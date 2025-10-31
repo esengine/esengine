@@ -1,104 +1,303 @@
 <div align="center">
 
-# 你好，我是 ESEngine 👋
+```
+███████╗███████╗███████╗███╗   ██╗ ██████╗ ██╗███╗   ██╗███████╗
+██╔════╝██╔════╝██╔════╝████╗  ██║██╔════╝ ██║████╗  ██║██╔════╝
+█████╗  ███████╗█████╗  ██╔██╗ ██║██║  ███╗██║██╔██╗ ██║█████╗
+██╔══╝  ╚════██║██╔══╝  ██║╚██╗██║██║   ██║██║██║╚██╗██║██╔══╝
+███████╗███████║███████╗██║ ╚████║╚██████╔╝██║██║ ╚████║███████╗
+╚══════╝╚══════╝╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝╚══════╝
+```
 
-### 游戏开发框架架构师 | 开源开发者
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=28&duration=3000&pause=1000&color=00F7F7&center=true&vCenter=true&width=800&lines=Game+Engine+Architect;High-Performance+ECS+Framework+Developer;TypeScript+%7C+System+Architecture+%7C+Open+Source)](https://git.io/typing-svg)
 
-<img src="https://komarev.com/ghpvc/?username=esengine&label=Profile%20views&color=0e75b6&style=flat" alt="esengine" />
+<img src="https://komarev.com/ghpvc/?username=esengine&label=SYSTEM+ACCESS&color=00f7f7&style=for-the-badge" alt="profile views" />
+
+</div>
+
+```bash
+$ system.boot --mode=production
+> Initializing ESEngine Framework...
+> Loading core modules... [OK]
+> Mounting distributed systems... [OK]
+> System ready. Welcome, Developer.
+```
+
+---
+
+## 🔧 SYSTEM OVERVIEW
+
+<div align="center">
+
+```typescript
+interface DeveloperProfile {
+  role: "Game Engine Architect";
+  specialization: ["ECS Architecture", "Real-time Systems", "Network Synchronization"];
+  currentProject: "High-Performance Entity-Component-System Framework";
+  techStack: {
+    primary: ["TypeScript", "JavaScript", "Node.js"];
+    architecture: ["ECS", "Behavior Trees", "Client-Server Model"];
+    tools: ["Tauri", "React", "WebSocket", "Monorepo"];
+  };
+  performance: {
+    cacheOptimization: "SoA (Structure of Arrays)";
+    memoryLayout: "Archetype System";
+    querySystem: "Reactive with O(1) lookups";
+  };
+}
+```
 
 </div>
 
 ---
 
-## 关于我
-
-我专注于构建高性能的游戏开发框架和工具，致力于为游戏开发者提供更优雅的开发体验。
-
-- 🎮 专注于 ECS 架构和游戏引擎开发
-- 🔧 主要使用 TypeScript 构建高性能框架
-- 🌟 开源贡献者，热衷于分享技术
-- 📚 持续学习游戏引擎架构和优化技术
-
-## 核心项目
-
-### [ECS Framework](https://github.com/esengine/ecs-framework)
-
-一个高性能、类型安全的 Entity-Component-System 游戏开发框架
-
-**技术特点：**
-- 基于 TypeScript 的强类型系统
-- 行为树编辑器和运行时
-- 网络同步系统（客户端/服务器架构）
-- 完整的序列化和场景管理
-- 可视化编辑器（基于 Tauri）
-
-**架构亮点：**
-- Archetype 系统优化内存布局
-- SoA（Structure of Arrays）存储提升缓存命中率
-- 响应式查询系统
-- 插件化架构支持扩展
-- 性能监控和调试工具
-
-## 技术栈
-
-**核心技术：**
-
-![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![JavaScript](https://img.shields.io/badge/-JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
-![Node.js](https://img.shields.io/badge/-Node.js-339933?style=flat-square&logo=node.js&logoColor=white)
-
-**游戏开发：**
-
-![ECS](https://img.shields.io/badge/-ECS%20Architecture-FF6B6B?style=flat-square)
-![Game Engine](https://img.shields.io/badge/-Game%20Engine-4CAF50?style=flat-square)
-![Behavior Tree](https://img.shields.io/badge/-Behavior%20Tree-9C27B0?style=flat-square)
-
-**工具与框架：**
-
-![React](https://img.shields.io/badge/-React-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Tauri](https://img.shields.io/badge/-Tauri-FFC131?style=flat-square&logo=tauri&logoColor=black)
-![WebSocket](https://img.shields.io/badge/-WebSocket-010101?style=flat-square)
-![Monorepo](https://img.shields.io/badge/-Monorepo-6DB33F?style=flat-square)
-
-## GitHub 统计
+## 📊 REAL-TIME METRICS
 
 <div align="center">
 
-![ESEngine's GitHub stats](https://github-readme-stats.vercel.app/api?username=esengine&show_icons=true&theme=tokyonight&hide_border=true&include_all_commits=true&count_private=true)
+### 🎯 Performance Dashboard
 
-![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=esengine&layout=compact&theme=tokyonight&hide_border=true&langs_count=8)
+<table>
+<tr>
+<td width="50%">
 
-![GitHub Streak](https://github-readme-streak-stats.herokuapp.com/?user=esengine&theme=tokyonight&hide_border=true)
+#### Repository Statistics
+![GitHub Stats](https://github-readme-stats.vercel.app/api?username=esengine&show_icons=true&theme=radical&hide_border=true&bg_color=0D1117&title_color=00F7F7&icon_color=00F7F7&text_color=FFFFFF&border_radius=10)
+
+</td>
+<td width="50%">
+
+#### Code Distribution
+![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=esengine&layout=compact&theme=radical&hide_border=true&bg_color=0D1117&title_color=00F7F7&text_color=FFFFFF&border_radius=10&langs_count=8)
+
+</td>
+</tr>
+</table>
+
+### ⚡ Activity Metrics
+
+![GitHub Streak](https://streak-stats.demolab.com?user=esengine&theme=radical&hide_border=true&background=0D1117&ring=00F7F7&fire=FF6E96&currStreakLabel=00F7F7&sideNums=00F7F7&currStreakNum=FFFFFF&sideLabels=FFFFFF&dates=FFFFFF)
+
+### 📈 Contribution Graph
+
+![Activity Graph](https://github-readme-activity-graph.vercel.app/graph?username=esengine&theme=react-dark&bg_color=0D1117&color=00F7F7&line=FF6E96&point=FFFFFF&area=true&hide_border=true)
 
 </div>
 
-## 贡献活动
+---
 
-![ESEngine's Activity Graph](https://github-readme-activity-graph.vercel.app/graph?username=esengine&theme=tokyo-night&hide_border=true&area=true)
+## 🏗️ CORE PROJECT: ECS FRAMEWORK
 
-## 开发理念
+<div align="center">
 
-> "优雅的架构源于对性能和可维护性的平衡追求"
+[![ECS Framework](https://github-readme-stats.vercel.app/api/pin/?username=esengine&repo=ecs-framework&theme=radical&hide_border=true&bg_color=0D1117&title_color=00F7F7&icon_color=FF6E96&text_color=FFFFFF)](https://github.com/esengine/ecs-framework)
 
-- 类型安全优先：利用 TypeScript 的类型系统避免运行时错误
-- 性能至上：从内存布局到算法选择，每一处都经过深思熟虑
-- 开发体验：提供直观的 API 和完善的工具链
-- 可扩展性：通过插件系统支持无限可能
+</div>
 
-## 最近活动
+```diff
++ High-Performance Entity-Component-System Framework
++ Type-Safe | Real-time | Distributed Architecture
+```
+
+### ⚙️ Technical Specifications
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+**🎯 Core Engine**
+```
+• Archetype-based ECS
+• SoA Memory Layout
+• Reactive Query System
+• O(1) Component Access
+```
+
+</td>
+<td width="33%" align="center">
+
+**🌐 Network Layer**
+```
+• Client-Server Sync
+• Delta Compression
+• Conflict Resolution
+• WebSocket Transport
+```
+
+</td>
+<td width="33%" align="center">
+
+**🔧 Development Tools**
+```
+• Visual Editor (Tauri)
+• Behavior Tree Editor
+• Performance Profiler
+• Debug Inspector
+```
+
+</td>
+</tr>
+</table>
+
+### 🎮 Architecture Highlights
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ECS FRAMEWORK STACK                       │
+├─────────────────────────────────────────────────────────────┤
+│  Editor Layer        │  Tauri + React Visual Editor          │
+│  Behavior Tree       │  Visual Node Editor + Runtime         │
+│  Network Layer       │  Client/Server Sync + RPC             │
+│  ECS Core           │  Archetype + SoA + Reactive Queries   │
+│  Serialization      │  Scene + Component + Incremental      │
+│  Platform           │  Node.js + Browser + Cross-platform   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 💻 TECHNOLOGY STACK
+
+<div align="center">
+
+### Core Technologies
+
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white)
+
+### Frameworks & Libraries
+
+![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Tauri](https://img.shields.io/badge/Tauri-FFC131?style=for-the-badge&logo=tauri&logoColor=black)
+![WebSocket](https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socket.io&logoColor=white)
+
+### Architecture & Patterns
+
+![ECS](https://img.shields.io/badge/ECS_Architecture-FF6B6B?style=for-the-badge)
+![Behavior_Tree](https://img.shields.io/badge/Behavior_Tree-9C27B0?style=for-the-badge)
+![Monorepo](https://img.shields.io/badge/Monorepo-6DB33F?style=for-the-badge)
+![Microservices](https://img.shields.io/badge/Distributed_Systems-00BCD4?style=for-the-badge)
+
+</div>
+
+---
+
+## 🎯 CORE COMPETENCIES
+
+<div align="center">
+
+```mermaid
+mindmap
+  root((ESEngine))
+    Architecture
+      ECS Pattern
+      Data-Oriented Design
+      Cache Optimization
+      Memory Management
+    Performance
+      Archetype System
+      SoA Storage
+      Query Optimization
+      Profiling Tools
+    Network
+      Client-Server Sync
+      Delta Compression
+      Conflict Resolution
+      RPC System
+    Development
+      Type Safety
+      Visual Editor
+      Behavior Trees
+      Plugin System
+```
+
+</div>
+
+---
+
+## 🔥 RECENT ACTIVITY
 
 <!--START_SECTION:activity-->
 <!--END_SECTION:activity-->
 
-## 联系我
+---
 
-- GitHub: [@esengine](https://github.com/esengine)
-- Issues: [ECS Framework Issues](https://github.com/esengine/ecs-framework/issues)
+## 📡 SYSTEM METRICS
+
+<div align="center">
+
+![](https://github-profile-summary-cards.vercel.app/api/cards/profile-details?username=esengine&theme=radical)
+
+<table>
+<tr>
+<td>
+
+![](https://github-profile-summary-cards.vercel.app/api/cards/repos-per-language?username=esengine&theme=radical)
+
+</td>
+<td>
+
+![](https://github-profile-summary-cards.vercel.app/api/cards/most-commit-language?username=esengine&theme=radical)
+
+</td>
+</tr>
+<tr>
+<td>
+
+![](https://github-profile-summary-cards.vercel.app/api/cards/stats?username=esengine&theme=radical)
+
+</td>
+<td>
+
+![](https://github-profile-summary-cards.vercel.app/api/cards/productive-time?username=esengine&theme=radical)
+
+</td>
+</tr>
+</table>
+
+</div>
+
+---
+
+## 🏆 ACHIEVEMENTS
+
+<div align="center">
+
+[![trophy](https://github-profile-trophy.vercel.app/?username=esengine&theme=radical&no-frame=true&no-bg=true&margin-w=4&column=7)](https://github.com/ryo-ma/github-profile-trophy)
+
+</div>
+
+---
+
+## 📮 CONNECT
+
+<div align="center">
+
+```bash
+$ connect --protocol=github --target=esengine
+> Establishing secure connection...
+> Connection established.
+```
+
+[![GitHub](https://img.shields.io/badge/GitHub-esengine-181717?style=for-the-badge&logo=github)](https://github.com/esengine)
+[![ECS Framework](https://img.shields.io/badge/Project-ECS_Framework-00F7F7?style=for-the-badge&logo=github)](https://github.com/esengine/ecs-framework)
+
+</div>
 
 ---
 
 <div align="center">
 
-**感谢访问我的主页！如果你对游戏开发框架感兴趣，欢迎 star 和贡献代码**
+```
+╔══════════════════════════════════════════════════════════════╗
+║  "Building elegant architectures through performance and     ║
+║   maintainability engineering"                               ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+**⚡ Powered by Open Source | Optimized for Performance | Built for Scale ⚡**
+
+![Wave](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=100&section=footer)
 
 </div>
