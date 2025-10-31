@@ -15,13 +15,11 @@
 
 </div>
 
-```bash
-$ system.boot --mode=production
-> Initializing ESEngine Framework...
-> Loading core modules... [OK]
-> Mounting distributed systems... [OK]
-> System ready. Welcome, Developer.
-```
+<div align="center">
+
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=16&duration=2000&pause=500&color=00F7F7&background=0D111700&center=true&vCenter=true&multiline=true&repeat=true&width=600&height=120&lines=$+system.boot+--mode%3Dproduction;%3E+Initializing+ESEngine+Framework...;%3E+Loading+core+modules...+%5BOK%5D;%3E+Mounting+distributed+systems...+%5BOK%5D;%3E+System+ready.+Welcome%2C+Developer.)](https://git.io/typing-svg)
+
+</div>
 
 ---
 
