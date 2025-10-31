@@ -27,27 +27,42 @@ $ system.boot --mode=production
 
 ## 🔧 SYSTEM OVERVIEW
 
-<div align="center">
+<table>
+<tr>
+<td width="50%">
 
-```typescript
-interface DeveloperProfile {
-  role: "Game Engine Architect";
-  specialization: ["ECS Architecture", "Real-time Systems", "Network Synchronization"];
-  currentProject: "High-Performance Entity-Component-System Framework";
-  techStack: {
-    primary: ["TypeScript", "JavaScript", "Node.js"];
-    architecture: ["ECS", "Behavior Trees", "Client-Server Model"];
-    tools: ["Tauri", "React", "WebSocket", "Monorepo"];
-  };
-  performance: {
-    cacheOptimization: "SoA (Structure of Arrays)";
-    memoryLayout: "Archetype System";
-    querySystem: "Reactive with O(1) lookups";
-  };
-}
-```
+### 👨‍💻 Developer Profile
 
-</div>
+**Role:** Game Engine Architect
+
+**Specialization:**
+- ECS Architecture
+- Real-time Systems
+- Network Synchronization
+
+**Current Project:**
+High-Performance Entity-Component-System Framework
+
+</td>
+<td width="50%">
+
+### ⚡ Performance Profile
+
+**Cache Optimization:**
+- SoA (Structure of Arrays)
+
+**Memory Layout:**
+- Archetype System
+
+**Query System:**
+- Reactive with O(1) lookups
+
+**Tech Stack:**
+TypeScript, JavaScript, Node.js
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -103,37 +118,31 @@ interface DeveloperProfile {
 
 <table>
 <tr>
-<td width="33%" align="center">
+<td width="33%">
 
 **🎯 Core Engine**
-```
-• Archetype-based ECS
-• SoA Memory Layout
-• Reactive Query System
-• O(1) Component Access
-```
+- Archetype-based ECS
+- SoA Memory Layout
+- Reactive Query System
+- O(1) Component Access
 
 </td>
-<td width="33%" align="center">
+<td width="33%">
 
 **🌐 Network Layer**
-```
-• Client-Server Sync
-• Delta Compression
-• Conflict Resolution
-• WebSocket Transport
-```
+- Client-Server Sync
+- Delta Compression
+- Conflict Resolution
+- WebSocket Transport
 
 </td>
-<td width="33%" align="center">
+<td width="33%">
 
 **🔧 Development Tools**
-```
-• Visual Editor (Tauri)
-• Behavior Tree Editor
-• Performance Profiler
-• Debug Inspector
-```
+- Visual Editor (Tauri)
+- Behavior Tree Editor
+- Performance Profiler
+- Debug Inspector
 
 </td>
 </tr>
@@ -141,18 +150,18 @@ interface DeveloperProfile {
 
 ### 🎮 Architecture Highlights
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ECS FRAMEWORK STACK                       │
-├─────────────────────────────────────────────────────────────┤
-│  Editor Layer        │  Tauri + React Visual Editor          │
-│  Behavior Tree       │  Visual Node Editor + Runtime         │
-│  Network Layer       │  Client/Server Sync + RPC             │
-│  ECS Core           │  Archetype + SoA + Reactive Queries   │
-│  Serialization      │  Scene + Component + Incremental      │
-│  Platform           │  Node.js + Browser + Cross-platform   │
-└─────────────────────────────────────────────────────────────┘
-```
+<div align="center">
+
+| Layer | Implementation |
+|:------|:---------------|
+| 🖥️ **Editor Layer** | Tauri + React Visual Editor |
+| 🌳 **Behavior Tree** | Visual Node Editor + Runtime |
+| 🌐 **Network Layer** | Client/Server Sync + RPC |
+| ⚙️ **ECS Core** | Archetype + SoA + Reactive Queries |
+| 💾 **Serialization** | Scene + Component + Incremental |
+| 🔧 **Platform** | Node.js + Browser + Cross-platform |
+
+</div>
 
 ---
 
