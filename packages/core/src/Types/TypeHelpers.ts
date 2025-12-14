@@ -16,9 +16,10 @@ export type ComponentInstance<T> = T extends new (...args: any[]) => infer R ? R
 /**
  * 组件构造函数类型
  *
- * 与 ComponentType 保持一致，避免类型转换
+ * 使用 Component 作为默认类型，与 ComponentType 保持一致。
+ * 这确保类型兼容性，因为所有实际组件都继承自 Component 类。
  */
-export type ComponentConstructor<T extends IComponent = IComponent> = new (...args: any[]) => T;
+export type ComponentConstructor<T extends Component = Component> = new (...args: any[]) => T;
 
 /**
  * 组件类型的通用约束
@@ -237,7 +238,7 @@ export interface TypedQueryCondition<
 /**
  * 组件类型守卫
  */
-export function isComponentType<T extends IComponent>(
+export function isComponentType<T extends Component>(
     value: any
 ): value is ComponentConstructor<T> {
     return typeof value === 'function' && value.prototype instanceof Component;

@@ -6,6 +6,7 @@ import { createLogger } from '../Utils/Logger';
 import { getComponentInstanceTypeName, getComponentTypeName } from './Decorators';
 import { generateGUID } from '../Utils/GUID';
 import type { IScene } from './IScene';
+import { EntityHandle, NULL_HANDLE } from './Core/EntityHandle';
 
 /**
  * 组件活跃状态变化接口
@@ -94,6 +95,19 @@ export class Entity {
     public readonly persistentId: string;
 
     /**
+     * 轻量级实体句柄
+     *
+     * 数值类型的实体标识符，包含索引和代数信息。
+     * 用于高性能场景下替代对象引用，支持 Archetype 存储等优化。
+     *
+     * Lightweight entity handle.
+     * Numeric identifier containing index and generation.
+     * Used for high-performance scenarios instead of object references,
+     * supports Archetype storage optimizations.
+     */
+    private _handle: EntityHandle = NULL_HANDLE;
+
+    /**
      * 所属场景引用
      */
     public scene: IScene | null = null;
@@ -169,6 +183,34 @@ export class Entity {
      */
     public get isPersistent(): boolean {
         return this._lifecyclePolicy === EEntityLifecyclePolicy.Persistent;
+    }
+
+    /**
+     * 获取实体句柄
+     *
+     * 返回轻量级数值句柄，用于高性能场景。
+     * 如果实体尚未分配句柄，返回 NULL_HANDLE。
+     *
+     * Get entity handle.
+     * Returns lightweight numeric handle for high-performance scenarios.
+     * Returns NULL_HANDLE if entity has no handle assigned.
+     */
+    public get handle(): EntityHandle {
+        return this._handle;
+    }
+
+    /**
+     * 设置实体句柄（内部使用）
+     *
+     * 此方法供 Scene 在创建实体时调用。
+     *
+     * Set entity handle (internal use).
+     * Called by Scene when creating entities.
+     *
+     * @internal
+     */
+    public setHandle(handle: EntityHandle): void {
+        this._handle = handle;
     }
 
     /**
@@ -557,6 +599,39 @@ export class Entity {
             component = this.createComponent(type, ...args);
         }
         return component;
+    }
+
+    /**
+     * 标记组件为已修改
+     *
+     * 便捷方法，自动从场景获取当前 epoch 并标记组件。
+     * 用于帧级变更检测系统。
+     *
+     * Mark component(s) as modified.
+     * Convenience method that auto-gets epoch from scene and marks components.
+     * Used for frame-level change detection system.
+     *
+     * @param components 要标记的组件 | Components to mark
+     *
+     * @example
+     * ```typescript
+     * const pos = entity.getComponent(Position)!;
+     * pos.x = 100;
+     * entity.markDirty(pos);
+     *
+     * // 或者标记多个组件
+     * entity.markDirty(pos, vel);
+     * ```
+     */
+    public markDirty(...components: Component[]): void {
+        if (!this.scene) {
+            return;
+        }
+
+        const epoch = this.scene.epochManager.current;
+        for (const component of components) {
+            component.markDirty(epoch);
+        }
     }
 
     /**

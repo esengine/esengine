@@ -20,6 +20,22 @@ export interface IComponent {
     /** 组件所属的实体ID */
     entityId: number | null;
 
+    /**
+     * 最后写入的 epoch
+     *
+     * 用于帧级变更检测，记录组件最后一次被修改时的 epoch。
+     *
+     * Last write epoch for frame-level change detection.
+     */
+    readonly lastWriteEpoch: number;
+
+    /**
+     * 标记组件为已修改
+     *
+     * Mark component as modified with current epoch.
+     */
+    markDirty(epoch: number): void;
+
     /** 组件添加到实体时的回调 */
     onAddedToEntity(): void;
     /** 组件从实体移除时的回调 */

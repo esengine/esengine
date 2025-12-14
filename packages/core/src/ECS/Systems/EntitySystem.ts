@@ -11,6 +11,8 @@ import type { ComponentConstructor, ComponentInstance } from '../../Types/TypeHe
 import type { IService } from '../../Core/ServiceContainer';
 import { EntityCache } from './EntityCache';
 import { CommandBuffer } from '../Core/CommandBuffer';
+import type { SystemStage, SystemSchedulingMetadata } from '../Core/SystemScheduler';
+import { getSchedulingMetadata } from '../Decorators/SystemScheduling';
 
 /**
  * 事件监听器记录
@@ -84,6 +86,12 @@ export abstract class EntitySystem implements ISystemBase, IService {
     protected logger: ReturnType<typeof createLogger>;
 
     /**
+     * 调度元数据
+     * Scheduling metadata
+     */
+    protected _schedulingMetadata: SystemSchedulingMetadata;
+
+    /**
      * 实体ID映射缓存
      */
     private _entityIdMap: Map<number, Entity> | null;
@@ -117,6 +125,15 @@ export abstract class EntitySystem implements ISystemBase, IService {
      * ```
      */
     protected readonly commands: CommandBuffer = new CommandBuffer();
+
+    /**
+     * 上次处理的 epoch 检查点
+     * Last processed epoch checkpoint
+     *
+     * 用于变更检测，记录上次 forEachChanged 完成时的 epoch。
+     * Used for change detection, records epoch when forEachChanged last completed.
+     */
+    private _lastProcessEpoch: number = 0;
 
     /**
      * 获取系统处理的实体列表
@@ -205,6 +222,18 @@ export abstract class EntitySystem implements ISystemBase, IService {
         this.logger = createLogger(this.getLoggerName());
 
         this._entityCache = new EntityCache();
+
+        // 初始化调度元数据（优先使用装饰器元数据）
+        // Initialize scheduling metadata (prefer decorator metadata)
+        const decoratorMeta = getSchedulingMetadata(this);
+        this._schedulingMetadata = decoratorMeta
+            ? { ...decoratorMeta }
+            : {
+                  stage: 'update',
+                  before: [],
+                  after: [],
+                  sets: []
+              };
     }
 
     /**
@@ -255,6 +284,135 @@ export abstract class EntitySystem implements ISystemBase, IService {
         if (this._updateOrder === order) return;
         this._updateOrder = order;
         this._scene?.markSystemsOrderDirty();
+    }
+
+    // ========================================================================
+    // 调度配置方法 (Fluent API)
+    // Scheduling configuration methods (Fluent API)
+    // ========================================================================
+
+    /**
+     * 设置系统执行阶段
+     * Set system execution stage
+     *
+     * @param stage 执行阶段 | Execution stage
+     * @returns this (用于链式调用 | for chaining)
+     *
+     * @example
+     * ```typescript
+     * class MySystem extends EntitySystem {
+     *     constructor() {
+     *         super();
+     *         this.stage('preUpdate');
+     *     }
+     * }
+     * ```
+     */
+    public stage(stage: SystemStage): this {
+        this._schedulingMetadata.stage = stage;
+        this._scene?.markSystemsOrderDirty();
+        return this;
+    }
+
+    /**
+     * 声明此系统在指定系统之前执行
+     * Declare this system executes before specified systems
+     *
+     * @param systems 系统名称列表 | System names
+     * @returns this (用于链式调用 | for chaining)
+     *
+     * @example
+     * ```typescript
+     * class MySystem extends EntitySystem {
+     *     constructor() {
+     *         super();
+     *         this.before('RenderSystem');
+     *     }
+     * }
+     * ```
+     */
+    public before(...systems: string[]): this {
+        this._schedulingMetadata.before.push(...systems);
+        this._scene?.markSystemsOrderDirty();
+        return this;
+    }
+
+    /**
+     * 声明此系统在指定系统之后执行
+     * Declare this system executes after specified systems
+     *
+     * @param systems 系统名称列表（可使用 'set:' 前缀指定集合）| System names (use 'set:' prefix for sets)
+     * @returns this (用于链式调用 | for chaining)
+     *
+     * @example
+     * ```typescript
+     * class MySystem extends EntitySystem {
+     *     constructor() {
+     *         super();
+     *         this.after('PhysicsSystem', 'set:CoreSystems');
+     *     }
+     * }
+     * ```
+     */
+    public after(...systems: string[]): this {
+        this._schedulingMetadata.after.push(...systems);
+        this._scene?.markSystemsOrderDirty();
+        return this;
+    }
+
+    /**
+     * 将系统加入指定集合
+     * Add system to specified sets
+     *
+     * @param sets 集合名称列表 | Set names
+     * @returns this (用于链式调用 | for chaining)
+     *
+     * @example
+     * ```typescript
+     * class MySystem extends EntitySystem {
+     *     constructor() {
+     *         super();
+     *         this.inSet('PhysicsSystems');
+     *     }
+     * }
+     * ```
+     */
+    public inSet(...sets: string[]): this {
+        this._schedulingMetadata.sets.push(...sets);
+        this._scene?.markSystemsOrderDirty();
+        return this;
+    }
+
+    /**
+     * 获取系统的执行阶段
+     * Get system execution stage
+     */
+    public getStage(): SystemStage {
+        return this._schedulingMetadata.stage;
+    }
+
+    /**
+     * 获取系统应该在哪些系统之前执行
+     * Get systems that this system should execute before
+     */
+    public getBefore(): readonly string[] {
+        return this._schedulingMetadata.before;
+    }
+
+    /**
+     * 获取系统应该在哪些系统之后执行
+     * Get systems that this system should execute after
+     */
+    public getAfter(): readonly string[] {
+        return this._schedulingMetadata.after;
+    }
+
+    /**
+     * 获取系统所属的集合
+     * Get sets that this system belongs to
+     */
+    public getSets(): readonly string[] {
+        return this._schedulingMetadata.sets;
     }
 
     /**
@@ -1301,5 +1459,168 @@ export abstract class EntitySystem implements ISystemBase, IService {
             }
         }
         return true;
+    }
+
+    // ========================================================================
+    // 变更检测方法 (Change Detection Methods)
+    // ========================================================================
+
+    /**
+     * 获取上次处理的 epoch 检查点
+     * Get the last processed epoch checkpoint
+     *
+     * @returns 上次处理完成时的 epoch | Epoch when last processing completed
+     */
+    protected get lastProcessEpoch(): number {
+        return this._lastProcessEpoch;
+    }
+
+    /**
+     * 获取当前 epoch
+     * Get the current epoch
+     *
+     * @returns 当前的 epoch 值，如果 scene 不可用则返回 0 | Current epoch value, or 0 if scene unavailable
+     */
+    protected get currentEpoch(): number {
+        return this._scene?.epochManager?.current ?? 0;
+    }
+
+    /**
+     * 保存当前 epoch 作为检查点
+     * Save current epoch as checkpoint
+     *
+     * 调用此方法后，下次 forEachChanged 将只处理此时间点之后变更的组件。
+     * After calling this, next forEachChanged will only process components changed after this point.
+     */
+    protected saveEpoch(): void {
+        this._lastProcessEpoch = this.currentEpoch;
+    }
+
+    /**
+     * 遍历有变更组件的实体
+     * Iterate entities with changed components
+     *
+     * 只处理自上次 saveEpoch() 或指定 epoch 以来组件发生变更的实体。
+     * 处理完成后自动更新 lastProcessEpoch。
+     *
+     * Only processes entities whose components changed since last saveEpoch() or specified epoch.
+     * Automatically updates lastProcessEpoch after processing.
+     *
+     * @param entities 实体列表 | Entity list
+     * @param componentTypes 要检查变更的组件类型 | Component types to check for changes
+     * @param processor 处理函数 | Processor function
+     * @param sinceEpoch 可选的起始 epoch，默认使用 lastProcessEpoch | Optional starting epoch, defaults to lastProcessEpoch
+     *
+     * @example
+     * ```typescript
+     * protected process(entities: readonly Entity[]): void {
+     *     // 只处理 Velocity 组件发生变更的实体
+     *     this.forEachChanged(entities, [Velocity], (entity) => {
+     *         const vel = this.requireComponent(entity, Velocity);
+     *         // 只有 velocity 改变时才重新计算
+     *         this.updatePhysics(entity, vel);
+     *     });
+     * }
+     * ```
+     */
+    protected forEachChanged<T extends ComponentConstructor[]>(
+        entities: readonly Entity[],
+        componentTypes: T,
+        processor: (entity: Entity, index: number) => void,
+        sinceEpoch?: number
+    ): void {
+        const checkEpoch = sinceEpoch ?? this._lastProcessEpoch;
+
+        for (let i = 0; i < entities.length; i++) {
+            const entity = entities[i]!;
+            let hasChanged = false;
+
+            // 检查任意指定组件是否发生变更
+            // Check if any specified component has changed
+            for (const componentType of componentTypes) {
+                const component = entity.getComponent(componentType);
+                if (component && component.lastWriteEpoch > checkEpoch) {
+                    hasChanged = true;
+                    break;
+                }
+            }
+
+            if (hasChanged) {
+                processor(entity, i);
+            }
+        }
+
+        // 自动更新检查点
+        // Automatically update checkpoint
+        this._lastProcessEpoch = this.currentEpoch;
+    }
+
+    /**
+     * 过滤出有变更组件的实体
+     * Filter entities with changed components
+     *
+     * @param entities 实体列表 | Entity list
+     * @param componentTypes 要检查变更的组件类型 | Component types to check for changes
+     * @param sinceEpoch 可选的起始 epoch | Optional starting epoch
+     * @returns 有变更的实体数组 | Array of entities with changes
+     *
+     * @example
+     * ```typescript
+     * protected process(entities: readonly Entity[]): void {
+     *     const changedEntities = this.filterChanged(entities, [Position, Velocity]);
+     *     for (const entity of changedEntities) {
+     *         // 处理位置或速度变化的实体
+     *     }
+     *     this.saveEpoch();
+     * }
+     * ```
+     */
+    protected filterChanged<T extends ComponentConstructor[]>(
+        entities: readonly Entity[],
+        componentTypes: T,
+        sinceEpoch?: number
+    ): Entity[] {
+        const checkEpoch = sinceEpoch ?? this._lastProcessEpoch;
+        const result: Entity[] = [];
+
+        for (let i = 0; i < entities.length; i++) {
+            const entity = entities[i]!;
+
+            for (const componentType of componentTypes) {
+                const component = entity.getComponent(componentType);
+                if (component && component.lastWriteEpoch > checkEpoch) {
+                    result.push(entity);
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 检查实体的指定组件是否发生变更
+     * Check if entity's specified components have changed
+     *
+     * @param entity 实体 | Entity
+     * @param componentTypes 要检查的组件类型 | Component types to check
+     * @param sinceEpoch 可选的起始 epoch | Optional starting epoch
+     * @returns 是否有变更 | Whether there are changes
+     */
+    protected hasChanged<T extends ComponentConstructor[]>(
+        entity: Entity,
+        componentTypes: T,
+        sinceEpoch?: number
+    ): boolean {
+        const checkEpoch = sinceEpoch ?? this._lastProcessEpoch;
+
+        for (const componentType of componentTypes) {
+            const component = entity.getComponent(componentType);
+            if (component && component.lastWriteEpoch > checkEpoch) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

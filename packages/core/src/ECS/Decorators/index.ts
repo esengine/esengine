@@ -67,3 +67,17 @@ export type {
     PropertyAssetType,
     EnumOption
 } from './PropertyDecorator';
+
+// ============================================================================
+// System Scheduling Decorators
+// 系统调度装饰器
+// ============================================================================
+export {
+    Stage,
+    Before,
+    After,
+    InSet,
+    getSchedulingMetadata,
+    hasSchedulingMetadata,
+    SCHEDULING_METADATA
+} from './SystemScheduling';

@@ -282,7 +282,9 @@ describe('CommandBuffer', () => {
             commandBuffer.addComponent(entity, new MarkerComponent());
             commandBuffer.destroyEntity(entity);
 
-            expect(commandBuffer.pendingCount).toBe(2);
+            // 由于去重逻辑，destroyEntity 会清除同一实体的其他操作
+            // Due to deduplication, destroyEntity clears other operations for the same entity
+            expect(commandBuffer.pendingCount).toBe(1);
 
             commandBuffer.clear();
 

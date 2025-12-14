@@ -58,12 +58,56 @@ export abstract class Component implements IComponent {
     public entityId: number | null = null;
 
     /**
+     * 最后写入的 epoch
+     *
+     * 用于帧级变更检测，记录组件最后一次被修改时的 epoch。
+     * 0 表示从未被标记为已修改。
+     *
+     * Last write epoch.
+     * Used for frame-level change detection, records the epoch when component was last modified.
+     * 0 means never marked as modified.
+     */
+    private _lastWriteEpoch: number = 0;
+
+    /**
+     * 获取最后写入的 epoch
+     *
+     * Get last write epoch.
+     */
+    public get lastWriteEpoch(): number {
+        return this._lastWriteEpoch;
+    }
+
+    /**
      * 创建组件实例
      *
      * 自动分配唯一ID给组件。
      */
     constructor() {
         this.id = Component.idGenerator++;
+    }
+
+    /**
+     * 标记组件为已修改
+     *
+     * 调用此方法会更新组件的 lastWriteEpoch 为当前帧的 epoch。
+     * 系统可以通过比较 lastWriteEpoch 和上次检查的 epoch 来判断组件是否发生变更。
+     *
+     * Mark component as modified.
+     * Calling this method updates the component's lastWriteEpoch to the current frame's epoch.
+     * Systems can compare lastWriteEpoch with their last checked epoch to detect changes.
+     *
+     * @param epoch 当前帧的 epoch | Current frame's epoch
+     *
+     * @example
+     * ```typescript
+     * // 在修改组件数据后调用
+     * velocity.x = 10;
+     * velocity.markDirty(scene.epochManager.current);
+     * ```
+     */
+    public markDirty(epoch: number): void {
+        this._lastWriteEpoch = epoch;
     }
 
     /**

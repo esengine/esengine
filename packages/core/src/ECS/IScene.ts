@@ -5,6 +5,7 @@ import { EntitySystem } from './Systems/EntitySystem';
 import { ComponentStorageManager, ComponentType } from './Core/ComponentStorage';
 import { QuerySystem } from './Core/QuerySystem';
 import { TypeSafeEventSystem } from './Core/EventSystem';
+import { EpochManager } from './Core/EpochManager';
 import type { ReferenceTracker } from './Core/ReferenceTracker';
 import type { ServiceContainer, ServiceType } from '../Core/ServiceContainer';
 import type { TypedQueryBuilder } from './Core/Query/TypedQuery';
@@ -70,6 +71,16 @@ export interface IScene {
      * 引用追踪器
      */
     readonly referenceTracker: ReferenceTracker;
+
+    /**
+     * Epoch 管理器
+     *
+     * 用于帧级变更检测，追踪组件修改。
+     *
+     * Epoch manager.
+     * Used for frame-level change detection, tracking component modifications.
+     */
+    readonly epochManager: EpochManager;
 
     /**
      * 服务容器
