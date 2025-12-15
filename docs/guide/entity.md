@@ -293,6 +293,133 @@ entity.components.forEach(component => {
 
 实体是 ECS 架构的核心概念之一，理解如何正确使用实体将帮助你构建高效、可维护的游戏代码。
 
+## 实体句柄 (EntityHandle)
+
+实体句柄是一种轻量级的实体引用方式，用于安全地存储和传递实体引用，同时能够检测悬空引用（引用已销毁的实体）。
+
+### 为什么需要实体句柄？
+
+直接存储 `Entity` 引用存在问题：
+- 实体销毁后，引用变成悬空指针
+- 无法检测实体是否已被销毁
+- 实体索引被复用时，可能错误地引用新实体
+
+实体句柄通过 **代数（Generation）** 机制解决这些问题：
+
+```typescript
+import {
+    EntityHandle,
+    makeHandle,
+    indexOf,
+    genOf,
+    isValidHandle,
+    NULL_HANDLE
+} from '@esengine/ecs-framework';
+
+// 句柄包含索引和代数两部分信息
+// 28位索引 + 20位代数 = 48位（在 JavaScript 安全整数范围内）
+const handle = makeHandle(42, 1);
+
+console.log(indexOf(handle)); // 42 - 实体索引
+console.log(genOf(handle));   // 1  - 实体代数
+console.log(isValidHandle(handle)); // true - 非空句柄
+```
+
+### 使用 EntityHandleManager
+
+```typescript
+import { EntityHandleManager, indexOf, genOf } from '@esengine/ecs-framework';
+
+const manager = new EntityHandleManager();
+
+// 创建实体句柄
+const handle1 = manager.create();
+console.log(manager.isAlive(handle1)); // true
+
+// 销毁实体
+manager.destroy(handle1);
+console.log(manager.isAlive(handle1)); // false - 句柄已失效
+
+// 创建新实体（索引会被复用，但代数会增加）
+const handle2 = manager.create();
+console.log(indexOf(handle1) === indexOf(handle2)); // true - 相同索引
+console.log(genOf(handle2) > genOf(handle1));       // true - 代数增加
+
+// 旧句柄无法匹配新实体
+console.log(manager.isAlive(handle1)); // false - 代数不匹配
+console.log(manager.isAlive(handle2)); // true  - 代数匹配
+```
+
+### 检测悬空引用
+
+代数机制可以检测 ABA 问题（索引被复用导致的错误引用）：
+
+```typescript
+// 场景：存储敌人的句柄
+let enemyHandle = manager.create();
+
+// ... 游戏运行中，敌人被销毁
+manager.destroy(enemyHandle);
+
+// ... 新实体被创建，复用了相同索引
+const newEntity = manager.create();
+
+// 安全检测：旧句柄不再有效
+if (!manager.isAlive(enemyHandle)) {
+    console.log('敌人已被销毁，句柄无效');
+    enemyHandle = NULL_HANDLE; // 清空引用
+}
+```
+
+### 启用/禁用状态
+
+句柄管理器还支持实体的启用/禁用状态：
+
+```typescript
+const handle = manager.create();
+
+// 禁用实体（仍然存活，但不参与处理）
+manager.setEnabled(handle, false);
+console.log(manager.isEnabled(handle)); // false
+console.log(manager.isAlive(handle));   // true - 仍然存活
+
+// 重新启用
+manager.setEnabled(handle, true);
+```
+
+### API 参考
+
+#### 句柄函数
+
+| 函数 | 说明 |
+|-----|------|
+| `makeHandle(index, generation)` | 创建句柄 |
+| `indexOf(handle)` | 获取索引 |
+| `genOf(handle)` | 获取代数 |
+| `isValidHandle(handle)` | 检查是否非空 |
+| `handleEquals(a, b)` | 比较两个句柄 |
+| `handleToString(handle)` | 调试输出 |
+
+#### EntityHandleManager 方法
+
+| 方法 | 说明 |
+|-----|------|
+| `create()` | 创建新句柄 |
+| `destroy(handle)` | 销毁句柄 |
+| `isAlive(handle)` | 检查是否存活 |
+| `isEnabled(handle)` | 检查是否启用 |
+| `setEnabled(handle, enabled)` | 设置启用状态 |
+| `aliveCount` | 存活实体数量 |
+| `capacity` | 当前容量 |
+
+### 常量
+
+| 常量 | 值 | 说明 |
+|-----|---|------|
+| `NULL_HANDLE` | `0` | 空句柄 |
+| `MAX_ENTITIES` | `268,435,456` | 最大实体数 |
+| `MAX_GENERATION` | `1,048,576` | 最大代数值 |
+
 ## 下一步
 
 - 了解 [层级系统](./hierarchy.md) 建立实体间的父子关系
