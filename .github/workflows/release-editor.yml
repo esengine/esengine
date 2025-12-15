@@ -92,6 +92,7 @@ jobs:
           node scripts/bundle-runtime.mjs
 
       - name: Build Tauri app
+        id: tauri
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,31 +103,59 @@ jobs:
           tagName: ${{ github.event_name == 'workflow_dispatch' && format('editor-v{0}', github.event.inputs.version) || github.ref_name }}
           releaseName: 'ECS Editor v${{ github.event.inputs.version || github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true  # 改为草稿，等待 SignPath 签名
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           updaterJsonKeepUniversal: false
           args: ${{ matrix.platform == 'macos-latest' && format('--target {0}', matrix.target) || '' }}
 
+      # Windows 构建上传 artifact 供 SignPath 签名
+      - name: Upload Windows artifacts for signing
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: |
+            packages/editor-app/src-tauri/target/release/bundle/nsis/*.exe
+            packages/editor-app/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 1
+
   # SignPath 代码签名（Windows）
+  # SignPath OSS code signing for Windows
+  # 注意：需要先在 https://signpath.io 申请 OSS 证书
+  # Note: Apply for OSS certificate at https://signpath.io first
+  # 并配置 GitHub Secrets: SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
+  # Configure GitHub Secrets: SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
   sign-windows:
     needs: build-tauri
     runs-on: ubuntu-latest
-    if: success()
+    if: success() && secrets.SIGNPATH_API_TOKEN != ''
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-unsigned
+          path: ./artifacts
+
       - name: Submit to SignPath for code signing
-        uses: signpath/github-action-submit-signing-request@v0.4
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: 'esengine-editor'
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: 'ecs-framework'
           signing-policy-slug: 'release-signing'
-          github-artifact-id: '*.exe'
+          artifact-configuration-slug: 'default'
+          github-artifact-name: 'windows-unsigned'
           wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 600
           output-artifact-directory: './signed'
 
-      - name: Publish signed release
+      - name: Upload signed artifacts to release
         uses: softprops/action-gh-release@v1
         with:
           files: ./signed/*
