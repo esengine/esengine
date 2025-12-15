@@ -7,8 +7,10 @@ import { getComponentTypeName } from '../Decorators';
 import { Archetype, ArchetypeSystem } from './ArchetypeSystem';
 import { ReactiveQuery, ReactiveQueryConfig } from './ReactiveQuery';
 import { QueryCondition, QueryConditionType, QueryResult } from './QueryTypes';
+import { CompiledQuery } from './Query/CompiledQuery';
 
 export { QueryCondition, QueryConditionType, QueryResult };
+export { CompiledQuery };
 
 /**
  * 实体索引结构
@@ -531,6 +533,76 @@ export class QuerySystem {
     }
 
     /**
+     * 查询自指定 epoch 以来发生变更的实体
+     *
+     * 返回拥有指定组件且该组件在 sinceEpoch 之后被修改过的实体。
+     * 用于实现增量更新，只处理发生变化的实体。
+     *
+     * Query entities with components changed since the specified epoch.
+     * Returns entities that have the specified component type(s) and that component
+     * was modified after sinceEpoch.
+     * Used for incremental updates, only processing entities that have changed.
+     *
+     * @param sinceEpoch 上次检查的 epoch | Last checked epoch
+     * @param componentTypes 要检查的组件类型 | Component types to check
+     * @returns 查询结果，包含变更的实体 | Query result with changed entities
+     *
+     * @example
+     * ```typescript
+     * class MovementSystem extends EntitySystem {
+     *     private _lastEpoch = 0;
+     *
+     *     update(): void {
+     *         // 只处理 Velocity 组件发生变化的实体
+     *         const result = this.scene.querySystem.queryChangedSince(
+     *             this._lastEpoch,
+     *             Velocity
+     *         );
+     *
+     *         for (const entity of result.entities) {
+     *             // 处理变更的实体
+     *         }
+     *
+     *         this._lastEpoch = this.scene.epochManager.current;
+     *     }
+     * }
+     * ```
+     */
+    public queryChangedSince(sinceEpoch: number, ...componentTypes: ComponentType[]): QueryResult {
+        const startTime = performance.now();
+        this._queryStats.totalQueries++;
+        this._queryStats.dirtyChecks++;
+
+        // 先获取所有拥有这些组件的实体
+        const baseResult = this.queryAll(...componentTypes);
+        const changedEntities: Entity[] = [];
+
+        // 过滤出组件发生变更的实体
+        for (const entity of baseResult.entities) {
+            let hasChanged = false;
+
+            for (const componentType of componentTypes) {
+                const component = entity.getComponent(componentType);
+                if (component && component.lastWriteEpoch > sinceEpoch) {
+                    hasChanged = true;
+                    break;
+                }
+            }
+
+            if (hasChanged) {
+                changedEntities.push(entity);
+            }
+        }
+
+        return {
+            entities: changedEntities,
+            count: changedEntities.length,
+            executionTime: performance.now() - startTime,
+            fromCache: false
+        };
+    }
+
+    /**
      * 按单个组件类型查询实体
      *
      * 返回包含指定组件类型的所有实体。
@@ -702,6 +774,42 @@ export class QuerySystem {
     public clearCache(): void {
         this.clearQueryCache();
         this.clearReactiveQueries();
+    }
+
+    /**
+     * 编译查询
+     *
+     * 创建预编译的查询对象，避免每次查询时重复构建匹配条件。
+     * 适用于在 System 中频繁执行的查询，提供便捷的迭代方法。
+     *
+     * Compile query.
+     * Creates a pre-compiled query object that avoids repeated condition building.
+     * Suitable for frequently executed queries in Systems, provides convenient iteration.
+     *
+     * @param componentTypes 要查询的组件类型 | Component types to query
+     * @returns 编译查询实例 | Compiled query instance
+     *
+     * @example
+     * ```typescript
+     * class MovementSystem extends EntitySystem {
+     *     private _query: CompiledQuery<[typeof Position, typeof Velocity]>;
+     *
+     *     onInitialize(): void {
+     *         this._query = this.scene.querySystem.compile(Position, Velocity);
+     *     }
+     *
+     *     update(): void {
+     *         this._query.forEach((entity, pos, vel) => {
+     *             pos.x += vel.x * this.deltaTime;
+     *             pos.y += vel.y * this.deltaTime;
+     *             pos.markDirty(this.scene.epochManager.current);
+     *         });
+     *     }
+     * }
+     * ```
+     */
+    public compile<T extends ComponentType[]>(...componentTypes: T): CompiledQuery<T> {
+        return new CompiledQuery<T>(this, ...componentTypes);
     }
 
     /**

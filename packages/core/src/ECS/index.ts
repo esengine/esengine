@@ -23,3 +23,35 @@ export type { ReactiveQueryChange, ReactiveQueryListener, ReactiveQueryConfig } 
 export { CommandBuffer, CommandType } from './Core/CommandBuffer';
 export type { DeferredCommand } from './Core/CommandBuffer';
 export * from './EntityTags';
+
+// System Scheduling
+export { SystemScheduler, CycleDependencyError, DEFAULT_STAGE_ORDER } from './Core/SystemScheduler';
+export type { SystemStage, SystemSchedulingMetadata } from './Core/SystemScheduler';
+export { SystemDependencyGraph } from './Core/SystemDependencyGraph';
+export type { SystemDependencyInfo } from './Core/SystemDependencyGraph';
+
+// Entity Handle
+export {
+    makeHandle,
+    indexOf,
+    genOf,
+    isValidHandle,
+    handleEquals,
+    handleToString,
+    NULL_HANDLE,
+    INDEX_BITS,
+    GEN_BITS,
+    INDEX_MASK,
+    GEN_MASK,
+    MAX_ENTITIES,
+    MAX_GENERATION
+} from './Core/EntityHandle';
+export type { EntityHandle } from './Core/EntityHandle';
+export { EntityHandleManager } from './Core/EntityHandleManager';
+
+// Change Detection
+export { EpochManager } from './Core/EpochManager';
+
+// Compiled Query
+export { CompiledQuery } from './Core/Query/CompiledQuery';
+export type { InstanceTypes } from './Core/Query/CompiledQuery';

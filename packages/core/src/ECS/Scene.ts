@@ -27,6 +27,10 @@ import { AutoProfiler } from '../Utils/Profiler/AutoProfiler';
 import { ServiceContainer, type ServiceType, type IService } from '../Core/ServiceContainer';
 import { createInstance, isInjectable, injectProperties } from '../Core/DI';
 import { createLogger } from '../Utils/Logger';
+import { SystemScheduler, CycleDependencyError } from './Core/SystemScheduler';
+import { EntityHandleManager } from './Core/EntityHandleManager';
+import { EntityHandle, isValidHandle } from './Core/EntityHandle';
+import { EpochManager } from './Core/EpochManager';
 
 /**
  * 游戏场景默认实现类
@@ -91,6 +95,38 @@ export class Scene implements IScene {
      * 追踪Component中对Entity的引用，当Entity销毁时自动清理引用。
      */
     public readonly referenceTracker: ReferenceTracker;
+
+    /**
+     * 实体句柄管理器
+     *
+     * 管理轻量级实体句柄的生命周期，包括创建、销毁和状态查询。
+     * 用于高性能场景下替代对象引用。
+     *
+     * Entity handle manager.
+     * Manages lifecycle of lightweight entity handles.
+     * Used for high-performance scenarios instead of object references.
+     */
+    public readonly handleManager: EntityHandleManager;
+
+    /**
+     * 句柄到实体的映射
+     *
+     * 用于 O(1) 时间复杂度的句柄查找。
+     *
+     * Handle to entity mapping.
+     * Used for O(1) lookup by handle.
+     */
+    private readonly _handleToEntity: Map<EntityHandle, Entity> = new Map();
+
+    /**
+     * Epoch 管理器
+     *
+     * 用于帧级变更检测，追踪组件的修改时间。
+     *
+     * Epoch manager.
+     * Used for frame-level change detection, tracking component modification time.
+     */
+    public readonly epochManager: EpochManager = new EpochManager();
 
     /**
      * 服务容器
@@ -176,6 +212,18 @@ export class Scene implements IScene {
     private _systemAddCounter: number = 0;
 
     /**
+     * 系统调度器
+     *
+     * 用于管理系统的执行阶段和依赖关系。
+     * 支持 before/after 依赖声明和拓扑排序。
+     *
+     * System scheduler.
+     * Manages system execution stages and dependencies.
+     * Supports before/after dependency declarations and topological sorting.
+     */
+    private readonly _systemScheduler: SystemScheduler = new SystemScheduler();
+
+    /**
      * 组件ID到系统的索引映射
      *
      * 用于快速查找关心特定组件的系统，避免遍历所有系统。
@@ -220,12 +268,34 @@ export class Scene implements IScene {
     /**
      * 重新构建系统缓存
      *
-     * 从服务容器中提取所有EntitySystem并排序
+     * 从服务容器中提取所有EntitySystem并排序。
+     * 使用 SystemScheduler 进行依赖排序，支持 before/after 声明。
+     *
+     * Rebuild system cache.
+     * Extract all EntitySystems from service container and sort them.
+     * Uses SystemScheduler for dependency sorting, supports before/after declarations.
      */
     private _rebuildSystemsCache(): EntitySystem[] {
         const allServices = this._services.getAll();
         const systems = this._filterEntitySystems(allServices);
-        return this._sortSystemsByUpdateOrder(systems);
+
+        try {
+            // 使用 SystemScheduler 进行依赖排序
+            this._systemScheduler.markDirty();
+            return this._systemScheduler.getAllSortedSystems(systems);
+        } catch (error) {
+            if (error instanceof CycleDependencyError) {
+                // 循环依赖错误，记录警告并回退到 updateOrder 排序
+                this.logger.error(
+                    `[Scene] 系统存在循环依赖，回退到 updateOrder 排序 | Cycle dependency detected, falling back to updateOrder sort`,
+                    error.involvedNodes
+                );
+            } else {
+                this.logger.error(`[Scene] 系统排序失败 | System sorting failed`, error);
+            }
+            // 回退到简单的 updateOrder 排序
+            return this._sortSystemsByUpdateOrder(systems);
+        }
     }
 
     /**
@@ -302,6 +372,7 @@ export class Scene implements IScene {
         this.querySystem = new QuerySystem();
         this.eventSystem = new TypeSafeEventSystem();
         this.referenceTracker = new ReferenceTracker();
+        this.handleManager = new EntityHandleManager();
         this._services = new ServiceContainer();
         this.logger = createLogger('Scene');
 
@@ -429,12 +500,22 @@ export class Scene implements IScene {
         // 清空组件索引 | Clear component indices
         this._componentIdToSystems.clear();
         this._globalNotifySystems.clear();
+
+        // 清空句柄映射并重置句柄管理器 | Clear handle mapping and reset handle manager
+        this._handleToEntity.clear();
+        this.handleManager.reset();
+
+        // 重置 epoch 管理器 | Reset epoch manager
+        this.epochManager.reset();
     }
 
     /**
      * 更新场景
      */
     public update() {
+        // 递增帧计数（用于变更检测） | Increment epoch (for change detection)
+        this.epochManager.increment();
+
         // 开始性能采样帧
         ProfilerSDK.beginFrame();
         const frameHandle = ProfilerSDK.beginSample('Scene.update', ProfileCategory.ECS);
@@ -548,6 +629,13 @@ export class Scene implements IScene {
      */
     public createEntity(name: string) {
         const entity = new Entity(name, this.identifierPool.checkOut());
+
+        // 分配轻量级句柄 | Assign lightweight handle
+        const handle = this.handleManager.create();
+        entity.setHandle(handle);
+
+        // 添加到句柄映射 | Add to handle mapping
+        this._handleToEntity.set(handle, entity);
 
         this.eventSystem.emitSync('entity:created', { entityName: name, entity, scene: this });
 
@@ -736,6 +824,14 @@ export class Scene implements IScene {
         for (let i = 0; i < count; i++) {
             const entity = new Entity(`${namePrefix}_${i}`, this.identifierPool.checkOut());
             entity.scene = this;
+
+            // 分配轻量级句柄 | Assign lightweight handle
+            const handle = this.handleManager.create();
+            entity.setHandle(handle);
+
+            // 添加到句柄映射 | Add to handle mapping
+            this._handleToEntity.set(handle, entity);
+
             entities.push(entity);
         }
 
@@ -770,6 +866,12 @@ export class Scene implements IScene {
         for (const entity of entities) {
             this.entities.remove(entity);
             this.querySystem.removeEntity(entity);
+
+            // 销毁句柄并从映射中移除 | Destroy handle and remove from mapping
+            if (isValidHandle(entity.handle)) {
+                this._handleToEntity.delete(entity.handle);
+                this.handleManager.destroy(entity.handle);
+            }
         }
 
         this.querySystem.clearCache();
@@ -799,6 +901,26 @@ export class Scene implements IScene {
      */
     public findEntityById(id: number): Entity | null {
         return this.entities.findEntityById(id);
+    }
+
+    /**
+     * 根据句柄查找实体
+     *
+     * 通过轻量级句柄查找对应的实体（O(1) 时间复杂度）。
+     * 如果句柄无效或实体已被销毁，返回 null。
+     *
+     * Find entity by handle (O(1) time complexity).
+     * Returns null if handle is invalid or entity has been destroyed.
+     *
+     * @param handle 实体句柄 | Entity handle
+     * @returns 实体实例或 null | Entity instance or null
+     */
+    public findEntityByHandle(handle: EntityHandle): Entity | null {
+        if (!isValidHandle(handle) || !this.handleManager.isAlive(handle)) {
+            return null;
+        }
+
+        return this._handleToEntity.get(handle) ?? null;
     }
 
     /**

@@ -672,6 +672,243 @@ scene.addSystem(new SystemB()); // addOrder = 1, executes second
 
 > **Note**: `addOrder` is automatically set by the framework when calling `addSystem`, no manual management needed. This ensures systems with the same `updateOrder` execute in their addition order, avoiding random behavior from unstable sorting.
 
+## Declarative System Scheduling
+
+> **v2.4.0+**
+
+In addition to manually controlling execution order with `updateOrder`, the framework provides a declarative system scheduling mechanism that lets you define execution order through dependencies.
+
+### Scheduling Decorators
+
+```typescript
+import { EntitySystem, ECSSystem, Stage, Before, After, InSet } from '@esengine/ecs-framework';
+
+// Use decorators to declare system scheduling
+@ECSSystem('Movement')
+@Stage('update')           // Execute in update stage
+@After('InputSystem')      // Execute after InputSystem
+@Before('RenderSystem')    // Execute before RenderSystem
+class MovementSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Position, Velocity));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // Movement logic
+    }
+}
+
+// Use system sets for grouping
+@ECSSystem('Physics')
+@Stage('update')
+@InSet('CoreSystems')      // Belongs to CoreSystems set
+class PhysicsSystem extends EntitySystem {
+    // ...
+}
+
+@ECSSystem('Collision')
+@Stage('update')
+@After('set:CoreSystems')  // Execute after all systems in CoreSystems set
+class CollisionSystem extends EntitySystem {
+    // ...
+}
+```
+
+### System Execution Stages
+
+The framework defines the following system execution stages, executed in order:
+
+| Stage | Description | Typical Usage |
+|-------|-------------|---------------|
+| `startup` | Startup stage | One-time initialization |
+| `preUpdate` | Pre-update stage | Input handling, state preparation |
+| `update` | Main update stage (default) | Core game logic |
+| `postUpdate` | Post-update stage | Physics, collision detection |
+| `cleanup` | Cleanup stage | Resource cleanup, state reset |
+
+### Fluent API Configuration
+
+If you prefer not to use decorators, you can configure scheduling at runtime using the Fluent API:
+
+```typescript
+@ECSSystem('Movement')
+class MovementSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Position, Velocity));
+
+        // Configure scheduling using Fluent API
+        this.stage('update')
+            .after('InputSystem')
+            .before('RenderSystem')
+            .inSet('CoreSystems');
+    }
+}
+```
+
+### Cycle Dependency Detection
+
+The framework automatically detects cyclic dependencies and throws clear errors:
+
+```typescript
+// This will cause a cycle dependency error
+@ECSSystem('SystemA')
+@Before('SystemB')
+class SystemA extends EntitySystem { }
+
+@ECSSystem('SystemB')
+@Before('SystemA')  // Error: A -> B -> A forms a cycle
+class SystemB extends EntitySystem { }
+
+// Error message: Cyclic dependency detected: SystemA -> SystemB -> SystemA
+```
+
+## Frame-Level Change Detection
+
+> **v2.4.0+**
+
+The framework provides epoch-based frame-level change detection, allowing systems to process only entities that have changed, significantly improving performance.
+
+### Core Concepts
+
+- **Epoch**: Global frame counter, incremented each frame
+- **lastWriteEpoch**: The epoch when a component was last modified
+- **Change Detection**: Determine if component changed after a specific point by comparing epochs
+
+### Marking Components as Modified
+
+After modifying component data, you need to mark the component as changed. There are two approaches:
+
+**Approach 1: Via Entity Helper Method (Recommended)**
+
+```typescript
+// Mark component dirty via entity.markDirty() after modification
+const pos = entity.getComponent(Position)!;
+pos.x = 100;
+pos.y = 200;
+entity.markDirty(pos);
+
+// Can mark multiple components at once
+const vel = entity.getComponent(Velocity)!;
+vel.vx = 10;
+entity.markDirty(pos, vel);
+```
+
+**Approach 2: Encapsulate in Component**
+
+```typescript
+class VelocityComponent extends Component {
+    private _vx: number = 0;
+    private _vy: number = 0;
+
+    // Provide modification method that accepts epoch parameter
+    public setVelocity(vx: number, vy: number, epoch: number): void {
+        this._vx = vx;
+        this._vy = vy;
+        this.markDirty(epoch);
+    }
+
+    public get vx(): number { return this._vx; }
+    public get vy(): number { return this._vy; }
+}
+
+// Usage in system
+const vel = entity.getComponent(VelocityComponent)!;
+vel.setVelocity(10, 20, this.currentEpoch);
+```
+
+### Using Change Detection in Systems
+
+EntitySystem provides several change detection helper methods:
+
+```typescript
+@ECSSystem('Physics')
+class PhysicsSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Position, Velocity));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // Method 1: Use forEachChanged to process only changed entities
+        // Automatically saves epoch checkpoint
+        this.forEachChanged(entities, [Velocity], (entity) => {
+            const pos = this.requireComponent(entity, Position);
+            const vel = this.requireComponent(entity, Velocity);
+
+            // Only update position when Velocity changes
+            pos.x += vel.vx * Time.deltaTime;
+            pos.y += vel.vy * Time.deltaTime;
+        });
+    }
+}
+
+@ECSSystem('Transform')
+class TransformSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Transform, RigidBody));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // Method 2: Use filterChanged to get list of changed entities
+        const changedEntities = this.filterChanged(entities, [RigidBody]);
+
+        for (const entity of changedEntities) {
+            // Process entities with changed physics state
+            this.updatePhysics(entity);
+        }
+
+        // Manually save epoch checkpoint
+        this.saveEpoch();
+    }
+
+    protected updatePhysics(entity: Entity): void {
+        // Physics update logic
+    }
+}
+```
+
+### Change Detection API Reference
+
+| Method | Description |
+|--------|-------------|
+| `forEachChanged(entities, [Types], callback)` | Iterate entities with changed specified components, auto-saves checkpoint |
+| `filterChanged(entities, [Types])` | Return array of entities with changed specified components |
+| `hasChanged(entity, [Types])` | Check if single entity's specified components have changed |
+| `saveEpoch()` | Manually save current epoch as checkpoint |
+| `lastProcessEpoch` | Get last saved epoch checkpoint |
+| `currentEpoch` | Get current scene epoch |
+
+### Use Cases
+
+Change detection is particularly suitable for:
+
+1. **Dirty flag optimization**: Only update rendering when data changes
+2. **Physics sync**: Only sync entities with changed position/velocity
+3. **Network sync**: Only send changed component data
+4. **Cache invalidation**: Only recalculate when dependent data changes
+
+```typescript
+@ECSSystem('NetworkSync')
+class NetworkSyncSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(NetworkComponent, Transform));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // Only sync changed entities, greatly reducing network traffic
+        this.forEachChanged(entities, [Transform], (entity) => {
+            const transform = this.requireComponent(entity, Transform);
+            const network = this.requireComponent(entity, NetworkComponent);
+
+            this.sendTransformUpdate(network.id, transform);
+        });
+    }
+
+    private sendTransformUpdate(id: string, transform: Transform): void {
+        // Send network update
+    }
+}
+```
+
 ## Complex System Examples
 
 ### Collision Detection System

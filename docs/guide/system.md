@@ -672,6 +672,243 @@ scene.addSystem(new SystemB()); // addOrder = 1，后执行
 
 > **注意**：`addOrder` 由框架在 `addSystem` 时自动设置，无需手动管理。这确保了相同 `updateOrder` 的系统按照添加顺序执行，避免了排序不稳定导致的随机行为。
 
+## 声明式系统调度
+
+> **v2.4.0+**
+
+除了使用 `updateOrder` 手动控制执行顺序外，框架还提供了声明式的系统调度机制，让你可以通过依赖关系来定义系统的执行顺序。
+
+### 调度装饰器
+
+```typescript
+import { EntitySystem, ECSSystem, Stage, Before, After, InSet } from '@esengine/ecs-framework';
+
+// 使用装饰器声明系统调度
+@ECSSystem('Movement')
+@Stage('update')           // 在 update 阶段执行
+@After('InputSystem')      // 在 InputSystem 之后执行
+@Before('RenderSystem')    // 在 RenderSystem 之前执行
+class MovementSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Position, Velocity));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // 移动逻辑
+    }
+}
+
+// 使用系统集合进行分组
+@ECSSystem('Physics')
+@Stage('update')
+@InSet('CoreSystems')      // 属于 CoreSystems 集合
+class PhysicsSystem extends EntitySystem {
+    // ...
+}
+
+@ECSSystem('Collision')
+@Stage('update')
+@After('set:CoreSystems')  // 在 CoreSystems 集合的所有系统之后执行
+class CollisionSystem extends EntitySystem {
+    // ...
+}
+```
+
+### 系统执行阶段
+
+框架定义了以下系统执行阶段，按顺序执行：
+
+| 阶段 | 说明 | 典型用途 |
+|------|------|----------|
+| `startup` | 启动阶段 | 一次性初始化 |
+| `preUpdate` | 更新前阶段 | 输入处理、状态准备 |
+| `update` | 主更新阶段（默认） | 核心游戏逻辑 |
+| `postUpdate` | 更新后阶段 | 物理、碰撞检测 |
+| `cleanup` | 清理阶段 | 资源清理、状态重置 |
+
+### Fluent API 配置
+
+如果不想使用装饰器，也可以使用 Fluent API 在运行时配置调度：
+
+```typescript
+@ECSSystem('Movement')
+class MovementSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Position, Velocity));
+
+        // 使用 Fluent API 配置调度
+        this.stage('update')
+            .after('InputSystem')
+            .before('RenderSystem')
+            .inSet('CoreSystems');
+    }
+}
+```
+
+### 循环依赖检测
+
+框架会自动检测循环依赖并抛出明确的错误：
+
+```typescript
+// 这会导致循环依赖错误
+@ECSSystem('SystemA')
+@Before('SystemB')
+class SystemA extends EntitySystem { }
+
+@ECSSystem('SystemB')
+@Before('SystemA')  // 错误：A -> B -> A 形成循环
+class SystemB extends EntitySystem { }
+
+// 错误信息：Cyclic dependency detected: SystemA -> SystemB -> SystemA
+```
+
+## 帧级变更检测
+
+> **v2.4.0+**
+
+框架提供了基于 epoch 的帧级变更检测机制，让系统可以只处理发生变化的实体，大幅提升性能。
+
+### 核心概念
+
+- **Epoch**：全局帧计数器，每帧递增
+- **lastWriteEpoch**：组件最后被修改时的 epoch
+- **变更检测**：通过比较 epoch 判断组件是否在指定时间点后发生变化
+
+### 标记组件为已修改
+
+修改组件数据后，需要标记组件为已变更。有两种方式：
+
+**方式 1：通过 Entity 辅助方法（推荐）**
+
+```typescript
+// 修改组件后通过 entity.markDirty() 标记
+const pos = entity.getComponent(Position)!;
+pos.x = 100;
+pos.y = 200;
+entity.markDirty(pos);
+
+// 可以同时标记多个组件
+const vel = entity.getComponent(Velocity)!;
+vel.vx = 10;
+entity.markDirty(pos, vel);
+```
+
+**方式 2：在组件内部封装**
+
+```typescript
+class VelocityComponent extends Component {
+    private _vx: number = 0;
+    private _vy: number = 0;
+
+    // 提供修改方法，接收 epoch 参数
+    public setVelocity(vx: number, vy: number, epoch: number): void {
+        this._vx = vx;
+        this._vy = vy;
+        this.markDirty(epoch);
+    }
+
+    public get vx(): number { return this._vx; }
+    public get vy(): number { return this._vy; }
+}
+
+// 在系统中使用
+const vel = entity.getComponent(VelocityComponent)!;
+vel.setVelocity(10, 20, this.currentEpoch);
+```
+
+### 在系统中使用变更检测
+
+EntitySystem 提供了多个变更检测辅助方法：
+
+```typescript
+@ECSSystem('Physics')
+class PhysicsSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Position, Velocity));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // 方式1：使用 forEachChanged 只处理变更的实体
+        // 自动保存 epoch 检查点
+        this.forEachChanged(entities, [Velocity], (entity) => {
+            const pos = this.requireComponent(entity, Position);
+            const vel = this.requireComponent(entity, Velocity);
+
+            // 只有 Velocity 变化时才更新位置
+            pos.x += vel.vx * Time.deltaTime;
+            pos.y += vel.vy * Time.deltaTime;
+        });
+    }
+}
+
+@ECSSystem('Transform')
+class TransformSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(Transform, RigidBody));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // 方式2：使用 filterChanged 获取变更的实体列表
+        const changedEntities = this.filterChanged(entities, [RigidBody]);
+
+        for (const entity of changedEntities) {
+            // 处理物理状态变化的实体
+            this.updatePhysics(entity);
+        }
+
+        // 手动保存 epoch 检查点
+        this.saveEpoch();
+    }
+
+    protected updatePhysics(entity: Entity): void {
+        // 物理更新逻辑
+    }
+}
+```
+
+### 变更检测 API 参考
+
+| 方法 | 说明 |
+|------|------|
+| `forEachChanged(entities, [Types], callback)` | 遍历指定组件发生变更的实体，自动保存检查点 |
+| `filterChanged(entities, [Types])` | 返回指定组件发生变更的实体数组 |
+| `hasChanged(entity, [Types])` | 检查单个实体的指定组件是否发生变更 |
+| `saveEpoch()` | 手动保存当前 epoch 作为检查点 |
+| `lastProcessEpoch` | 获取上次保存的 epoch 检查点 |
+| `currentEpoch` | 获取当前场景的 epoch |
+
+### 使用场景
+
+变更检测特别适合以下场景：
+
+1. **脏标记优化**：只在数据变化时更新渲染
+2. **物理同步**：只同步位置/速度发生变化的实体
+3. **网络同步**：只发送变化的组件数据
+4. **缓存失效**：只在依赖数据变化时重新计算
+
+```typescript
+@ECSSystem('NetworkSync')
+class NetworkSyncSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(NetworkComponent, Transform));
+    }
+
+    protected process(entities: readonly Entity[]): void {
+        // 只同步变化的实体，大幅减少网络流量
+        this.forEachChanged(entities, [Transform], (entity) => {
+            const transform = this.requireComponent(entity, Transform);
+            const network = this.requireComponent(entity, NetworkComponent);
+
+            this.sendTransformUpdate(network.id, transform);
+        });
+    }
+
+    private sendTransformUpdate(id: string, transform: Transform): void {
+        // 发送网络更新
+    }
+}
+```
+
 ## 复杂系统示例
 
 ### 碰撞检测系统
