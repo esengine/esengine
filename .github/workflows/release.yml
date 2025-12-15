@@ -1,10 +1,26 @@
 name: Release NPM Packages
 
 on:
+  # 标签触发：支持 v* 和 {package}-v* 格式
+  # Tag trigger: supports v* and {package}-v* formats
+  push:
+    tags:
+      - 'v*'
+      - 'core-v*'
+      - 'behavior-tree-v*'
+      - 'editor-core-v*'
+      - 'node-editor-v*'
+      - 'blueprint-v*'
+      - 'tilemap-v*'
+      - 'physics-rapier2d-v*'
+      - 'worker-generator-v*'
+
+  # 保留手动触发选项
+  # Keep manual trigger option
   workflow_dispatch:
     inputs:
       package:
-        description: '选择要发布的包'
+        description: '选择要发布的包 | Select package to publish'
         required: true
         type: choice
         options:
@@ -15,19 +31,15 @@ on:
           - blueprint
           - tilemap
           - physics-rapier2d
+          - worker-generator
       version_type:
-        description: '版本更新类型'
+        description: '版本更新类型 | Version bump type'
         required: true
         type: choice
         options:
           - patch
           - minor
           - major
-          - custom
-      custom_version:
-        description: '自定义版本号 (仅当选择 custom 时使用，例如: 2.2.9)'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -36,7 +48,7 @@ permissions:
 
 jobs:
   release-package:
-    name: Release ${{ github.event.inputs.package }} Package
+    name: Release Package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,6 +56,42 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse tag or input
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # 从标签解析包名和版本 | Parse package and version from tag
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+            # 解析格式：v1.0.0 或 package-v1.0.0
+            # Parse format: v1.0.0 or package-v1.0.0
+            if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+              PACKAGE="core"
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^([a-z-]+)-v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+              PACKAGE="${BASH_REMATCH[1]}"
+              VERSION="${BASH_REMATCH[2]}"
+            else
+              echo "::error::Invalid tag format: $TAG"
+              echo "Expected: v1.0.0 or package-v1.0.0"
+              exit 1
+            fi
+
+            echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "mode=tag" >> $GITHUB_OUTPUT
+            echo "📦 Package: $PACKAGE"
+            echo "📌 Version: $VERSION"
+          else
+            # 手动触发：从 package.json 读取并 bump 版本
+            # Manual trigger: read from package.json and bump version
+            PACKAGE="${{ github.event.inputs.package }}"
+            echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+            echo "mode=manual" >> $GITHUB_OUTPUT
+            echo "version_type=${{ github.event.inputs.version_type }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -58,76 +106,124 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Verify version (tag mode)
+        if: steps.parse.outputs.mode == 'tag'
+        run: |
+          PACKAGE="${{ steps.parse.outputs.package }}"
+          EXPECTED_VERSION="${{ steps.parse.outputs.version }}"
+
+          # 获取 package.json 中的版本
+          # Get version from package.json
+          ACTUAL_VERSION=$(node -p "require('./packages/$PACKAGE/package.json').version")
+
+          if [ "$EXPECTED_VERSION" != "$ACTUAL_VERSION" ]; then
+            echo "::error::Version mismatch!"
+            echo "Tag version: $EXPECTED_VERSION"
+            echo "package.json version: $ACTUAL_VERSION"
+            echo ""
+            echo "Please update packages/$PACKAGE/package.json to version $EXPECTED_VERSION before tagging."
+            exit 1
+          fi
+
+          echo "✅ Version verified: $EXPECTED_VERSION"
+
+      - name: Bump version (manual mode)
+        if: steps.parse.outputs.mode == 'manual'
+        id: bump
+        run: |
+          PACKAGE="${{ steps.parse.outputs.package }}"
+          cd packages/$PACKAGE
+
+          CURRENT=$(node -p "require('./package.json').version")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case "${{ steps.parse.outputs.version_type }}" in
+            major) NEW_VERSION="$((MAJOR+1)).0.0" ;;
+            minor) NEW_VERSION="$MAJOR.$((MINOR+1)).0" ;;
+            patch) NEW_VERSION="$MAJOR.$MINOR.$((PATCH+1))" ;;
+          esac
+
+          # Update package.json
+          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json')); pkg.version='$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)+'\n')"
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Bumped version: $CURRENT → $NEW_VERSION"
+
+      - name: Set final version
+        id: version
+        run: |
+          if [ "${{ steps.parse.outputs.mode }}" = "tag" ]; then
+            echo "value=${{ steps.parse.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=${{ steps.bump.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build core package (if needed)
-        if: ${{ github.event.inputs.package != 'core' && github.event.inputs.package != 'node-editor' }}
+        if: ${{ steps.parse.outputs.package != 'core' && steps.parse.outputs.package != 'node-editor' && steps.parse.outputs.package != 'worker-generator' }}
         run: |
           cd packages/core
           pnpm run build
 
       - name: Build node-editor package (if needed for blueprint)
-        if: ${{ github.event.inputs.package == 'blueprint' }}
+        if: ${{ steps.parse.outputs.package == 'blueprint' }}
         run: |
           cd packages/node-editor
           pnpm run build
 
-      # - name: Run tests
-      #   run: |
-      #     cd packages/${{ github.event.inputs.package }}
-      #     npm run test:ci
-
-      - name: Update version
-        id: version
-        run: |
-          cd packages/${{ github.event.inputs.package }}
-          if [ "${{ github.event.inputs.version_type }}" = "custom" ]; then
-            NEW_VERSION=${{ github.event.inputs.custom_version }}
-          else
-            # Get current version and bump it
-            CURRENT=$(node -p "require('./package.json').version")
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-            case "${{ github.event.inputs.version_type }}" in
-              major) NEW_VERSION="$((MAJOR+1)).0.0" ;;
-              minor) NEW_VERSION="$MAJOR.$((MINOR+1)).0" ;;
-              patch) NEW_VERSION="$MAJOR.$MINOR.$((PATCH+1))" ;;
-            esac
-          fi
-          # Update package.json using node
-          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json')); pkg.version='$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)+'\n')"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "发布版本: $NEW_VERSION"
-
       - name: Build package
         run: |
-          cd packages/${{ github.event.inputs.package }}
+          cd packages/${{ steps.parse.outputs.package }}
           pnpm run build:npm
 
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages/${{ github.event.inputs.package }}/dist
+          cd packages/${{ steps.parse.outputs.package }}/dist
           pnpm publish --access public --no-git-checks
 
-      - name: Create Pull Request
+      - name: Create GitHub Release (tag mode)
+        if: steps.parse.outputs.mode == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.parse.outputs.tag }}
+          name: "${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}"
+          body: |
+            ## 🚀 @esengine/${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}
+
+            📦 **NPM**: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
+
+            ```bash
+            npm install @esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}
+            ```
+
+            ---
+            *自动发布 | Auto-released by GitHub Actions*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pull Request (manual mode)
+        if: steps.parse.outputs.mode == 'manual'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore(${{ github.event.inputs.package }}): release v${{ steps.version.outputs.new_version }}"
-          branch: release/${{ github.event.inputs.package }}-v${{ steps.version.outputs.new_version }}
+          commit-message: "chore(${{ steps.parse.outputs.package }}): release v${{ steps.version.outputs.value }}"
+          branch: release/${{ steps.parse.outputs.package }}-v${{ steps.version.outputs.value }}
           delete-branch: true
-          title: "chore(${{ github.event.inputs.package }}): Release v${{ steps.version.outputs.new_version }}"
+          title: "chore(${{ steps.parse.outputs.package }}): Release v${{ steps.version.outputs.value }}"
           body: |
-            ## 🚀 Release v${{ steps.version.outputs.new_version }}
+            ## 🚀 Release v${{ steps.version.outputs.value }}
 
-            此 PR 更新 `@esengine/${{ github.event.inputs.package }}` 包的版本号
+            此 PR 更新 `@esengine/${{ steps.parse.outputs.package }}` 包的版本号
 
             ### 变更
-            - ✅ 已发布到 npm: [@esengine/${{ github.event.inputs.package }}@${{ steps.version.outputs.new_version }}](https://www.npmjs.com/package/@esengine/${{ github.event.inputs.package }}/v/${{ steps.version.outputs.new_version }})
-            - ✅ 更新 `packages/${{ github.event.inputs.package }}/package.json` → `${{ steps.version.outputs.new_version }}`
+            - ✅ 已发布到 npm: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
+            - ✅ 更新 `packages/${{ steps.parse.outputs.package }}/package.json` → `${{ steps.version.outputs.value }}`
 
             ---
             *此 PR 由发布工作流自动创建*
           labels: |
             release
-            ${{ github.event.inputs.package }}
+            ${{ steps.parse.outputs.package }}
             automated pr

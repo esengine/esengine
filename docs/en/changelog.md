@@ -4,6 +4,54 @@ This document records the version update history of the `@esengine/ecs-framework
 
 ---
 
+## v2.4.0 (2025-12-15)
+
+### Features
+
+- **EntityHandle**: Lightweight entity reference abstraction (#304)
+  - 28-bit index + 20-bit generation design for efficient reuse of destroyed entity slots
+  - `EntityHandleManager` manages handle lifecycle and validity verification
+  - Support handle-to-entity conversion with dangling reference detection
+
+- **SystemScheduler**: Declarative system scheduling (#304)
+  - New `@Stage(name)` decorator to specify system execution stage
+  - New `@Before(SystemClass)` / `@After(SystemClass)` decorators to declare dependencies
+  - New `@InSet(setName)` decorator to group systems logically
+  - Automatic execution order resolution via topological sort with cycle detection
+
+- **EpochManager**: Frame-level change detection mechanism (#304)
+  - Track component add/modify timestamps (epochs)
+  - Support querying "components changed since last check"
+  - Suitable for dirty checking, incremental updates, and other optimization scenarios
+
+- **CompiledQuery**: Pre-compiled type-safe queries (#304)
+  - Compile-time generated optimized query logic, reducing runtime overhead
+  - Full TypeScript type inference support
+  - Support `With`, `Without`, `Changed` and other query condition combinations
+
+- **PluginServiceRegistry**: Type-safe plugin service registry (#300)
+  - Accessible via `Core.pluginServices`
+  - Support `ServiceToken<T>` pattern for service retrieval
+
+- **Component Auto-Registration**: `@ECSComponent` decorator enhancement (#302)
+  - Decorator now automatically registers to `ComponentRegistry`
+  - Resolved `Decorators ↔ ComponentRegistry` circular dependency
+  - New `ComponentTypeUtils.ts` as low-level dependency-free module
+
+### API Changes
+
+- `EntitySystem` adds `getBefore()` / `getAfter()` / `getSets()` getter methods
+- `Entity` adds `markDirty()` helper method for manual change detection triggering
+- `IScene` adds `epochManager` property
+- `CommandBuffer.pendingCount` corrected to return actual operation count (not entity count)
+
+### Documentation
+
+- Updated system scheduling documentation with declarative dependency configuration
+- Updated entity query documentation with compiled query usage
+
+---
+
 ## v2.3.2 (2025-12-08)
 
 ### Features

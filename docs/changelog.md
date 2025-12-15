@@ -4,6 +4,54 @@
 
 ---
 
+## v2.4.0 (2025-12-15)
+
+### Features
+
+- **EntityHandle 实体句柄**: 轻量级实体引用抽象 (#304)
+  - 28位索引 + 20位代数（generation）设计，高效复用已销毁实体槽位
+  - `EntityHandleManager` 管理句柄生命周期和有效性验证
+  - 支持句柄转换为实体引用，检测悬空引用
+
+- **SystemScheduler 系统调度器**: 声明式系统调度 (#304)
+  - 新增 `@Stage(name)` 装饰器指定系统执行阶段
+  - 新增 `@Before(SystemClass)` / `@After(SystemClass)` 装饰器声明系统依赖
+  - 新增 `@InSet(setName)` 装饰器将系统归入逻辑分组
+  - 基于拓扑排序自动解析执行顺序，检测循环依赖
+
+- **EpochManager 变更检测**: 帧级变更追踪机制 (#304)
+  - 跟踪组件添加/修改时间戳（epoch）
+  - 支持查询"自上次检查以来变化的组件"
+  - 适用于脏检测、增量更新等优化场景
+
+- **CompiledQuery 编译查询**: 预编译类型安全查询 (#304)
+  - 编译时生成优化的查询逻辑，减少运行时开销
+  - 完整的 TypeScript 类型推断支持
+  - 支持 `With`、`Without`、`Changed` 等查询条件组合
+
+- **PluginServiceRegistry**: 类型安全的插件服务注册表 (#300)
+  - 通过 `Core.pluginServices` 访问
+  - 支持 `ServiceToken<T>` 模式获取服务
+
+- **组件自动注册**: `@ECSComponent` 装饰器增强 (#302)
+  - 装饰器现在自动注册到 `ComponentRegistry`
+  - 解决 `Decorators ↔ ComponentRegistry` 循环依赖
+  - 新建 `ComponentTypeUtils.ts` 作为底层无依赖模块
+
+### API Changes
+
+- `EntitySystem` 添加 `getBefore()` / `getAfter()` / `getSets()` getter 方法
+- `Entity` 添加 `markDirty()` 辅助方法用于手动触发变更检测
+- `IScene` 添加 `epochManager` 属性
+- `CommandBuffer.pendingCount` 修正为返回实际操作数（而非实体数）
+
+### Documentation
+
+- 更新系统调度文档，添加声明式依赖配置章节
+- 更新实体查询文档，添加编译查询使用说明
+
+---
+
 ## v2.3.2 (2025-12-08)
 
 ### Features
