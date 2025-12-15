@@ -295,130 +295,149 @@ entity.components.forEach(component => {
 
 ## 实体句柄 (EntityHandle)
 
-实体句柄是一种轻量级的实体引用方式，用于安全地存储和传递实体引用，同时能够检测悬空引用（引用已销毁的实体）。
+实体句柄是一种安全的实体引用方式，用于解决"引用已销毁实体"的问题。
 
-### 为什么需要实体句柄？
+### 问题场景
 
-直接存储 `Entity` 引用存在问题：
-- 实体销毁后，引用变成悬空指针
-- 无法检测实体是否已被销毁
-- 实体索引被复用时，可能错误地引用新实体
-
-实体句柄通过 **代数（Generation）** 机制解决这些问题：
+假设你的 AI 系统需要追踪一个目标敌人：
 
 ```typescript
-import {
-    EntityHandle,
-    makeHandle,
-    indexOf,
-    genOf,
-    isValidHandle,
-    NULL_HANDLE
-} from '@esengine/ecs-framework';
+// 错误做法：直接存储实体引用
+class AISystem extends EntitySystem {
+    private targetEnemy: Entity | null = null;
 
-// 句柄包含索引和代数两部分信息
-// 28位索引 + 20位代数 = 48位（在 JavaScript 安全整数范围内）
-const handle = makeHandle(42, 1);
+    setTarget(enemy: Entity) {
+        this.targetEnemy = enemy;
+    }
 
-console.log(indexOf(handle)); // 42 - 实体索引
-console.log(genOf(handle));   // 1  - 实体代数
-console.log(isValidHandle(handle)); // true - 非空句柄
-```
-
-### 使用 EntityHandleManager
-
-```typescript
-import { EntityHandleManager, indexOf, genOf } from '@esengine/ecs-framework';
-
-const manager = new EntityHandleManager();
-
-// 创建实体句柄
-const handle1 = manager.create();
-console.log(manager.isAlive(handle1)); // true
-
-// 销毁实体
-manager.destroy(handle1);
-console.log(manager.isAlive(handle1)); // false - 句柄已失效
-
-// 创建新实体（索引会被复用，但代数会增加）
-const handle2 = manager.create();
-console.log(indexOf(handle1) === indexOf(handle2)); // true - 相同索引
-console.log(genOf(handle2) > genOf(handle1));       // true - 代数增加
-
-// 旧句柄无法匹配新实体
-console.log(manager.isAlive(handle1)); // false - 代数不匹配
-console.log(manager.isAlive(handle2)); // true  - 代数匹配
-```
-
-### 检测悬空引用
-
-代数机制可以检测 ABA 问题（索引被复用导致的错误引用）：
-
-```typescript
-// 场景：存储敌人的句柄
-let enemyHandle = manager.create();
-
-// ... 游戏运行中，敌人被销毁
-manager.destroy(enemyHandle);
-
-// ... 新实体被创建，复用了相同索引
-const newEntity = manager.create();
-
-// 安全检测：旧句柄不再有效
-if (!manager.isAlive(enemyHandle)) {
-    console.log('敌人已被销毁，句柄无效');
-    enemyHandle = NULL_HANDLE; // 清空引用
+    process() {
+        if (this.targetEnemy) {
+            // 危险！敌人可能已被销毁，但引用还在
+            // 更糟糕：这个内存位置可能被新实体复用了
+            const health = this.targetEnemy.getComponent(Health);
+            // 可能操作了错误的实体！
+        }
+    }
 }
 ```
 
-### 启用/禁用状态
+### 使用句柄的正确做法
 
-句柄管理器还支持实体的启用/禁用状态：
+每个实体创建时会自动分配一个句柄，通过 `entity.handle` 获取：
 
 ```typescript
-const handle = manager.create();
+import { EntityHandle, NULL_HANDLE, isValidHandle } from '@esengine/ecs-framework';
 
-// 禁用实体（仍然存活，但不参与处理）
-manager.setEnabled(handle, false);
-console.log(manager.isEnabled(handle)); // false
-console.log(manager.isAlive(handle));   // true - 仍然存活
+class AISystem extends EntitySystem {
+    // 存储句柄而非实体引用
+    private targetHandle: EntityHandle = NULL_HANDLE;
 
-// 重新启用
-manager.setEnabled(handle, true);
+    setTarget(enemy: Entity) {
+        // 保存敌人的句柄
+        this.targetHandle = enemy.handle;
+    }
+
+    process() {
+        if (!isValidHandle(this.targetHandle)) {
+            return; // 没有目标
+        }
+
+        // 通过句柄获取实体（自动检测是否有效）
+        const enemy = this.scene.findEntityByHandle(this.targetHandle);
+
+        if (!enemy) {
+            // 敌人已被销毁，清空引用
+            this.targetHandle = NULL_HANDLE;
+            return;
+        }
+
+        // 安全操作
+        const health = enemy.getComponent(Health);
+    }
+}
 ```
 
-### API 参考
+### 完整示例：技能目标锁定
 
-#### 句柄函数
+```typescript
+import {
+    EntitySystem, Entity, EntityHandle, NULL_HANDLE, isValidHandle
+} from '@esengine/ecs-framework';
 
-| 函数 | 说明 |
-|-----|------|
-| `makeHandle(index, generation)` | 创建句柄 |
-| `indexOf(handle)` | 获取索引 |
-| `genOf(handle)` | 获取代数 |
-| `isValidHandle(handle)` | 检查是否非空 |
-| `handleEquals(a, b)` | 比较两个句柄 |
-| `handleToString(handle)` | 调试输出 |
+@ECSSystem('SkillTargeting')
+class SkillTargetingSystem extends EntitySystem {
+    // 存储多个目标的句柄
+    private lockedTargets: Map<Entity, EntityHandle> = new Map();
 
-#### EntityHandleManager 方法
+    // 锁定目标
+    lockTarget(caster: Entity, target: Entity) {
+        this.lockedTargets.set(caster, target.handle);
+    }
 
-| 方法 | 说明 |
-|-----|------|
-| `create()` | 创建新句柄 |
-| `destroy(handle)` | 销毁句柄 |
-| `isAlive(handle)` | 检查是否存活 |
-| `isEnabled(handle)` | 检查是否启用 |
-| `setEnabled(handle, enabled)` | 设置启用状态 |
-| `aliveCount` | 存活实体数量 |
-| `capacity` | 当前容量 |
+    // 获取锁定的目标
+    getLockedTarget(caster: Entity): Entity | null {
+        const handle = this.lockedTargets.get(caster);
 
-### 常量
+        if (!handle || !isValidHandle(handle)) {
+            return null;
+        }
 
-| 常量 | 值 | 说明 |
-|-----|---|------|
-| `NULL_HANDLE` | `0` | 空句柄 |
-| `MAX_ENTITIES` | `268,435,456` | 最大实体数 |
-| `MAX_GENERATION` | `1,048,576` | 最大代数值 |
+        // findEntityByHandle 会检查句柄是否有效
+        const target = this.scene.findEntityByHandle(handle);
+
+        if (!target) {
+            // 目标已死亡，清除锁定
+            this.lockedTargets.delete(caster);
+        }
+
+        return target;
+    }
+
+    // 释放技能
+    castSkill(caster: Entity) {
+        const target = this.getLockedTarget(caster);
+
+        if (!target) {
+            console.log('目标丢失，技能取消');
+            return;
+        }
+
+        // 安全地对目标造成伤害
+        const health = target.getComponent(Health);
+        if (health) {
+            health.current -= 10;
+        }
+    }
+}
+```
+
+### 句柄 vs 实体引用
+
+| 场景 | 推荐方式 |
+|-----|---------|
+| 同一帧内临时使用 | 直接用 `Entity` 引用 |
+| 跨帧存储（如 AI 目标、技能目标） | 使用 `EntityHandle` |
+| 需要序列化保存 | 使用 `EntityHandle`（数字类型） |
+| 网络同步 | 使用 `EntityHandle`（可直接传输） |
+
+### API 速查
+
+```typescript
+// 获取实体的句柄
+const handle = entity.handle;
+
+// 检查句柄是否非空
+if (isValidHandle(handle)) { ... }
+
+// 通过句柄获取实体（自动检测有效性）
+const entity = scene.findEntityByHandle(handle);
+
+// 检查句柄对应的实体是否存活
+const alive = scene.handleManager.isAlive(handle);
+
+// 空句柄常量
+const emptyHandle = NULL_HANDLE;
+```
 
 ## 下一步
 
