@@ -38,4 +38,8 @@ export class TauriFileAPI implements IFileAPI {
     public async pathExists(path: string): Promise<boolean> {
         return await TauriAPI.pathExists(path);
     }
+
+    public async getFileMtime(path: string): Promise<number> {
+        return await TauriAPI.getFileMtime(path);
+    }
 }
