@@ -7,7 +7,6 @@ import { AssetManager } from '../core/AssetManager';
 import { AssetGUID, AssetType } from '../types/AssetTypes';
 import { ITextureAsset, IAudioAsset, IJsonAsset } from '../interfaces/IAssetLoader';
 import { PathResolutionService, type IPathResolutionService } from '../services/PathResolutionService';
-import { TextureLoader } from '../loaders/TextureLoader';
 
 /**
  * Texture engine bridge interface (for asset system)
