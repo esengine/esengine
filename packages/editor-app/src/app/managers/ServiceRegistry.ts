@@ -1,4 +1,4 @@
-import { Core, ComponentRegistry as CoreComponentRegistry, PrefabSerializer, ComponentRegistry as ECSComponentRegistry } from '@esengine/ecs-framework';
+import { Core, GlobalComponentRegistry, PrefabSerializer } from '@esengine/ecs-framework';
 import type { ComponentType } from '@esengine/ecs-framework';
 import { invoke } from '@tauri-apps/api/core';
 import {
@@ -136,8 +136,8 @@ export class ServiceRegistry {
 
         for (const comp of standardComponents) {
             // Register to editor registry for UI
-            // 组件已通过 @ECSComponent 装饰器自动注册到 CoreComponentRegistry
-            // Components are auto-registered to CoreComponentRegistry via @ECSComponent decorator
+            // 组件已通过 @ECSComponent 装饰器自动注册到 GlobalComponentRegistry
+            // Components are auto-registered to GlobalComponentRegistry via @ECSComponent decorator
             componentRegistry.register({
                 name: comp.editorName,
                 type: comp.type,
@@ -149,7 +149,7 @@ export class ServiceRegistry {
 
         // Enable hot reload for editor environment
         // 在编辑器环境中启用热更新
-        CoreComponentRegistry.enableHotReload();
+        GlobalComponentRegistry.enableHotReload();
 
         const projectService = new ProjectService(messageHub, fileAPI);
         const componentDiscovery = new ComponentDiscoveryService(messageHub);
@@ -340,8 +340,14 @@ export class ServiceRegistry {
                     // 编辑器脚本编译错误只记录，不影响运行时
                     console.warn('[UserCodeService] Editor compilation errors:', editorResult.errors);
                 }
+
+                // 编译完成，发出就绪信号 | Compilation done, signal ready
+                userCodeService.signalReady();
             } catch (error) {
                 console.error('[UserCodeService] Failed to compile/load:', error);
+                // 即使编译失败也要发出就绪信号，避免阻塞场景加载
+                // Signal ready even on failure to avoid blocking scene loading
+                userCodeService.signalReady();
             }
         };
 
