@@ -1,5 +1,4 @@
-import type { IScene, ServiceContainer } from '@esengine/ecs-framework';
-import { ComponentRegistry } from '@esengine/ecs-framework';
+import type { IScene, ServiceContainer, IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { AssetManagerToken } from '@esengine/asset-system';
 
@@ -17,7 +16,7 @@ export { BehaviorTreeSystemToken } from './tokens';
 class BehaviorTreeRuntimeModule implements IRuntimeModule {
     private _loaderRegistered = false;
 
-    registerComponents(registry: typeof ComponentRegistry): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(BehaviorTreeRuntimeComponent);
     }
 

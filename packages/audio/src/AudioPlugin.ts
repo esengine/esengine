@@ -1,9 +1,9 @@
-import type { ComponentRegistry as ComponentRegistryType } from '@esengine/ecs-framework';
+import type { IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest } from '@esengine/engine-core';
 import { AudioSourceComponent } from './AudioSourceComponent';
 
 class AudioRuntimeModule implements IRuntimeModule {
-    registerComponents(registry: typeof ComponentRegistryType): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(AudioSourceComponent);
     }
 }

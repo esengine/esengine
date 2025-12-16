@@ -1,5 +1,4 @@
-import type { IScene } from '@esengine/ecs-framework';
-import { ComponentRegistry } from '@esengine/ecs-framework';
+import type { IScene, IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { AssetManagerToken } from '@esengine/asset-system';
 import { RenderSystemToken } from '@esengine/ecs-engine-bindgen';
@@ -26,7 +25,7 @@ class TilemapRuntimeModule implements IRuntimeModule {
     private _tilemapPhysicsSystem: TilemapPhysicsSystem | null = null;
     private _loaderRegistered = false;
 
-    registerComponents(registry: typeof ComponentRegistry): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(TilemapComponent);
         registry.register(TilemapCollider2DComponent);
     }

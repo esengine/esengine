@@ -1,4 +1,4 @@
-import type { ComponentRegistry as ComponentRegistryType, IScene } from '@esengine/ecs-framework';
+import type { IComponentRegistry, IScene } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { SpriteComponent } from './SpriteComponent';
 import { SpriteAnimatorComponent } from './SpriteAnimatorComponent';
@@ -11,7 +11,7 @@ export type { SystemContext, ModuleManifest, IRuntimeModule, IRuntimePlugin };
 export { SpriteAnimatorSystemToken } from './tokens';
 
 class SpriteRuntimeModule implements IRuntimeModule {
-    registerComponents(registry: typeof ComponentRegistryType): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(SpriteComponent);
         registry.register(SpriteAnimatorComponent);
     }

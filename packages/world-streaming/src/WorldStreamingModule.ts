@@ -1,5 +1,4 @@
-import type { IScene, ServiceContainer } from '@esengine/ecs-framework';
-import { ComponentRegistry } from '@esengine/ecs-framework';
+import type { IScene, ServiceContainer, IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, SystemContext } from '@esengine/engine-core';
 import { ChunkComponent } from './components/ChunkComponent';
 import { StreamingAnchorComponent } from './components/StreamingAnchorComponent';
@@ -22,7 +21,7 @@ export class WorldStreamingModule implements IRuntimeModule {
         return this._chunkManager;
     }
 
-    registerComponents(registry: typeof ComponentRegistry): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(ChunkComponent);
         registry.register(StreamingAnchorComponent);
         registry.register(ChunkLoaderComponent);
