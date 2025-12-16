@@ -81,7 +81,8 @@
         {
           "identifier": "main",
           "windows": [
-            "main"
+            "main",
+            "frame-debugger"
           ],
           "permissions": [
             "core:default",
@@ -91,6 +92,9 @@
             "core:window:allow-toggle-maximize",
             "core:window:allow-close",
             "core:window:allow-is-maximized",
+            "core:window:allow-create",
+            "core:webview:allow-create-webview",
+            "core:webview:allow-create-webview-window",
             "shell:default",
             "dialog:default",
             "updater:default",

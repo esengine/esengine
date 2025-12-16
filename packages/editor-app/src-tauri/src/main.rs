@@ -65,6 +65,7 @@ fn main() {
             commands::scan_directory,
             commands::read_file_as_base64,
             commands::copy_file,
+            commands::get_file_mtime,
             // Dialog operations
             commands::open_folder_dialog,
             commands::open_file_dialog,
@@ -183,18 +184,27 @@ fn handle_project_protocol(
 }
 
 /// Get MIME type based on file extension
+/// 根据文件扩展名获取 MIME 类型
 fn get_mime_type(file_path: &str) -> &'static str {
     if file_path.ends_with(".ts") || file_path.ends_with(".tsx") {
         "application/javascript"
-    } else if file_path.ends_with(".js") {
+    } else if file_path.ends_with(".js") || file_path.ends_with(".mjs") {
         "application/javascript"
     } else if file_path.ends_with(".json") {
         "application/json"
+    } else if file_path.ends_with(".wasm") {
+        "application/wasm"
     } else if file_path.ends_with(".css") {
         "text/css"
     } else if file_path.ends_with(".html") {
         "text/html"
+    } else if file_path.ends_with(".png") {
+        "image/png"
+    } else if file_path.ends_with(".jpg") || file_path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if file_path.ends_with(".svg") {
+        "image/svg+xml"
     } else {
-        "text/plain"
+        "application/octet-stream"
     }
 }

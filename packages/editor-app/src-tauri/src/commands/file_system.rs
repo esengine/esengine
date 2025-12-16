@@ -254,6 +254,25 @@ pub fn read_file_as_base64(file_path: String) -> Result<String, String> {
     Ok(general_purpose::STANDARD.encode(&file_content))
 }
 
+/// Get file modification time (milliseconds since UNIX epoch)
+/// 获取文件修改时间（Unix 纪元以来的毫秒数）
+#[tauri::command]
+pub fn get_file_mtime(path: String) -> Result<u64, String> {
+    let metadata = fs::metadata(&path)
+        .map_err(|e| format!("Failed to get metadata for {}: {}", path, e))?;
+
+    let modified = metadata
+        .modified()
+        .map_err(|e| format!("Failed to get modified time for {}: {}", path, e))?;
+
+    let millis = modified
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| format!("Time error: {}", e))?
+        .as_millis() as u64;
+
+    Ok(millis)
+}
+
 /// Copy file from source to destination
 #[tauri::command]
 pub fn copy_file(src: String, dst: String) -> Result<(), String> {
