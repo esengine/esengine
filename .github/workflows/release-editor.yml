@@ -156,18 +156,25 @@ jobs:
         if: steps.check-signpath.outputs.enabled == 'true'
         uses: actions/checkout@v4
 
-      - name: Download Windows artifact
+      - name: Get artifact ID
         if: steps.check-signpath.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-unsigned
-          path: ./artifacts
-
-      - name: List artifacts for signing
-        if: steps.check-signpath.outputs.enabled == 'true'
+        id: get-artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Files to be signed:"
-          find ./artifacts -type f \( -name "*.exe" -o -name "*.msi" \) | head -20
+          # 获取 windows-unsigned artifact 的 ID
+          ARTIFACT_ID=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+            --jq '.artifacts[] | select(.name == "windows-unsigned") | .id')
+
+          if [ -z "$ARTIFACT_ID" ]; then
+            echo "Error: Could not find artifact 'windows-unsigned'"
+            exit 1
+          fi
+
+          echo "artifact-id=$ARTIFACT_ID" >> $GITHUB_OUTPUT
+          echo "Found artifact ID: $ARTIFACT_ID"
 
       - name: Submit to SignPath for code signing
         if: steps.check-signpath.outputs.enabled == 'true'
@@ -179,7 +186,7 @@ jobs:
           project-slug: 'ecs-framework'
           signing-policy-slug: 'test-signing'
           artifact-configuration-slug: 'default'
-          github-artifact-name: 'windows-unsigned'
+          github-artifact-id: ${{ steps.get-artifact.outputs.artifact-id }}
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 600
           output-artifact-directory: './signed'
