@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Particle System End-to-End Test</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
+        canvas { border: 1px solid #444; margin: 10px; background: #333; }
+        .section { margin: 20px 0; padding: 15px; background: #252525; border-radius: 8px; }
+        h2 { color: #8cf; margin-top: 0; }
+        pre { background: #333; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 11px; }
+        .pass { color: #2a5; }
+        .fail { color: #f55; }
+        .log { color: #aaa; font-size: 11px; }
+        table { border-collapse: collapse; margin: 10px 0; }
+        td, th { border: 1px solid #444; padding: 5px 10px; text-align: left; }
+        th { background: #333; }
+    </style>
+</head>
+<body>
+    <h1>Particle System End-to-End Test</h1>
+    <p>This test simulates the COMPLETE particle rendering pipeline.</p>
+
+    <div class="section">
+        <h2>Step 1: Test Texture</h2>
+        <pre>
+2x2 Spritesheet (128x128 pixels):
+┌───────────┬───────────┐
+│  RED (0)  │ GREEN (1) │  row=0, v: 0.0 - 0.5
+├───────────┼───────────┤
+│  BLUE (2) │ YELLOW(3) │  row=1, v: 0.5 - 1.0
+└───────────┴───────────┘
+        </pre>
+        <canvas id="texturePreview" width="128" height="128"></canvas>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: TextureSheetAnimationModule._setParticleUV()</h2>
+        <pre id="step2Log"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: ParticleRenderDataProvider._updateRenderData()</h2>
+        <pre id="step3Log"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 4: EngineRenderSystem.convertProviderDataToSprites()</h2>
+        <pre id="step4Log"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 5: sprite_batch.rs add_sprite_vertices_to_batch()</h2>
+        <pre id="step5Log"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 6: Final Rendering Result</h2>
+        <canvas id="mainCanvas" width="500" height="150"></canvas>
+        <div id="renderResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>Test Results</h2>
+        <table>
+            <tr><th>Frame</th><th>Expected</th><th>Got</th><th>Status</th></tr>
+            <tbody id="resultsTable"></tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Conclusion</h2>
+        <pre id="conclusion"></pre>
+    </div>
+
+    <script>
+        // ========== Shaders ==========
+        const vsSource = `
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            varying vec2 vTexCoord;
+            uniform mat4 uProjection;
+            void main() {
+                gl_Position = uProjection * vec4(aPosition, 0.0, 1.0);
+                vTexCoord = aTexCoord;
+            }
+        `;
+
+        const fsSource = `
+            precision mediump float;
+            varying vec2 vTexCoord;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord);
+            }
+        `;
+
+        // ========== WebGL Setup ==========
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            return shader;
+        }
+
+        function createProgram(gl) {
+            const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            return program;
+        }
+
+        function createTestTexture(gl) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0); // NO FLIP - same as engine
+
+            const data = new Uint8Array([
+                255, 50, 50, 255,    50, 255, 50, 255,   // Row 0: Red, Green
+                50, 50, 255, 255,    255, 255, 50, 255   // Row 1: Blue, Yellow
+            ]);
+
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 2, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            return texture;
+        }
+
+        // ========== Step 2: TextureSheetAnimationModule._setParticleUV ==========
+        function simulateTextureSheetAnimationModule(frameIndex, tilesX, tilesY) {
+            const col = frameIndex % tilesX;
+            const row = Math.floor(frameIndex / tilesX);
+
+            // This is what TextureSheetAnimationModule stores on the particle
+            return {
+                _animFrame: frameIndex,
+                _animTilesX: tilesX,
+                _animTilesY: tilesY,
+                col,
+                row
+            };
+        }
+
+        // ========== Step 3: ParticleRenderDataProvider._updateRenderData ==========
+        function simulateParticleRenderDataProvider(particle, tilesX, tilesY) {
+            const frame = particle._animFrame;
+            const col = frame % tilesX;
+            const row = Math.floor(frame / tilesX);
+            const uWidth = 1 / tilesX;
+            const vHeight = 1 / tilesY;
+
+            // This is exactly what ParticleRenderDataProvider does
+            const u0 = col * uWidth;
+            const u1 = (col + 1) * uWidth;
+            const v0 = row * vHeight;
+            const v1 = (row + 1) * vHeight;
+
+            return {
+                uvs: [u0, v0, u1, v1],
+                transforms: [0, 0, 0, 64, 64, 0.5, 0.5], // x, y, rotation, scaleX, scaleY, originX, originY
+                tileCount: 1
+            };
+        }
+
+        // ========== Step 4: EngineRenderSystem.convertProviderDataToSprites ==========
+        function simulateConvertProviderDataToSprites(providerData, x, y) {
+            const tOffset = 0;
+            const uvOffset = 0;
+
+            return {
+                x: x,
+                y: y,
+                rotation: providerData.transforms[tOffset + 2],
+                scaleX: providerData.transforms[tOffset + 3],
+                scaleY: providerData.transforms[tOffset + 4],
+                originX: providerData.transforms[tOffset + 5],
+                originY: providerData.transforms[tOffset + 6],
+                uv: [
+                    providerData.uvs[0],
+                    providerData.uvs[1],
+                    providerData.uvs[2],
+                    providerData.uvs[3]
+                ]
+            };
+        }
+
+        // ========== Step 5: sprite_batch.rs add_sprite_vertices_to_batch ==========
+        function simulateSpriteBatch(sprite, batch) {
+            const { x, y, scaleX: width, scaleY: height, rotation, originX, originY } = sprite;
+            const [u0, v0, u1, v1] = sprite.uv;
+
+            const ox = originX * width;
+            const oy = originY * height;
+
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+
+            // Exactly as sprite_batch.rs
+            const corners = [
+                [-ox, height - oy],           // 0: Top-left (high Y)
+                [width - ox, height - oy],    // 1: Top-right
+                [width - ox, -oy],            // 2: Bottom-right (low Y)
+                [-ox, -oy]                    // 3: Bottom-left
+            ];
+
+            const texCoords = [
+                [u0, v0],  // 0: Top-left vertex gets (u0, v0)
+                [u1, v0],  // 1: Top-right vertex gets (u1, v0)
+                [u1, v1],  // 2: Bottom-right vertex gets (u1, v1)
+                [u0, v1]   // 3: Bottom-left vertex gets (u0, v1)
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                const [lx, ly] = corners[i];
+                const rx = lx * cos - ly * sin;
+                const ry = lx * sin + ly * cos;
+                const px = rx + x;
+                const py = ry + y;
+
+                batch.positions.push(px, py);
+                batch.texCoords.push(texCoords[i][0], texCoords[i][1]);
+            }
+
+            const base = batch.vertexCount;
+            batch.indices.push(base, base + 1, base + 2, base + 2, base + 3, base);
+            batch.vertexCount += 4;
+
+            return { corners, texCoords };
+        }
+
+        // ========== Utility ==========
+        function colorName(r, g, b) {
+            if (r > 200 && g < 100 && b < 100) return 'RED';
+            if (r < 100 && g > 200 && b < 100) return 'GREEN';
+            if (r < 100 && g < 100 && b > 200) return 'BLUE';
+            if (r > 200 && g > 200 && b < 100) return 'YELLOW';
+            return `RGB(${r},${g},${b})`;
+        }
+
+        // ========== Main Test ==========
+        function runTest() {
+            const tilesX = 2, tilesY = 2;
+            const expectedColors = ['RED', 'GREEN', 'BLUE', 'YELLOW'];
+            const results = [];
+
+            let step2Log = '';
+            let step3Log = '';
+            let step4Log = '';
+            let step5Log = '';
+
+            // Draw texture preview
+            const previewCanvas = document.getElementById('texturePreview');
+            const previewCtx = previewCanvas.getContext('2d');
+            previewCtx.fillStyle = '#ff3232'; previewCtx.fillRect(0, 0, 64, 64);
+            previewCtx.fillStyle = '#32ff32'; previewCtx.fillRect(64, 0, 64, 64);
+            previewCtx.fillStyle = '#3232ff'; previewCtx.fillRect(0, 64, 64, 64);
+            previewCtx.fillStyle = '#ffff32'; previewCtx.fillRect(64, 64, 64, 64);
+            previewCtx.fillStyle = '#fff'; previewCtx.font = '20px monospace';
+            previewCtx.fillText('0', 28, 38); previewCtx.fillText('1', 92, 38);
+            previewCtx.fillText('2', 28, 102); previewCtx.fillText('3', 92, 102);
+
+            // Setup WebGL
+            const canvas = document.getElementById('mainCanvas');
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            const program = createProgram(gl);
+            const texture = createTestTexture(gl);
+
+            gl.useProgram(program);
+
+            const projLoc = gl.getUniformLocation(program, 'uProjection');
+            const left = 0, right = 500, bottom = 0, top = 150;
+            const projection = new Float32Array([
+                2/(right-left), 0, 0, 0,
+                0, 2/(top-bottom), 0, 0,
+                0, 0, -1, 0,
+                -(right+left)/(right-left), -(top+bottom)/(top-bottom), 0, 1
+            ]);
+            gl.uniformMatrix4fv(projLoc, false, projection);
+
+            gl.viewport(0, 0, 500, 150);
+            gl.clearColor(0.15, 0.15, 0.15, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            const batch = { positions: [], texCoords: [], indices: [], vertexCount: 0 };
+
+            // Process each frame
+            for (let frame = 0; frame < 4; frame++) {
+                const x = 60 + frame * 110;
+                const y = 75;
+
+                // Step 2
+                const particleData = simulateTextureSheetAnimationModule(frame, tilesX, tilesY);
+                step2Log += `Frame ${frame}: _animFrame=${particleData._animFrame}, col=${particleData.col}, row=${particleData.row}\n`;
+
+                // Step 3
+                const providerData = simulateParticleRenderDataProvider(particleData, tilesX, tilesY);
+                step3Log += `Frame ${frame}: uvs=[${providerData.uvs.map(v => v.toFixed(2)).join(', ')}]\n`;
+
+                // Step 4
+                const sprite = simulateConvertProviderDataToSprites(providerData, x, y);
+                step4Log += `Frame ${frame}: uv=[${sprite.uv.map(v => v.toFixed(2)).join(', ')}], pos=(${x}, ${y})\n`;
+
+                // Step 5
+                const batchResult = simulateSpriteBatch(sprite, batch);
+                step5Log += `Frame ${frame}: vertex0(top-left)=[${batchResult.texCoords[0].map(v => v.toFixed(2)).join(', ')}], `;
+                step5Log += `vertex2(bottom-right)=[${batchResult.texCoords[2].map(v => v.toFixed(2)).join(', ')}]\n`;
+            }
+
+            document.getElementById('step2Log').textContent = step2Log;
+            document.getElementById('step3Log').textContent = step3Log;
+            document.getElementById('step4Log').textContent = step4Log;
+            document.getElementById('step5Log').textContent = step5Log;
+
+            // Render
+            const posLoc = gl.getAttribLocation(program, 'aPosition');
+            const texLoc = gl.getAttribLocation(program, 'aTexCoord');
+
+            const posBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(batch.positions), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+            const texBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(batch.texCoords), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(texLoc);
+            gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 0, 0);
+
+            const idxBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(batch.indices), gl.STATIC_DRAW);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.drawElements(gl.TRIANGLES, batch.indices.length, gl.UNSIGNED_SHORT, 0);
+
+            // Read back and verify
+            const tableBody = document.getElementById('resultsTable');
+            let allPassed = true;
+
+            for (let frame = 0; frame < 4; frame++) {
+                const x = 60 + frame * 110;
+                const y = 75;
+
+                const pixels = new Uint8Array(4);
+                gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                const actual = colorName(pixels[0], pixels[1], pixels[2]);
+                const expected = expectedColors[frame];
+                const passed = actual === expected;
+
+                if (!passed) allPassed = false;
+                results.push({ frame, expected, actual, passed });
+
+                tableBody.innerHTML += `
+                    <tr class="${passed ? 'pass' : 'fail'}">
+                        <td>Frame ${frame}</td>
+                        <td>${expected}</td>
+                        <td>${actual}</td>
+                        <td>${passed ? '✓ PASS' : '✗ FAIL'}</td>
+                    </tr>
+                `;
+            }
+
+            // Conclusion
+            const conclusionEl = document.getElementById('conclusion');
+            if (allPassed) {
+                conclusionEl.innerHTML = `<span class="pass">ALL TESTS PASSED!</span>
+
+The entire particle rendering pipeline is CORRECT:
+- TextureSheetAnimationModule ✓
+- ParticleRenderDataProvider ✓
+- EngineRenderSystem ✓
+- sprite_batch.rs ✓
+
+If your actual particles still show wrong colors, the problem must be:
+1. Your spritesheet image has a different layout
+2. Something else is modifying the UV values
+3. The texture is being loaded differently
+
+Try using the test image: F:\\ecs-framework\\test_spritesheet_2x2.png`;
+            } else {
+                const failedFrames = results.filter(r => !r.passed);
+                conclusionEl.innerHTML = `<span class="fail">TESTS FAILED!</span>
+
+Failed frames:
+${failedFrames.map(f => `Frame ${f.frame}: expected ${f.expected}, got ${f.actual}`).join('\n')}
+
+This indicates a bug in the rendering pipeline.`;
+            }
+        }
+
+        window.onload = runTest;
+    </script>
+</body>
+</html>

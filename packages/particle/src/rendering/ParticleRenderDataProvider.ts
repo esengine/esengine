@@ -194,17 +194,40 @@ export class ParticleRenderDataProvider implements IRenderDataProvider {
                     this._transforms[tOffset + 5] = 0.5; // originX
                     this._transforms[tOffset + 6] = 0.5; // originY
 
-                    // Texture ID: 设置为 0，让 EngineRenderSystem 通过 textureGuid 解析
-                    // Set to 0, let EngineRenderSystem resolve via textureGuid
-                    // 这样可以避免场景恢复后 textureId 过期导致的纹理混乱问题
-                    // This avoids texture confusion when textureId becomes stale after scene restore
-                    this._textureIds[particleIndex] = 0;
+                    // Texture ID: 优先使用组件上预加载的 textureId，否则让 EngineRenderSystem 通过 textureGuid 解析
+                    // Prefer using pre-loaded textureId from component, otherwise let EngineRenderSystem resolve via textureGuid
+                    this._textureIds[particleIndex] = component.textureId;
 
-                    // UV (full texture)
-                    this._uvs[uvOffset] = 0;
-                    this._uvs[uvOffset + 1] = 0;
-                    this._uvs[uvOffset + 2] = 1;
-                    this._uvs[uvOffset + 3] = 1;
+                    // UV - 支持精灵图帧动画 | Support spritesheet animation
+                    if (p._animTilesX !== undefined && p._animTilesY !== undefined && p._animFrame !== undefined) {
+                        // 计算帧的 UV 坐标 | Calculate frame UV coordinates
+                        // WebGL 纹理坐标：V=0 采样纹理行0（即图像顶部）
+                        // WebGL texture coords: V=0 samples texture row 0 (image top)
+                        const tilesX = p._animTilesX;
+                        const tilesY = p._animTilesY;
+                        const frame = p._animFrame;
+                        const col = frame % tilesX;
+                        const row = Math.floor(frame / tilesX);
+                        const uWidth = 1 / tilesX;
+                        const vHeight = 1 / tilesY;
+
+                        // UV: u0, v0, u1, v1
+                        const u0 = col * uWidth;
+                        const u1 = (col + 1) * uWidth;
+                        const v0 = row * vHeight;
+                        const v1 = (row + 1) * vHeight;
+
+                        this._uvs[uvOffset] = u0;
+                        this._uvs[uvOffset + 1] = v0;
+                        this._uvs[uvOffset + 2] = u1;
+                        this._uvs[uvOffset + 3] = v1;
+                    } else {
+                        // 默认：使用完整纹理 | Default: use full texture
+                        this._uvs[uvOffset] = 0;
+                        this._uvs[uvOffset + 1] = 0;
+                        this._uvs[uvOffset + 2] = 1;
+                        this._uvs[uvOffset + 3] = 1;
+                    }
 
                     // Color (packed ABGR for WebGL)
                     this._colors[particleIndex] = Color.packABGR(

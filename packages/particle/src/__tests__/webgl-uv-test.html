@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebGL UV Coordinate Test</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
+        canvas { border: 1px solid #444; margin: 10px; }
+        .test-row { display: flex; align-items: center; margin: 20px 0; }
+        .label { width: 200px; }
+        .result { margin-left: 20px; padding: 5px 10px; border-radius: 4px; }
+        .pass { background: #2a5; }
+        .fail { background: #a33; }
+        h2 { color: #8cf; }
+        pre { background: #333; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>WebGL UV Coordinate System Test</h1>
+
+    <h2>1. Test Texture (2x2 grid)</h2>
+    <pre>
+Image file layout (how it looks in image editor):
+┌─────────┬─────────┐
+│ RED (0) │ GREEN(1)│  row 0 (top of image file)
+├─────────┼─────────┤
+│ BLUE(2) │ YELLOW(3)│  row 1 (bottom of image file)
+└─────────┴─────────┘
+    </pre>
+    <canvas id="texturePreview" width="128" height="128"></canvas>
+    <span>← This is the source texture</span>
+
+    <h2>2. UV Sampling Test</h2>
+    <p>Each square below samples a different UV region. We test what color appears.</p>
+
+    <div class="test-row">
+        <div class="label">UV [0, 0, 0.5, 0.5] (Frame 0):</div>
+        <canvas id="uv0" width="64" height="64"></canvas>
+        <div id="result0" class="result"></div>
+    </div>
+
+    <div class="test-row">
+        <div class="label">UV [0.5, 0, 1, 0.5] (Frame 1):</div>
+        <canvas id="uv1" width="64" height="64"></canvas>
+        <div id="result1" class="result"></div>
+    </div>
+
+    <div class="test-row">
+        <div class="label">UV [0, 0.5, 0.5, 1] (Frame 2):</div>
+        <canvas id="uv2" width="64" height="64"></canvas>
+        <div id="result2" class="result"></div>
+    </div>
+
+    <div class="test-row">
+        <div class="label">UV [0.5, 0.5, 1, 1] (Frame 3):</div>
+        <canvas id="uv3" width="64" height="64"></canvas>
+        <div id="result3" class="result"></div>
+    </div>
+
+    <h2>3. Conclusion</h2>
+    <pre id="conclusion"></pre>
+
+    <script>
+        // Vertex shader
+        const vsSource = `
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            varying vec2 vTexCoord;
+            void main() {
+                gl_Position = vec4(aPosition, 0.0, 1.0);
+                vTexCoord = aTexCoord;
+            }
+        `;
+
+        // Fragment shader
+        const fsSource = `
+            precision mediump float;
+            varying vec2 vTexCoord;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl) {
+            const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            return program;
+        }
+
+        // Create 2x2 test texture data
+        // Row 0: Red, Green
+        // Row 1: Blue, Yellow
+        function createTestTextureData() {
+            const size = 2;
+            const data = new Uint8Array(size * size * 4);
+            // Row 0 (will be uploaded first)
+            data[0] = 255; data[1] = 0;   data[2] = 0;   data[3] = 255; // Red
+            data[4] = 0;   data[5] = 255; data[6] = 0;   data[7] = 255; // Green
+            // Row 1
+            data[8] = 0;   data[9] = 0;   data[10] = 255; data[11] = 255; // Blue
+            data[12] = 255; data[13] = 255; data[14] = 0; data[15] = 255; // Yellow
+            return data;
+        }
+
+        function createTexture(gl, flipY = false) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            // Set FLIP_Y if requested
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY ? 1 : 0);
+
+            const data = createTestTextureData();
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 2, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            return texture;
+        }
+
+        function renderQuad(gl, program, u0, v0, u1, v1) {
+            gl.useProgram(program);
+
+            const posLoc = gl.getAttribLocation(program, 'aPosition');
+            const texLoc = gl.getAttribLocation(program, 'aTexCoord');
+
+            // Full screen quad
+            const positions = new Float32Array([
+                -1, -1,  1, -1,  -1, 1,
+                -1,  1,  1, -1,   1, 1
+            ]);
+
+            // UV coordinates - map corners to the specified UV region
+            // Vertex order: bottom-left, bottom-right, top-left, top-left, bottom-right, top-right
+            const texCoords = new Float32Array([
+                u0, v1,  u1, v1,  u0, v0,
+                u0, v0,  u1, v1,  u1, v0
+            ]);
+
+            const posBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+            const texBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(texLoc);
+            gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 0, 0);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        function getCanvasColor(canvas) {
+            const ctx = canvas.getContext('2d') || canvas.getContext('webgl2') || canvas.getContext('webgl');
+            if (ctx instanceof WebGLRenderingContext || ctx instanceof WebGL2RenderingContext) {
+                const pixels = new Uint8Array(4);
+                ctx.readPixels(32, 32, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, pixels);
+                return { r: pixels[0], g: pixels[1], b: pixels[2] };
+            }
+            return null;
+        }
+
+        function colorName(r, g, b) {
+            if (r > 200 && g < 100 && b < 100) return 'RED';
+            if (r < 100 && g > 200 && b < 100) return 'GREEN';
+            if (r < 100 && g < 100 && b > 200) return 'BLUE';
+            if (r > 200 && g > 200 && b < 100) return 'YELLOW';
+            return `RGB(${r},${g},${b})`;
+        }
+
+        function runTest() {
+            // Draw texture preview
+            const previewCanvas = document.getElementById('texturePreview');
+            const previewCtx = previewCanvas.getContext('2d');
+            previewCtx.fillStyle = 'red';
+            previewCtx.fillRect(0, 0, 64, 64);
+            previewCtx.fillStyle = 'green';
+            previewCtx.fillRect(64, 0, 64, 64);
+            previewCtx.fillStyle = 'blue';
+            previewCtx.fillRect(0, 64, 64, 64);
+            previewCtx.fillStyle = 'yellow';
+            previewCtx.fillRect(64, 64, 64, 64);
+
+            // Test UV regions
+            const uvTests = [
+                { id: 'uv0', uv: [0, 0, 0.5, 0.5], expected: 'RED' },
+                { id: 'uv1', uv: [0.5, 0, 1, 0.5], expected: 'GREEN' },
+                { id: 'uv2', uv: [0, 0.5, 0.5, 1], expected: 'BLUE' },
+                { id: 'uv3', uv: [0.5, 0.5, 1, 1], expected: 'YELLOW' }
+            ];
+
+            const results = [];
+
+            for (const test of uvTests) {
+                const canvas = document.getElementById(test.id);
+                const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+                if (!gl) {
+                    document.getElementById('result' + test.id.slice(-1)).textContent = 'WebGL not supported';
+                    continue;
+                }
+
+                const program = createProgram(gl);
+                const texture = createTexture(gl, false); // No FLIP_Y
+
+                gl.viewport(0, 0, 64, 64);
+                gl.clearColor(0, 0, 0, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                renderQuad(gl, program, ...test.uv);
+
+                // Read back color
+                const pixels = new Uint8Array(4);
+                gl.readPixels(32, 32, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                const actual = colorName(pixels[0], pixels[1], pixels[2]);
+
+                const passed = actual === test.expected;
+                results.push({ test: test.id, expected: test.expected, actual, passed });
+
+                const resultEl = document.getElementById('result' + test.id.slice(-1));
+                resultEl.textContent = `Expected: ${test.expected}, Got: ${actual}`;
+                resultEl.className = 'result ' + (passed ? 'pass' : 'fail');
+            }
+
+            // Conclusion
+            const allPassed = results.every(r => r.passed);
+            const conclusionEl = document.getElementById('conclusion');
+
+            if (allPassed) {
+                conclusionEl.textContent = `
+ALL TESTS PASSED!
+
+UV coordinate system (without FLIP_Y):
+- V=0 samples the TOP of the image (row 0)
+- V=1 samples the BOTTOM of the image (row N)
+
+This means the current particle UV calculation should be CORRECT:
+  v0 = row * vHeight;      // row 0 -> v0=0 -> image top
+  v1 = (row + 1) * vHeight;
+
+If particles still show wrong frames, the problem is elsewhere.
+`;
+            } else {
+                const failedTests = results.filter(r => !r.passed);
+                conclusionEl.textContent = `
+SOME TESTS FAILED!
+
+${failedTests.map(t => `${t.test}: expected ${t.expected}, got ${t.actual}`).join('\n')}
+
+This indicates the UV coordinate system behaves differently than expected.
+The V axis may need to be flipped in particle UV calculation.
+`;
+            }
+        }
+
+        window.onload = runTest;
+    </script>
+</body>
+</html>

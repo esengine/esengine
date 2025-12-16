@@ -8,10 +8,8 @@
 
 import { EntitySystem, Matcher, Entity, ECSSystem, PluginServiceRegistry, createServiceToken } from '@esengine/ecs-framework';
 import { Input, MouseButton, TransformComponent, SortingLayers } from '@esengine/engine-core';
-import type { IAssetManager } from '@esengine/asset-system';
 import { ClickFxComponent, ClickFxTriggerMode } from '../ClickFxComponent';
 import { ParticleSystemComponent, RenderSpace } from '../ParticleSystemComponent';
-import type { IParticleAsset } from '../loaders/ParticleLoader';
 
 // ============================================================================
 // 本地服务令牌定义 | Local Service Token Definitions
@@ -66,20 +64,11 @@ const RenderSystemToken = createServiceToken<IEngineRenderSystem>('renderSystem'
 export class ClickFxSystem extends EntitySystem {
     private _engineBridge: IEngineBridge | null = null;
     private _renderSystem: IEngineRenderSystem | null = null;
-    private _assetManager: IAssetManager | null = null;
     private _entitiesToDestroy: Entity[] = [];
     private _canvas: HTMLCanvasElement | null = null;
 
     constructor() {
         super(Matcher.empty().all(ClickFxComponent));
-    }
-
-    /**
-     * 设置资产管理器
-     * Set asset manager
-     */
-    setAssetManager(assetManager: IAssetManager | null): void {
-        this._assetManager = assetManager;
     }
 
     /**
@@ -339,8 +328,11 @@ export class ClickFxSystem extends EntitySystem {
         const transform = effectEntity.addComponent(new TransformComponent(screenSpaceX, screenSpaceY));
         transform.setScale(clickFx.scale, clickFx.scale, 1);
 
-        // 添加 ParticleSystem | Add ParticleSystem
-        const particleSystem = effectEntity.addComponent(new ParticleSystemComponent());
+        // 创建 ParticleSystemComponent 并预先设置 GUID（在添加到实体前）
+        // Create ParticleSystemComponent and set GUID before adding to entity
+        // 这样 ParticleUpdateSystem.onAdded 触发时已经有 GUID 了
+        // So ParticleUpdateSystem.onAdded has the GUID when triggered
+        const particleSystem = new ParticleSystemComponent();
         particleSystem.particleAssetGuid = particleGuid;
         particleSystem.autoPlay = true;
         // 使用 ScreenOverlay 层和屏幕空间渲染
@@ -349,31 +341,12 @@ export class ClickFxSystem extends EntitySystem {
         particleSystem.orderInLayer = 0;
         particleSystem.renderSpace = RenderSpace.Screen;
 
+        // 添加组件到实体（触发 ParticleUpdateSystem 的初始化和资产加载）
+        // Add component to entity (triggers ParticleUpdateSystem initialization and asset loading)
+        effectEntity.addComponent(particleSystem);
+
         // 记录活跃特效 | Record active effect
         clickFx.addActiveEffect(effectEntity.id);
-
-        // 异步加载并播放 | Async load and play
-        if (this._assetManager) {
-            this._assetManager.loadAsset<IParticleAsset>(particleGuid).then(result => {
-                if (result?.asset) {
-                    particleSystem.setAssetData(result.asset);
-                    // 应用资产的排序属性 | Apply sorting properties from asset
-                    if (result.asset.sortingLayer) {
-                        particleSystem.sortingLayer = result.asset.sortingLayer;
-                    }
-                    if (result.asset.orderInLayer !== undefined) {
-                        particleSystem.orderInLayer = result.asset.orderInLayer;
-                    }
-                    particleSystem.play();
-                } else {
-                    console.warn(`[ClickFxSystem] Failed to load particle asset: ${particleGuid}`);
-                }
-            }).catch(error => {
-                console.error(`[ClickFxSystem] Error loading particle asset ${particleGuid}:`, error);
-            });
-        } else {
-            console.warn('[ClickFxSystem] AssetManager not set, cannot load particle asset');
-        }
     }
 
     /**

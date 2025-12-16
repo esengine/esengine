@@ -185,6 +185,11 @@ export class ParticleUpdateSystem extends EntitySystem {
                 }
             }
 
+            // 如果正在初始化中，跳过处理 | Skip processing if initializing
+            if (this._loadingComponents.has(particle)) {
+                continue;
+            }
+
             // 检测资产 GUID 变化并重新加载 | Detect asset GUID change and reload
             // 这使得编辑器中选择新的粒子资产时能够立即切换
             // This allows immediate switching when selecting a new particle asset in the editor
@@ -205,8 +210,9 @@ export class ParticleUpdateSystem extends EntitySystem {
                 particle.update(deltaTime, worldX, worldY, worldRotation, worldScaleX, worldScaleY);
             }
 
-            // 尝试加载纹理（如果还没有加载）| Try to load texture if not loaded yet
-            if (particle.textureId === 0) {
+            // 尝试加载纹理（如果还没有加载且不在初始化中）
+            // Try to load texture if not loaded yet and not initializing
+            if (particle.textureId === 0 && !this._loadingComponents.has(particle)) {
                 this.loadParticleTexture(particle);
             }
 
@@ -262,56 +268,65 @@ export class ParticleUpdateSystem extends EntitySystem {
      * Async initialize particle system
      */
     private async _initializeParticle(entity: Entity, particle: ParticleSystemComponent): Promise<void> {
-        // 如果有资产 GUID，先加载资产 | Load asset first if GUID is set
-        if (particle.particleAssetGuid) {
-            const asset = await this._loadParticleAsset(particle.particleAssetGuid);
-            if (asset) {
-                particle.setAssetData(asset);
-                // 应用资产的排序属性 | Apply sorting properties from asset
-                if (asset.sortingLayer) {
-                    particle.sortingLayer = asset.sortingLayer;
-                }
-                if (asset.orderInLayer !== undefined) {
-                    particle.orderInLayer = asset.orderInLayer;
+        // 标记为正在初始化，防止 process 中重复调用 loadParticleTexture
+        // Mark as initializing to prevent duplicate loadParticleTexture calls in process
+        this._loadingComponents.add(particle);
+
+        try {
+            // 如果有资产 GUID，先加载资产 | Load asset first if GUID is set
+            if (particle.particleAssetGuid) {
+                const asset = await this._loadParticleAsset(particle.particleAssetGuid);
+                if (asset) {
+                    particle.setAssetData(asset);
+                    // 应用资产的排序属性 | Apply sorting properties from asset
+                    if (asset.sortingLayer) {
+                        particle.sortingLayer = asset.sortingLayer;
+                    }
+                    if (asset.orderInLayer !== undefined) {
+                        particle.orderInLayer = asset.orderInLayer;
+                    }
                 }
             }
-        }
 
-        // 初始化粒子系统（不自动播放，由下面的逻辑控制）
-        // Initialize particle system (don't auto play, controlled by logic below)
-        particle.ensureBuilt();
+            // 初始化粒子系统（不自动播放，由下面的逻辑控制）
+            // Initialize particle system (don't auto play, controlled by logic below)
+            particle.ensureBuilt();
 
-        // 加载纹理 | Load texture
-        await this.loadParticleTexture(particle);
+            // 加载纹理 | Load texture
+            await this.loadParticleTexture(particle);
 
-        // 注册到渲染数据提供者 | Register to render data provider
-        // 尝试获取 Transform，如果没有则使用默认位置 | Try to get Transform, use default position if not available
-        let transform: ITransformComponent | null = null;
-        if (this._transformType) {
-            transform = entity.getComponent(this._transformType);
-        }
-        // 即使没有 Transform，也要注册粒子系统（使用原点位置） | Register particle system even without Transform (use origin position)
-        if (transform) {
-            this._renderDataProvider.register(particle, transform);
-        } else {
-            this._renderDataProvider.register(particle, { position: { x: 0, y: 0 } });
-        }
-
-        // 记录已加载的资产 GUID | Record loaded asset GUID
-        this._lastLoadedGuids.set(particle, particle.particleAssetGuid);
-
-        // 决定是否自动播放 | Decide whether to auto play
-        // 编辑器模式：有资产时自动播放预览 | Editor mode: auto play preview if has asset
-        // 运行时模式：根据 autoPlay 设置 | Runtime mode: based on autoPlay setting
-        const isEditorMode = this.scene?.isEditorMode ?? false;
-        if (particle.particleAssetGuid && particle.loadedAsset) {
-            if (isEditorMode) {
-                // 编辑器模式：始终播放预览 | Editor mode: always play preview
-                particle.play();
-            } else if (particle.autoPlay) {
-                // 运行时模式：根据 autoPlay 设置 | Runtime mode: based on autoPlay
-                particle.play();
+            // 注册到渲染数据提供者 | Register to render data provider
+            // 尝试获取 Transform，如果没有则使用默认位置 | Try to get Transform, use default position if not available
+            let transform: ITransformComponent | null = null;
+            if (this._transformType) {
+                transform = entity.getComponent(this._transformType);
             }
+            // 即使没有 Transform，也要注册粒子系统（使用原点位置） | Register particle system even without Transform (use origin position)
+            if (transform) {
+                this._renderDataProvider.register(particle, transform);
+            } else {
+                this._renderDataProvider.register(particle, { position: { x: 0, y: 0 } });
+            }
+
+            // 记录已加载的资产 GUID | Record loaded asset GUID
+            this._lastLoadedGuids.set(particle, particle.particleAssetGuid);
+
+            // 决定是否自动播放 | Decide whether to auto play
+            // 编辑器模式：有资产时自动播放预览 | Editor mode: auto play preview if has asset
+            // 运行时模式：根据 autoPlay 设置 | Runtime mode: based on autoPlay setting
+            const isEditorMode = this.scene?.isEditorMode ?? false;
+            if (particle.particleAssetGuid && particle.loadedAsset) {
+                if (isEditorMode) {
+                    // 编辑器模式：始终播放预览 | Editor mode: always play preview
+                    particle.play();
+                } else if (particle.autoPlay) {
+                    // 运行时模式：根据 autoPlay 设置 | Runtime mode: based on autoPlay
+                    particle.play();
+                }
+            }
+        } finally {
+            // 初始化完成，移除加载标记 | Initialization complete, remove loading mark
+            this._loadingComponents.delete(particle);
         }
     }
 
@@ -329,9 +344,25 @@ export class ParticleUpdateSystem extends EntitySystem {
         const currentGuid = particle.particleAssetGuid;
         const lastGuid = this._lastLoadedGuids.get(particle);
 
-        // 如果 GUID 没有变化，或者正在加载中，跳过
-        // Skip if GUID hasn't changed or already loading
-        if (currentGuid === lastGuid || this._loadingComponents.has(particle)) {
+        // 如果正在加载中，跳过
+        // Skip if already loading
+        if (this._loadingComponents.has(particle)) {
+            return;
+        }
+
+        // 检查是否需要重新加载：
+        // 1. GUID 变化了
+        // 2. 或者 GUID 相同但资产数据丢失（场景恢复后）
+        // 3. 或者 GUID 相同但纹理 ID 无效（纹理被清除后）
+        // Check if reload is needed:
+        // 1. GUID changed
+        // 2. Or GUID is same but asset data is lost (after scene restore)
+        // 3. Or GUID is same but texture ID is invalid (after texture clear)
+        const needsReload = currentGuid !== lastGuid ||
+            (currentGuid && !particle.loadedAsset) ||
+            (currentGuid && particle.textureId === 0);
+
+        if (!needsReload) {
             return;
         }
 
@@ -410,35 +441,70 @@ export class ParticleUpdateSystem extends EntitySystem {
             } catch (error) {
                 console.error('[ParticleUpdateSystem] Failed to load texture by GUID:', textureGuid, error);
                 // 加载失败时使用默认纹理 | Use default texture on load failure
-                await this._ensureDefaultTexture();
-                particle.textureId = DEFAULT_PARTICLE_TEXTURE_ID;
+                const loaded = await this._ensureDefaultTexture();
+                if (loaded) {
+                    particle.textureId = DEFAULT_PARTICLE_TEXTURE_ID;
+                }
             }
         } else {
             // 没有纹理 GUID 时使用默认粒子纹理 | Use default particle texture when no GUID
-            await this._ensureDefaultTexture();
-            particle.textureId = DEFAULT_PARTICLE_TEXTURE_ID;
+            const loaded = await this._ensureDefaultTexture();
+            if (loaded) {
+                particle.textureId = DEFAULT_PARTICLE_TEXTURE_ID;
+            }
         }
     }
 
     /**
      * 确保默认粒子纹理已加载
      * Ensure default particle texture is loaded
+     *
+     * 使用 loadTextureAsync API 等待纹理实际加载完成，
+     * 避免显示灰色占位符的问题。
+     * Uses loadTextureAsync API to wait for actual texture completion,
+     * avoiding the gray placeholder issue.
+     *
+     * @returns 是否成功加载 | Whether successfully loaded
      */
-    private async _ensureDefaultTexture(): Promise<void> {
-        if (this._defaultTextureLoaded || this._defaultTextureLoading) return;
-        if (!this._engineBridge) return;
+    private async _ensureDefaultTexture(): Promise<boolean> {
+        // 已加载过 | Already loaded
+        if (this._defaultTextureLoaded) return true;
+
+        // 正在加载中，等待完成 | Loading in progress, wait for completion
+        if (this._defaultTextureLoading) {
+            // 轮询等待加载完成 | Poll until loading completes
+            while (this._defaultTextureLoading) {
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            return this._defaultTextureLoaded;
+        }
+
+        // 没有引擎桥接，无法加载 | No engine bridge, cannot load
+        if (!this._engineBridge) {
+            console.warn('[ParticleUpdateSystem] EngineBridge not set, cannot load default texture');
+            return false;
+        }
 
         this._defaultTextureLoading = true;
         try {
             const dataUrl = generateDefaultParticleTextureDataURL();
             if (dataUrl) {
-                await this._engineBridge.loadTexture(DEFAULT_PARTICLE_TEXTURE_ID, dataUrl);
+                // 优先使用 loadTextureAsync（等待纹理就绪）
+                // Prefer loadTextureAsync (waits for texture ready)
+                if (this._engineBridge.loadTextureAsync) {
+                    await this._engineBridge.loadTextureAsync(DEFAULT_PARTICLE_TEXTURE_ID, dataUrl);
+                } else {
+                    // 回退到旧 API（可能显示灰色占位符）
+                    // Fallback to old API (may show gray placeholder)
+                    await this._engineBridge.loadTexture(DEFAULT_PARTICLE_TEXTURE_ID, dataUrl);
+                }
                 this._defaultTextureLoaded = true;
             }
         } catch (error) {
             console.error('[ParticleUpdateSystem] Failed to create default particle texture:', error);
         }
         this._defaultTextureLoading = false;
+        return this._defaultTextureLoaded;
     }
 
     protected override onRemoved(entity: Entity): void {
