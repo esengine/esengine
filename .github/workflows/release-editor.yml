@@ -190,7 +190,8 @@ jobs:
         with:
           files: ./signed/*
           tag_name: ${{ github.event_name == 'workflow_dispatch' && format('editor-v{0}', github.event.inputs.version) || github.ref_name }}
-          draft: false
+          # 保持 Draft 状态，需要手动发布 | Keep as draft, require manual publish
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
