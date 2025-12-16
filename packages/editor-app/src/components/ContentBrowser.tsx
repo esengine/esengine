@@ -1026,13 +1026,16 @@ export class ${className} {
 
     // Handle asset double click
     const handleAssetDoubleClick = useCallback(async (asset: AssetItem) => {
+        console.log('[ContentBrowser] Double click:', asset.name, 'type:', asset.type, 'ext:', asset.extension);
         if (asset.type === 'folder') {
             setCurrentPath(asset.path);
             loadAssets(asset.path);
             setExpandedFolders(prev => new Set([...prev, asset.path]));
         } else {
             const ext = asset.extension?.toLowerCase();
+            console.log('[ContentBrowser] File ext:', ext, 'onOpenScene:', !!onOpenScene);
             if (ext === 'ecs' && onOpenScene) {
+                console.log('[ContentBrowser] Opening scene:', asset.path);
                 onOpenScene(asset.path);
                 return;
             }

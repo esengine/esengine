@@ -40,11 +40,15 @@ import { Inspector } from './components/inspectors/Inspector';
 import { AssetBrowser } from './components/AssetBrowser';
 import { Viewport } from './components/Viewport';
 import { AdvancedProfilerWindow } from './components/AdvancedProfilerWindow';
+import { RenderDebugPanel } from './components/debug/RenderDebugPanel';
+import { emit, emitTo, listen } from '@tauri-apps/api/event';
+import { renderDebugService } from './services/RenderDebugService';
 import { PortManager } from './components/PortManager';
 import { SettingsWindow } from './components/SettingsWindow';
 import { AboutDialog } from './components/AboutDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { ExternalModificationDialog } from './components/ExternalModificationDialog';
 import { PluginGeneratorWindow } from './components/PluginGeneratorWindow';
 import { BuildSettingsWindow } from './components/BuildSettingsWindow';
 import { ForumPanel } from './components/forum';
@@ -63,6 +67,7 @@ import { useLocale } from './hooks/useLocale';
 import { useStoreSubscriptions } from './hooks/useStoreSubscriptions';
 import { en, zh, es } from './locales';
 import type { Locale } from '@esengine/editor-core';
+import { UserCodeService } from '@esengine/editor-core';
 import { Loader2 } from 'lucide-react';
 import './styles/App.css';
 
@@ -84,11 +89,23 @@ Core.services.registerInstance(ICompilerRegistry, compilerRegistryInstance);
 
 const logger = createLogger('App');
 
+// 检查是否为独立窗口模式 | Check if standalone window mode
+const isFrameDebuggerMode = new URLSearchParams(window.location.search).get('mode') === 'frame-debugger';
+
 function App() {
     const initRef = useRef(false);
     const layoutContainerRef = useRef<FlexLayoutDockContainerHandle>(null);
     const [pluginLoader] = useState(() => new PluginLoader());
     const { showToast, hideToast } = useToast();
+
+    // 如果是独立调试窗口模式，只渲染调试面板 | If standalone debugger mode, only render debug panel
+    if (isFrameDebuggerMode) {
+        return (
+            <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+                <RenderDebugPanel visible={true} onClose={() => window.close()} standalone />
+            </div>
+        );
+    }
 
     // ===== 本地初始化状态（只用于初始化阶段）| Local init state (only for initialization) =====
     const [initialized, setInitialized] = useState(false);
@@ -170,9 +187,39 @@ function App() {
         showAbout, setShowAbout,
         showPluginGenerator, setShowPluginGenerator,
         showBuildSettings, setShowBuildSettings,
+        showRenderDebug, setShowRenderDebug,
         errorDialog, setErrorDialog,
-        confirmDialog, setConfirmDialog
+        confirmDialog, setConfirmDialog,
+        externalModificationDialog, setExternalModificationDialog
     } = useDialogStore();
+
+    // 全局监听独立调试窗口的数据请求 | Global listener for standalone debug window requests
+    useEffect(() => {
+        let broadcastInterval: ReturnType<typeof setInterval> | null = null;
+
+        const unlistenPromise = listen('render-debug-request-data', () => {
+            // 开始定时广播数据 | Start broadcasting data periodically
+            if (!broadcastInterval) {
+                const broadcast = () => {
+                    renderDebugService.setEnabled(true);
+                    const snap = renderDebugService.collectSnapshot();
+                    if (snap) {
+                        // 使用 emitTo 发送到独立窗口 | Use emitTo to send to standalone window
+                        emitTo('frame-debugger', 'render-debug-snapshot', snap).catch(() => {});
+                    }
+                };
+                broadcast(); // 立即广播一次 | Broadcast immediately
+                broadcastInterval = setInterval(broadcast, 500);
+            }
+        });
+
+        return () => {
+            unlistenPromise.then(unlisten => unlisten());
+            if (broadcastInterval) {
+                clearInterval(broadcastInterval);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         // 禁用默认右键菜单
@@ -483,6 +530,113 @@ function App() {
         };
     }, [initialized]);
 
+    // Handle external scene file changes
+    // 处理外部场景文件变更
+    useEffect(() => {
+        if (!initialized || !messageHubRef.current || !sceneManagerRef.current) return;
+        const hub = messageHubRef.current;
+        const sm = sceneManagerRef.current;
+
+        const unsubscribe = hub.subscribe('scene:external-change', (data: {
+            path: string;
+            sceneName: string;
+        }) => {
+            logger.info('Scene externally modified:', data.path);
+
+            // Show confirmation dialog to reload the scene
+            // 显示确认对话框以重新加载场景
+            setConfirmDialog({
+                title: t('scene.externalChange.title'),
+                message: t('scene.externalChange.message', { name: data.sceneName }),
+                confirmText: t('scene.externalChange.reload'),
+                cancelText: t('scene.externalChange.ignore'),
+                onConfirm: async () => {
+                    setConfirmDialog(null);
+                    try {
+                        await sm.openScene(data.path);
+                        showToast(t('scene.reloadedSuccess', { name: data.sceneName }), 'success');
+                    } catch (error) {
+                        console.error('Failed to reload scene:', error);
+                        showToast(t('scene.reloadFailed'), 'error');
+                    }
+                },
+                onCancel: () => {
+                    // User chose to ignore, do nothing
+                    // 用户选择忽略，不做任何操作
+                }
+            });
+        });
+
+        return () => unsubscribe?.();
+    }, [initialized, t, showToast]);
+
+    // Handle external modification when saving scene
+    // 处理保存场景时的外部修改检测
+    useEffect(() => {
+        if (!initialized || !messageHubRef.current || !sceneManagerRef.current) return;
+        const hub = messageHubRef.current;
+        const sm = sceneManagerRef.current;
+
+        const unsubscribe = hub.subscribe('scene:externalModification', (data: {
+            path: string;
+            sceneName: string;
+        }) => {
+            logger.info('Scene file externally modified during save:', data.path);
+
+            // Show external modification dialog with three options
+            // 显示外部修改对话框，提供三个选项
+            setExternalModificationDialog({
+                sceneName: data.sceneName,
+                onReload: async () => {
+                    setExternalModificationDialog(null);
+                    try {
+                        await sm.reloadScene();
+                        showToast(t('scene.reloadedSuccess', { name: data.sceneName }), 'success');
+                    } catch (error) {
+                        console.error('Failed to reload scene:', error);
+                        showToast(t('scene.reloadFailed'), 'error');
+                    }
+                },
+                onOverwrite: async () => {
+                    setExternalModificationDialog(null);
+                    try {
+                        await sm.saveScene(true); // Force save, overwriting external changes
+                        showToast(t('scene.savedSuccess', { name: data.sceneName }), 'success');
+                    } catch (error) {
+                        console.error('Failed to save scene:', error);
+                        showToast(t('scene.saveFailed'), 'error');
+                    }
+                }
+            });
+        });
+
+        return () => unsubscribe?.();
+    }, [initialized, t, showToast, setExternalModificationDialog]);
+
+    // Handle user code compilation results
+    // 处理用户代码编译结果
+    useEffect(() => {
+        if (!initialized || !messageHubRef.current) return;
+        const hub = messageHubRef.current;
+
+        const unsubscribe = hub.subscribe('usercode:compilation-result', (data: {
+            success: boolean;
+            exports: string[];
+            errors: string[];
+        }) => {
+            if (data.success) {
+                if (data.exports.length > 0) {
+                    showToast(t('usercode.compileSuccess', { count: data.exports.length }), 'success');
+                }
+            } else {
+                const errorMsg = data.errors[0] ?? t('usercode.compileError');
+                showToast(errorMsg, 'error');
+            }
+        });
+
+        return () => unsubscribe?.();
+    }, [initialized, t, showToast]);
+
     const handleOpenRecentProject = async (projectPath: string) => {
         try {
             setIsLoading(true, t('loading.step1'));
@@ -523,7 +677,6 @@ function App() {
                 const sceneFiles = await TauriAPI.scanDirectory(`${projectPath}/scenes`, '*.ecs');
                 const sceneNames = sceneFiles.map(f => `scenes/${f.split(/[\\/]/).pop()}`);
                 setAvailableScenes(sceneNames);
-                console.log('[App] Found scenes:', sceneNames);
             } catch (e) {
                 console.warn('[App] Failed to scan scenes:', e);
             }
@@ -545,12 +698,8 @@ function App() {
             // Load project plugin config and activate plugins (after engine init, before module system init)
             if (pluginManagerRef.current) {
                 const pluginSettings = projectService.getPluginSettings();
-                console.log('[App] Plugin settings from project:', pluginSettings);
                 if (pluginSettings && pluginSettings.enabledPlugins.length > 0) {
-                    console.log('[App] Loading plugin config:', pluginSettings.enabledPlugins);
                     await pluginManagerRef.current.loadConfig({ enabledPlugins: pluginSettings.enabledPlugins });
-                } else {
-                    console.log('[App] No plugin settings found in project config');
                 }
             }
 
@@ -565,6 +714,13 @@ function App() {
             setStatus(t('header.status.projectOpened'));
 
             setIsLoading(true, t('loading.step3'));
+
+            // Wait for user code to be compiled and registered before loading scenes
+            // 等待用户代码编译和注册完成后再加载场景
+            const userCodeService = Core.services.tryResolve(UserCodeService);
+            if (userCodeService) {
+                await userCodeService.waitForReady();
+            }
 
             const sceneManagerService = Core.services.resolve(SceneManagerService);
             if (sceneManagerService) {
@@ -696,6 +852,13 @@ function App() {
         }
 
         try {
+            // Wait for user code to be ready before loading scene
+            // 在加载场景前等待用户代码就绪
+            const userCodeService = Core.services.tryResolve(UserCodeService);
+            if (userCodeService) {
+                await userCodeService.waitForReady();
+            }
+
             await sceneManager.openScene();
             const sceneState = sceneManager.getSceneState();
             setStatus(t('scene.openedSuccess', { name: sceneState.sceneName }));
@@ -706,13 +869,25 @@ function App() {
     };
 
     const handleOpenSceneByPath = useCallback(async (scenePath: string) => {
+        console.log('[App] handleOpenSceneByPath called:', scenePath);
         if (!sceneManager) {
             console.error('SceneManagerService not available');
             return;
         }
 
         try {
+            // Wait for user code to be ready before loading scene
+            // 在加载场景前等待用户代码就绪
+            const userCodeService = Core.services.tryResolve(UserCodeService);
+            if (userCodeService) {
+                console.log('[App] Waiting for user code service...');
+                await userCodeService.waitForReady();
+                console.log('[App] User code service ready');
+            }
+
+            console.log('[App] Calling sceneManager.openScene...');
             await sceneManager.openScene(scenePath);
+            console.log('[App] Scene opened successfully');
             const sceneState = sceneManager.getSceneState();
             setStatus(t('scene.openedSuccess', { name: sceneState.sceneName }));
         } catch (error) {
@@ -1087,6 +1262,14 @@ function App() {
                         }}
                     />
                 )}
+                {externalModificationDialog && (
+                    <ExternalModificationDialog
+                        sceneName={externalModificationDialog.sceneName}
+                        onReload={externalModificationDialog.onReload}
+                        onOverwrite={externalModificationDialog.onOverwrite}
+                        onCancel={() => setExternalModificationDialog(null)}
+                    />
+                )}
             </>
         );
     }
@@ -1121,6 +1304,7 @@ function App() {
                         onCreatePlugin={handleCreatePlugin}
                         onReloadPlugins={handleReloadPlugins}
                         onOpenBuildSettings={() => setShowBuildSettings(true)}
+                        onOpenRenderDebug={() => setShowRenderDebug(true)}
                     />
                     <MainToolbar
                         messageHub={messageHub || undefined}
@@ -1226,6 +1410,12 @@ function App() {
                 />
             )}
 
+            {/* 渲染调试面板 | Render Debug Panel */}
+            <RenderDebugPanel
+                visible={showRenderDebug}
+                onClose={() => setShowRenderDebug(false)}
+            />
+
             {errorDialog && (
                 <ErrorDialog
                     title={errorDialog.title}
@@ -1250,6 +1440,15 @@ function App() {
                         }
                         setConfirmDialog(null);
                     }}
+                />
+            )}
+
+            {externalModificationDialog && (
+                <ExternalModificationDialog
+                    sceneName={externalModificationDialog.sceneName}
+                    onReload={externalModificationDialog.onReload}
+                    onOverwrite={externalModificationDialog.onOverwrite}
+                    onCancel={() => setExternalModificationDialog(null)}
                 />
             )}
         </div>

@@ -38,6 +38,7 @@ interface TitleBarProps {
     onCreatePlugin?: () => void;
     onReloadPlugins?: () => void;
     onOpenBuildSettings?: () => void;
+    onOpenRenderDebug?: () => void;
 }
 
 export function TitleBar({
@@ -61,7 +62,8 @@ export function TitleBar({
     onOpenAbout,
     onCreatePlugin,
     onReloadPlugins,
-    onOpenBuildSettings
+    onOpenBuildSettings,
+    onOpenRenderDebug
 }: TitleBarProps) {
     const { t } = useLocale();
     const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -197,6 +199,7 @@ export function TitleBar({
             { label: t('menu.tools.reloadPlugins'), shortcut: 'Ctrl+R', onClick: onReloadPlugins },
             { separator: true },
             { label: t('menu.tools.portManager'), onClick: onOpenPortManager },
+            { label: t('menu.tools.renderDebug'), onClick: onOpenRenderDebug },
             { separator: true },
             { label: t('menu.tools.settings'), onClick: onOpenSettings }
         ],
