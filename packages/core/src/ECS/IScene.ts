@@ -3,6 +3,7 @@ import { EntityList } from './Utils/EntityList';
 import { IdentifierPool } from './Utils/IdentifierPool';
 import { EntitySystem } from './Systems/EntitySystem';
 import { ComponentStorageManager, ComponentType } from './Core/ComponentStorage';
+import type { IComponentRegistry } from './Core/ComponentStorage';
 import { QuerySystem } from './Core/QuerySystem';
 import { TypeSafeEventSystem } from './Core/EventSystem';
 import { EpochManager } from './Core/EpochManager';
@@ -56,6 +57,17 @@ export interface IScene {
      * 组件存储管理器
      */
     readonly componentStorageManager: ComponentStorageManager;
+
+    /**
+     * 组件注册表
+     * Component Registry
+     *
+     * Each scene has its own registry for component type isolation.
+     * Clones from GlobalComponentRegistry on creation.
+     * 每个场景有自己的组件类型注册表以实现隔离。
+     * 创建时从 GlobalComponentRegistry 克隆。
+     */
+    readonly componentRegistry: IComponentRegistry;
 
     /**
      * 查询系统
@@ -359,10 +371,20 @@ export interface ISceneFactory<T extends IScene> {
 
 /**
  * 场景配置接口
+ * Scene configuration interface
  */
 export interface ISceneConfig {
     /**
      * 场景名称
+     * Scene name
      */
     name?: string;
+
+    /**
+     * 是否从全局注册表继承组件类型
+     * Whether to inherit component types from global registry
+     *
+     * @default true
+     */
+    inheritGlobalRegistry?: boolean;
 }

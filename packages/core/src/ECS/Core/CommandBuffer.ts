@@ -1,6 +1,6 @@
 import { Entity } from '../Entity';
 import { Component } from '../Component';
-import { ComponentType, ComponentRegistry } from './ComponentStorage';
+import { ComponentType, GlobalComponentRegistry } from './ComponentStorage';
 import { IScene } from '../IScene';
 import { createLogger } from '../../Utils/Logger';
 
@@ -198,10 +198,10 @@ export class CommandBuffer {
     private getTypeId(componentOrType: Component | ComponentType): number {
         if (typeof componentOrType === 'function') {
             // ComponentType
-            return ComponentRegistry.getBitIndex(componentOrType);
+            return GlobalComponentRegistry.getBitIndex(componentOrType);
         } else {
             // Component instance
-            return ComponentRegistry.getBitIndex(componentOrType.constructor as ComponentType);
+            return GlobalComponentRegistry.getBitIndex(componentOrType.constructor as ComponentType);
         }
     }
 
@@ -413,7 +413,7 @@ export class CommandBuffer {
             if (ops.removes && ops.removes.size > 0) {
                 for (const typeId of ops.removes) {
                     try {
-                        const componentType = ComponentRegistry.getTypeByBitIndex(typeId);
+                        const componentType = GlobalComponentRegistry.getTypeByBitIndex(typeId);
                         if (componentType) {
                             entity.removeComponentByType(componentType);
                             commandCount++;

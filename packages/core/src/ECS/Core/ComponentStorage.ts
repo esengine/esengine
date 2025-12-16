@@ -3,10 +3,13 @@ import { BitMask64Utils, BitMask64Data } from '../Utils/BigIntCompatibility';
 import { SoAStorage, SupportedTypedArray } from './SoAStorage';
 import { createLogger } from '../../Utils/Logger';
 import { getComponentTypeName, ComponentType } from '../Decorators';
-import { ComponentRegistry } from './ComponentStorage/ComponentRegistry';
+import { ComponentRegistry, GlobalComponentRegistry } from './ComponentStorage/ComponentRegistry';
+import type { IComponentRegistry } from './ComponentStorage/IComponentRegistry';
 
 // 导出核心类型
-export { ComponentRegistry };
+// Export core types
+export { ComponentRegistry, GlobalComponentRegistry };
+export type { IComponentRegistry };
 export type { ComponentType };
 
 
@@ -333,15 +336,18 @@ export class ComponentStorageManager {
 
     /**
      * 获取实体的组件位掩码
-     * @param entityId 实体ID
-     * @returns 组件位掩码
+     * Get component bitmask for entity
+     *
+     * @param entityId 实体ID | Entity ID
+     * @param registry 组件注册表（可选，默认使用全局注册表）| Component registry (optional, defaults to global)
+     * @returns 组件位掩码 | Component bitmask
      */
-    public getComponentMask(entityId: number): BitMask64Data {
+    public getComponentMask(entityId: number, registry: IComponentRegistry = GlobalComponentRegistry): BitMask64Data {
         const mask = BitMask64Utils.clone(BitMask64Utils.ZERO);
 
         for (const [componentType, storage] of this.storages.entries()) {
             if (storage.hasComponent(entityId)) {
-                const componentMask = ComponentRegistry.getBitMask(componentType as ComponentType);
+                const componentMask = registry.getBitMask(componentType as ComponentType);
                 BitMask64Utils.orInPlace(mask, componentMask);
             }
         }

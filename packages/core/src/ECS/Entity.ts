@@ -1,5 +1,5 @@
 import { Component } from './Component';
-import { ComponentRegistry, ComponentType } from './Core/ComponentStorage';
+import { ComponentType, GlobalComponentRegistry } from './Core/ComponentStorage';
 import { EEntityLifecyclePolicy } from './Core/EntityLifecyclePolicy';
 import { BitMask64Utils, BitMask64Data } from './Utils/BigIntCompatibility';
 import { createLogger } from '../Utils/Logger';
@@ -293,11 +293,12 @@ export class Entity {
         }
 
         const mask = this._componentMask;
-        const maxBitIndex = ComponentRegistry.getRegisteredCount();
+        const registry = this.scene.componentRegistry;
+        const maxBitIndex = registry.getRegisteredCount();
 
         for (let bitIndex = 0; bitIndex < maxBitIndex; bitIndex++) {
             if (BitMask64Utils.getBit(mask, bitIndex)) {
-                const componentType = ComponentRegistry.getTypeByBitIndex(bitIndex);
+                const componentType = registry.getTypeByBitIndex(bitIndex);
                 if (componentType) {
                     const component = this.scene.componentStorageManager.getComponent(this.id, componentType);
 
@@ -428,7 +429,8 @@ export class Entity {
 
         // 更新位掩码（组件已通过 @ECSComponent 装饰器自动注册）
         // Update bitmask (component already registered via @ECSComponent decorator)
-        const componentMask = ComponentRegistry.getBitMask(componentType);
+        const registry = this.scene?.componentRegistry ?? GlobalComponentRegistry;
+        const componentMask = registry.getBitMask(componentType);
         BitMask64Utils.orInPlace(this._componentMask, componentMask);
 
         // 使缓存失效
@@ -565,11 +567,12 @@ export class Entity {
      * ```
      */
     public hasComponent<T extends Component>(type: ComponentType<T>): boolean {
-        if (!ComponentRegistry.isRegistered(type)) {
+        const registry = this.scene?.componentRegistry ?? GlobalComponentRegistry;
+        if (!registry.isRegistered(type)) {
             return false;
         }
 
-        const mask = ComponentRegistry.getBitMask(type);
+        const mask = registry.getBitMask(type);
         return BitMask64Utils.hasAny(this._componentMask, mask);
     }
 
@@ -641,12 +644,13 @@ export class Entity {
      */
     public removeComponent(component: Component): void {
         const componentType = component.constructor as ComponentType;
+        const registry = this.scene?.componentRegistry ?? GlobalComponentRegistry;
 
-        if (!ComponentRegistry.isRegistered(componentType)) {
+        if (!registry.isRegistered(componentType)) {
             return;
         }
 
-        const bitIndex = ComponentRegistry.getBitIndex(componentType);
+        const bitIndex = registry.getBitIndex(componentType);
 
         // 更新位掩码
         BitMask64Utils.clearBit(this._componentMask, bitIndex);

@@ -1,5 +1,5 @@
 import { Entity } from '../Entity';
-import { ComponentType, ComponentRegistry } from './ComponentStorage';
+import { ComponentType, GlobalComponentRegistry } from './ComponentStorage';
 import { BitMask64Data, BitMask64Utils } from '../Utils';
 import { BitMaskHashMap } from '../Utils/BitMaskHashMap';
 
@@ -271,7 +271,7 @@ export class ArchetypeSystem {
     private generateArchetypeId(componentTypes: ComponentType[]): ArchetypeId {
         const mask = BitMask64Utils.clone(BitMask64Utils.ZERO);
         for (const type of componentTypes) {
-            const bitMask = ComponentRegistry.getBitMask(type);
+            const bitMask = GlobalComponentRegistry.getBitMask(type);
             BitMask64Utils.orInPlace(mask, bitMask);
         }
         return mask;

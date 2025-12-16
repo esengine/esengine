@@ -1,3 +1,13 @@
+/**
+ * Component Registry Implementation.
+ * 组件注册表实现。
+ *
+ * Manages component type bitmask allocation.
+ * Each Scene has its own registry instance for isolation.
+ * 管理组件类型的位掩码分配。
+ * 每个 Scene 都有自己的注册表实例以实现隔离。
+ */
+
 import { Component } from '../../Component';
 import { BitMask64Utils, BitMask64Data } from '../../Utils/BigIntCompatibility';
 import { createLogger } from '../../../Utils/Logger';
@@ -6,48 +16,43 @@ import {
     getComponentTypeName,
     hasECSComponentDecorator
 } from './ComponentTypeUtils';
+import type { IComponentRegistry } from './IComponentRegistry';
+
+const logger = createLogger('ComponentRegistry');
 
 /**
- * 组件注册表
- * 管理组件类型的位掩码分配
+ * Component Registry.
+ * 组件注册表。
+ *
+ * Instance-based registry for component type management.
+ * Each Scene should have its own registry.
+ * 基于实例的组件类型管理注册表。
+ * 每个 Scene 应有自己的注册表。
  */
-export class ComponentRegistry {
-    protected static readonly _logger = createLogger('ComponentStorage');
-    private static componentTypes = new Map<Function, number>();
-    private static bitIndexToType = new Map<number, Function>();
-    private static componentNameToType = new Map<string, Function>();
-    private static componentNameToId = new Map<string, number>();
-    private static maskCache = new Map<string, BitMask64Data>();
-    private static nextBitIndex = 0;
+export class ComponentRegistry implements IComponentRegistry {
+    private _componentTypes = new Map<Function, number>();
+    private _bitIndexToType = new Map<number, Function>();
+    private _componentNameToType = new Map<string, Function>();
+    private _componentNameToId = new Map<string, number>();
+    private _maskCache = new Map<string, BitMask64Data>();
+    private _nextBitIndex = 0;
+    private _hotReloadEnabled = false;
+    private _warnedComponents = new Set<Function>();
 
     /**
-     * 热更新模式标志，默认禁用
-     * Hot reload mode flag, disabled by default
-     * 编辑器环境应启用此选项以支持脚本热更新
-     * Editor environment should enable this to support script hot reload
-     */
-    private static hotReloadEnabled = false;
-
-    /**
-     * 已警告过的组件类型集合，避免重复警告
-     * Set of warned component types to avoid duplicate warnings
-     */
-    private static warnedComponents = new Set<Function>();
-
-    /**
-     * 注册组件类型并分配位掩码
-     * Register component type and allocate bitmask
+     * Register component type and allocate bitmask.
+     * 注册组件类型并分配位掩码。
      *
-     * @param componentType 组件类型
-     * @returns 分配的位索引
+     * @param componentType - Component constructor | 组件构造函数
+     * @returns Allocated bit index | 分配的位索引
      */
-    public static register<T extends Component>(componentType: ComponentType<T>): number {
+    public register<T extends Component>(componentType: ComponentType<T>): number {
         const typeName = getComponentTypeName(componentType);
 
-        // 检查是否使用了 @ECSComponent 装饰器
         // Check if @ECSComponent decorator is used
-        if (!hasECSComponentDecorator(componentType) && !this.warnedComponents.has(componentType)) {
-            this.warnedComponents.add(componentType);
+        // 检查是否使用了 @ECSComponent 装饰器
+        if (!hasECSComponentDecorator(componentType) && !this._warnedComponents.has(componentType)) {
+            this._warnedComponents.add(componentType);
             console.warn(
                 `[ComponentRegistry] Component "${typeName}" is missing @ECSComponent decorator. ` +
                 `This may cause issues with serialization and code minification. ` +
@@ -55,51 +60,43 @@ export class ComponentRegistry {
             );
         }
 
-        if (this.componentTypes.has(componentType)) {
-            const existingIndex = this.componentTypes.get(componentType)!;
-            return existingIndex;
+        if (this._componentTypes.has(componentType)) {
+            return this._componentTypes.get(componentType)!;
         }
 
-        // 检查是否有同名但不同类的组件已注册（热更新场景）
-        // Check if a component with the same name but different class is registered (hot reload scenario)
-        if (this.hotReloadEnabled && this.componentNameToType.has(typeName)) {
-            const existingType = this.componentNameToType.get(typeName);
+        // Hot reload: check if same-named component exists
+        // 热更新：检查是否有同名组件
+        if (this._hotReloadEnabled && this._componentNameToType.has(typeName)) {
+            const existingType = this._componentNameToType.get(typeName);
             if (existingType !== componentType) {
-                // 热更新：替换旧的类为新的类，复用相同的 bitIndex
-                // Hot reload: replace old class with new class, reuse the same bitIndex
-                const existingIndex = this.componentTypes.get(existingType!)!;
+                // Reuse old bitIndex, replace class mapping
+                // 复用旧的 bitIndex，替换类映射
+                const existingIndex = this._componentTypes.get(existingType!)!;
+                this._componentTypes.delete(existingType!);
+                this._componentTypes.set(componentType, existingIndex);
+                this._bitIndexToType.set(existingIndex, componentType);
+                this._componentNameToType.set(typeName, componentType);
 
-                // 移除旧类的映射
-                // Remove old class mapping
-                this.componentTypes.delete(existingType!);
-
-                // 用新类更新映射
-                // Update mappings with new class
-                this.componentTypes.set(componentType, existingIndex);
-                this.bitIndexToType.set(existingIndex, componentType);
-                this.componentNameToType.set(typeName, componentType);
-
-                console.log(`[ComponentRegistry] Hot reload: replaced component "${typeName}"`);
+                logger.debug(`Hot reload: replaced component "${typeName}"`);
                 return existingIndex;
             }
         }
 
-        const bitIndex = this.nextBitIndex++;
-        this.componentTypes.set(componentType, bitIndex);
-        this.bitIndexToType.set(bitIndex, componentType);
-        this.componentNameToType.set(typeName, componentType);
-        this.componentNameToId.set(typeName, bitIndex);
+        const bitIndex = this._nextBitIndex++;
+        this._componentTypes.set(componentType, bitIndex);
+        this._bitIndexToType.set(bitIndex, componentType);
+        this._componentNameToType.set(typeName, componentType);
+        this._componentNameToId.set(typeName, bitIndex);
 
         return bitIndex;
     }
 
     /**
-     * 获取组件类型的位掩码
-     * @param componentType 组件类型
-     * @returns 位掩码
+     * Get component type's bitmask.
+     * 获取组件类型的位掩码。
      */
-    public static getBitMask<T extends Component>(componentType: ComponentType<T>): BitMask64Data {
-        const bitIndex = this.componentTypes.get(componentType);
+    public getBitMask<T extends Component>(componentType: ComponentType<T>): BitMask64Data {
+        const bitIndex = this._componentTypes.get(componentType);
         if (bitIndex === undefined) {
             const typeName = getComponentTypeName(componentType);
             throw new Error(`Component type ${typeName} is not registered`);
@@ -108,12 +105,11 @@ export class ComponentRegistry {
     }
 
     /**
-     * 获取组件类型的位索引
-     * @param componentType 组件类型
-     * @returns 位索引
+     * Get component type's bit index.
+     * 获取组件类型的位索引。
      */
-    public static getBitIndex<T extends Component>(componentType: ComponentType<T>): number {
-        const bitIndex = this.componentTypes.get(componentType);
+    public getBitIndex<T extends Component>(componentType: ComponentType<T>): number {
+        const bitIndex = this._componentTypes.get(componentType);
         if (bitIndex === undefined) {
             const typeName = getComponentTypeName(componentType);
             throw new Error(`Component type ${typeName} is not registered`);
@@ -122,90 +118,84 @@ export class ComponentRegistry {
     }
 
     /**
-     * 检查组件类型是否已注册
-     * @param componentType 组件类型
-     * @returns 是否已注册
+     * Check if component type is registered.
+     * 检查组件类型是否已注册。
      */
-    public static isRegistered<T extends Component>(componentType: ComponentType<T>): boolean {
-        return this.componentTypes.has(componentType);
+    public isRegistered<T extends Component>(componentType: ComponentType<T>): boolean {
+        return this._componentTypes.has(componentType);
     }
 
     /**
-     * 通过位索引获取组件类型
-     * @param bitIndex 位索引
-     * @returns 组件类型构造函数或null
+     * Get component type by bit index.
+     * 通过位索引获取组件类型。
      */
-    public static getTypeByBitIndex(bitIndex: number): ComponentType | null {
-        return (this.bitIndexToType.get(bitIndex) as ComponentType) || null;
+    public getTypeByBitIndex(bitIndex: number): ComponentType | null {
+        return (this._bitIndexToType.get(bitIndex) as ComponentType) || null;
     }
 
     /**
-     * 获取当前已注册的组件类型数量
-     * @returns 已注册数量
+     * Get registered component count.
+     * 获取已注册的组件数量。
      */
-    public static getRegisteredCount(): number {
-        return this.nextBitIndex;
+    public getRegisteredCount(): number {
+        return this._nextBitIndex;
     }
 
     /**
-     * 通过名称获取组件类型
-     * @param componentName 组件名称
-     * @returns 组件类型构造函数
+     * Get component type by name.
+     * 通过名称获取组件类型。
      */
-    public static getComponentType(componentName: string): Function | null {
-        return this.componentNameToType.get(componentName) || null;
+    public getComponentType(componentName: string): Function | null {
+        return this._componentNameToType.get(componentName) || null;
     }
 
     /**
-     * 获取所有已注册的组件类型
-     * @returns 组件类型映射
+     * Get all registered component types.
+     * 获取所有已注册的组件类型。
      */
-    public static getAllRegisteredTypes(): Map<Function, number> {
-        return new Map(this.componentTypes);
+    public getAllRegisteredTypes(): Map<Function, number> {
+        return new Map(this._componentTypes);
     }
 
     /**
-     * 获取所有组件名称到类型的映射
-     * @returns 名称到类型的映射
+     * Get all component names.
+     * 获取所有组件名称。
      */
-    public static getAllComponentNames(): Map<string, Function> {
-        return new Map(this.componentNameToType);
+    public getAllComponentNames(): Map<string, Function> {
+        return new Map(this._componentNameToType);
     }
 
     /**
-     * 通过名称获取组件类型ID
-     * @param componentName 组件名称
-     * @returns 组件类型ID
+     * Get component type ID by name.
+     * 通过名称获取组件类型 ID。
      */
-    public static getComponentId(componentName: string): number | undefined {
-        return this.componentNameToId.get(componentName);
+    public getComponentId(componentName: string): number | undefined {
+        return this._componentNameToId.get(componentName);
     }
 
     /**
-     * 注册组件类型（通过名称）
-     * @param componentName 组件名称
-     * @returns 分配的组件ID
+     * Register component type by name.
+     * 通过名称注册组件类型。
      */
-    public static registerComponentByName(componentName: string): number {
-        if (this.componentNameToId.has(componentName)) {
-            return this.componentNameToId.get(componentName)!;
+    public registerComponentByName(componentName: string): number {
+        if (this._componentNameToId.has(componentName)) {
+            return this._componentNameToId.get(componentName)!;
         }
 
-        const bitIndex = this.nextBitIndex++;
-        this.componentNameToId.set(componentName, bitIndex);
+        const bitIndex = this._nextBitIndex++;
+        this._componentNameToId.set(componentName, bitIndex);
         return bitIndex;
     }
 
     /**
-     * 创建单个组件的掩码
-     * @param componentName 组件名称
-     * @returns 组件掩码
+     * Create single component mask.
+     * 创建单个组件的掩码。
      */
-    public static createSingleComponentMask(componentName: string): BitMask64Data {
+    public createSingleComponentMask(componentName: string): BitMask64Data {
         const cacheKey = `single:${componentName}`;
 
-        if (this.maskCache.has(cacheKey)) {
-            return this.maskCache.get(cacheKey)!;
+        if (this._maskCache.has(cacheKey)) {
+            return this._maskCache.get(cacheKey)!;
         }
 
         const componentId = this.getComponentId(componentName);
@@ -214,21 +204,20 @@ export class ComponentRegistry {
         }
 
         const mask = BitMask64Utils.create(componentId);
-        this.maskCache.set(cacheKey, mask);
+        this._maskCache.set(cacheKey, mask);
         return mask;
     }
 
     /**
-     * 创建多个组件的掩码
-     * @param componentNames 组件名称数组
-     * @returns 组合掩码
+     * Create component mask for multiple components.
+     * 创建多个组件的掩码。
      */
-    public static createComponentMask(componentNames: string[]): BitMask64Data {
+    public createComponentMask(componentNames: string[]): BitMask64Data {
         const sortedNames = [...componentNames].sort();
         const cacheKey = `multi:${sortedNames.join(',')}`;
 
-        if (this.maskCache.has(cacheKey)) {
-            return this.maskCache.get(cacheKey)!;
+        if (this._maskCache.has(cacheKey)) {
+            return this._maskCache.get(cacheKey)!;
         }
 
         const mask = BitMask64Utils.clone(BitMask64Utils.ZERO);
@@ -240,90 +229,79 @@ export class ComponentRegistry {
             }
         }
 
-        this.maskCache.set(cacheKey, mask);
+        this._maskCache.set(cacheKey, mask);
         return mask;
     }
 
     /**
-     * 清除掩码缓存
+     * Clear mask cache.
+     * 清除掩码缓存。
      */
-    public static clearMaskCache(): void {
-        this.maskCache.clear();
+    public clearMaskCache(): void {
+        this._maskCache.clear();
     }
 
     /**
-     * 启用热更新模式
-     * Enable hot reload mode
-     * 在编辑器环境中调用以支持脚本热更新
-     * Call in editor environment to support script hot reload
+     * Enable hot reload mode.
+     * 启用热更新模式。
      */
-    public static enableHotReload(): void {
-        this.hotReloadEnabled = true;
+    public enableHotReload(): void {
+        this._hotReloadEnabled = true;
     }
 
     /**
-     * 禁用热更新模式
-     * Disable hot reload mode
+     * Disable hot reload mode.
+     * 禁用热更新模式。
      */
-    public static disableHotReload(): void {
-        this.hotReloadEnabled = false;
+    public disableHotReload(): void {
+        this._hotReloadEnabled = false;
     }
 
     /**
-     * 检查热更新模式是否启用
-     * Check if hot reload mode is enabled
+     * Check if hot reload mode is enabled.
+     * 检查热更新模式是否启用。
      */
-    public static isHotReloadEnabled(): boolean {
-        return this.hotReloadEnabled;
+    public isHotReloadEnabled(): boolean {
+        return this._hotReloadEnabled;
     }
 
     /**
-     * 注销组件类型
-     * Unregister component type
-     *
-     * 用于插件卸载时清理组件。
-     * 注意：这不会释放 bitIndex，以避免索引冲突。
-     *
-     * Used for cleanup during plugin unload.
-     * Note: This does not release bitIndex to avoid index conflicts.
-     *
-     * @param componentName 组件名称 | Component name
+     * Unregister component type.
+     * 注销组件类型。
      */
-    public static unregister(componentName: string): void {
-        const componentType = this.componentNameToType.get(componentName);
+    public unregister(componentName: string): void {
+        const componentType = this._componentNameToType.get(componentName);
         if (!componentType) {
             return;
         }
 
-        const bitIndex = this.componentTypes.get(componentType);
+        const bitIndex = this._componentTypes.get(componentType);
 
-        // 移除类型映射
         // Remove type mappings
-        this.componentTypes.delete(componentType);
+        // 移除类型映射
+        this._componentTypes.delete(componentType);
         if (bitIndex !== undefined) {
-            this.bitIndexToType.delete(bitIndex);
+            this._bitIndexToType.delete(bitIndex);
         }
-        this.componentNameToType.delete(componentName);
-        this.componentNameToId.delete(componentName);
+        this._componentNameToType.delete(componentName);
+        this._componentNameToId.delete(componentName);
 
-        // 清除相关的掩码缓存
         // Clear related mask cache
+        // 清除相关的掩码缓存
         this.clearMaskCache();
 
-        this._logger.debug(`Component unregistered: ${componentName}`);
+        logger.debug(`Component unregistered: ${componentName}`);
     }
 
     /**
-     * 获取所有已注册的组件信息
-     * Get all registered component info
-     *
-     * @returns 组件信息数组 | Array of component info
+     * Get all registered component info.
+     * 获取所有已注册的组件信息。
      */
-    public static getRegisteredComponents(): Array<{ name: string; type: Function; bitIndex: number }> {
+    public getRegisteredComponents(): Array<{ name: string; type: Function; bitIndex: number }> {
         const result: Array<{ name: string; type: Function; bitIndex: number }> = [];
 
-        for (const [name, type] of this.componentNameToType) {
-            const bitIndex = this.componentTypes.get(type);
+        for (const [name, type] of this._componentNameToType) {
+            const bitIndex = this._componentTypes.get(type);
             if (bitIndex !== undefined) {
                 result.push({ name, type, bitIndex });
             }
@@ -333,17 +311,48 @@ export class ComponentRegistry {
     }
 
     /**
-     * 重置注册表（用于测试）
-     * Reset registry (for testing)
+     * Reset registry.
+     * 重置注册表。
      */
-    public static reset(): void {
-        this.componentTypes.clear();
-        this.bitIndexToType.clear();
-        this.componentNameToType.clear();
-        this.componentNameToId.clear();
-        this.maskCache.clear();
-        this.warnedComponents.clear();
-        this.nextBitIndex = 0;
-        this.hotReloadEnabled = false;
+    public reset(): void {
+        this._componentTypes.clear();
+        this._bitIndexToType.clear();
+        this._componentNameToType.clear();
+        this._componentNameToId.clear();
+        this._maskCache.clear();
+        this._warnedComponents.clear();
+        this._nextBitIndex = 0;
+        this._hotReloadEnabled = false;
+    }
+
+    /**
+     * Clone component types from another registry.
+     * 从另一个注册表克隆组件类型。
+     *
+     * Used to inherit framework components when creating a new Scene.
+     * 用于在创建新 Scene 时继承框架组件。
+     */
+    public cloneFrom(source: IComponentRegistry): void {
+        const types = source.getAllRegisteredTypes();
+        for (const [type, index] of types) {
+            this._componentTypes.set(type, index);
+            this._bitIndexToType.set(index, type);
+            const typeName = getComponentTypeName(type as ComponentType);
+            this._componentNameToType.set(typeName, type);
+            this._componentNameToId.set(typeName, index);
+        }
+        this._nextBitIndex = source.getRegisteredCount();
+        this._hotReloadEnabled = source.isHotReloadEnabled();
     }
 }
+
+/**
+ * Global Component Registry.
+ * 全局组件注册表。
+ *
+ * Used by framework components and decorators.
+ * Scene instances clone from this registry on creation.
+ * 用于框架组件和装饰器。
+ * Scene 实例在创建时从此注册表克隆。
+ */
+export const GlobalComponentRegistry = new ComponentRegistry();

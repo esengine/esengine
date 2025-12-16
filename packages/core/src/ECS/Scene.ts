@@ -2,7 +2,13 @@ import { Entity } from './Entity';
 import { EntityList } from './Utils/EntityList';
 import { IdentifierPool } from './Utils/IdentifierPool';
 import { EntitySystem } from './Systems/EntitySystem';
-import { ComponentStorageManager, ComponentRegistry, ComponentType } from './Core/ComponentStorage';
+import {
+    ComponentStorageManager,
+    ComponentRegistry,
+    GlobalComponentRegistry,
+    ComponentType
+} from './Core/ComponentStorage';
+import type { IComponentRegistry } from './Core/ComponentStorage';
 import { QuerySystem } from './Core/QuerySystem';
 import { TypeSafeEventSystem } from './Core/EventSystem';
 import { ReferenceTracker } from './Core/ReferenceTracker';
@@ -74,6 +80,15 @@ export class Scene implements IScene {
      * 高性能的组件存储和查询系统。
      */
     public readonly componentStorageManager: ComponentStorageManager;
+
+    /**
+     * 组件注册表
+     * Component Registry
+     *
+     * Each scene has its own registry for component type isolation.
+     * 每个场景有自己的组件类型注册表以实现隔离。
+     */
+    public readonly componentRegistry: IComponentRegistry;
 
     /**
      * 查询系统
@@ -364,11 +379,23 @@ export class Scene implements IScene {
 
     /**
      * 创建场景实例
+     * Create scene instance
      */
     constructor(config?: ISceneConfig) {
         this.entities = new EntityList(this);
         this.identifierPool = new IdentifierPool();
         this.componentStorageManager = new ComponentStorageManager();
+
+        // 创建场景级别的组件注册表
+        // Create scene-level component registry
+        this.componentRegistry = new ComponentRegistry();
+
+        // 从全局注册表继承框架组件（默认启用）
+        // Inherit framework components from global registry (enabled by default)
+        if (config?.inheritGlobalRegistry !== false) {
+            this.componentRegistry.cloneFrom(GlobalComponentRegistry);
+        }
+
         this.querySystem = new QuerySystem();
         this.eventSystem = new TypeSafeEventSystem();
         this.referenceTracker = new ReferenceTracker();
@@ -671,8 +698,8 @@ export class Scene implements IScene {
         const notifiedSystems = new Set<EntitySystem>();
 
         // 如果提供了组件类型，使用索引优化 | If component type provided, use index optimization
-        if (changedComponentType && ComponentRegistry.isRegistered(changedComponentType)) {
-            const componentId = ComponentRegistry.getBitIndex(changedComponentType);
+        if (changedComponentType && this.componentRegistry.isRegistered(changedComponentType)) {
+            const componentId = this.componentRegistry.getBitIndex(changedComponentType);
             const interestedSystems = this._componentIdToSystems.get(componentId);
 
             if (interestedSystems) {
@@ -760,7 +787,7 @@ export class Scene implements IScene {
      * @param system 系统 | System
      */
     private addSystemToComponentIndex(componentType: ComponentType, system: EntitySystem): void {
-        const componentId = ComponentRegistry.getBitIndex(componentType);
+        const componentId = this.componentRegistry.getBitIndex(componentType);
         let systems = this._componentIdToSystems.get(componentId);
 
         if (!systems) {
@@ -1506,7 +1533,7 @@ export class Scene implements IScene {
             ? IncrementalSerializer.deserializeIncremental(incremental as string | Uint8Array)
             : (incremental as IncrementalSnapshot);
 
-        const registry = componentRegistry || (ComponentRegistry.getAllComponentNames() as Map<string, ComponentType>);
+        const registry = componentRegistry || (this.componentRegistry.getAllComponentNames() as Map<string, ComponentType>);
 
         IncrementalSerializer.applyIncremental(this, snapshot, registry);
     }

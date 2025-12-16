@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask';
+export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask';
 
 /**
  * 属性资源类型
@@ -102,7 +102,7 @@ interface ColorPropertyOptions extends PropertyOptionsBase {
  * Vector property options
  */
 interface VectorPropertyOptions extends PropertyOptionsBase {
-    type: 'vector2' | 'vector3';
+    type: 'vector2' | 'vector3' | 'vector4';
 }
 
 /**
@@ -139,6 +139,7 @@ export type ArrayItemType =
     | { type: 'asset'; assetType?: PropertyAssetType; extensions?: string[] }
     | { type: 'vector2' }
     | { type: 'vector3' }
+    | { type: 'vector4' }
     | { type: 'color'; alpha?: boolean }
     | { type: 'enum'; options: EnumOption[] };
 

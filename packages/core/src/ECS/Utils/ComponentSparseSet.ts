@@ -1,5 +1,5 @@
 import { Entity } from '../Entity';
-import { ComponentType, ComponentRegistry } from '../Core/ComponentStorage';
+import { ComponentType, GlobalComponentRegistry } from '../Core/ComponentStorage';
 import { BitMask64Utils, BitMask64Data } from './BigIntCompatibility';
 import { SparseSet } from './SparseSet';
 import { Pool } from '../../Utils/Pool/Pool';
@@ -86,7 +86,7 @@ export class ComponentSparseSet {
             entityComponents.add(componentType);
 
             // 获取组件位掩码并合并
-            const bitMask = ComponentRegistry.getBitMask(componentType);
+            const bitMask = GlobalComponentRegistry.getBitMask(componentType);
             BitMask64Utils.orInPlace(componentMask, bitMask);
         }
 
@@ -166,10 +166,10 @@ export class ComponentSparseSet {
         // 构建目标位掩码
         const targetMask = BitMask64Utils.clone(BitMask64Utils.ZERO);
         for (const componentType of componentTypes) {
-            if (!ComponentRegistry.isRegistered(componentType)) {
+            if (!GlobalComponentRegistry.isRegistered(componentType)) {
                 return new Set<Entity>(); // 未注册的组件类型，结果为空
             }
-            const bitMask = ComponentRegistry.getBitMask(componentType);
+            const bitMask = GlobalComponentRegistry.getBitMask(componentType);
             BitMask64Utils.orInPlace(targetMask, bitMask);
         }
 
@@ -206,8 +206,8 @@ export class ComponentSparseSet {
         // 构建目标位掩码
         const targetMask = BitMask64Utils.clone(BitMask64Utils.ZERO);
         for (const componentType of componentTypes) {
-            if (ComponentRegistry.isRegistered(componentType)) {
-                const bitMask = ComponentRegistry.getBitMask(componentType);
+            if (GlobalComponentRegistry.isRegistered(componentType)) {
+                const bitMask = GlobalComponentRegistry.getBitMask(componentType);
                 BitMask64Utils.orInPlace(targetMask, bitMask);
             }
         }
@@ -242,12 +242,12 @@ export class ComponentSparseSet {
             return false;
         }
 
-        if (!ComponentRegistry.isRegistered(componentType)) {
+        if (!GlobalComponentRegistry.isRegistered(componentType)) {
             return false;
         }
 
         const entityMask = this._componentMasks[entityIndex]!;
-        const componentMask = ComponentRegistry.getBitMask(componentType);
+        const componentMask = GlobalComponentRegistry.getBitMask(componentType);
 
         return BitMask64Utils.hasAny(entityMask, componentMask);
     }
