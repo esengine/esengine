@@ -894,10 +894,12 @@ describe('QuerySystem - 查询系统测试', () => {
             const independentQuerySystem = new QuerySystem();
             const testEntity = scene.createEntity('ArchetypeTestEntity');
 
-            // 模拟Scene环境（保留componentStorageManager）
+            // 模拟Scene环境（保留componentStorageManager和componentRegistry）
+            // Mock Scene environment (keep componentStorageManager and componentRegistry)
             const mockScene = {
                 querySystem: independentQuerySystem,
                 componentStorageManager: scene.componentStorageManager,
+                componentRegistry: scene.componentRegistry,
                 clearSystemEntityCaches: jest.fn()
             };
             testEntity.scene = mockScene as any;
@@ -938,10 +940,12 @@ describe('QuerySystem - 查询系统测试', () => {
             const independentQuerySystem = new QuerySystem();
             const testEntity = scene.createEntity('RemoveAllTestEntity');
 
-            // 模拟Scene环境（保留componentStorageManager）
+            // 模拟Scene环境（保留componentStorageManager和componentRegistry）
+            // Mock Scene environment (keep componentStorageManager and componentRegistry)
             const mockScene = {
                 querySystem: independentQuerySystem,
                 componentStorageManager: scene.componentStorageManager,
+                componentRegistry: scene.componentRegistry,
                 clearSystemEntityCaches: jest.fn()
             };
             testEntity.scene = mockScene as any;
