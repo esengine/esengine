@@ -4,11 +4,14 @@
  * 编辑器版本的物理插件，不包含 WASM 依赖。
  * Editor version of physics plugin, without WASM dependencies.
  *
- * 用于编辑器中注册插件清单，但不创建运行时模块。
- * 运行时使用 PhysicsPlugin from '@esengine/physics-rapier2d/runtime'
+ * 使用轻量级 Physics2DComponentsModule 注册组件，
+ * 使场景中的物理组件可以正确序列化/反序列化。
+ * Uses lightweight Physics2DComponentsModule to register components,
+ * enabling proper serialization/deserialization of physics components in scenes.
  */
 
 import type { IRuntimePlugin, ModuleManifest } from '@esengine/engine-core';
+import { Physics2DComponentsModule } from './Physics2DComponentsModule';
 
 const manifest: ModuleManifest = {
     id: '@esengine/physics-rapier2d',
@@ -30,12 +33,15 @@ const manifest: ModuleManifest = {
 };
 
 /**
- * 编辑器物理插件（无运行时模块）
- * Editor physics plugin (no runtime module)
+ * 编辑器物理插件（轻量级运行时模块）
+ * Editor physics plugin (lightweight runtime module)
  *
- * 编辑器使用此版本注册插件，运行时使用带 WASM 的完整版本。
+ * 使用 Physics2DComponentsModule 注册组件，用于场景反序列化。
+ * 不包含 WASM 依赖，不创建物理系统。
+ * Uses Physics2DComponentsModule for component registration (scene deserialization).
+ * No WASM dependency, no physics system creation.
  */
 export const Physics2DPlugin: IRuntimePlugin = {
-    manifest
-    // No runtime module - editor doesn't need physics simulation
+    manifest,
+    runtimeModule: new Physics2DComponentsModule()
 };

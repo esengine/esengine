@@ -6,7 +6,7 @@
  * 用于编辑器中的组件序列化/反序列化
  */
 
-import { ComponentRegistry } from '@esengine/ecs-framework';
+import type { IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule } from '@esengine/engine-core';
 
 // Components (no WASM dependency)
@@ -26,8 +26,9 @@ import { PolygonCollider2DComponent } from './components/PolygonCollider2DCompon
 export class Physics2DComponentsModule implements IRuntimeModule {
     /**
      * 注册组件到 ComponentRegistry
+     * Register components to ComponentRegistry
      */
-    registerComponents(registry: typeof ComponentRegistry): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(Rigidbody2DComponent);
         registry.register(BoxCollider2DComponent);
         registry.register(CircleCollider2DComponent);

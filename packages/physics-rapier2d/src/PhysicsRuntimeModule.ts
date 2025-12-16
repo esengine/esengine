@@ -4,8 +4,7 @@
  * 提供 Rapier2D 物理引擎的 ECS 集成
  */
 
-import type { IScene, ServiceContainer } from '@esengine/ecs-framework';
-import { ComponentRegistry } from '@esengine/ecs-framework';
+import type { IScene, ServiceContainer, IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { WasmLibraryLoaderFactory } from '@esengine/platform-common';
 import type * as RAPIER from '@esengine/rapier2d';
@@ -101,10 +100,11 @@ class PhysicsRuntimeModule implements IRuntimeModule {
 
     /**
      * 注册物理组件
+     * Register physics components
      *
-     * @param registry - 组件注册表
+     * @param registry - 组件注册表 | Component registry
      */
-    registerComponents(registry: typeof ComponentRegistry): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(Rigidbody2DComponent);
         registry.register(BoxCollider2DComponent);
         registry.register(CircleCollider2DComponent);
