@@ -276,6 +276,15 @@ export class UITransformComponent extends Component implements ISortable {
     public worldScaleY: number = 1;
 
     /**
+     * 计算后的世界层内顺序（考虑父元素和层级深度）
+     * Computed world order in layer (considering parent and hierarchy depth)
+     *
+     * 子元素总是渲染在父元素之上：worldOrderInLayer = parentWorldOrder + depth * 1000 + localOrder
+     * Children always render on top of parents: worldOrderInLayer = parentWorldOrder + depth * 1000 + localOrder
+     */
+    public worldOrderInLayer: number = 0;
+
+    /**
      * 本地到世界的 2D 变换矩阵（只读，由 UILayoutSystem 计算）
      * Local to world 2D transformation matrix (readonly, computed by UILayoutSystem)
      */

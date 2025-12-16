@@ -58,9 +58,9 @@ export class UIButtonRenderSystem extends EntitySystem {
             const width = (transform.computedWidth ?? transform.width) * scaleX;
             const height = (transform.computedHeight ?? transform.height) * scaleY;
             const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用排序层和层内顺序 | Use sorting layer and order in layer
+            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
             const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.orderInLayer;
+            const orderInLayer = transform.worldOrderInLayer;
             // 使用 transform 的 pivot 作为旋转/缩放中心
             const pivotX = transform.pivotX;
             const pivotY = transform.pivotY;

@@ -88,6 +88,9 @@ export {
     type UIFontWeight
 } from './components/UITextComponent';
 
+export { TextBlinkComponent } from './components/TextBlinkComponent';
+export { SceneLoadTriggerComponent } from './components/SceneLoadTriggerComponent';
+
 export {
     UILayoutComponent,
     UILayoutType,
@@ -124,6 +127,8 @@ export { UILayoutSystem } from './systems/UILayoutSystem';
 export { UIInputSystem, type UIInputEvent } from './systems/UIInputSystem';
 export { UIAnimationSystem, UIEasing, type EasingFunction, type EasingName } from './systems/UIAnimationSystem';
 export { UIRenderDataProvider, type IUIRenderDataProvider } from './systems/UIRenderDataProvider';
+export { TextBlinkSystem } from './systems/TextBlinkSystem';
+export { SceneLoadTriggerSystem } from './systems/SceneLoadTriggerSystem';
 
 // Systems - Render (ECS-compliant render systems)
 export {

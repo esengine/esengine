@@ -56,7 +56,7 @@ export interface UIRenderPrimitive {
     rotation: number;
     /** Pivot/Origin X (0-1, 0=left, 0.5=center, 1=right) | 锚点 X (0-1, 0=左, 0.5=中心, 1=右) */
     pivotX: number;
-    /** Pivot/Origin Y (0-1, 0=top, 0.5=center, 1=bottom) | 锚点 Y (0-1, 0=上, 0.5=中心, 1=下) */
+    /** Pivot/Origin Y (0-1, 0=bottom, 0.5=center, 1=top) in Y-up system | 锚点 Y (0-1, 0=下, 0.5=中心, 1=上) Y轴向上坐标系 */
     pivotY: number;
     /** Packed color (0xAABBGGRR) | 打包颜色 */
     color: number;
@@ -169,6 +169,136 @@ export class UIRenderCollector {
     addPrimitive(primitive: UIRenderPrimitive): void {
         this.primitives.push(primitive);
         this.cache = null;
+    }
+
+    /**
+     * Add a nine-patch (9-slice) primitive
+     * 添加九宫格原语
+     *
+     * Nine-patch divides the texture into 9 regions:
+     * - Corners: Keep original size
+     * - Edges: Stretch in one direction
+     * - Center: Stretches in both directions
+     *
+     * 九宫格将纹理分为 9 个区域：
+     * - 角落：保持原始尺寸
+     * - 边缘：单向拉伸
+     * - 中心：双向拉伸
+     *
+     * @param x - X position | X 坐标
+     * @param y - Y position | Y 坐标
+     * @param width - Target width | 目标宽度
+     * @param height - Target height | 目标高度
+     * @param margins - Nine-patch margins [top, right, bottom, left] | 九宫格边距
+     * @param textureWidth - Source texture width | 源纹理宽度
+     * @param textureHeight - Source texture height | 源纹理高度
+     * @param color - Tint color | 着色颜色
+     * @param alpha - Alpha value | 透明度
+     * @param sortingLayer - Sorting layer | 排序层
+     * @param orderInLayer - Order in layer | 层内顺序
+     * @param options - Additional options | 额外选项
+     */
+    addNinePatch(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        margins: [number, number, number, number],
+        textureWidth: number,
+        textureHeight: number,
+        color: number,
+        alpha: number,
+        sortingLayer: string,
+        orderInLayer: number,
+        options?: {
+            rotation?: number;
+            textureId?: number;
+            textureGuid?: string;
+        }
+    ): void {
+        const [marginTop, marginRight, marginBottom, marginLeft] = margins;
+
+        // Ensure minimum size to avoid negative dimensions
+        // 确保最小尺寸以避免负尺寸
+        const minWidth = marginLeft + marginRight;
+        const minHeight = marginTop + marginBottom;
+        const targetWidth = Math.max(width, minWidth);
+        const targetHeight = Math.max(height, minHeight);
+
+        // Calculate center dimensions
+        // 计算中心区域尺寸
+        const centerWidth = targetWidth - marginLeft - marginRight;
+        const centerHeight = targetHeight - marginTop - marginBottom;
+
+        // Source texture UV boundaries (normalized)
+        // 源纹理 UV 边界（归一化）
+        const uvLeft = marginLeft / textureWidth;
+        const uvRight = (textureWidth - marginRight) / textureWidth;
+        const uvTop = marginTop / textureHeight;
+        const uvBottom = (textureHeight - marginBottom) / textureHeight;
+
+        // Common options for all patches
+        // 所有 patch 的公共选项
+        // Note: pivotY=1 means position is top-left corner (Y-up coordinate system)
+        // 注意：pivotY=1 表示位置是左上角（Y轴向上坐标系）
+        const baseOptions = {
+            rotation: options?.rotation ?? 0,
+            pivotX: 0,
+            pivotY: 1,
+            textureId: options?.textureId,
+            textureGuid: options?.textureGuid
+        };
+
+        // Helper to add a patch with specific UVs
+        // 辅助函数：添加具有特定 UV 的 patch
+        const addPatch = (
+            px: number,
+            py: number,
+            pw: number,
+            ph: number,
+            u0: number,
+            v0: number,
+            u1: number,
+            v1: number
+        ) => {
+            if (pw <= 0 || ph <= 0) return;
+            this.addRect(px, py, pw, ph, color, alpha, sortingLayer, orderInLayer, {
+                ...baseOptions,
+                uv: [u0, v0, u1, v1]
+            });
+        };
+
+        // Y-up coordinate system: y decreases as we go down
+        // Y轴向上坐标系：向下移动时 y 减小
+        // (x, y) is top-left corner, patches extend downward (negative y direction)
+        // (x, y) 是左上角，patch 向下延伸（y 减小方向）
+
+        // Top-left corner | 左上角
+        addPatch(x, y, marginLeft, marginTop, 0, 0, uvLeft, uvTop);
+
+        // Top edge | 顶边
+        addPatch(x + marginLeft, y, centerWidth, marginTop, uvLeft, 0, uvRight, uvTop);
+
+        // Top-right corner | 右上角
+        addPatch(x + marginLeft + centerWidth, y, marginRight, marginTop, uvRight, 0, 1, uvTop);
+
+        // Left edge | 左边 (move down = subtract y)
+        addPatch(x, y - marginTop, marginLeft, centerHeight, 0, uvTop, uvLeft, uvBottom);
+
+        // Center | 中心
+        addPatch(x + marginLeft, y - marginTop, centerWidth, centerHeight, uvLeft, uvTop, uvRight, uvBottom);
+
+        // Right edge | 右边
+        addPatch(x + marginLeft + centerWidth, y - marginTop, marginRight, centerHeight, uvRight, uvTop, 1, uvBottom);
+
+        // Bottom-left corner | 左下角
+        addPatch(x, y - marginTop - centerHeight, marginLeft, marginBottom, 0, uvBottom, uvLeft, 1);
+
+        // Bottom edge | 底边
+        addPatch(x + marginLeft, y - marginTop - centerHeight, centerWidth, marginBottom, uvLeft, uvBottom, uvRight, 1);
+
+        // Bottom-right corner | 右下角
+        addPatch(x + marginLeft + centerWidth, y - marginTop - centerHeight, marginRight, marginBottom, uvRight, uvBottom, 1, 1);
     }
 
     /**

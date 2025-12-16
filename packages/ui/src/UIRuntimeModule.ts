@@ -1,5 +1,4 @@
-import type { IScene } from '@esengine/ecs-framework';
-import { ComponentRegistry } from '@esengine/ecs-framework';
+import type { IScene, IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { EngineBridgeToken } from '@esengine/ecs-engine-bindgen';
 
@@ -14,10 +13,14 @@ import {
     UISliderComponent,
     UIScrollViewComponent
 } from './components';
+import { TextBlinkComponent } from './components/TextBlinkComponent';
+import { SceneLoadTriggerComponent } from './components/SceneLoadTriggerComponent';
 import { UILayoutSystem } from './systems/UILayoutSystem';
 import { UIInputSystem } from './systems/UIInputSystem';
 import { UIAnimationSystem } from './systems/UIAnimationSystem';
 import { UIRenderDataProvider } from './systems/UIRenderDataProvider';
+import { TextBlinkSystem } from './systems/TextBlinkSystem';
+import { SceneLoadTriggerSystem } from './systems/SceneLoadTriggerSystem';
 import {
     UIRenderBeginSystem,
     UIRectRenderSystem,
@@ -43,7 +46,7 @@ export {
 } from './tokens';
 
 class UIRuntimeModule implements IRuntimeModule {
-    registerComponents(registry: typeof ComponentRegistry): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(UITransformComponent);
         registry.register(UIRenderComponent);
         registry.register(UIInteractableComponent);
@@ -53,6 +56,8 @@ class UIRuntimeModule implements IRuntimeModule {
         registry.register(UIProgressBarComponent);
         registry.register(UISliderComponent);
         registry.register(UIScrollViewComponent);
+        registry.register(TextBlinkComponent);
+        registry.register(SceneLoadTriggerComponent);
     }
 
     createSystems(scene: IScene, context: SystemContext): void {
@@ -64,6 +69,14 @@ class UIRuntimeModule implements IRuntimeModule {
 
         const animationSystem = new UIAnimationSystem();
         scene.addSystem(animationSystem);
+
+        // 文本闪烁系统 | Text blink system
+        const textBlinkSystem = new TextBlinkSystem();
+        scene.addSystem(textBlinkSystem);
+
+        // 场景加载触发系统 | Scene load trigger system
+        const sceneLoadTriggerSystem = new SceneLoadTriggerSystem();
+        scene.addSystem(sceneLoadTriggerSystem);
 
         const renderBeginSystem = new UIRenderBeginSystem();
         scene.addSystem(renderBeginSystem);
