@@ -80,17 +80,30 @@ export class EntityList {
 
     /**
      * 移除所有实体
+     * Remove all entities
+     *
+     * 包括 buffer 中的实体和待添加队列中的实体。
+     * Includes entities in buffer and entities in pending add queue.
      */
     public removeAllEntities(): void {
-        // 收集所有实体ID用于回收
         const idsToRecycle: number[] = [];
 
+        // 销毁 buffer 中的实体
+        // Destroy entities in buffer
         for (let i = this.buffer.length - 1; i >= 0; i--) {
             idsToRecycle.push(this.buffer[i]!.id);
             this.buffer[i]!.destroy();
         }
 
-        // 批量回收ID
+        // 销毁待添加队列中的实体（这些实体已创建但尚未加入 buffer）
+        // Destroy entities in pending add queue (created but not yet in buffer)
+        for (const entity of this._entitiesToAdd) {
+            idsToRecycle.push(entity.id);
+            entity.destroy();
+        }
+
+        // 批量回收 ID
+        // Recycle IDs in batch
         if (this._scene && this._scene.identifierPool) {
             for (const id of idsToRecycle) {
                 this._scene.identifierPool.checkIn(id);
