@@ -210,10 +210,30 @@ export class GameEngine {
    */
   getViewportIds(): string[];
   /**
+   * 检查纹理是否已就绪
+   * Check if texture is ready to use
+   *
+   * # Arguments | 参数
+   * * `id` - Texture ID | 纹理ID
+   */
+  isTextureReady(id: number): boolean;
+  /**
    * Add a capsule gizmo outline.
    * 添加胶囊Gizmo边框。
    */
   addGizmoCapsule(x: number, y: number, radius: number, half_height: number, rotation: number, r: number, g: number, b: number, a: number): void;
+  /**
+   * 获取纹理加载状态
+   * Get texture loading state
+   *
+   * # Arguments | 参数
+   * * `id` - Texture ID | 纹理ID
+   *
+   * # Returns | 返回
+   * State string: "loading", "ready", or "failed:reason"
+   * 状态字符串："loading"、"ready" 或 "failed:原因"
+   */
+  getTextureState(id: number): string;
   /**
    * Register a new viewport.
    * 注册新视口。
@@ -362,6 +382,11 @@ export class GameEngine {
    */
   clearTexturePathCache(): void;
   /**
+   * 获取正在加载中的纹理数量
+   * Get the number of textures currently loading
+   */
+  getTextureLoadingCount(): number;
+  /**
    * Create a new game engine instance.
    * 创建新的游戏引擎实例。
    *
@@ -429,6 +454,8 @@ export interface InitOutput {
   readonly gameengine_getCamera: (a: number) => [number, number];
   readonly gameengine_getOrLoadTextureByPath: (a: number, b: number, c: number) => [number, number, number];
   readonly gameengine_getTextureIdByPath: (a: number, b: number, c: number) => number;
+  readonly gameengine_getTextureLoadingCount: (a: number) => number;
+  readonly gameengine_getTextureState: (a: number, b: number) => [number, number];
   readonly gameengine_getViewportCamera: (a: number, b: number, c: number) => [number, number];
   readonly gameengine_getViewportIds: (a: number) => [number, number];
   readonly gameengine_hasMaterial: (a: number, b: number) => number;
@@ -436,6 +463,7 @@ export interface InitOutput {
   readonly gameengine_height: (a: number) => number;
   readonly gameengine_isEditorMode: (a: number) => number;
   readonly gameengine_isKeyDown: (a: number, b: number, c: number) => number;
+  readonly gameengine_isTextureReady: (a: number, b: number) => number;
   readonly gameengine_loadTexture: (a: number, b: number, c: number, d: number) => [number, number];
   readonly gameengine_loadTextureByPath: (a: number, b: number, c: number) => [number, number, number];
   readonly gameengine_new: (a: number, b: number) => [number, number, number];

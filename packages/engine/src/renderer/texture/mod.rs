@@ -5,4 +5,4 @@ mod texture;
 mod texture_manager;
 
 pub use texture::Texture;
-pub use texture_manager::TextureManager;
+pub use texture_manager::{TextureManager, TextureState};

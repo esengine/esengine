@@ -883,6 +883,133 @@ export class EngineBridge implements ITextureEngineBridge {
         this.getEngine().clearAllTextures();
     }
 
+    // ===== Texture State API =====
+    // ===== 纹理状态 API =====
+
+    /**
+     * Get texture loading state.
+     * 获取纹理加载状态。
+     *
+     * @param id - Texture ID | 纹理ID
+     * @returns State string: 'loading', 'ready', or 'failed:reason'
+     *          状态字符串：'loading'、'ready' 或 'failed:reason'
+     */
+    getTextureState(id: number): string {
+        if (!this.initialized) return 'loading';
+        return this.getEngine().getTextureState(id);
+    }
+
+    /**
+     * Check if texture is ready for rendering.
+     * 检查纹理是否已就绪可渲染。
+     *
+     * @param id - Texture ID | 纹理ID
+     * @returns true if texture data is fully loaded | 纹理数据完全加载则返回true
+     */
+    isTextureReady(id: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().isTextureReady(id);
+    }
+
+    /**
+     * Get count of textures currently loading.
+     * 获取当前正在加载的纹理数量。
+     *
+     * @returns Number of textures in 'loading' state | 处于加载状态的纹理数量
+     */
+    getTextureLoadingCount(): number {
+        if (!this.initialized) return 0;
+        return this.getEngine().getTextureLoadingCount();
+    }
+
+    /**
+     * Load texture asynchronously with Promise.
+     * 使用Promise异步加载纹理。
+     *
+     * Unlike loadTexture which returns immediately with a placeholder,
+     * this method waits until the texture is actually loaded and ready.
+     * 与loadTexture立即返回占位符不同，此方法会等待纹理实际加载完成。
+     *
+     * @param id - Texture ID | 纹理ID
+     * @param url - Image URL | 图片URL
+     * @returns Promise that resolves when texture is ready, rejects on failure
+     *          纹理就绪时解析的Promise，失败时拒绝
+     */
+    loadTextureAsync(id: number, url: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!this.initialized) {
+                reject(new Error('Engine not initialized'));
+                return;
+            }
+
+            // Start loading the texture
+            // 开始加载纹理
+            this.getEngine().loadTexture(id, url);
+
+            // Poll for state changes
+            // 轮询状态变化
+            const checkInterval = 16; // ~60fps
+            const maxWaitTime = 30000; // 30 seconds timeout
+            let elapsed = 0;
+
+            const checkState = () => {
+                const state = this.getTextureState(id);
+
+                if (state === 'ready') {
+                    resolve();
+                } else if (state.startsWith('failed:')) {
+                    const reason = state.substring(7);
+                    reject(new Error(`Texture load failed: ${reason}`));
+                } else if (elapsed >= maxWaitTime) {
+                    reject(new Error(`Texture load timeout after ${maxWaitTime}ms`));
+                } else {
+                    elapsed += checkInterval;
+                    setTimeout(checkState, checkInterval);
+                }
+            };
+
+            // Start checking after a small delay to allow initial state setup
+            // 稍后开始检查，允许初始状态设置
+            setTimeout(checkState, checkInterval);
+        });
+    }
+
+    /**
+     * Wait for all loading textures to complete.
+     * 等待所有加载中的纹理完成。
+     *
+     * @param timeout - Maximum wait time in ms (default: 30000)
+     *                  最大等待时间（毫秒，默认30000）
+     * @returns Promise that resolves when all textures are loaded
+     *          所有纹理加载完成时解析的Promise
+     */
+    waitForAllTextures(timeout: number = 30000): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!this.initialized) {
+                reject(new Error('Engine not initialized'));
+                return;
+            }
+
+            const checkInterval = 16;
+            let elapsed = 0;
+
+            const checkLoading = () => {
+                const loadingCount = this.getTextureLoadingCount();
+
+                if (loadingCount === 0) {
+                    resolve();
+                } else if (elapsed >= timeout) {
+                    reject(new Error(`Timeout waiting for ${loadingCount} textures to load`));
+                } else {
+                    elapsed += checkInterval;
+                    setTimeout(checkLoading, checkInterval);
+                }
+            };
+
+            checkLoading();
+        });
+    }
+
     /**
      * Dispose the bridge and release resources.
      * 销毁桥接并释放资源。

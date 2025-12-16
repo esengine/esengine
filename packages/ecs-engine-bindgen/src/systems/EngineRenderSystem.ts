@@ -3,16 +3,16 @@
  * 用于ECS的引擎渲染系统。
  */
 
-import { EntitySystem, Matcher, Entity, ComponentType, ECSSystem, Component, Core } from '@esengine/ecs-framework';
-import { TransformComponent, sortingLayerManager } from '@esengine/engine-core';
-import { Color } from '@esengine/ecs-framework-math';
-import { SpriteComponent } from '@esengine/sprite';
 import { CameraComponent } from '@esengine/camera';
+import { Component, ComponentType, Core, ECSSystem, Entity, EntitySystem, Matcher } from '@esengine/ecs-framework';
+import { Color } from '@esengine/ecs-framework-math';
+import { TransformComponent, sortingLayerManager } from '@esengine/engine-core';
 import { getMaterialManager } from '@esengine/material-system';
+import { SpriteComponent } from '@esengine/sprite';
 import type { EngineBridge } from '../core/EngineBridge';
 import { RenderBatcher } from '../core/RenderBatcher';
-import type { SpriteRenderData } from '../types';
 import type { ITransformComponent } from '../core/SpriteRenderHelper';
+import type { SpriteRenderData } from '../types';
 
 /**
  * Render data from a provider
@@ -339,14 +339,12 @@ export class EngineRenderSystem extends EntitySystem {
             }
 
             // Calculate UV with flip | 计算带翻转的 UV
-            const uv: [number, number, number, number] = [0, 0, 1, 1];
-            if (sprite.flipX || sprite.flipY) {
-                if (sprite.flipX) {
-                    [uv[0], uv[2]] = [uv[2], uv[0]];
-                }
-                if (sprite.flipY) {
-                    [uv[1], uv[3]] = [uv[3], uv[1]];
-                }
+            const uv: [number, number, number, number] = [...sprite.uv];
+            if (sprite.flipX) {
+                [uv[0], uv[2]] = [uv[2], uv[0]];
+            }
+            if (sprite.flipY) {
+                [uv[1], uv[3]] = [uv[3], uv[1]];
             }
 
             // 使用世界变换（由 TransformSystem 计算，考虑父级变换），回退到本地变换
@@ -569,6 +567,13 @@ export class EngineRenderSystem extends EntitySystem {
             const tOffset = i * 7;
             const uvOffset = i * 4;
 
+            const uv: [number, number, number, number] = [
+                data.uvs[uvOffset],
+                data.uvs[uvOffset + 1],
+                data.uvs[uvOffset + 2],
+                data.uvs[uvOffset + 3]
+            ];
+
             const renderData: SpriteRenderData = {
                 x: data.transforms[tOffset],
                 y: data.transforms[tOffset + 1],
@@ -578,7 +583,7 @@ export class EngineRenderSystem extends EntitySystem {
                 originX: data.transforms[tOffset + 5],
                 originY: data.transforms[tOffset + 6],
                 textureId,
-                uv: [data.uvs[uvOffset], data.uvs[uvOffset + 1], data.uvs[uvOffset + 2], data.uvs[uvOffset + 3]],
+                uv,
                 color: data.colors[i]
             };
 

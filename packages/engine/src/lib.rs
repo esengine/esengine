@@ -224,6 +224,42 @@ impl GameEngine {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// 获取纹理加载状态
+    /// Get texture loading state
+    ///
+    /// # Arguments | 参数
+    /// * `id` - Texture ID | 纹理ID
+    ///
+    /// # Returns | 返回
+    /// State string: "loading", "ready", or "failed:reason"
+    /// 状态字符串："loading"、"ready" 或 "failed:原因"
+    #[wasm_bindgen(js_name = getTextureState)]
+    pub fn get_texture_state(&self, id: u32) -> String {
+        use crate::renderer::texture::TextureState;
+        match self.engine.get_texture_state(id) {
+            TextureState::Loading => "loading".to_string(),
+            TextureState::Ready => "ready".to_string(),
+            TextureState::Failed(reason) => format!("failed:{}", reason),
+        }
+    }
+
+    /// 检查纹理是否已就绪
+    /// Check if texture is ready to use
+    ///
+    /// # Arguments | 参数
+    /// * `id` - Texture ID | 纹理ID
+    #[wasm_bindgen(js_name = isTextureReady)]
+    pub fn is_texture_ready(&self, id: u32) -> bool {
+        self.engine.is_texture_ready(id)
+    }
+
+    /// 获取正在加载中的纹理数量
+    /// Get the number of textures currently loading
+    #[wasm_bindgen(js_name = getTextureLoadingCount)]
+    pub fn get_texture_loading_count(&self) -> u32 {
+        self.engine.get_texture_loading_count()
+    }
+
     /// Check if a key is currently pressed.
     /// 检查某个键是否当前被按下。
     ///
