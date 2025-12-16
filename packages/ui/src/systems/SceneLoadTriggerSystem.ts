@@ -4,6 +4,12 @@
  *
  * 处理 SceneLoadTriggerComponent，绑定 UIInteractable 点击事件到场景加载。
  * Processes SceneLoadTriggerComponent, binds UIInteractable click to scene loading.
+ *
+ * 设计说明 | Design Notes:
+ * - 每次点击时动态从服务容器获取 RuntimeSceneManager
+ * - 不缓存服务引用，避免 Play/Stop 切换时引用失效
+ * - Dynamically resolves RuntimeSceneManager from service container on each click
+ * - Avoids caching service references to handle Play/Stop lifecycle correctly
  */
 
 import { Entity, EntitySystem, Matcher, ECSSystem, Core } from '@esengine/ecs-framework';
@@ -11,17 +17,11 @@ import { SceneLoadTriggerComponent } from '../components/SceneLoadTriggerCompone
 import { UIInteractableComponent } from '../components/UIInteractableComponent';
 
 /**
- * 场景加载函数类型（与 RuntimeSceneManager.loadScene 兼容）
- * Scene load function type (compatible with RuntimeSceneManager.loadScene)
- */
-type SceneLoadFunction = (sceneName: string) => Promise<void>;
-
-/**
  * 场景管理器接口（最小化，避免循环依赖）
  * Scene manager interface (minimal, avoids circular dependency)
  *
- * 包含 IService 的 dispose 方法以兼容 ServiceContainer。
- * Includes IService's dispose method for ServiceContainer compatibility.
+ * 包含 IService 所需方法以满足 tryResolve 类型约束。
+ * Includes IService required methods to satisfy tryResolve type constraint.
  */
 interface ISceneManager {
     loadScene(sceneName: string): Promise<void>;
@@ -32,8 +32,8 @@ interface ISceneManager {
  * 全局场景管理器服务键
  * Global scene manager service key
  *
- * 使用 Symbol.for 确保与 BrowserRuntime 中注册的键一致。
- * Uses Symbol.for to match the key registered in BrowserRuntime.
+ * 使用 Symbol.for 确保与 BrowserRuntime/Viewport 中注册的键一致。
+ * Uses Symbol.for to match the key registered in BrowserRuntime/Viewport.
  */
 const GlobalSceneManagerKey = Symbol.for('@esengine/service:runtimeSceneManager');
 
@@ -46,30 +46,11 @@ const GlobalSceneManagerKey = Symbol.for('@esengine/service:runtimeSceneManager'
  */
 @ECSSystem('SceneLoadTrigger')
 export class SceneLoadTriggerSystem extends EntitySystem {
-    private _sceneLoader: SceneLoadFunction | null = null;
-
     constructor() {
         super(Matcher.empty().all(SceneLoadTriggerComponent, UIInteractableComponent));
     }
 
-    /**
-     * 设置场景加载函数
-     * Set scene load function
-     *
-     * 可以直接设置函数，或者系统会尝试从服务注册表获取 RuntimeSceneManager。
-     * Can set function directly, or system will try to get RuntimeSceneManager from service registry.
-     */
-    public setSceneLoader(loader: SceneLoadFunction): void {
-        this._sceneLoader = loader;
-    }
-
     protected override process(entities: readonly Entity[]): void {
-        // 如果没有设置场景加载器，尝试从服务注册表获取
-        // If no scene loader set, try to get from service registry
-        if (!this._sceneLoader) {
-            this._tryGetSceneManager();
-        }
-
         for (const entity of entities) {
             const trigger = entity.getComponent(SceneLoadTriggerComponent);
             const interactable = entity.getComponent(UIInteractableComponent);
@@ -77,84 +58,51 @@ export class SceneLoadTriggerSystem extends EntitySystem {
             if (!trigger || !interactable) continue;
             if (!trigger.enabled || !trigger.targetScene) continue;
 
-            // 只绑定一次回调
-            // Only bind callback once
+            // 只绑定一次回调 | Only bind callback once
             if (trigger._callbackBound) continue;
 
-            this._bindClickHandler(entity, trigger, interactable);
-        }
-    }
-
-    /**
-     * 尝试从全局服务获取场景管理器
-     * Try to get scene manager from global services
-     */
-    private _tryGetSceneManager(): void {
-        try {
-            // 从 Core.services 获取场景管理器
-            // Get scene manager from Core.services
-            // RuntimeSceneManager 实现了 IService 接口
-            // RuntimeSceneManager implements IService interface
-            const sceneManager = Core.services.tryResolve<ISceneManager>(GlobalSceneManagerKey);
-            if (sceneManager?.loadScene) {
-                this._sceneLoader = (sceneName: string) => sceneManager.loadScene(sceneName);
-            }
-        } catch (e) {
-            // 忽略错误，保持 _sceneLoader 为 null
-            // Ignore error, keep _sceneLoader as null
+            this._bindClickHandler(trigger, interactable);
         }
     }
 
     /**
      * 绑定点击处理器
      * Bind click handler
+     *
+     * 关键设计：不缓存 sceneManager 引用，每次点击时动态获取。
+     * Key design: Don't cache sceneManager reference, resolve dynamically on each click.
      */
     private _bindClickHandler(
-        entity: Entity,
         trigger: SceneLoadTriggerComponent,
         interactable: UIInteractableComponent
     ): void {
         const targetScene = trigger.targetScene;
-
-        // 保存原有的 onClick（如果有）
-        // Save original onClick (if any)
         const originalOnClick = interactable.onClick;
 
         interactable.onClick = () => {
-            // 调用原有回调
-            // Call original callback
             originalOnClick?.();
 
-            // 检查是否启用
-            // Check if enabled
             if (!trigger.enabled) return;
 
-            // 禁用（防止重复点击）
-            // Disable (prevent double clicks)
             if (trigger.disableOnClick) {
                 trigger.enabled = false;
             }
 
-            // 尝试获取场景加载器（可能在回调绑定后才注册）
-            // Try to get scene loader (may be registered after callback binding)
-            if (!this._sceneLoader) {
-                this._tryGetSceneManager();
+            // 每次点击时动态获取场景管理器
+            // Resolve scene manager dynamically on each click
+            const sceneManager = Core.services.tryResolve<ISceneManager>(GlobalSceneManagerKey);
+            if (!sceneManager?.loadScene) {
+                // 编辑器预览模式下可能未注册，静默处理
+                // May not be registered in editor preview mode, handle silently
+                return;
             }
 
-            // 加载场景
-            // Load scene
-            if (this._sceneLoader) {
-                this._sceneLoader(targetScene).catch((error) => {
-                    console.error(`[SceneLoadTriggerSystem] Failed to load scene "${targetScene}":`, error);
-                    // 恢复启用状态
-                    // Restore enabled state
-                    if (trigger.disableOnClick) {
-                        trigger.enabled = true;
-                    }
-                });
-            }
-            // 静默处理：编辑器预览模式下场景切换不可用
-            // Silent handling: scene switching not available in editor preview mode
+            sceneManager.loadScene(targetScene).catch((error) => {
+                console.error(`[SceneLoadTriggerSystem] Failed to load scene "${targetScene}":`, error);
+                if (trigger.disableOnClick) {
+                    trigger.enabled = true;
+                }
+            });
         };
 
         trigger._callbackBound = true;

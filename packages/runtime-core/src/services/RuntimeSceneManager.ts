@@ -2,8 +2,12 @@
  * 运行时场景管理器
  * Runtime Scene Manager
  *
- * 提供场景加载和切换 API，供用户脚本使用
- * Provides scene loading and transition API for user scripts
+ * 提供场景加载和切换 API，供用户脚本使用。
+ * Provides scene loading and transition API for user scripts.
+ *
+ * 生命周期设计 | Lifecycle Design:
+ * - reset(): 清理会话状态，保留核心功能（用于 Play/Stop 切换）
+ * - dispose(): 完全销毁，释放所有资源（用于编辑器关闭）
  *
  * @example
  * ```typescript
@@ -68,8 +72,9 @@ export type SceneLoader = (url: string) => Promise<void>;
  * 运行时场景管理器接口
  * Runtime Scene Manager Interface
  *
- * 继承 IService 的 dispose 模式以兼容 ServiceContainer。
- * Follows IService dispose pattern for ServiceContainer compatibility.
+ * 生命周期方法 | Lifecycle Methods:
+ * - reset(): 重置会话状态（Play/Stop 切换时调用）
+ * - dispose(): 完全销毁（编辑器关闭时调用）
  */
 export interface IRuntimeSceneManager {
     /**
@@ -133,8 +138,41 @@ export interface IRuntimeSceneManager {
     onLoadError(callback: (error: Error, sceneName: string) => void): () => void;
 
     /**
-     * 释放资源（IService 兼容）
-     * Dispose resources (IService compatible)
+     * 设置场景加载器
+     * Set scene loader
+     *
+     * 用于更新场景加载函数（如 Play 模式切换时）。
+     * Used to update scene loader function (e.g., during Play mode transitions).
+     */
+    setSceneLoader(loader: SceneLoader): void;
+
+    /**
+     * 设置基础 URL
+     * Set base URL
+     */
+    setBaseUrl(baseUrl: string): void;
+
+    /**
+     * 重置会话状态
+     * Reset session state
+     *
+     * 清理监听器和当前场景状态，但保留 sceneLoader。
+     * 用于 Play/Stop 切换时调用。
+     *
+     * Clears listeners and current scene state, but keeps sceneLoader.
+     * Called during Play/Stop transitions.
+     */
+    reset(): void;
+
+    /**
+     * 完全释放资源
+     * Dispose all resources
+     *
+     * 销毁实例，清理所有资源。
+     * 仅在编辑器关闭时调用。
+     *
+     * Destroys the instance, cleans up all resources.
+     * Only called when editor closes.
      */
     dispose(): void;
 }
@@ -367,25 +405,45 @@ export class RuntimeSceneManager implements IRuntimeSceneManager {
         }
     }
 
-    // ==================== IService 实现 | IService Implementation ====================
+    // ==================== 生命周期方法 | Lifecycle Methods ====================
 
     /**
-     * 释放资源
-     * Dispose resources
+     * 重置会话状态
+     * Reset session state
      *
-     * 实现 IService 接口，清理所有监听器和状态。
-     * Implements IService interface, cleans up all listeners and state.
+     * 清理监听器和当前场景状态，但保留 sceneLoader 和 baseUrl。
+     * 用于 Play/Stop 切换时调用，允许实例复用。
+     *
+     * Clears listeners and current scene state, but keeps sceneLoader and baseUrl.
+     * Called during Play/Stop transitions, allows instance reuse.
      */
-    dispose(): void {
-        if (this._disposed) return;
-
+    reset(): void {
         this._loadStartListeners.clear();
         this._loadCompleteListeners.clear();
         this._loadErrorListeners.clear();
         this._scenes.clear();
-        this._sceneLoader = null;
         this._currentSceneName = null;
         this._currentScenePath = null;
+        this._isLoading = false;
+        // 注意：保留 _sceneLoader 和 _baseUrl
+        // Note: Keep _sceneLoader and _baseUrl
+    }
+
+    /**
+     * 完全释放资源
+     * Dispose all resources
+     *
+     * 销毁实例，清理所有资源包括 sceneLoader。
+     * 仅在编辑器完全关闭时调用。
+     *
+     * Destroys the instance, cleans up all resources including sceneLoader.
+     * Only called when editor completely closes.
+     */
+    dispose(): void {
+        if (this._disposed) return;
+
+        this.reset();
+        this._sceneLoader = null;
         this._disposed = true;
     }
 }
