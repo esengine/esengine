@@ -6,7 +6,7 @@
  * Creates an entity instance from a prefab asset.
  */
 
-import { Core, Entity, HierarchySystem, PrefabSerializer, ComponentRegistry } from '@esengine/ecs-framework';
+import { Core, Entity, HierarchySystem, PrefabSerializer, GlobalComponentRegistry } from '@esengine/ecs-framework';
 import type { EntityStoreService, MessageHub } from '@esengine/editor-core';
 import type { PrefabData, ComponentType } from '@esengine/ecs-framework';
 import { BaseCommand } from '../BaseCommand';
@@ -50,9 +50,9 @@ export class InstantiatePrefabCommand extends BaseCommand {
         }
 
         // 获取组件注册表 | Get component registry
-        // ComponentRegistry.getAllComponentNames() returns Map<string, Function>
+        // GlobalComponentRegistry.getAllComponentNames() returns Map<string, Function>
         // We need to cast it to Map<string, ComponentType>
-        const componentRegistry = ComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
+        const componentRegistry = GlobalComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
 
         // 实例化预制体 | Instantiate prefab
         this.createdEntity = PrefabSerializer.instantiate(

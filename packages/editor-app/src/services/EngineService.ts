@@ -11,6 +11,7 @@ import { Core, Scene, Entity, SceneSerializer, ProfilerSDK, createLogger, Plugin
 import { CameraConfig, EngineBridgeToken, RenderSystemToken, EngineIntegrationToken } from '@esengine/ecs-engine-bindgen';
 import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { SpriteComponent, SpriteAnimatorComponent, SpriteAnimatorSystemToken } from '@esengine/sprite';
+import { ParticleSystemComponent } from '@esengine/particle';
 import { invalidateUIRenderCaches, UIRenderProviderToken, UIInputSystemToken } from '@esengine/ui';
 import * as esEngine from '@esengine/engine';
 import {
@@ -462,6 +463,43 @@ export class EngineService {
             if (this._runtime?.bridge) {
                 this._engineIntegration = new EngineIntegration(this._assetManager, this._runtime.bridge);
 
+                // 为 EngineIntegration 设置使用 Tauri URL 转换的 PathResolver
+                // Set PathResolver for EngineIntegration that uses Tauri URL conversion
+                this._engineIntegration.setPathResolver({
+                    catalogToRuntime: (catalogPath: string): string => {
+                        // 空路径直接返回
+                        if (!catalogPath) return catalogPath;
+
+                        // 已经是 URL 则直接返回
+                        if (catalogPath.startsWith('http://') ||
+                            catalogPath.startsWith('https://') ||
+                            catalogPath.startsWith('data:') ||
+                            catalogPath.startsWith('asset://')) {
+                            return catalogPath;
+                        }
+
+                        // 使用 pathTransformerFn 转换路径为 Tauri URL
+                        // 路径应该是相对于项目目录的，如 'assets/sparkle_yellow.png'
+                        let fullPath = catalogPath;
+                        // 如果路径不以 'assets/' 开头，添加前缀
+                        if (!catalogPath.startsWith('assets/') && !catalogPath.startsWith('assets\\')) {
+                            fullPath = `assets/${catalogPath}`;
+                        }
+                        return pathTransformerFn(fullPath);
+                    },
+                    editorToCatalog: (editorPath: string, projectRoot: string): string => {
+                        return editorPath; // 不需要在此上下文中使用
+                    },
+                    setBaseUrl: () => {},
+                    getBaseUrl: () => '',
+                    normalize: (path: string) => path.replace(/\\/g, '/'),
+                    isAbsoluteUrl: (path: string) =>
+                        path.startsWith('http://') ||
+                        path.startsWith('https://') ||
+                        path.startsWith('data:') ||
+                        path.startsWith('asset://')
+                });
+
                 this._sceneResourceManager = new SceneResourceManager();
                 this._sceneResourceManager.setResourceLoader(this._engineIntegration);
 
@@ -712,10 +750,15 @@ export class EngineService {
                             return convertFileSrc(absolutePath);
                         }
                         return relativePath;
+                    } else {
+                        // GUID not found in registry - this could be a timing issue where asset
+                        // was just added but not yet registered. Log for debugging.
+                        // GUID 在注册表中未找到 - 可能是资源刚添加但尚未注册的时序问题
+                        console.warn(`[AssetPathResolver] GUID not found in registry: ${guidOrPath}. Asset may not be registered yet.`);
                     }
                 }
-                // GUID not found, return original value
-                // 未找到 GUID，返回原值
+                // GUID not found, return original value (will result in white block)
+                // 未找到 GUID，返回原值（会显示白块）
                 return guidOrPath;
             }
 
@@ -1029,6 +1072,19 @@ export class EngineService {
             // 清除 UI 渲染缓存
             invalidateUIRenderCaches();
 
+            // Reset particle component textureIds before loading resources
+            // 在加载资源前重置粒子组件的 textureId
+            // This ensures ParticleUpdateSystem will reload textures
+            // 这确保 ParticleUpdateSystem 会重新加载纹理
+            if (this._runtime.scene) {
+                for (const entity of this._runtime.scene.entities.buffer) {
+                    const particleComponent = entity.getComponent(ParticleSystemComponent);
+                    if (particleComponent) {
+                        particleComponent.textureId = 0;
+                    }
+                }
+            }
+
             // 加载场景资源
             if (this._sceneResourceManager && this._runtime.scene) {
                 await this._sceneResourceManager.loadSceneResources(this._runtime.scene);
@@ -1055,6 +1111,21 @@ export class EngineService {
         }
 
         return success;
+    }
+
+    /**
+     * Load scene resources (textures, audio, etc.)
+     * 加载场景资源（纹理、音频等）
+     *
+     * Used by runtime scene switching in play mode.
+     * 用于 Play 模式下的运行时场景切换。
+     */
+    async loadSceneResources(): Promise<void> {
+        const scene = this._runtime?.scene;
+        if (!this._sceneResourceManager || !scene) {
+            return;
+        }
+        await this._sceneResourceManager.loadSceneResources(scene);
     }
 
     /**

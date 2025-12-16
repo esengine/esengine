@@ -268,6 +268,17 @@ export class TauriAPI {
     }
 
     /**
+     * 获取文件修改时间
+     * Get file modification time
+     *
+     * @param path 文件路径 | File path
+     * @returns 文件修改时间（毫秒时间戳）| File modification time (milliseconds timestamp)
+     */
+    static async getFileMtime(path: string): Promise<number> {
+        return await invoke<number>('get_file_mtime', { path });
+    }
+
+    /**
    * 写入二进制文件
    * @param filePath 文件路径
    * @param content 二进制数据
