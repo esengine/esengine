@@ -95,6 +95,9 @@ export class EntityStoreService implements IService {
         this.entities.clear();
         this.rootEntityIds = [];
 
+        // 调试：打印场景实体信息 | Debug: print scene entity info
+        logger.info(`[syncFromScene] Scene name: ${scene.name}, entities.count: ${scene.entities.count}`);
+
         let entityCount = 0;
         scene.entities.forEach((entity) => {
             entityCount++;
@@ -106,7 +109,7 @@ export class EntityStoreService implements IService {
             }
         });
 
-        logger.debug(`syncFromScene: synced ${entityCount} entities, ${this.rootEntityIds.length} root entities`);
+        logger.info(`[syncFromScene] Synced ${entityCount} entities, ${this.rootEntityIds.length} root entities`);
         if (this.rootEntityIds.length > 0) {
             const rootNames = this.rootEntityIds
                 .map(id => this.entities.get(id)?.name)

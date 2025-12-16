@@ -394,8 +394,14 @@ export class AssetRegistryService implements IService {
                 // 处理文件创建 - 注册新资产并生成 .meta
                 if (changeType === 'create' || changeType === 'modify') {
                     for (const absolutePath of paths) {
-                        // Skip .meta files
-                        if (absolutePath.endsWith('.meta')) continue;
+                        // Handle .meta file changes - invalidate cache
+                        // 处理 .meta 文件变化 - 使缓存失效
+                        if (absolutePath.endsWith('.meta')) {
+                            const assetPath = absolutePath.slice(0, -5); // Remove '.meta' suffix
+                            this._metaManager.invalidateCache(assetPath);
+                            logger.debug(`Meta file changed, invalidated cache for: ${assetPath}`);
+                            continue;
+                        }
 
                         // Only process files in managed directories
                         // 只处理托管目录中的文件
@@ -406,8 +412,14 @@ export class AssetRegistryService implements IService {
                     }
                 } else if (changeType === 'remove') {
                     for (const absolutePath of paths) {
-                        // Skip .meta files
-                        if (absolutePath.endsWith('.meta')) continue;
+                        // Handle .meta file deletion - invalidate cache
+                        // 处理 .meta 文件删除 - 使缓存失效
+                        if (absolutePath.endsWith('.meta')) {
+                            const assetPath = absolutePath.slice(0, -5);
+                            this._metaManager.invalidateCache(assetPath);
+                            logger.debug(`Meta file removed, invalidated cache for: ${assetPath}`);
+                            continue;
+                        }
 
                         // Only process files in managed directories
                         // 只处理托管目录中的文件
