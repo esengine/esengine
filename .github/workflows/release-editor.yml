@@ -185,7 +185,7 @@ jobs:
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: 'ecs-framework'
           signing-policy-slug: 'test-signing'
-          artifact-configuration-slug: 'default'
+          artifact-configuration-slug: 'initial'
           github-artifact-id: ${{ steps.get-artifact.outputs.artifact-id }}
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 600
