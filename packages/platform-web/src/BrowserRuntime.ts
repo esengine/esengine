@@ -16,7 +16,10 @@ import {
     BrowserPlatformAdapter,
     runtimePluginManager,
     BrowserFileSystemService,
-    type IPlugin
+    RuntimeSceneManager,
+    RuntimeSceneManagerToken,
+    type IPlugin,
+    type IRuntimeSceneManager
 } from '@esengine/runtime-core';
 import { isValidGUID, type IAssetManager } from '@esengine/asset-system';
 import { BrowserAssetReader } from './BrowserAssetReader';
@@ -55,6 +58,7 @@ export class BrowserRuntime {
     private _assetBaseUrl: string;
     private _fileSystem: BrowserFileSystemService | null = null;
     private _assetReader: BrowserAssetReader | null = null;
+    private _sceneManager: RuntimeSceneManager | null = null;
     private _initialized = false;
 
     constructor(config: RuntimeConfig) {
@@ -164,8 +168,58 @@ export class BrowserRuntime {
         // 为渲染系统设置资产路径解析器
         this._setupAssetPathResolver();
 
+        // Initialize scene manager
+        // 初始化场景管理器
+        this._initializeSceneManager();
+
         this._initialized = true;
         console.log('[Runtime] Initialized');
+    }
+
+    /**
+     * Initialize the runtime scene manager
+     * 初始化运行时场景管理器
+     */
+    private _initializeSceneManager(): void {
+        if (!this._runtime) return;
+
+        // Create scene manager with scene loader
+        // 使用场景加载器创建场景管理器
+        this._sceneManager = new RuntimeSceneManager(
+            (url: string) => this._runtime!.loadSceneFromUrl(url),
+            './scenes'
+        );
+
+        // Auto-discover scenes from catalog
+        // 从目录自动发现场景
+        // scenes 是运行时扩展字段，不在 IAssetCatalog 接口中
+        // scenes is a runtime extension field, not in IAssetCatalog interface
+        const catalog = this._fileSystem?.catalog as { scenes?: Array<{ name: string; path: string }> } | null;
+        if (catalog?.scenes) {
+            const scenes = catalog.scenes.map((scene) => ({
+                name: scene.name,
+                path: `./scenes/${scene.name}.ecs`
+            }));
+            this._sceneManager.registerScenes(scenes);
+        }
+
+        // Register scene manager as a service
+        // 注册场景管理器为服务
+        const serviceRegistry = this._runtime.getServiceRegistry();
+        if (serviceRegistry) {
+            serviceRegistry.register(RuntimeSceneManagerToken, this._sceneManager);
+        }
+
+        // Also register in Core.services for global access (systems can access it)
+        // 同时注册到 Core.services 供全局访问（系统可以访问）
+        // RuntimeSceneManager 实现了 IService 接口（有 dispose 方法）
+        // RuntimeSceneManager implements IService interface (has dispose method)
+        const GlobalSceneManagerKey = Symbol.for('@esengine/service:runtimeSceneManager');
+        if (!Core.services.isRegistered(GlobalSceneManagerKey)) {
+            Core.services.registerInstance(GlobalSceneManagerKey, this._sceneManager);
+        }
+
+        console.log('[Runtime] Scene manager initialized');
     }
 
     /**
@@ -226,12 +280,21 @@ export class BrowserRuntime {
     /**
      * Load a scene from URL
      * 从 URL 加载场景
+     *
+     * @param sceneUrl 场景 URL 或名称 | Scene URL or name
      */
     async loadScene(sceneUrl: string): Promise<void> {
         if (!this._runtime) {
             throw new Error('Runtime not initialized. Call initialize() first.');
         }
-        await this._runtime.loadSceneFromUrl(sceneUrl);
+
+        // Use scene manager if available for proper tracking
+        // 如果可用，使用场景管理器进行正确跟踪
+        if (this._sceneManager) {
+            await this._sceneManager.loadSceneByPath(sceneUrl);
+        } else {
+            await this._runtime.loadSceneFromUrl(sceneUrl);
+        }
     }
 
     /**
@@ -285,6 +348,33 @@ export class BrowserRuntime {
      */
     get assetManager(): IAssetManager | null {
         return this._runtime?.assetManager ?? null;
+    }
+
+    /**
+     * Get the scene manager
+     * 获取场景管理器
+     *
+     * Use this to load scenes, check available scenes, and listen to scene events.
+     * 使用它来加载场景、检查可用场景和监听场景事件。
+     *
+     * @example
+     * ```typescript
+     * // Load a scene by name
+     * await runtime.sceneManager?.loadScene('Level1');
+     *
+     * // Get list of available scenes
+     * const scenes = runtime.sceneManager?.availableScenes;
+     *
+     * // Listen to scene load events
+     * runtime.sceneManager?.onLoadComplete((sceneName) => {
+     *     console.log(`Scene loaded: ${sceneName}`);
+     * });
+     * ```
+     *
+     * @returns The scene manager instance, or null if not initialized
+     */
+    get sceneManager(): IRuntimeSceneManager | null {
+        return this._sceneManager;
     }
 
     /**
