@@ -12,7 +12,7 @@ import {
     ChangeOperation
 } from '../../../src/ECS/Serialization';
 import { ECSComponent } from '../../../src/ECS/Decorators';
-import { ComponentRegistry } from '../../../src/ECS/Core/ComponentStorage';
+import { GlobalComponentRegistry } from '../../../src/ECS/Core/ComponentStorage';
 
 // 测试组件定义
 @ECSComponent('IncTest_Position')
@@ -56,12 +56,14 @@ describe('Incremental Serialization System', () => {
 
     beforeEach(() => {
         IncrementalSerializer.resetVersion();
-        ComponentRegistry.reset();
 
-        // 重新注册测试组件
-        ComponentRegistry.register(PositionComponent);
-        ComponentRegistry.register(VelocityComponent);
-        ComponentRegistry.register(HealthComponent);
+        // 重置全局注册表 | Reset global registry
+        GlobalComponentRegistry.reset();
+
+        // 重新注册测试组件 | Re-register test components
+        GlobalComponentRegistry.register(PositionComponent);
+        GlobalComponentRegistry.register(VelocityComponent);
+        GlobalComponentRegistry.register(HealthComponent);
 
         scene = new Scene({ name: 'IncrementalTestScene' });
     });

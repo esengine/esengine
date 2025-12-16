@@ -8,9 +8,9 @@ import '../styles/Viewport.css';
 import { useEngine } from '../hooks/useEngine';
 import { useLocale } from '../hooks/useLocale';
 import { EngineService } from '../services/EngineService';
-import { Core, Entity, SceneSerializer, PrefabSerializer, ComponentRegistry } from '@esengine/ecs-framework';
+import { Core, Entity, SceneSerializer, PrefabSerializer, GlobalComponentRegistry } from '@esengine/ecs-framework';
 import type { PrefabData, ComponentType } from '@esengine/ecs-framework';
-import { MessageHub, ProjectService, AssetRegistryService, EntityStoreService, CommandManager, SceneManagerService } from '@esengine/editor-core';
+import { MessageHub, ProjectService, AssetRegistryService, EntityStoreService, CommandManager, SceneManagerService, UserCodeService, UserCodeTarget } from '@esengine/editor-core';
 import { InstantiatePrefabCommand } from '../application/commands/prefab/InstantiatePrefabCommand';
 import { TransformCommand, type TransformState, type TransformOperationType } from '../application/commands';
 import { TransformComponent } from '@esengine/engine-core';
@@ -21,6 +21,8 @@ import { open } from '@tauri-apps/plugin-shell';
 import { RuntimeResolver } from '../services/RuntimeResolver';
 import { QRCodeDialog } from './QRCodeDialog';
 import { collectAssetReferences } from '@esengine/asset-system';
+import { RuntimeSceneManager, type IRuntimeSceneManager } from '@esengine/runtime-core';
+import { ParticleSystemComponent } from '@esengine/particle';
 
 import type { ModuleManifest } from '../services/RuntimeResolver';
 
@@ -263,6 +265,9 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
     // Store editor camera state when entering play mode
     const editorCameraRef = useRef({ x: 0, y: 0, zoom: 1 });
     const playStateRef = useRef<PlayState>('stopped');
+
+    // Runtime scene manager for play mode scene switching | Play 模式场景切换管理器
+    const runtimeSceneManagerRef = useRef<IRuntimeSceneManager | null>(null);
 
     // Live transform display state | 实时变换显示状态
     const [liveTransform, setLiveTransform] = useState<{
@@ -811,7 +816,22 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                 return;
             }
             // Save scene snapshot before playing
+            // saveSceneSnapshot clears all textures, so we need to reset particle textureIds after
+            // saveSceneSnapshot 会清除所有纹理，所以之后需要重置粒子的 textureId
             EngineService.getInstance().saveSceneSnapshot();
+
+            // Reset particle component textureIds after snapshot (textures were cleared)
+            // 快照后重置粒子组件的 textureId（纹理已被清除）
+            const scene = Core.scene;
+            if (scene) {
+                for (const entity of scene.entities.buffer) {
+                    const particleComponent = entity.getComponent(ParticleSystemComponent);
+                    if (particleComponent) {
+                        particleComponent.textureId = 0;
+                    }
+                }
+            }
+
             // Save editor camera state
             editorCameraRef.current = { x: camera2DOffset.x, y: camera2DOffset.y, zoom: camera2DZoom };
             setPlayState('playing');
@@ -820,6 +840,132 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             EngineService.getInstance().setEditorMode(false);
             // Switch to player camera
             syncPlayerCamera();
+
+            // Register RuntimeSceneManager for scene switching in play mode
+            // 注册 RuntimeSceneManager 以支持 Play 模式下的场景切换
+            const projectService = Core.services.tryResolve(ProjectService);
+            const projectPath = projectService?.getCurrentProject()?.path;
+            if (projectPath) {
+                // Create scene loader function that reads scene files using Tauri API
+                // 创建使用 Tauri API 读取场景文件的场景加载器函数
+                const editorSceneLoader = async (scenePath: string): Promise<void> => {
+                    try {
+                        // Normalize path: handle both relative and absolute paths
+                        // 标准化路径：处理相对路径和绝对路径
+                        let fullPath = scenePath;
+                        if (!scenePath.includes(':') && !scenePath.startsWith('/')) {
+                            // Relative path - construct full path
+                            // 相对路径 - 构建完整路径
+                            const normalizedPath = scenePath.replace(/^\.\//, '').replace(/\//g, '\\');
+                            fullPath = `${projectPath}\\${normalizedPath}`;
+                        } else {
+                            // Absolute path - normalize separators for Windows
+                            // 绝对路径 - 为 Windows 规范化分隔符
+                            fullPath = scenePath.replace(/\//g, '\\');
+                        }
+
+                        // Read scene file content
+                        // 读取场景文件内容
+                        const sceneJson = await TauriAPI.readFileContent(fullPath);
+
+                        // Validate scene data
+                        // 验证场景数据
+                        const validation = SceneSerializer.validate(sceneJson);
+                        if (!validation.valid) {
+                            throw new Error(`Invalid scene: ${validation.errors?.join(', ')}`);
+                        }
+
+                        // Save current scene snapshot (so we can go back)
+                        // 保存当前场景快照（以便返回）
+                        EngineService.getInstance().saveSceneSnapshot();
+
+                        // Load new scene by deserializing into current scene
+                        // 通过反序列化加载新场景到当前场景
+                        const scene = Core.scene;
+                        if (scene) {
+                            scene.deserialize(sceneJson, { strategy: 'replace' });
+
+                            // Reset particle component textureIds after scene switch
+                            // 场景切换后重置粒子组件的 textureId
+                            // This ensures ParticleUpdateSystem will reload textures
+                            // 这确保 ParticleUpdateSystem 会重新加载纹理
+                            for (const entity of scene.entities.buffer) {
+                                const particleComponent = entity.getComponent(ParticleSystemComponent);
+                                if (particleComponent) {
+                                    particleComponent.textureId = 0;
+                                }
+                            }
+
+                            // Re-register user code components and systems after scene switch
+                            // 场景切换后重新注册用户代码组件和系统
+                            const userCodeService = Core.services.tryResolve(UserCodeService);
+                            if (userCodeService) {
+                                const runtimeModule = userCodeService.getModule(UserCodeTarget.Runtime);
+                                if (runtimeModule) {
+                                    // Re-register components (ensures GlobalComponentRegistry has correct references)
+                                    // 重新注册组件（确保 GlobalComponentRegistry 有正确的引用）
+                                    userCodeService.registerComponents(runtimeModule, GlobalComponentRegistry);
+
+                                    // Re-register systems (recreates systems with correct component references)
+                                    // 重新注册系统（使用正确的组件引用重建系统）
+                                    userCodeService.registerSystems(runtimeModule, scene);
+                                }
+                            }
+
+                            // Load scene resources (textures, etc.)
+                            // 加载场景资源（纹理等）
+                            await EngineService.getInstance().loadSceneResources();
+
+                            // Sync entity store
+                            // 同步实体存储
+                            const entityStore = Core.services.tryResolve(EntityStoreService);
+                            entityStore?.syncFromScene();
+                        }
+
+                        console.log(`[Viewport] Scene loaded in play mode: ${scenePath}`);
+                    } catch (error) {
+                        console.error(`[Viewport] Failed to load scene: ${scenePath}`, error);
+                        throw error;
+                    }
+                };
+
+                // Create and register RuntimeSceneManager
+                // 创建并注册 RuntimeSceneManager
+                const sceneManager = new RuntimeSceneManager(
+                    editorSceneLoader,
+                    `${projectPath}\\scenes`
+                );
+                runtimeSceneManagerRef.current = sceneManager;
+
+                // Register to Core.services with the global key
+                // 使用全局 key 注册到 Core.services
+                const GlobalSceneManagerKey = Symbol.for('@esengine/service:runtimeSceneManager');
+                if (!Core.services.isRegistered(GlobalSceneManagerKey)) {
+                    Core.services.registerInstance(GlobalSceneManagerKey, sceneManager);
+                }
+
+                console.log('[Viewport] RuntimeSceneManager registered for play mode');
+            }
+
+            // Register user code components and systems before starting engine
+            // 在启动引擎前注册用户代码组件和系统
+            const userCodeService = Core.services.tryResolve(UserCodeService);
+            if (userCodeService) {
+                const runtimeModule = userCodeService.getModule(UserCodeTarget.Runtime);
+                if (runtimeModule) {
+                    // Register components first (ensures GlobalComponentRegistry has correct references)
+                    // 先注册组件（确保 GlobalComponentRegistry 有正确的引用）
+                    userCodeService.registerComponents(runtimeModule, GlobalComponentRegistry);
+
+                    // Then register systems (uses registered component references)
+                    // 然后注册系统（使用已注册的组件引用）
+                    const scene = Core.scene;
+                    if (scene) {
+                        userCodeService.registerSystems(runtimeModule, scene);
+                    }
+                }
+            }
+
             engine.start();
         } else if (playState === 'paused') {
             setPlayState('playing');
@@ -837,6 +983,19 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
     const handleStop = async () => {
         setPlayState('stopped');
         engine.stop();
+
+        // Unregister RuntimeSceneManager
+        // 注销 RuntimeSceneManager
+        if (runtimeSceneManagerRef.current) {
+            const GlobalSceneManagerKey = Symbol.for('@esengine/service:runtimeSceneManager');
+            if (Core.services.isRegistered(GlobalSceneManagerKey)) {
+                Core.services.unregister(GlobalSceneManagerKey);
+            }
+            runtimeSceneManagerRef.current.dispose();
+            runtimeSceneManagerRef.current = null;
+            console.log('[Viewport] RuntimeSceneManager unregistered');
+        }
+
         // Restore scene snapshot
         await EngineService.getInstance().restoreSceneSnapshot();
         // Restore editor camera state

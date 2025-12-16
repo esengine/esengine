@@ -9,11 +9,16 @@ import { isEditorEnvironment } from '@esengine/platform-common';
 /**
  * 获取 WASM 路径
  * Get WASM path based on environment
+ *
+ * Editor: engine/rapier2d/pkg/rapier_wasm2d_bg.wasm (deployed by vite build plugin)
+ * Runtime: wasm/rapier_wasm2d_bg.wasm (deployed by game build)
  */
 function getWasmPath(): string {
     const isEditor = isEditorEnvironment();
+    // Editor uses dist/engine/rapier2d/pkg/ structure (from vite copy-engine-modules plugin)
+    // 编辑器使用 dist/engine/rapier2d/pkg/ 结构（来自 vite copy-engine-modules 插件）
     const path = isEditor
-        ? 'engine/physics-rapier2d/rapier_wasm2d_bg.wasm'
+        ? 'engine/rapier2d/pkg/rapier_wasm2d_bg.wasm'
         : 'wasm/rapier_wasm2d_bg.wasm';
 
     console.log(`[Rapier2D] isEditor=${isEditor}, wasmPath=${path}`);
@@ -32,7 +37,7 @@ export const Rapier2DLoaderConfig: WasmLibraryConfig = {
     web: {
         /**
          * WASM 文件路径
-         * 编辑器: engine/physics-rapier2d/rapier_wasm2d_bg.wasm
+         * 编辑器: engine/rapier2d/pkg/rapier_wasm2d_bg.wasm
          * 运行时: wasm/rapier_wasm2d_bg.wasm
          */
         get wasmPath(): string {

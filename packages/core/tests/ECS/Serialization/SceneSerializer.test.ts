@@ -4,7 +4,7 @@ import { Component } from '../../../src/ECS/Component';
 import { HierarchySystem } from '../../../src/ECS/Systems/HierarchySystem';
 import { HierarchyComponent } from '../../../src/ECS/Components/HierarchyComponent';
 import { ECSComponent } from '../../../src/ECS/Decorators';
-import { ComponentRegistry, ComponentType } from '../../../src/ECS/Core/ComponentStorage';
+import { GlobalComponentRegistry, ComponentType } from '../../../src/ECS/Core/ComponentStorage';
 import { Serializable, Serialize } from '../../../src/ECS/Serialization';
 
 @ECSComponent('SceneSerTest_Position')
@@ -40,7 +40,7 @@ describe('SceneSerializer', () => {
     beforeEach(() => {
         scene = new Scene({ name: 'SceneSerializerTestScene' });
 
-        componentRegistry = ComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
+        componentRegistry = GlobalComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
     });
 
     afterEach(() => {

@@ -3,7 +3,7 @@
  * Unified Plugin Manager
  */
 
-import { createLogger, ComponentRegistry } from '@esengine/ecs-framework';
+import { createLogger, GlobalComponentRegistry } from '@esengine/ecs-framework';
 import type { IScene, ServiceContainer, IService } from '@esengine/ecs-framework';
 import type {
     ModuleManifest,
@@ -670,9 +670,9 @@ export class PluginManager implements IService {
         // 注册组件（使用包装的 Registry 来跟踪）
         // Register components (use wrapped registry to track)
         if (runtimeModule.registerComponents) {
-            const componentsBefore = new Set(ComponentRegistry.getRegisteredComponents().map(c => c.name));
-            runtimeModule.registerComponents(ComponentRegistry);
-            const componentsAfter = ComponentRegistry.getRegisteredComponents();
+            const componentsBefore = new Set(GlobalComponentRegistry.getRegisteredComponents().map(c => c.name));
+            runtimeModule.registerComponents(GlobalComponentRegistry);
+            const componentsAfter = GlobalComponentRegistry.getRegisteredComponents();
 
             // 跟踪新注册的组件
             // Track newly registered components
@@ -779,7 +779,7 @@ export class PluginManager implements IService {
         if (resources.componentTypeNames.length > 0) {
             for (const componentName of resources.componentTypeNames) {
                 try {
-                    ComponentRegistry.unregister(componentName);
+                    GlobalComponentRegistry.unregister(componentName);
                     logger.debug(`Component unregistered: ${componentName}`);
                 } catch (e) {
                     logger.error(`Failed to unregister component ${componentName}:`, e);
@@ -900,7 +900,7 @@ export class PluginManager implements IService {
             const runtimeModule = plugin.plugin.runtimeModule;
             if (runtimeModule?.registerComponents) {
                 try {
-                    runtimeModule.registerComponents(ComponentRegistry);
+                    runtimeModule.registerComponents(GlobalComponentRegistry);
                     logger.debug(`Components registered for: ${pluginId}`);
                 } catch (e) {
                     logger.error(`Failed to register components for ${pluginId}:`, e);

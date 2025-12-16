@@ -61,4 +61,13 @@ export interface IFileAPI {
      * @returns 路径是否存在
      */
     pathExists(path: string): Promise<boolean>;
+
+    /**
+     * 获取文件修改时间
+     * Get file modification time
+     *
+     * @param path 文件路径 | File path
+     * @returns 文件修改时间（毫秒时间戳）| File modification time (milliseconds timestamp)
+     */
+    getFileMtime?(path: string): Promise<number>;
 }

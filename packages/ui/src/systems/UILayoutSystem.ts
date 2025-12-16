@@ -96,7 +96,7 @@ export class UILayoutSystem extends EntitySystem {
         const identityMatrix: Matrix2D = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 
         for (const entity of rootEntities) {
-            this.layoutEntity(entity, parentX, parentY, this.canvasWidth, this.canvasHeight, 1, identityMatrix);
+            this.layoutEntity(entity, parentX, parentY, this.canvasWidth, this.canvasHeight, 1, identityMatrix, true, 0);
         }
     }
 
@@ -112,7 +112,8 @@ export class UILayoutSystem extends EntitySystem {
         parentHeight: number,
         parentAlpha: number,
         parentMatrix: Matrix2D,
-        parentVisible: boolean = true
+        parentVisible: boolean = true,
+        depth: number = 0
     ): void {
         const transform = entity.getComponent(UITransformComponent);
         if (!transform) return;
@@ -199,6 +200,12 @@ export class UILayoutSystem extends EntitySystem {
         // Calculate world visibility (if parent is invisible, children are also invisible)
         transform.worldVisible = parentVisible && transform.visible;
 
+        // 计算世界层内顺序（子元素总是渲染在父元素之上）
+        // Calculate world order in layer (children always render on top of parents)
+        // 公式：depth * 1000 + localOrderInLayer
+        // Formula: depth * 1000 + localOrderInLayer
+        transform.worldOrderInLayer = depth * 1000 + transform.orderInLayer;
+
         // 使用矩阵乘法计算世界变换
         this.updateWorldMatrix(transform, parentMatrix);
 
@@ -215,7 +222,7 @@ export class UILayoutSystem extends EntitySystem {
         // 检查是否有布局组件
         const layout = entity.getComponent(UILayoutComponent);
         if (layout && layout.type !== UILayoutType.None) {
-            this.layoutChildren(layout, transform, children);
+            this.layoutChildren(layout, transform, children, depth + 1);
         } else {
             // 无布局组件，直接递归处理子元素
             for (const child of children) {
@@ -227,7 +234,8 @@ export class UILayoutSystem extends EntitySystem {
                     height,
                     transform.worldAlpha,
                     transform.localToWorldMatrix,
-                    transform.worldVisible
+                    transform.worldVisible,
+                    depth + 1
                 );
             }
         }
@@ -240,7 +248,8 @@ export class UILayoutSystem extends EntitySystem {
     private layoutChildren(
         layout: UILayoutComponent,
         parentTransform: UITransformComponent,
-        children: Entity[]
+        children: Entity[],
+        depth: number
     ): void {
         const contentStartX = parentTransform.worldX + layout.paddingLeft;
         // Y-up 系统：worldY 是底部，顶部 = worldY + height
@@ -252,13 +261,13 @@ export class UILayoutSystem extends EntitySystem {
 
         switch (layout.type) {
             case UILayoutType.Horizontal:
-                this.layoutHorizontal(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight);
+                this.layoutHorizontal(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth);
                 break;
             case UILayoutType.Vertical:
-                this.layoutVertical(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight);
+                this.layoutVertical(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth);
                 break;
             case UILayoutType.Grid:
-                this.layoutGrid(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight);
+                this.layoutGrid(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth);
                 break;
             default:
                 // 默认按正常方式递归（传递顶部 Y）
@@ -270,7 +279,9 @@ export class UILayoutSystem extends EntitySystem {
                         parentTransform.computedWidth,
                         parentTransform.computedHeight,
                         parentTransform.worldAlpha,
-                        parentTransform.localToWorldMatrix
+                        parentTransform.localToWorldMatrix,
+                        parentTransform.worldVisible,
+                        depth
                     );
                 }
         }
@@ -287,7 +298,8 @@ export class UILayoutSystem extends EntitySystem {
         startX: number,
         startY: number,
         contentWidth: number,
-        contentHeight: number
+        contentHeight: number,
+        depth: number
     ): void {
         // 计算总子元素宽度
         const childSizes = children.map(child => {
@@ -366,12 +378,14 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.worldAlpha = parentTransform.worldAlpha * childTransform.alpha;
             // 传播世界可见性 | Propagate world visibility
             childTransform.worldVisible = parentTransform.worldVisible && childTransform.visible;
+            // 计算世界层内顺序 | Calculate world order in layer
+            childTransform.worldOrderInLayer = depth * 1000 + childTransform.orderInLayer;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
             childTransform.layoutDirty = false;
 
             // 递归处理子元素的子元素
-            this.processChildrenRecursive(child, childTransform);
+            this.processChildrenRecursive(child, childTransform, depth);
 
             offsetX += size.width + gap;
         }
@@ -389,7 +403,8 @@ export class UILayoutSystem extends EntitySystem {
         startX: number,
         startY: number,
         contentWidth: number,
-        contentHeight: number
+        contentHeight: number,
+        depth: number
     ): void {
         // 计算总子元素高度
         const childSizes = children.map(child => {
@@ -466,11 +481,13 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.worldAlpha = parentTransform.worldAlpha * childTransform.alpha;
             // 传播世界可见性 | Propagate world visibility
             childTransform.worldVisible = parentTransform.worldVisible && childTransform.visible;
+            // 计算世界层内顺序 | Calculate world order in layer
+            childTransform.worldOrderInLayer = depth * 1000 + childTransform.orderInLayer;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
             childTransform.layoutDirty = false;
 
-            this.processChildrenRecursive(child, childTransform);
+            this.processChildrenRecursive(child, childTransform, depth);
 
             // 移动到下一个元素的顶部位置（向下 = Y 减小）
             currentTopY -= size.height + gap;
@@ -489,7 +506,8 @@ export class UILayoutSystem extends EntitySystem {
         startX: number,
         startY: number,
         contentWidth: number,
-        _contentHeight: number
+        _contentHeight: number,
+        depth: number
     ): void {
         const columns = layout.columns;
         const gapX = layout.getHorizontalGap();
@@ -524,11 +542,13 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.worldAlpha = parentTransform.worldAlpha * childTransform.alpha;
             // 传播世界可见性 | Propagate world visibility
             childTransform.worldVisible = parentTransform.worldVisible && childTransform.visible;
+            // 计算世界层内顺序 | Calculate world order in layer
+            childTransform.worldOrderInLayer = depth * 1000 + childTransform.orderInLayer;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
             childTransform.layoutDirty = false;
 
-            this.processChildrenRecursive(child, childTransform);
+            this.processChildrenRecursive(child, childTransform, depth);
         }
     }
 
@@ -565,7 +585,7 @@ export class UILayoutSystem extends EntitySystem {
      * 递归处理子元素
      * Recursively process children
      */
-    private processChildrenRecursive(entity: Entity, parentTransform: UITransformComponent): void {
+    private processChildrenRecursive(entity: Entity, parentTransform: UITransformComponent, depth: number): void {
         const children = this.getUIChildren(entity);
         if (children.length === 0) return;
 
@@ -574,7 +594,7 @@ export class UILayoutSystem extends EntitySystem {
 
         const layout = entity.getComponent(UILayoutComponent);
         if (layout && layout.type !== UILayoutType.None) {
-            this.layoutChildren(layout, parentTransform, children);
+            this.layoutChildren(layout, parentTransform, children, depth + 1);
         } else {
             for (const child of children) {
                 this.layoutEntity(
@@ -585,7 +605,8 @@ export class UILayoutSystem extends EntitySystem {
                     parentTransform.computedHeight,
                     parentTransform.worldAlpha,
                     parentTransform.localToWorldMatrix,
-                    parentTransform.worldVisible
+                    parentTransform.worldVisible,
+                    depth + 1
                 );
             }
         }

@@ -1,19 +1,19 @@
 import { Component } from '../../../src/ECS/Component';
-import { ComponentRegistry } from '../../../src/ECS/Core/ComponentStorage/ComponentRegistry';
+import { GlobalComponentRegistry } from '../../../src/ECS/Core/ComponentStorage/ComponentRegistry';
 import { Entity } from '../../../src/ECS/Entity';
 import { Scene } from '../../../src/ECS/Scene';
 
 describe('ComponentRegistry Extended - 64+ 组件支持', () => {
-    // 组件类缓存
+    // 组件类缓存 | Component class cache
     const componentClassCache = new Map<number, any>();
 
     beforeEach(() => {
-        ComponentRegistry.reset();
+        GlobalComponentRegistry.reset();
         componentClassCache.clear();
     });
 
     afterEach(() => {
-        ComponentRegistry.reset();
+        GlobalComponentRegistry.reset();
         componentClassCache.clear();
     });
 
@@ -39,11 +39,11 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             // 注册 100 个组件类型
             for (let i = 0; i < 100; i++) {
                 const ComponentClass = createTestComponent(i);
-                const bitIndex = ComponentRegistry.register(ComponentClass);
+                const bitIndex = GlobalComponentRegistry.register(ComponentClass);
                 componentTypes.push(ComponentClass);
 
                 expect(bitIndex).toBe(i);
-                expect(ComponentRegistry.isRegistered(ComponentClass)).toBe(true);
+                expect(GlobalComponentRegistry.isRegistered(ComponentClass)).toBe(true);
             }
 
             expect(componentTypes.length).toBe(100);
@@ -53,14 +53,14 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             // 注册 80 个组件
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
             }
 
             // 验证第 70 个组件的位掩码
             const Component70 = createTestComponent(70);
-            ComponentRegistry.register(Component70);
+            GlobalComponentRegistry.register(Component70);
 
-            const bitMask = ComponentRegistry.getBitMask(Component70);
+            const bitMask = GlobalComponentRegistry.getBitMask(Component70);
             expect(bitMask).toBeDefined();
             expect(bitMask.segments).toBeDefined(); // 应该有扩展段
             expect(bitMask.segments!.length).toBeGreaterThan(0);
@@ -70,11 +70,11 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             // 注册 1500 个组件验证无限制
             for (let i = 0; i < 1500; i++) {
                 const ComponentClass = createTestComponent(i);
-                const bitIndex = ComponentRegistry.register(ComponentClass);
+                const bitIndex = GlobalComponentRegistry.register(ComponentClass);
                 expect(bitIndex).toBe(i);
             }
 
-            expect(ComponentRegistry.getRegisteredCount()).toBe(1500);
+            expect(GlobalComponentRegistry.getRegisteredCount()).toBe(1500);
         });
 
     });
@@ -92,10 +92,13 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             const componentTypes: any[] = [];
             const components: any[] = [];
 
-            // 添加 80 个组件
+            // 添加 80 个组件 | Add 80 components
+            // 需要同时注册到 GlobalComponentRegistry（ArchetypeSystem 使用）和 Scene registry
+            // Need to register to both GlobalComponentRegistry (used by ArchetypeSystem) and Scene registry
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 componentTypes.push(ComponentClass);
 
                 const component = new ComponentClass();
@@ -115,32 +118,35 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
         });
 
         it('应该能够正确检查超过 64 个组件的存在性', () => {
-            // 添加组件 0-79
+            // 添加组件 0-79 | Add components 0-79
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 entity.addComponent(new ComponentClass());
             }
 
-            // 验证 hasComponent 对所有组件都工作
+            // 验证 hasComponent 对所有组件都工作 | Verify hasComponent works for all
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
                 expect(entity.hasComponent(ComponentClass)).toBe(true);
             }
 
-            // 验证不存在的组件
+            // 验证不存在的组件 | Verify non-existent component
             const NonExistentComponent = createTestComponent(999);
-            ComponentRegistry.register(NonExistentComponent);
+            GlobalComponentRegistry.register(NonExistentComponent);
+            scene.componentRegistry.register(NonExistentComponent);
             expect(entity.hasComponent(NonExistentComponent)).toBe(false);
         });
 
         it('应该能够移除超过 64 索引的组件', () => {
             const componentTypes: any[] = [];
 
-            // 添加 80 个组件
+            // 添加 80 个组件 | Add 80 components
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 componentTypes.push(ComponentClass);
                 entity.addComponent(new ComponentClass());
             }
@@ -162,10 +168,11 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
         });
 
         it('应该能够正确遍历超过 64 个组件', () => {
-            // 添加 80 个组件
+            // 添加 80 个组件 | Add 80 components
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 entity.addComponent(new ComponentClass());
             }
 
@@ -182,29 +189,29 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
 
     describe('热更新模式', () => {
         it('默认应该禁用热更新模式', () => {
-            expect(ComponentRegistry.isHotReloadEnabled()).toBe(false);
+            expect(GlobalComponentRegistry.isHotReloadEnabled()).toBe(false);
         });
 
         it('应该能够启用和禁用热更新模式', () => {
-            expect(ComponentRegistry.isHotReloadEnabled()).toBe(false);
+            expect(GlobalComponentRegistry.isHotReloadEnabled()).toBe(false);
 
-            ComponentRegistry.enableHotReload();
-            expect(ComponentRegistry.isHotReloadEnabled()).toBe(true);
+            GlobalComponentRegistry.enableHotReload();
+            expect(GlobalComponentRegistry.isHotReloadEnabled()).toBe(true);
 
-            ComponentRegistry.disableHotReload();
-            expect(ComponentRegistry.isHotReloadEnabled()).toBe(false);
+            GlobalComponentRegistry.disableHotReload();
+            expect(GlobalComponentRegistry.isHotReloadEnabled()).toBe(false);
         });
 
         it('reset 应该重置热更新模式为禁用', () => {
-            ComponentRegistry.enableHotReload();
-            expect(ComponentRegistry.isHotReloadEnabled()).toBe(true);
+            GlobalComponentRegistry.enableHotReload();
+            expect(GlobalComponentRegistry.isHotReloadEnabled()).toBe(true);
 
-            ComponentRegistry.reset();
-            expect(ComponentRegistry.isHotReloadEnabled()).toBe(false);
+            GlobalComponentRegistry.reset();
+            expect(GlobalComponentRegistry.isHotReloadEnabled()).toBe(false);
         });
 
         it('启用热更新时应该替换同名组件类', () => {
-            ComponentRegistry.enableHotReload();
+            GlobalComponentRegistry.enableHotReload();
 
             // 模拟热更新场景：两个不同的类但有相同的 constructor.name
             // Simulate hot reload: two different classes with same constructor.name
@@ -229,20 +236,20 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             expect(TestComponentV1.name).toBe(TestComponentV2.name);
             expect(TestComponentV1).not.toBe(TestComponentV2);
 
-            const index1 = ComponentRegistry.register(TestComponentV1);
-            const index2 = ComponentRegistry.register(TestComponentV2);
+            const index1 = GlobalComponentRegistry.register(TestComponentV1);
+            const index2 = GlobalComponentRegistry.register(TestComponentV2);
 
             // 应该复用相同的 bitIndex
             expect(index1).toBe(index2);
 
             // 新类应该替换旧类
-            expect(ComponentRegistry.isRegistered(TestComponentV2)).toBe(true);
-            expect(ComponentRegistry.isRegistered(TestComponentV1)).toBe(false);
+            expect(GlobalComponentRegistry.isRegistered(TestComponentV2)).toBe(true);
+            expect(GlobalComponentRegistry.isRegistered(TestComponentV1)).toBe(false);
         });
 
         it('禁用热更新时不应该替换同名组件类', () => {
             // 确保热更新被禁用
-            ComponentRegistry.disableHotReload();
+            GlobalComponentRegistry.disableHotReload();
 
             // 创建两个同名组件
             // Create two classes with same constructor.name
@@ -265,15 +272,15 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             expect(TestCompA.name).toBe(TestCompB.name);
             expect(TestCompA).not.toBe(TestCompB);
 
-            const index1 = ComponentRegistry.register(TestCompA);
-            const index2 = ComponentRegistry.register(TestCompB);
+            const index1 = GlobalComponentRegistry.register(TestCompA);
+            const index2 = GlobalComponentRegistry.register(TestCompB);
 
             // 应该分配不同的 bitIndex（因为热更新被禁用）
             expect(index2).toBe(index1 + 1);
 
             // 两个类都应该被注册
-            expect(ComponentRegistry.isRegistered(TestCompA)).toBe(true);
-            expect(ComponentRegistry.isRegistered(TestCompB)).toBe(true);
+            expect(GlobalComponentRegistry.isRegistered(TestCompA)).toBe(true);
+            expect(GlobalComponentRegistry.isRegistered(TestCompB)).toBe(true);
         });
     });
 
@@ -282,14 +289,15 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             const scene = new Scene();
             const entity = scene.createEntity('TestEntity');
 
-            // 注册 65 个组件（跨越 64 位边界）
+            // 注册 65 个组件（跨越 64 位边界）| Register 65 components (crossing 64-bit boundary)
             for (let i = 0; i < 65; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 entity.addComponent(new ComponentClass());
             }
 
-            // 验证第 63, 64, 65 个组件
+            // 验证第 63, 64, 65 个组件 | Verify components 63, 64
             const Component63 = createTestComponent(63);
             const Component64 = createTestComponent(64);
 
@@ -301,25 +309,27 @@ describe('ComponentRegistry Extended - 64+ 组件支持', () => {
             const scene = new Scene();
             const entity = scene.createEntity('TestEntity');
 
-            // 添加 80 个组件
+            // 添加 80 个组件 | Add 80 components
             for (let i = 0; i < 80; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 entity.addComponent(new ComponentClass());
             }
 
-            // 强制重建缓存（通过访问 components）
+            // 强制重建缓存（通过访问 components）| Force cache rebuild
             const components1 = entity.components;
             expect(components1.length).toBe(80);
 
-            // 添加更多组件
+            // 添加更多组件 | Add more components
             for (let i = 80; i < 90; i++) {
                 const ComponentClass = createTestComponent(i);
-                ComponentRegistry.register(ComponentClass);
+                GlobalComponentRegistry.register(ComponentClass);
+                scene.componentRegistry.register(ComponentClass);
                 entity.addComponent(new ComponentClass());
             }
 
-            // 重新获取组件数组（应该重建缓存）
+            // 重新获取组件数组（应该重建缓存）| Re-get component array (should rebuild cache)
             const components2 = entity.components;
             expect(components2.length).toBe(90);
         });

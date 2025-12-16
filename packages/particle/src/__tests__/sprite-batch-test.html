@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sprite Batch Rendering Test (模拟 sprite_batch.rs)</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #fff; padding: 20px; }
+        canvas { border: 1px solid #444; margin: 10px; background: #333; }
+        .test-row { display: flex; align-items: flex-start; margin: 20px 0; gap: 20px; }
+        .info { background: #333; padding: 10px; border-radius: 4px; font-size: 12px; }
+        h2 { color: #8cf; }
+        pre { background: #333; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .pass { color: #2a5; }
+        .fail { color: #f55; }
+    </style>
+</head>
+<body>
+    <h1>Sprite Batch Rendering Test</h1>
+    <p>This test simulates exactly how sprite_batch.rs renders sprites with UV coordinates.</p>
+
+    <h2>Test Texture (2x2 spritesheet)</h2>
+    <pre>
+┌─────────┬─────────┐
+│ RED (0) │ GREEN(1)│  v: 0.0 - 0.5
+├─────────┼─────────┤
+│ BLUE(2) │ YELLOW(3)│  v: 0.5 - 1.0
+└─────────┴─────────┘
+    </pre>
+
+    <h2>Rendering Test (same as sprite_batch.rs)</h2>
+    <div class="test-row">
+        <div>
+            <canvas id="mainCanvas" width="400" height="300"></canvas>
+            <div>Main rendering canvas</div>
+        </div>
+        <div class="info">
+            <h3>sprite_batch.rs vertex mapping:</h3>
+            <pre>
+corners = [
+  (-ox, height-oy),  // 0: Top-left (high Y)
+  (width-ox, height-oy), // 1: Top-right
+  (width-ox, -oy),   // 2: Bottom-right (low Y)
+  (-ox, -oy),        // 3: Bottom-left
+];
+
+tex_coords = [
+  [u0, v0], // 0: Top-left
+  [u1, v0], // 1: Top-right
+  [u1, v1], // 2: Bottom-right
+  [u0, v1], // 3: Bottom-left
+];
+
+indices = [0, 1, 2, 2, 3, 0];
+            </pre>
+        </div>
+    </div>
+
+    <h2>Frame-by-Frame Test Results</h2>
+    <div id="results"></div>
+
+    <h2>Conclusion</h2>
+    <pre id="conclusion"></pre>
+
+    <script>
+        const vsSource = `
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            varying vec2 vTexCoord;
+            uniform mat4 uProjection;
+            void main() {
+                gl_Position = uProjection * vec4(aPosition, 0.0, 1.0);
+                vTexCoord = aTexCoord;
+            }
+        `;
+
+        const fsSource = `
+            precision mediump float;
+            varying vec2 vTexCoord;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vsSource, fsSource) {
+            const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            return program;
+        }
+
+        function createTestTexture(gl) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            // NO FLIP_Y - same as our engine
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+
+            // 2x2 texture: Red, Green, Blue, Yellow
+            const data = new Uint8Array([
+                255, 0, 0, 255,    0, 255, 0, 255,   // Row 0: Red, Green
+                0, 0, 255, 255,    255, 255, 0, 255  // Row 1: Blue, Yellow
+            ]);
+
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 2, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            return texture;
+        }
+
+        // Simulate sprite_batch.rs add_sprite_vertices_to_batch
+        function addSpriteVertices(batch, x, y, width, height, rotation, originX, originY, u0, v0, u1, v1, color) {
+            const ox = originX * width;
+            const oy = originY * height;
+
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+
+            // Same as sprite_batch.rs
+            const corners = [
+                [-ox, height - oy],           // 0: Top-left
+                [width - ox, height - oy],    // 1: Top-right
+                [width - ox, -oy],            // 2: Bottom-right
+                [-ox, -oy]                    // 3: Bottom-left
+            ];
+
+            const texCoords = [
+                [u0, v0],  // 0: Top-left
+                [u1, v0],  // 1: Top-right
+                [u1, v1],  // 2: Bottom-right
+                [u0, v1]   // 3: Bottom-left
+            ];
+
+            // Transform and add vertices
+            for (let i = 0; i < 4; i++) {
+                const [lx, ly] = corners[i];
+
+                // Apply rotation
+                const rx = lx * cos - ly * sin;
+                const ry = lx * sin + ly * cos;
+
+                // Apply translation
+                const px = rx + x;
+                const py = ry + y;
+
+                batch.positions.push(px, py);
+                batch.texCoords.push(texCoords[i][0], texCoords[i][1]);
+            }
+
+            // Add indices (0, 1, 2, 2, 3, 0)
+            const base = batch.vertexCount;
+            batch.indices.push(base, base + 1, base + 2, base + 2, base + 3, base);
+            batch.vertexCount += 4;
+        }
+
+        function calculateUV(frame, tilesX, tilesY) {
+            const col = frame % tilesX;
+            const row = Math.floor(frame / tilesX);
+            const uWidth = 1 / tilesX;
+            const vHeight = 1 / tilesY;
+            return {
+                u0: col * uWidth,
+                v0: row * vHeight,
+                u1: (col + 1) * uWidth,
+                v1: (row + 1) * vHeight
+            };
+        }
+
+        function colorName(r, g, b) {
+            if (r > 200 && g < 100 && b < 100) return 'RED';
+            if (r < 100 && g > 200 && b < 100) return 'GREEN';
+            if (r < 100 && g < 100 && b > 200) return 'BLUE';
+            if (r > 200 && g > 200 && b < 100) return 'YELLOW';
+            return `RGB(${r},${g},${b})`;
+        }
+
+        function runTest() {
+            const canvas = document.getElementById('mainCanvas');
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+            if (!gl) {
+                document.getElementById('conclusion').textContent = 'WebGL not supported!';
+                return;
+            }
+
+            const program = createProgram(gl, vsSource, fsSource);
+            const texture = createTestTexture(gl);
+
+            gl.useProgram(program);
+
+            // Set up orthographic projection (Y-up, like our engine)
+            const projLoc = gl.getUniformLocation(program, 'uProjection');
+            const left = 0, right = 400, bottom = 0, top = 300;
+            const projection = new Float32Array([
+                2/(right-left), 0, 0, 0,
+                0, 2/(top-bottom), 0, 0,
+                0, 0, -1, 0,
+                -(right+left)/(right-left), -(top+bottom)/(top-bottom), 0, 1
+            ]);
+            gl.uniformMatrix4fv(projLoc, false, projection);
+
+            // Clear
+            gl.viewport(0, 0, 400, 300);
+            gl.clearColor(0.2, 0.2, 0.2, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Create batch
+            const batch = { positions: [], texCoords: [], indices: [], vertexCount: 0 };
+
+            // Add 4 sprites for 4 frames
+            const spriteSize = 80;
+            const spacing = 90;
+            const startX = 50;
+            const startY = 150;
+
+            const expectedColors = ['RED', 'GREEN', 'BLUE', 'YELLOW'];
+
+            for (let frame = 0; frame < 4; frame++) {
+                const uv = calculateUV(frame, 2, 2);
+                const x = startX + frame * spacing;
+                const y = startY;
+
+                addSpriteVertices(
+                    batch,
+                    x, y,           // position
+                    spriteSize, spriteSize, // size
+                    0,              // rotation
+                    0.5, 0.5,       // origin (center)
+                    uv.u0, uv.v0, uv.u1, uv.v1, // UV
+                    [1, 1, 1, 1]    // color
+                );
+            }
+
+            // Upload and render
+            const posLoc = gl.getAttribLocation(program, 'aPosition');
+            const texLoc = gl.getAttribLocation(program, 'aTexCoord');
+
+            const posBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(batch.positions), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+            const texBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, texBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(batch.texCoords), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(texLoc);
+            gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 0, 0);
+
+            const idxBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(batch.indices), gl.STATIC_DRAW);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.drawElements(gl.TRIANGLES, batch.indices.length, gl.UNSIGNED_SHORT, 0);
+
+            // Read back colors and verify
+            const resultsDiv = document.getElementById('results');
+            let allPassed = true;
+
+            for (let frame = 0; frame < 4; frame++) {
+                const x = startX + frame * spacing;
+                const y = startY;
+
+                const pixels = new Uint8Array(4);
+                gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                const actual = colorName(pixels[0], pixels[1], pixels[2]);
+                const expected = expectedColors[frame];
+                const passed = actual === expected;
+
+                if (!passed) allPassed = false;
+
+                const uv = calculateUV(frame, 2, 2);
+                resultsDiv.innerHTML += `
+                    <div class="${passed ? 'pass' : 'fail'}">
+                        Frame ${frame}: UV=[${uv.u0.toFixed(2)}, ${uv.v0.toFixed(2)}, ${uv.u1.toFixed(2)}, ${uv.v1.toFixed(2)}]
+                        → Expected: ${expected}, Got: ${actual} ${passed ? '✓' : '✗'}
+                    </div>
+                `;
+            }
+
+            const conclusionEl = document.getElementById('conclusion');
+            if (allPassed) {
+                conclusionEl.innerHTML = `
+<span class="pass">ALL TESTS PASSED!</span>
+
+The sprite_batch.rs rendering logic is CORRECT.
+UV calculation is CORRECT.
+
+If particles still show wrong frames in the actual engine, possible causes:
+1. The spritesheet image layout is different (frame 0 not at top-left)
+2. Image loading is flipping the texture somewhere
+3. The particle system is using different UV values than expected
+
+<b>NEXT STEP:</b> Check the actual spritesheet image in the editor.
+Is frame 0 really at the top-left corner of the image?
+                `;
+            } else {
+                conclusionEl.innerHTML = `
+<span class="fail">SOME TESTS FAILED!</span>
+
+There's a bug in the vertex/UV mapping logic.
+                `;
+            }
+        }
+
+        window.onload = runTest;
+    </script>
+</body>
+</html>

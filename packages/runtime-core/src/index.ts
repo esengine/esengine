@@ -73,6 +73,16 @@ export {
     type BrowserFileSystemOptions
 } from './services/BrowserFileSystemService';
 
+// Runtime Scene Manager
+export {
+    RuntimeSceneManager,
+    RuntimeSceneManagerToken,
+    type IRuntimeSceneManager,
+    type SceneInfo,
+    type SceneLoadOptions,
+    type SceneLoader
+} from './services/RuntimeSceneManager';
+
 // Re-export catalog types from asset-system (canonical source)
 // 从 asset-system 重新导出目录类型（规范来源）
 export type {

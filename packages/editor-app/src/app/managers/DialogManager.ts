@@ -6,6 +6,16 @@ interface ErrorDialogData {
     message: string;
 }
 
+/**
+ * 外部修改对话框数据
+ * External modification dialog data
+ */
+export interface ExternalModificationDialogData {
+    sceneName: string;
+    onReload: () => void;
+    onOverwrite: () => void;
+}
+
 interface DialogState {
     showProfiler: boolean;
     showAdvancedProfiler: boolean;
@@ -14,8 +24,10 @@ interface DialogState {
     showAbout: boolean;
     showPluginGenerator: boolean;
     showBuildSettings: boolean;
+    showRenderDebug: boolean;
     errorDialog: ErrorDialogData | null;
     confirmDialog: ConfirmDialogData | null;
+    externalModificationDialog: ExternalModificationDialogData | null;
 
     setShowProfiler: (show: boolean) => void;
     setShowAdvancedProfiler: (show: boolean) => void;
@@ -24,8 +36,10 @@ interface DialogState {
     setShowAbout: (show: boolean) => void;
     setShowPluginGenerator: (show: boolean) => void;
     setShowBuildSettings: (show: boolean) => void;
+    setShowRenderDebug: (show: boolean) => void;
     setErrorDialog: (data: ErrorDialogData | null) => void;
     setConfirmDialog: (data: ConfirmDialogData | null) => void;
+    setExternalModificationDialog: (data: ExternalModificationDialogData | null) => void;
     closeAllDialogs: () => void;
 }
 
@@ -37,8 +51,10 @@ export const useDialogStore = create<DialogState>((set) => ({
     showAbout: false,
     showPluginGenerator: false,
     showBuildSettings: false,
+    showRenderDebug: false,
     errorDialog: null,
     confirmDialog: null,
+    externalModificationDialog: null,
 
     setShowProfiler: (show) => set({ showProfiler: show }),
     setShowAdvancedProfiler: (show) => set({ showAdvancedProfiler: show }),
@@ -47,8 +63,10 @@ export const useDialogStore = create<DialogState>((set) => ({
     setShowAbout: (show) => set({ showAbout: show }),
     setShowPluginGenerator: (show) => set({ showPluginGenerator: show }),
     setShowBuildSettings: (show) => set({ showBuildSettings: show }),
+    setShowRenderDebug: (show) => set({ showRenderDebug: show }),
     setErrorDialog: (data) => set({ errorDialog: data }),
     setConfirmDialog: (data) => set({ confirmDialog: data }),
+    setExternalModificationDialog: (data) => set({ externalModificationDialog: data }),
 
     closeAllDialogs: () => set({
         showProfiler: false,
@@ -58,7 +76,9 @@ export const useDialogStore = create<DialogState>((set) => ({
         showAbout: false,
         showPluginGenerator: false,
         showBuildSettings: false,
+        showRenderDebug: false,
         errorDialog: null,
-        confirmDialog: null
+        confirmDialog: null,
+        externalModificationDialog: null
     })
 }));

@@ -126,3 +126,52 @@
 .confirm-dialog-btn:active {
   transform: scale(0.98);
 }
+
+/* External Modification Dialog | 外部修改对话框 */
+.external-modification-dialog .warning-icon {
+  color: #f0ad4e;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.external-modification-dialog .confirm-dialog-header {
+  gap: 0;
+}
+
+.external-modification-dialog .confirm-dialog-header h2 {
+  flex: 1;
+}
+
+.external-modification-dialog .hint-text {
+  margin-top: 12px;
+  color: var(--text-secondary, #999);
+  font-size: 13px;
+}
+
+.external-modification-footer {
+  flex-wrap: wrap;
+}
+
+.confirm-dialog-btn.reload {
+  background: #5bc0de;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirm-dialog-btn.reload:hover {
+  background: #7cd0e8;
+}
+
+.confirm-dialog-btn.overwrite {
+  background: #f0ad4e;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirm-dialog-btn.overwrite:hover {
+  background: #f4be6e;
+}

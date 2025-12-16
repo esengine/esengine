@@ -381,7 +381,8 @@ export const es: Translations = {
             portManager: 'Administrador de Puertos',
             settings: 'Configuración',
             devtools: 'Herramientas de Desarrollo',
-            build: 'Configuración de Compilación'
+            build: 'Configuración de Compilación',
+            renderDebug: 'Depuración de Renderizado'
         },
         help: {
             title: 'Ayuda',

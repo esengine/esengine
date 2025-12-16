@@ -50,6 +50,36 @@ export interface IAssetMeta {
 }
 
 /**
+ * Sprite settings for textures
+ * 纹理的 Sprite 设置
+ */
+export interface ISpriteSettings {
+    /**
+     * Nine-patch slice border [top, right, bottom, left]
+     * 九宫格切片边距
+     *
+     * Defines the non-stretchable borders for nine-patch rendering.
+     * 定义九宫格渲染时不可拉伸的边框区域。
+     */
+    sliceBorder?: [number, number, number, number];
+
+    /**
+     * Sprite pivot point (0-1 normalized)
+     * Sprite 锚点（0-1 归一化）
+     *
+     * Default is [0.5, 0.5] (center)
+     * 默认为 [0.5, 0.5]（中心）
+     */
+    pivot?: [number, number];
+
+    /**
+     * Pixels per unit for world-space rendering
+     * 世界空间渲染的像素单位比
+     */
+    pixelsPerUnit?: number;
+}
+
+/**
  * Import settings for different asset types
  * 不同资产类型的导入设置
  */
@@ -61,6 +91,9 @@ export interface IImportSettings {
     filterMode?: 'point' | 'bilinear' | 'trilinear';
     wrapMode?: 'clamp' | 'repeat' | 'mirror';
     premultiplyAlpha?: boolean;
+
+    // Sprite settings | Sprite 设置
+    spriteSettings?: ISpriteSettings;
 
     // Audio settings | 音频设置
     audioFormat?: 'mp3' | 'ogg' | 'wav';
@@ -382,6 +415,21 @@ export class AssetMetaManager {
                     await this._fs.delete(metaPath);
                 }
             }
+        }
+    }
+
+    /**
+     * Invalidate cache for a specific asset path
+     * 使特定资产路径的缓存失效
+     *
+     * Call this when a .meta file is modified externally.
+     * 当 .meta 文件被外部修改时调用此方法。
+     */
+    invalidateCache(assetPath: string): void {
+        const meta = this._cache.get(assetPath);
+        if (meta) {
+            this._guidToPath.delete(meta.guid);
+            this._cache.delete(assetPath);
         }
     }
 

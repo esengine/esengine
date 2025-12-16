@@ -43,15 +43,26 @@
  *         ↓
  * [UserCodeService.scan()] - Discovers all scripts
  *         ↓
- * [UserCodeService.compile()] - Compiles to JS using esbuild
+ * [UserCodeService.compile()] - Compiles to ESM using esbuild
+ *                               (@esengine/sdk marked as external)
  *         ↓
- * [UserCodeService.load()] - Loads compiled module
+ * [UserCodeService.load()] - Loads via project:// protocol + import()
  *         ↓
  * [registerComponents()] - Registers with ECS runtime
  * [registerEditorExtensions()] - Registers inspectors/gizmos
  *         ↓
  * [UserCodeService.watch()] - Hot reload on file changes
  * ```
+ *
+ * # Architecture | 架构
+ *
+ * - **Compilation**: ESM format with `external: ['@esengine/sdk']`
+ * - **Loading**: Reads file via Tauri, loads via Blob URL + import()
+ * - **Runtime**: SDK accessed via `window.__ESENGINE_SDK__` global
+ * - **Hot Reload**: File watching via Rust backend + Tauri events
+ *
+ * Note: Browser's import() only supports http/https/blob protocols.
+ * Custom protocols like project:// are not supported for ESM imports.
  *
  * # Example User Component | 用户组件示例
  *

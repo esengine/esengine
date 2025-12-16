@@ -1,4 +1,4 @@
-import type { ComponentRegistry as ComponentRegistryType, IScene } from '@esengine/ecs-framework';
+import type { IComponentRegistry, IScene } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { AssetManagerToken } from '@esengine/asset-system';
@@ -20,7 +20,7 @@ class ParticleRuntimeModule implements IRuntimeModule {
     private _updateSystem: ParticleUpdateSystem | null = null;
     private _loaderRegistered = false;
 
-    registerComponents(registry: typeof ComponentRegistryType): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(ParticleSystemComponent);
         registry.register(ClickFxComponent);
     }
@@ -73,12 +73,9 @@ class ParticleRuntimeModule implements IRuntimeModule {
         scene.addSystem(this._updateSystem);
 
         // 添加点击特效系统 | Add click FX system
+        // ClickFxSystem 不再需要 AssetManager，资产由 ParticleUpdateSystem 统一加载
+        // ClickFxSystem no longer needs AssetManager, assets are loaded by ParticleUpdateSystem
         const clickFxSystem = new ClickFxSystem();
-
-        // 设置资产管理器 | Set asset manager
-        if (assetManager) {
-            clickFxSystem.setAssetManager(assetManager);
-        }
 
         // 设置 EngineBridge（用于屏幕坐标转世界坐标）
         // Set EngineBridge (for screen to world coordinate conversion)

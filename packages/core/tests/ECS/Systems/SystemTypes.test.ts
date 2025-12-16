@@ -4,7 +4,7 @@ import { IntervalSystem } from '../../../src/ECS/Systems/IntervalSystem';
 import { ProcessingSystem } from '../../../src/ECS/Systems/ProcessingSystem';
 import { Entity } from '../../../src/ECS/Entity';
 import { Component } from '../../../src/ECS/Component';
-import { ComponentRegistry } from '../../../src/ECS/Core/ComponentStorage';
+import { GlobalComponentRegistry } from '../../../src/ECS/Core/ComponentStorage';
 import { Time } from '../../../src/Utils/Time';
 import { Matcher } from '../../../src/ECS/Utils/Matcher';
 import { Core } from '../../../src/Core';
@@ -85,13 +85,15 @@ describe('System Types - 系统类型测试', () => {
 
     beforeEach(() => {
         Core.create();
+        // 注册测试组件类型 | Register test component types
+        // 必须在创建 Scene 之前注册，因为 Scene 会克隆 GlobalComponentRegistry
+        // Must register before Scene creation, as Scene clones GlobalComponentRegistry
+        GlobalComponentRegistry.register(TestComponent);
+        GlobalComponentRegistry.register(AnotherComponent);
         scene = new Scene();
         entity = scene.createEntity('TestEntity');
         // 重置时间系统
         Time.update(0.016);
-        // 注册测试组件类型
-        ComponentRegistry.register(TestComponent);
-        ComponentRegistry.register(AnotherComponent);
     });
 
     describe('PassiveSystem - 被动系统', () => {

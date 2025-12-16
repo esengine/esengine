@@ -1,13 +1,30 @@
 //! Texture loading and management.
 //! 纹理加载和管理。
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlImageElement, WebGl2RenderingContext, WebGlTexture};
 
 use crate::core::error::{EngineError, Result};
 use super::Texture;
+
+/// 纹理加载状态
+/// Texture loading state
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextureState {
+    /// 正在加载中
+    /// Loading in progress
+    Loading,
+    /// 加载完成，可以使用
+    /// Loaded and ready to use
+    Ready,
+    /// 加载失败
+    /// Load failed
+    Failed(String),
+}
 
 /// Texture manager for loading and caching textures.
 /// 用于加载和缓存纹理的纹理管理器。
@@ -31,6 +48,10 @@ pub struct TextureManager {
     /// Default white texture for untextured rendering.
     /// 用于无纹理渲染的默认白色纹理。
     default_texture: Option<WebGlTexture>,
+
+    /// 纹理加载状态（使用 Rc<RefCell<>> 以便闭包可以修改）
+    /// Texture loading states (using Rc<RefCell<>> so closures can modify)
+    texture_states: Rc<RefCell<HashMap<u32, TextureState>>>,
 }
 
 impl TextureManager {
@@ -43,6 +64,7 @@ impl TextureManager {
             path_to_id: HashMap::new(),
             next_id: 1, // Start from 1, 0 is reserved for default
             default_texture: None,
+            texture_states: Rc::new(RefCell::new(HashMap::new())),
         };
 
         // Create default white texture | 创建默认白色纹理
@@ -90,17 +112,22 @@ impl TextureManager {
     /// 从URL加载纹理。
     ///
     /// Note: This is an async operation. The texture will be available
-    /// after the image loads.
-    /// 注意：这是一个异步操作。纹理在图片加载后可用。
+    /// after the image loads. Use `get_texture_state` to check loading status.
+    /// 注意：这是一个异步操作。纹理在图片加载后可用。使用 `get_texture_state` 检查加载状态。
     pub fn load_texture(&mut self, id: u32, url: &str) -> Result<()> {
+        // 设置初始状态为 Loading | Set initial state to Loading
+        self.texture_states.borrow_mut().insert(id, TextureState::Loading);
+
         // Create placeholder texture | 创建占位纹理
         let texture = self.gl
             .create_texture()
             .ok_or_else(|| EngineError::TextureLoadFailed("Failed to create texture".into()))?;
 
-        // Set up temporary 1x1 texture | 设置临时1x1纹理
+        // Set up temporary 1x1 transparent texture | 设置临时1x1透明纹理
+        // 使用透明而非灰色，这样未加载完成时不会显示奇怪的颜色
+        // Use transparent instead of gray, so incomplete textures don't show strange colors
         self.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture));
-        let placeholder: [u8; 4] = [128, 128, 128, 255];
+        let placeholder: [u8; 4] = [0, 0, 0, 0];
         let _ = self.gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
             WebGl2RenderingContext::TEXTURE_2D,
             0,
@@ -119,6 +146,10 @@ impl TextureManager {
         // Store texture with placeholder size | 存储带占位符尺寸的纹理
         self.textures.insert(id, Texture::new(texture, 1, 1));
 
+        // Clone state map for closures | 克隆状态映射用于闭包
+        let states_for_onload = Rc::clone(&self.texture_states);
+        let states_for_onerror = Rc::clone(&self.texture_states);
+
         // Load actual image asynchronously | 异步加载实际图片
         let gl = self.gl.clone();
 
@@ -130,6 +161,7 @@ impl TextureManager {
 
         // Clone image for use in closure | 克隆图片用于闭包
         let image_clone = image.clone();
+        let texture_id = id;
 
         // Set up load callback | 设置加载回调
         let onload = Closure::wrap(Box::new(move || {
@@ -146,7 +178,9 @@ impl TextureManager {
             );
 
             if let Err(e) = result {
-                log::error!("Failed to upload texture: {:?} | 纹理上传失败: {:?}", e, e);
+                log::error!("Failed to upload texture {}: {:?} | 纹理 {} 上传失败: {:?}", texture_id, e, texture_id, e);
+                states_for_onload.borrow_mut().insert(texture_id, TextureState::Failed(format!("{:?}", e)));
+                return;
             }
 
             // Set texture parameters | 设置纹理参数
@@ -171,10 +205,22 @@ impl TextureManager {
                 WebGl2RenderingContext::LINEAR as i32,
             );
 
+            // 标记为就绪 | Mark as ready
+            states_for_onload.borrow_mut().insert(texture_id, TextureState::Ready);
+
+        }) as Box<dyn Fn()>);
+
+        // Set up error callback | 设置错误回调
+        let url_for_error = url.to_string();
+        let onerror = Closure::wrap(Box::new(move || {
+            let error_msg = format!("Failed to load image: {}", url_for_error);
+            states_for_onerror.borrow_mut().insert(texture_id, TextureState::Failed(error_msg));
         }) as Box<dyn Fn()>);
 
         image.set_onload(Some(onload.as_ref().unchecked_ref()));
+        image.set_onerror(Some(onerror.as_ref().unchecked_ref()));
         onload.forget(); // Prevent closure from being dropped | 防止闭包被销毁
+        onerror.forget();
 
         image.set_src(url);
 
@@ -223,6 +269,56 @@ impl TextureManager {
         self.textures.contains_key(&id)
     }
 
+    /// 获取纹理加载状态
+    /// Get texture loading state
+    ///
+    /// 返回纹理的当前加载状态：Loading、Ready 或 Failed。
+    /// Returns the current loading state of the texture: Loading, Ready, or Failed.
+    #[inline]
+    pub fn get_texture_state(&self, id: u32) -> TextureState {
+        // ID 0 是默认纹理，始终就绪
+        // ID 0 is default texture, always ready
+        if id == 0 {
+            return TextureState::Ready;
+        }
+
+        self.texture_states
+            .borrow()
+            .get(&id)
+            .cloned()
+            .unwrap_or(TextureState::Failed("Texture not found".to_string()))
+    }
+
+    /// 检查纹理是否已就绪可用
+    /// Check if texture is ready to use
+    ///
+    /// 这是 `get_texture_state() == TextureState::Ready` 的便捷方法。
+    /// This is a convenience method for `get_texture_state() == TextureState::Ready`.
+    #[inline]
+    pub fn is_texture_ready(&self, id: u32) -> bool {
+        // ID 0 是默认纹理，始终就绪
+        // ID 0 is default texture, always ready
+        if id == 0 {
+            return true;
+        }
+
+        matches!(
+            self.texture_states.borrow().get(&id),
+            Some(TextureState::Ready)
+        )
+    }
+
+    /// 获取正在加载中的纹理数量
+    /// Get the number of textures currently loading
+    #[inline]
+    pub fn get_loading_count(&self) -> u32 {
+        self.texture_states
+            .borrow()
+            .values()
+            .filter(|s| matches!(s, TextureState::Loading))
+            .count() as u32
+    }
+
     /// Remove texture.
     /// 移除纹理。
     pub fn remove_texture(&mut self, id: u32) {
@@ -231,6 +327,8 @@ impl TextureManager {
         }
         // Also remove from path mapping | 同时从路径映射中移除
         self.path_to_id.retain(|_, &mut v| v != id);
+        // Remove state | 移除状态
+        self.texture_states.borrow_mut().remove(&id);
     }
 
     /// Load texture by path, returning texture ID.
@@ -307,6 +405,9 @@ impl TextureManager {
 
         // Clear path mapping | 清除路径映射
         self.path_to_id.clear();
+
+        // Clear texture states | 清除纹理状态
+        self.texture_states.borrow_mut().clear();
 
         // Reset ID counter (1 is reserved for first texture, 0 for default)
         // 重置ID计数器（1保留给第一个纹理，0给默认纹理）

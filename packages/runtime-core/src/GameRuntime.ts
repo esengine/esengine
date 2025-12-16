@@ -879,11 +879,10 @@ export class GameRuntime {
      * Save scene snapshot
      *
      * 使用二进制格式提升序列化性能，并支持 EntityRef 的正确序列化。
-     * 在保存前清除纹理缓存，确保恢复时能够从干净状态重新加载纹理。
+     * 使用路径稳定 ID 后，不再需要清除纹理缓存。
      *
      * Uses binary format for better serialization performance and supports proper
-     * EntityRef serialization. Clears texture cache before saving to ensure
-     * clean reload on restore.
+     * EntityRef serialization. With path-stable IDs, no need to clear texture cache.
      *
      * @param options 可选配置
      * @param options.useJson 是否使用 JSON 格式（用于调试），默认 false 使用二进制
@@ -895,13 +894,10 @@ export class GameRuntime {
         }
 
         try {
-            // 清除所有纹理缓存（确保恢复时重新加载）
-            // Clear all texture caches (ensures reload on restore)
-            // clearTextureMappings() 内部会同时清除 Rust 层和 JS 层的纹理缓存
-            // clearTextureMappings() internally clears both Rust and JS layer texture caches
-            if (this._engineIntegration) {
-                this._engineIntegration.clearTextureMappings();
-            }
+            // 使用路径稳定 ID 后，不再清除纹理缓存
+            // 组件保存的 textureId 在 Play/Stop 后仍然有效
+            // With path-stable IDs, no longer clear texture cache
+            // Component's saved textureId remains valid after Play/Stop
 
             // 使用二进制格式提升性能（默认）或 JSON 用于调试
             // Use binary format for performance (default) or JSON for debugging
@@ -927,9 +923,15 @@ export class GameRuntime {
      * 1. 创建所有实体和组件
      * 2. 解析所有 EntityRef 引用
      *
+     * 使用路径稳定 ID 后，不再需要清除纹理缓存。
+     * 组件保存的 textureId 在恢复后仍然有效。
+     *
      * Uses two-phase deserialization to ensure EntityRef references are properly restored:
      * 1. Create all entities and components
      * 2. Resolve all EntityRef references
+     *
+     * With path-stable IDs, no need to clear texture cache.
+     * Component's saved textureId remains valid after restore.
      */
     async restoreSceneSnapshot(): Promise<boolean> {
         if (!this._scene || !this._sceneSnapshot) {
@@ -938,19 +940,17 @@ export class GameRuntime {
         }
 
         try {
-            // 清除缓存
+            // 清除 Tilemap 缓存（Tilemap 使用独立的缓存机制）
+            // Clear Tilemap cache (Tilemap uses its own cache mechanism)
             const tilemapSystem = this._systemContext?.services.get(TilemapSystemToken);
             if (tilemapSystem) {
                 tilemapSystem.clearCache?.();
             }
 
-            // 清除所有纹理并重置状态（修复 Play/Stop 后纹理 ID 混乱的问题）
-            // Clear all textures and reset state (fixes texture ID confusion after Play/Stop)
-            // clearTextureMappings() 内部会同时清除 Rust 层和 JS 层的纹理缓存
-            // clearTextureMappings() internally clears both Rust and JS layer texture caches
-            if (this._engineIntegration) {
-                this._engineIntegration.clearTextureMappings();
-            }
+            // 使用路径稳定 ID 后，不再清除纹理缓存
+            // 组件保存的 textureId 在 Play/Stop 后仍然有效
+            // With path-stable IDs, no longer clear texture cache
+            // Component's saved textureId remains valid after Play/Stop
 
             // 反序列化场景（SceneSerializer 内部使用 SerializationContext 处理 EntityRef）
             // Deserialize scene (SceneSerializer internally uses SerializationContext for EntityRef)

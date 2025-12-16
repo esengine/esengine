@@ -7,7 +7,6 @@ import { AssetManager } from '../core/AssetManager';
 import { AssetGUID, AssetType } from '../types/AssetTypes';
 import { ITextureAsset, IAudioAsset, IJsonAsset } from '../interfaces/IAssetLoader';
 import { PathResolutionService, type IPathResolutionService } from '../services/PathResolutionService';
-import { TextureLoader } from '../loaders/TextureLoader';
 
 /**
  * Texture engine bridge interface (for asset system)
@@ -67,6 +66,49 @@ export interface ITextureEngineBridge {
      * 清除所有纹理并重置状态（可选）。
      */
     clearAllTextures?(): void;
+
+    // ===== Texture State API =====
+    // ===== 纹理状态 API =====
+
+    /**
+     * Get texture loading state.
+     * 获取纹理加载状态。
+     *
+     * @param id Texture ID | 纹理 ID
+     * @returns State string: 'loading', 'ready', or 'failed:reason' | 状态字符串
+     */
+    getTextureState?(id: number): string;
+
+    /**
+     * Check if texture is ready for rendering.
+     * 检查纹理是否已就绪可渲染。
+     *
+     * @param id Texture ID | 纹理 ID
+     * @returns true if texture data is loaded | 纹理数据已加载则返回 true
+     */
+    isTextureReady?(id: number): boolean;
+
+    /**
+     * Get count of textures currently loading.
+     * 获取当前正在加载的纹理数量。
+     *
+     * @returns Number of textures in 'loading' state | 处于加载状态的纹理数量
+     */
+    getTextureLoadingCount?(): number;
+
+    /**
+     * Load texture asynchronously with Promise.
+     * 使用 Promise 异步加载纹理。
+     *
+     * Unlike loadTexture which returns immediately, this method
+     * waits until the texture is actually loaded and ready.
+     * 与 loadTexture 立即返回不同，此方法会等待纹理实际加载完成。
+     *
+     * @param id Texture ID | 纹理 ID
+     * @param url Image URL | 图片 URL
+     * @returns Promise that resolves when texture is ready | 纹理就绪时解析的 Promise
+     */
+    loadTextureAsync?(id: number, url: string): Promise<void>;
 }
 
 /**
@@ -100,6 +142,10 @@ export class EngineIntegration {
     private _textureIdMap = new Map<AssetGUID, number>();
     private _pathToTextureId = new Map<string, number>();
 
+    // 路径稳定 ID 缓存（跨 Play/Stop 循环保持稳定）
+    // Path-stable ID cache (persists across Play/Stop cycles)
+    private static _pathIdCache = new Map<string, number>();
+
     // Audio resource mappings | 音频资源映射
     private _audioIdMap = new Map<AssetGUID, number>();
     private _pathToAudioId = new Map<string, number>();
@@ -111,6 +157,39 @@ export class EngineIntegration {
     private _pathToDataId = new Map<string, number>();
     private _dataAssets = new Map<number, DataAssetEntry>();
     private static _nextDataId = 1;
+
+    /**
+     * 根据路径生成稳定的 ID（使用 FNV-1a hash）
+     * Generate stable ID from path (using FNV-1a hash)
+     *
+     * 相同路径永远返回相同 ID，即使在 clearTextureMappings 后
+     * Same path always returns same ID, even after clearTextureMappings
+     *
+     * @param path 资源路径 | Resource path
+     * @param type 资源类型 | Resource type
+     * @returns 稳定的运行时 ID | Stable runtime ID
+     */
+    private static getStableIdForPath(path: string, type: 'texture' | 'audio'): number {
+        const cacheKey = `${type}:${path}`;
+        const cached = EngineIntegration._pathIdCache.get(cacheKey);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        // FNV-1a hash 算法 | FNV-1a hash algorithm
+        let hash = 2166136261; // FNV offset basis
+        for (let i = 0; i < path.length; i++) {
+            hash ^= path.charCodeAt(i);
+            hash = Math.imul(hash, 16777619); // FNV prime
+            hash = hash >>> 0; // Keep as uint32
+        }
+
+        // 确保 ID > 0（0 保留给默认纹理）
+        // Ensure ID > 0 (0 is reserved for default texture)
+        const id = (hash % 0x7FFFFFFF) + 1;
+        EngineIntegration._pathIdCache.set(cacheKey, id);
+        return id;
+    }
 
     constructor(assetManager: AssetManager, engineBridge?: ITextureEngineBridge, pathResolver?: IPathResolutionService) {
         this._assetManager = assetManager;
@@ -138,63 +217,56 @@ export class EngineIntegration {
      * Load texture for component
      * 为组件加载纹理
      *
-     * 使用 Rust 引擎作为纹理 ID 的唯一分配源。
-     * Uses Rust engine as the single source of truth for texture ID allocation.
+     * 使用路径稳定 ID 确保相同路径在 Play/Stop 循环后返回相同 ID。
+     * 这样组件保存的 textureId 在恢复场景后仍然有效。
+     *
+     * Uses path-stable ID to ensure same path returns same ID across Play/Stop cycles.
+     * This ensures component's saved textureId remains valid after scene restore.
      *
      * AssetManager 内部会处理路径解析，这里只需传入原始路径。
      * AssetManager handles path resolution internally, just pass the original path here.
      */
     async loadTextureForComponent(texturePath: string): Promise<number> {
-        // 检查缓存（使用原始路径作为键）
-        // Check cache (using original path as key)
+        // 生成路径稳定 ID（相同路径永远返回相同 ID）
+        // Generate path-stable ID (same path always returns same ID)
+        const stableId = EngineIntegration.getStableIdForPath(texturePath, 'texture');
+
+        // 检查是否已加载到 GPU
+        // Check if already loaded to GPU
         const existingId = this._pathToTextureId.get(texturePath);
-        if (existingId) {
-            return existingId;
+        if (existingId === stableId) {
+            return stableId; // 已加载，直接返回 | Already loaded, return directly
         }
 
         // 解析路径为引擎可用的 URL
         // Resolve path to engine-compatible URL
         const engineUrl = this._pathResolver.catalogToRuntime(texturePath);
 
-        // 优先使用 getOrLoadTextureByPath（Rust 分配 ID）
-        // Prefer getOrLoadTextureByPath (Rust allocates ID)
-        // 这确保纹理 ID 由 Rust 引擎统一分配，避免 JS/Rust 层 ID 不同步问题
-        // This ensures texture IDs are allocated by Rust engine uniformly,
-        // avoiding JS/Rust layer ID desync issues
-        if (this._engineBridge?.getOrLoadTextureByPath) {
-            const rustTextureId = this._engineBridge.getOrLoadTextureByPath(engineUrl);
-            if (rustTextureId > 0) {
-                // 缓存映射
-                // Cache mapping
-                this._pathToTextureId.set(texturePath, rustTextureId);
-                return rustTextureId;
+        // 使用稳定 ID 加载纹理到 GPU
+        // Load texture to GPU with stable ID
+        if (this._engineBridge) {
+            // 优先使用异步加载（支持加载状态追踪）
+            // Prefer async loading (supports loading state tracking)
+            if (this._engineBridge.loadTextureAsync) {
+                await this._engineBridge.loadTextureAsync(stableId, engineUrl);
+            } else {
+                await this._engineBridge.loadTexture(stableId, engineUrl);
             }
         }
 
-        // 回退：通过资产系统加载（兼容旧流程）
-        // Fallback: Load through asset system (for backward compatibility)
-        const result = await this._assetManager.loadAssetByPath<ITextureAsset>(texturePath);
-        const textureAsset = result.asset;
+        // 缓存映射
+        // Cache mapping
+        this._pathToTextureId.set(texturePath, stableId);
 
-        // 如果有引擎桥接，上传到GPU
-        // Upload to GPU if bridge exists
-        if (this._engineBridge && textureAsset.data) {
-            await this._engineBridge.loadTexture(textureAsset.textureId, engineUrl);
-        }
-
-        // 缓存映射（使用原始路径作为键，避免重复解析）
-        // Cache mapping (using original path as key to avoid re-resolving)
-        this._pathToTextureId.set(texturePath, textureAsset.textureId);
-
-        return textureAsset.textureId;
+        return stableId;
     }
 
     /**
      * Load texture by GUID
      * 通过GUID加载纹理
      *
-     * 使用 Rust 引擎作为纹理 ID 的唯一分配源。
-     * Uses Rust engine as the single source of truth for texture ID allocation.
+     * 使用路径稳定 ID 确保相同路径在 Play/Stop 循环后返回相同 ID。
+     * Uses path-stable ID to ensure same path returns same ID across Play/Stop cycles.
      */
     async loadTextureByGuid(guid: AssetGUID): Promise<number> {
         // 检查是否已有纹理ID / Check if texture ID exists
@@ -206,31 +278,38 @@ export class EngineIntegration {
         // 通过资产系统加载获取元数据和路径 / Load through asset system to get metadata and path
         const result = await this._assetManager.loadAsset<ITextureAsset>(guid);
         const metadata = result.metadata;
-        const engineUrl = this._pathResolver.catalogToRuntime(metadata.path);
+        const assetPath = metadata.path;
 
-        // 优先使用 getOrLoadTextureByPath（Rust 分配 ID）
-        // Prefer getOrLoadTextureByPath (Rust allocates ID)
-        if (this._engineBridge?.getOrLoadTextureByPath) {
-            const rustTextureId = this._engineBridge.getOrLoadTextureByPath(engineUrl);
-            if (rustTextureId > 0) {
-                // 缓存映射
-                // Cache mapping
-                this._textureIdMap.set(guid, rustTextureId);
-                return rustTextureId;
+        // 生成路径稳定 ID
+        // Generate path-stable ID
+        const stableId = EngineIntegration.getStableIdForPath(assetPath, 'texture');
+
+        // 检查是否已加载到 GPU
+        // Check if already loaded to GPU
+        if (this._pathToTextureId.get(assetPath) === stableId) {
+            this._textureIdMap.set(guid, stableId);
+            return stableId;
+        }
+
+        // 解析路径为引擎可用的 URL
+        // Resolve path to engine-compatible URL
+        const engineUrl = this._pathResolver.catalogToRuntime(assetPath);
+
+        // 使用稳定 ID 加载纹理到 GPU
+        // Load texture to GPU with stable ID
+        if (this._engineBridge) {
+            if (this._engineBridge.loadTextureAsync) {
+                await this._engineBridge.loadTextureAsync(stableId, engineUrl);
+            } else {
+                await this._engineBridge.loadTexture(stableId, engineUrl);
             }
         }
 
-        // 回退：使用 TextureLoader 分配的 ID（兼容旧流程）
-        // Fallback: Use TextureLoader allocated ID (for backward compatibility)
-        const textureAsset = result.asset;
-        if (this._engineBridge && textureAsset.data) {
-            await this._engineBridge.loadTexture(textureAsset.textureId, engineUrl);
-        }
-
         // 缓存映射 / Cache mapping
-        this._textureIdMap.set(guid, textureAsset.textureId);
+        this._textureIdMap.set(guid, stableId);
+        this._pathToTextureId.set(assetPath, stableId);
 
-        return textureAsset.textureId;
+        return stableId;
     }
 
     /**
@@ -561,40 +640,36 @@ export class EngineIntegration {
     }
 
     /**
-     * Clear all texture mappings
-     * 清空所有纹理映射
+     * Clear all texture mappings (for scene switching)
+     * 清空所有纹理映射（用于场景切换）
      *
-     * This clears both local texture ID mappings and the AssetManager's
-     * texture cache to ensure textures are fully reloaded.
-     * 这会清除本地纹理 ID 映射和 AssetManager 的纹理缓存，确保纹理完全重新加载。
+     * 注意：使用路径稳定 ID 后，不应在 Play/Stop 循环中调用此方法。
+     * 此方法仅用于场景切换时释放旧场景的纹理资源。
      *
-     * IMPORTANT: This also clears the Rust engine's texture cache to ensure
-     * both JS and Rust layers are in sync.
-     * 重要：这也会清除 Rust 引擎的纹理缓存，确保 JS 和 Rust 层同步。
+     * NOTE: With path-stable IDs, this should NOT be called during Play/Stop cycle.
+     * This method is only for releasing old scene's texture resources during scene switching.
+     *
+     * _pathIdCache 不会被清除，确保相同路径始终返回相同 ID。
+     * _pathIdCache is NOT cleared, ensuring same path always returns same ID.
      */
     clearTextureMappings(): void {
-        // 1. 清除本地映射
-        // Clear local mappings
+        // 1. 清除加载状态映射（不清除 _pathIdCache）
+        // Clear load state mappings (NOT clearing _pathIdCache)
         this._textureIdMap.clear();
         this._pathToTextureId.clear();
 
-        // 2. 清除 Rust 引擎的纹理缓存（如果可用）
-        // Clear Rust engine's texture cache (if available)
-        // 这确保下次加载时 Rust 会重新分配 ID
-        // This ensures Rust will reallocate IDs on next load
+        // 2. 清除 Rust 引擎的 GPU 纹理资源
+        // Clear Rust engine's GPU texture resources
         if (this._engineBridge?.clearAllTextures) {
             this._engineBridge.clearAllTextures();
         }
 
         // 3. 清除 AssetManager 中的纹理资产缓存
         // Clear texture asset cache in AssetManager
-        // 强制清除以确保纹理使用新的 ID 重新加载
-        // Force clear to ensure textures are reloaded with new IDs
         this._assetManager.unloadAssetsByType(AssetType.Texture, true);
 
-        // 4. 重置 TextureLoader 的 ID 计数器（保持向后兼容）
-        // Reset TextureLoader's ID counter (for backward compatibility)
-        TextureLoader.resetTextureIdCounter();
+        // 注意：不再重置 TextureLoader 的 ID 计数器，因为现在使用路径稳定 ID
+        // NOTE: No longer reset TextureLoader's ID counter as we now use path-stable IDs
     }
 
     /**

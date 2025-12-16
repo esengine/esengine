@@ -18,6 +18,7 @@ export {
     AssetMetaManager,
     type IAssetMeta,
     type IImportSettings,
+    type ISpriteSettings,
     type IMetaFileSystem,
     getMetaFilePath,
     inferAssetType,

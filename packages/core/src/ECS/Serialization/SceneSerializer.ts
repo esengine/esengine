@@ -6,7 +6,7 @@
 
 import type { IScene } from '../IScene';
 import { Entity } from '../Entity';
-import { ComponentType, ComponentRegistry } from '../Core/ComponentStorage';
+import { ComponentType, GlobalComponentRegistry } from '../Core/ComponentStorage';
 import { EntitySerializer, SerializedEntity } from './EntitySerializer';
 import { getComponentTypeName } from '../Decorators';
 import { getSerializationMetadata } from './SerializationDecorators';
@@ -565,7 +565,7 @@ export class SceneSerializer {
      * 从所有已注册的组件类型构建注册表
      */
     private static getGlobalComponentRegistry(): Map<string, ComponentType> {
-        return ComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
+        return GlobalComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
     }
 
     /**

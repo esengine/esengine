@@ -10,7 +10,7 @@
 
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
 import { UITransformComponent } from '../../components/UITransformComponent';
-import { UIRenderComponent } from '../../components/UIRenderComponent';
+import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
 import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
 import { UIProgressBarComponent } from '../../components/widgets/UIProgressBarComponent';
 import { UISliderComponent } from '../../components/widgets/UISliderComponent';
@@ -68,9 +68,11 @@ export class UIRectRenderSystem extends EntitySystem {
             const alpha = transform.worldAlpha ?? transform.alpha;
             // 使用世界旋转（考虑父级旋转）
             const rotation = transform.worldRotation ?? transform.rotation;
-            // 使用排序层和层内顺序 | Use sorting layer and order in layer
+            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
             const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.orderInLayer;
+            // worldOrderInLayer 考虑了父子层级关系，确保子元素渲染在父元素之上
+            // worldOrderInLayer considers parent-child hierarchy, ensuring children render on top of parents
+            const orderInLayer = transform.worldOrderInLayer;
             // 使用 transform 的 pivot 作为旋转/缩放中心
             const pivotX = transform.pivotX;
             const pivotY = transform.pivotY;
@@ -107,24 +109,56 @@ export class UIRectRenderSystem extends EntitySystem {
                 const textureGuid = typeof render.textureGuid === 'string' ? render.textureGuid : undefined;
                 const textureId = typeof render.textureGuid === 'number' ? render.textureGuid : undefined;
 
-                collector.addRect(
-                    renderX, renderY,
-                    width, height,
-                    render.textureTint,
-                    alpha,
-                    sortingLayer,
-                    orderInLayer,
-                    {
-                        rotation,
-                        pivotX,
-                        pivotY,
-                        textureId,
-                        textureGuid,
-                        uv: render.textureUV
-                            ? [render.textureUV.u0, render.textureUV.v0, render.textureUV.u1, render.textureUV.v1]
-                            : undefined
-                    }
-                );
+
+                // Handle nine-patch rendering
+                // 处理九宫格渲染
+                if (render.type === UIRenderType.NinePatch &&
+                    render.textureWidth > 0 &&
+                    render.textureHeight > 0) {
+                    // addNinePatch expects top-left corner coordinates
+                    // Y-up coordinate system: top = bottom + height
+                    // addNinePatch 期望左上角坐标
+                    // Y轴向上坐标系：顶部 = 底部 + 高度
+                    const topLeftX = x;
+                    const topLeftY = y + height;
+                    collector.addNinePatch(
+                        topLeftX, topLeftY,
+                        width, height,
+                        render.ninePatchMargins,
+                        render.textureWidth,
+                        render.textureHeight,
+                        render.textureTint,
+                        alpha,
+                        sortingLayer,
+                        orderInLayer,
+                        {
+                            rotation,
+                            textureId,
+                            textureGuid
+                        }
+                    );
+                } else {
+                    // Standard image rendering
+                    // 标准图像渲染
+                    collector.addRect(
+                        renderX, renderY,
+                        width, height,
+                        render.textureTint,
+                        alpha,
+                        sortingLayer,
+                        orderInLayer,
+                        {
+                            rotation,
+                            pivotX,
+                            pivotY,
+                            textureId,
+                            textureGuid,
+                            uv: render.textureUV
+                                ? [render.textureUV.u0, render.textureUV.v0, render.textureUV.u1, render.textureUV.v1]
+                                : undefined
+                        }
+                    );
+                }
             }
             // Render background color if fill is enabled
             // 如果启用填充，渲染背景颜色

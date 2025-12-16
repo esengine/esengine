@@ -27,6 +27,16 @@ export { default } from './BrowserRuntime';
 // Asset reader
 export { BrowserAssetReader } from './BrowserAssetReader';
 
+// Re-export scene manager for convenience
+// 重新导出场景管理器以方便使用
+export {
+    RuntimeSceneManager,
+    RuntimeSceneManagerToken,
+    type IRuntimeSceneManager,
+    type SceneInfo,
+    type SceneLoadOptions
+} from '@esengine/runtime-core';
+
 // ============================================
 // Web Platform Subsystems
 // ============================================

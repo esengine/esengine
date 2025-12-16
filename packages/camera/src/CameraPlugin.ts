@@ -1,11 +1,11 @@
-import type { ComponentRegistry as ComponentRegistryType, IScene } from '@esengine/ecs-framework';
+import type { IComponentRegistry, IScene } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { EngineBridgeToken } from '@esengine/engine-core';
 import { CameraComponent } from './CameraComponent';
 import { CameraSystem } from './CameraSystem';
 
 class CameraRuntimeModule implements IRuntimeModule {
-    registerComponents(registry: typeof ComponentRegistryType): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(CameraComponent);
     }
 

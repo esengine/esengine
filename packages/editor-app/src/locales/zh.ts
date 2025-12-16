@@ -306,7 +306,15 @@ export const zh: Translations = {
         openFailed: '打开场景失败',
         savedSuccess: '场景已保存: {{name}}',
         saveFailed: '保存场景失败',
-        saveAsFailed: '另存场景失败'
+        saveAsFailed: '另存场景失败',
+        reloadedSuccess: '场景已重新加载: {{name}}',
+        reloadFailed: '重新加载场景失败',
+        externalChange: {
+            title: '场景已更改',
+            message: '场景 "{{name}}" 已被外部修改。是否重新加载？',
+            reload: '重新加载',
+            ignore: '忽略'
+        }
     },
 
     // ========================================
@@ -372,6 +380,15 @@ export const zh: Translations = {
     },
 
     // ========================================
+    // User Code
+    // ========================================
+    usercode: {
+        compileSuccess: '脚本编译成功 ({{count}} 个导出)',
+        compileError: '脚本编译失败',
+        hotReloadSuccess: '脚本热更新成功'
+    },
+
+    // ========================================
     // Loading
     // ========================================
     loading: {
@@ -432,7 +449,8 @@ export const zh: Translations = {
             portManager: '端口管理器',
             settings: '设置',
             devtools: '开发者工具',
-            build: '构建设置'
+            build: '构建设置',
+            renderDebug: '渲染调试'
         },
         help: {
             title: '帮助',

@@ -3,7 +3,7 @@
  * 运行时插件管理器
  */
 
-import { ComponentRegistry, ServiceContainer } from '@esengine/ecs-framework';
+import { GlobalComponentRegistry, ServiceContainer } from '@esengine/ecs-framework';
 import type { IScene } from '@esengine/ecs-framework';
 import type { IRuntimePlugin, IRuntimeModule, SystemContext, ModuleManifest } from '@esengine/engine-core';
 
@@ -60,7 +60,7 @@ export class RuntimePluginManager {
             const mod = plugin.runtimeModule;
             if (mod?.registerComponents) {
                 try {
-                    mod.registerComponents(ComponentRegistry);
+                    mod.registerComponents(GlobalComponentRegistry);
                 } catch (e) {
                     console.error(`[PluginManager] Failed to register components for ${id}:`, e);
                 }

@@ -1,6 +1,6 @@
 import { Entity } from '../Entity';
 import { Component } from '../Component';
-import { ComponentRegistry, ComponentType } from './ComponentStorage';
+import { GlobalComponentRegistry, ComponentType } from './ComponentStorage';
 import { BitMask64Utils, BitMask64Data } from '../Utils/BigIntCompatibility';
 import { createLogger } from '../../Utils/Logger';
 import { getComponentTypeName } from '../Decorators';
@@ -932,7 +932,7 @@ export class QuerySystem {
         // 使用ComponentRegistry确保bitIndex一致
         const mask = BitMask64Utils.clone(BitMask64Utils.ZERO);
         for (const type of componentTypes) {
-            const bitMask = ComponentRegistry.getBitMask(type);
+            const bitMask = GlobalComponentRegistry.getBitMask(type);
             BitMask64Utils.orInPlace(mask, bitMask);
         }
 
@@ -1341,7 +1341,7 @@ export class QueryBuilder {
         const mask = BitMask64Utils.clone(BitMask64Utils.ZERO);
         for (const type of componentTypes) {
             try {
-                const bitMask = ComponentRegistry.getBitMask(type);
+                const bitMask = GlobalComponentRegistry.getBitMask(type);
                 BitMask64Utils.orInPlace(mask, bitMask);
             } catch (error) {
                 this._logger.warn(`组件类型 ${getComponentTypeName(type)} 未注册，跳过`);

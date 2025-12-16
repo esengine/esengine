@@ -278,12 +278,20 @@ export class EditorEngineSync {
      * Update sprite in engine entity.
      * 更新引擎实体的精灵。
      *
-     * Note: Texture loading is now handled automatically by EngineRenderSystem.
-     * 注意：纹理加载现在由EngineRenderSystem自动处理。
+     * Preloads textures when textureGuid changes to ensure they're available for rendering.
+     * 当 textureGuid 变更时预加载纹理以确保渲染时可用。
      */
     private updateSprite(entity: Entity, sprite: SpriteComponent, property: string, value: any): void {
-        // No manual texture loading needed - EngineRenderSystem handles it
-        // 不需要手动加载纹理 - EngineRenderSystem会处理
+        // When textureGuid changes, trigger texture preload
+        // 当 textureGuid 变更时，触发纹理预加载
+        if (property === 'textureGuid' && value) {
+            const bridge = this.engineService.getBridge();
+            if (bridge) {
+                // Preload the texture so it's ready for the next render frame
+                // 预加载纹理以便下一渲染帧时可用
+                bridge.getOrLoadTextureByPath(value);
+            }
+        }
     }
 
     /**

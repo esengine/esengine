@@ -9,6 +9,7 @@ import { SizeOverLifetimeModule } from './modules/SizeOverLifetimeModule';
 import { CollisionModule, BoundaryType, CollisionBehavior } from './modules/CollisionModule';
 import { ForceFieldModule, ForceFieldType, type ForceField } from './modules/ForceFieldModule';
 import { Physics2DCollisionModule } from './modules/Physics2DCollisionModule';
+import { TextureSheetAnimationModule, AnimationPlayMode, AnimationLoopMode } from './modules/TextureSheetAnimationModule';
 import type { IParticleAsset, IBurstConfig } from './loaders/ParticleLoader';
 
 // Re-export for backward compatibility
@@ -826,6 +827,42 @@ export class ParticleSystemComponent extends Component implements ISortable {
                     };
                     forceModule.forceFields.push(field);
                     this._modules.push(forceModule);
+                    break;
+                }
+                case 'TextureSheetAnimation': {
+                    // 纹理图集动画模块 | Texture sheet animation module
+                    const textureModule = new TextureSheetAnimationModule();
+                    // moduleConfig 直接包含属性（非 params 嵌套）
+                    // moduleConfig contains properties directly (not nested in params)
+                    const cfg = moduleConfig as unknown as Record<string, unknown>;
+                    textureModule.enabled = true;
+                    if (cfg.tilesX !== undefined) textureModule.tilesX = cfg.tilesX as number;
+                    if (cfg.tilesY !== undefined) textureModule.tilesY = cfg.tilesY as number;
+                    if (cfg.totalFrames !== undefined) textureModule.totalFrames = cfg.totalFrames as number;
+                    if (cfg.startFrame !== undefined) textureModule.startFrame = cfg.startFrame as number;
+                    if (cfg.frameRate !== undefined) textureModule.frameRate = cfg.frameRate as number;
+                    if (cfg.speedMultiplier !== undefined) textureModule.speedMultiplier = cfg.speedMultiplier as number;
+                    if (cfg.cycleCount !== undefined) textureModule.cycleCount = cfg.cycleCount as number;
+                    // 播放模式 | Play mode
+                    if (cfg.playMode !== undefined) {
+                        const playModeMap: Record<string, AnimationPlayMode> = {
+                            'lifetimeLoop': AnimationPlayMode.LifetimeLoop,
+                            'fixedFps': AnimationPlayMode.FixedFPS,
+                            'random': AnimationPlayMode.Random,
+                            'speedBased': AnimationPlayMode.SpeedBased,
+                        };
+                        textureModule.playMode = playModeMap[cfg.playMode as string] ?? AnimationPlayMode.LifetimeLoop;
+                    }
+                    // 循环模式 | Loop mode
+                    if (cfg.loopMode !== undefined) {
+                        const loopModeMap: Record<string, AnimationLoopMode> = {
+                            'once': AnimationLoopMode.Once,
+                            'loop': AnimationLoopMode.Loop,
+                            'pingPong': AnimationLoopMode.PingPong,
+                        };
+                        textureModule.loopMode = loopModeMap[cfg.loopMode as string] ?? AnimationLoopMode.Once;
+                    }
+                    this._modules.push(textureModule);
                     break;
                 }
                 // 可扩展其他模块类型 | Extensible for other module types

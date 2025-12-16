@@ -5,7 +5,7 @@ import { Component } from '../../../src/ECS/Component';
 import { HierarchySystem } from '../../../src/ECS/Systems/HierarchySystem';
 import { HierarchyComponent } from '../../../src/ECS/Components/HierarchyComponent';
 import { ECSComponent } from '../../../src/ECS/Decorators';
-import { ComponentRegistry, ComponentType } from '../../../src/ECS/Core/ComponentStorage';
+import { GlobalComponentRegistry, ComponentType } from '../../../src/ECS/Core/ComponentStorage';
 import { Serializable, Serialize } from '../../../src/ECS/Serialization';
 
 @ECSComponent('EntitySerTest_Position')
@@ -40,16 +40,18 @@ describe('EntitySerializer', () => {
     let componentRegistry: Map<string, ComponentType>;
 
     beforeEach(() => {
-        ComponentRegistry.reset();
-        ComponentRegistry.register(PositionComponent);
-        ComponentRegistry.register(VelocityComponent);
-        ComponentRegistry.register(HierarchyComponent);
+        // 重置全局注册表 | Reset global registry
+        GlobalComponentRegistry.reset();
+
+        GlobalComponentRegistry.register(PositionComponent);
+        GlobalComponentRegistry.register(VelocityComponent);
+        GlobalComponentRegistry.register(HierarchyComponent);
 
         scene = new Scene({ name: 'EntitySerializerTestScene' });
         hierarchySystem = new HierarchySystem();
         scene.addSystem(hierarchySystem);
 
-        componentRegistry = ComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
+        componentRegistry = GlobalComponentRegistry.getAllComponentNames() as Map<string, ComponentType>;
     });
 
     afterEach(() => {

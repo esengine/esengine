@@ -10,7 +10,7 @@
 
 import type { Component } from '../Component';
 import type { EntitySystem } from '../Systems';
-import { ComponentRegistry } from '../Core/ComponentStorage/ComponentRegistry';
+import { GlobalComponentRegistry } from '../Core/ComponentStorage/ComponentRegistry';
 import {
     COMPONENT_TYPE_NAME,
     COMPONENT_DEPENDENCIES,
@@ -88,9 +88,9 @@ export function ECSComponent(typeName: string, options?: ComponentOptions) {
             (target as any)[COMPONENT_EDITOR_OPTIONS] = options.editor;
         }
 
-        // 自动注册到 ComponentRegistry，使组件可以通过名称查找
-        // Auto-register to ComponentRegistry, enabling lookup by name
-        ComponentRegistry.register(target);
+        // 自动注册到全局 ComponentRegistry，使组件可以通过名称查找
+        // Auto-register to GlobalComponentRegistry, enabling lookup by name
+        GlobalComponentRegistry.register(target);
 
         return target;
     };

@@ -197,14 +197,6 @@ impl Engine {
         colors: &[u32],
         material_ids: &[u32],
     ) -> Result<()> {
-        // Debug: log once
-        use std::sync::atomic::{AtomicBool, Ordering};
-        static LOGGED: AtomicBool = AtomicBool::new(false);
-        if !LOGGED.swap(true, Ordering::Relaxed) {
-            let sprite_count = texture_ids.len();
-            log::info!("Engine submit_sprite_batch: {} sprites, texture_ids: {:?}", sprite_count, texture_ids);
-        }
-
         self.renderer.submit_batch(
             transforms,
             texture_ids,
@@ -380,6 +372,24 @@ impl Engine {
     /// 这会从GPU内存中移除所有已加载的纹理并重置ID计数器。
     pub fn clear_all_textures(&mut self) {
         self.texture_manager.clear_all();
+    }
+
+    /// 获取纹理加载状态
+    /// Get texture loading state
+    pub fn get_texture_state(&self, id: u32) -> crate::renderer::texture::TextureState {
+        self.texture_manager.get_texture_state(id)
+    }
+
+    /// 检查纹理是否已就绪
+    /// Check if texture is ready to use
+    pub fn is_texture_ready(&self, id: u32) -> bool {
+        self.texture_manager.is_texture_ready(id)
+    }
+
+    /// 获取正在加载中的纹理数量
+    /// Get the number of textures currently loading
+    pub fn get_texture_loading_count(&self) -> u32 {
+        self.texture_manager.get_loading_count()
     }
 
     /// Check if a key is currently pressed.

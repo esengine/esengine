@@ -1,6 +1,9 @@
-import { ComponentRegistry, ComponentStorage, ComponentStorageManager } from '../../../src/ECS/Core/ComponentStorage';
+import { ComponentRegistry, GlobalComponentRegistry, ComponentStorage, ComponentStorageManager } from '../../../src/ECS/Core/ComponentStorage';
 import { Component } from '../../../src/ECS/Component';
 import { BitMask64Utils } from '../../../src/ECS/Utils/BigIntCompatibility';
+
+// 为测试创建独立的注册表实例 | Create isolated registry instance for tests
+let testRegistry: ComponentRegistry;
 
 // 测试组件类（默认使用原始存储）
 class TestComponent extends Component {
@@ -51,89 +54,88 @@ class HealthComponent extends Component {
 
 describe('ComponentRegistry - 组件注册表测试', () => {
     beforeEach(() => {
-        // 重置注册表状态
-        (ComponentRegistry as any).componentTypes = new Map<Function, number>();
-        (ComponentRegistry as any).nextBitIndex = 0;
+        // 每个测试创建新的注册表实例 | Create new registry instance for each test
+        testRegistry = new ComponentRegistry();
     });
 
     describe('组件注册功能', () => {
         test('应该能够注册组件类型', () => {
-            const bitIndex = ComponentRegistry.register(TestComponent);
-            
+            const bitIndex = testRegistry.register(TestComponent);
+
             expect(bitIndex).toBe(0);
-            expect(ComponentRegistry.isRegistered(TestComponent)).toBe(true);
+            expect(testRegistry.isRegistered(TestComponent)).toBe(true);
         });
 
         test('重复注册相同组件应该返回相同的位索引', () => {
-            const bitIndex1 = ComponentRegistry.register(TestComponent);
-            const bitIndex2 = ComponentRegistry.register(TestComponent);
-            
+            const bitIndex1 = testRegistry.register(TestComponent);
+            const bitIndex2 = testRegistry.register(TestComponent);
+
             expect(bitIndex1).toBe(bitIndex2);
             expect(bitIndex1).toBe(0);
         });
 
         test('应该能够注册多个组件类型', () => {
-            const bitIndex1 = ComponentRegistry.register(TestComponent);
-            const bitIndex2 = ComponentRegistry.register(PositionComponent);
-            const bitIndex3 = ComponentRegistry.register(VelocityComponent);
-            
+            const bitIndex1 = testRegistry.register(TestComponent);
+            const bitIndex2 = testRegistry.register(PositionComponent);
+            const bitIndex3 = testRegistry.register(VelocityComponent);
+
             expect(bitIndex1).toBe(0);
             expect(bitIndex2).toBe(1);
             expect(bitIndex3).toBe(2);
         });
 
         test('应该能够检查组件是否已注册', () => {
-            expect(ComponentRegistry.isRegistered(TestComponent)).toBe(false);
-            
-            ComponentRegistry.register(TestComponent);
-            expect(ComponentRegistry.isRegistered(TestComponent)).toBe(true);
+            expect(testRegistry.isRegistered(TestComponent)).toBe(false);
+
+            testRegistry.register(TestComponent);
+            expect(testRegistry.isRegistered(TestComponent)).toBe(true);
         });
 
     });
 
     describe('位掩码功能', () => {
         test('应该能够获取组件的位掩码', () => {
-            ComponentRegistry.register(TestComponent);
-            ComponentRegistry.register(PositionComponent);
-            
-            const mask1 = ComponentRegistry.getBitMask(TestComponent);
-            const mask2 = ComponentRegistry.getBitMask(PositionComponent);
-            
+            testRegistry.register(TestComponent);
+            testRegistry.register(PositionComponent);
+
+            const mask1 = testRegistry.getBitMask(TestComponent);
+            const mask2 = testRegistry.getBitMask(PositionComponent);
+
             expect(BitMask64Utils.getBit(mask1,0)).toBe(true); // 2^0
             expect(BitMask64Utils.getBit(mask2,1)).toBe(true); // 2^1
         });
 
         test('应该能够获取组件的位索引', () => {
-            ComponentRegistry.register(TestComponent);
-            ComponentRegistry.register(PositionComponent);
-            
-            const index1 = ComponentRegistry.getBitIndex(TestComponent);
-            const index2 = ComponentRegistry.getBitIndex(PositionComponent);
-            
+            testRegistry.register(TestComponent);
+            testRegistry.register(PositionComponent);
+
+            const index1 = testRegistry.getBitIndex(TestComponent);
+            const index2 = testRegistry.getBitIndex(PositionComponent);
+
             expect(index1).toBe(0);
             expect(index2).toBe(1);
         });
 
         test('获取未注册组件的位掩码应该抛出错误', () => {
             expect(() => {
-                ComponentRegistry.getBitMask(TestComponent);
+                testRegistry.getBitMask(TestComponent);
             }).toThrow('Component type TestComponent is not registered');
         });
 
         test('获取未注册组件的位索引应该抛出错误', () => {
             expect(() => {
-                ComponentRegistry.getBitIndex(TestComponent);
+                testRegistry.getBitIndex(TestComponent);
             }).toThrow('Component type TestComponent is not registered');
         });
     });
 
     describe('注册表管理', () => {
         test('应该能够获取所有已注册的组件类型', () => {
-            ComponentRegistry.register(TestComponent);
-            ComponentRegistry.register(PositionComponent);
-            
-            const allTypes = ComponentRegistry.getAllRegisteredTypes();
-            
+            testRegistry.register(TestComponent);
+            testRegistry.register(PositionComponent);
+
+            const allTypes = testRegistry.getAllRegisteredTypes();
+
             expect(allTypes.size).toBe(2);
             expect(allTypes.has(TestComponent)).toBe(true);
             expect(allTypes.has(PositionComponent)).toBe(true);
@@ -142,12 +144,12 @@ describe('ComponentRegistry - 组件注册表测试', () => {
         });
 
         test('返回的注册表副本不应该影响原始数据', () => {
-            ComponentRegistry.register(TestComponent);
-            
-            const allTypes = ComponentRegistry.getAllRegisteredTypes();
+            testRegistry.register(TestComponent);
+
+            const allTypes = testRegistry.getAllRegisteredTypes();
             allTypes.set(PositionComponent, 999);
-            
-            expect(ComponentRegistry.isRegistered(PositionComponent)).toBe(false);
+
+            expect(testRegistry.isRegistered(PositionComponent)).toBe(false);
         });
     });
 });
@@ -156,10 +158,9 @@ describe('ComponentStorage - 组件存储器测试', () => {
     let storage: ComponentStorage<TestComponent>;
 
     beforeEach(() => {
-        // 重置注册表
-        (ComponentRegistry as any).componentTypes = new Map<Function, number>();
-        (ComponentRegistry as any).nextBitIndex = 0;
-        
+        // 每个测试创建新的注册表实例 | Create new registry instance for each test
+        testRegistry = new ComponentRegistry();
+
         storage = new ComponentStorage(TestComponent);
     });
 
@@ -358,10 +359,9 @@ describe('ComponentStorageManager - 组件存储管理器测试', () => {
     let manager: ComponentStorageManager;
 
     beforeEach(() => {
-        // 重置注册表
-        (ComponentRegistry as any).componentTypes = new Map<Function, number>();
-        (ComponentRegistry as any).nextBitIndex = 0;
-        
+        // 重置全局注册表 | Reset global registry
+        GlobalComponentRegistry.reset();
+
         manager = new ComponentStorageManager();
     });
 
@@ -455,10 +455,10 @@ describe('ComponentStorageManager - 组件存储管理器测试', () => {
 
     describe('位掩码功能', () => {
         test('应该能够获取实体的组件位掩码', () => {
-            // 确保组件已注册
-            ComponentRegistry.register(TestComponent);
-            ComponentRegistry.register(PositionComponent);
-            ComponentRegistry.register(VelocityComponent);
+            // 确保组件已注册 | Ensure components are registered
+            GlobalComponentRegistry.register(TestComponent);
+            GlobalComponentRegistry.register(PositionComponent);
+            GlobalComponentRegistry.register(VelocityComponent);
             
             manager.addComponent(1, new TestComponent(100));
             manager.addComponent(1, new PositionComponent(10, 20));
@@ -475,8 +475,8 @@ describe('ComponentStorageManager - 组件存储管理器测试', () => {
         });
 
         test('添加和移除组件应该更新掩码', () => {
-            ComponentRegistry.register(TestComponent);
-            ComponentRegistry.register(PositionComponent);
+            GlobalComponentRegistry.register(TestComponent);
+            GlobalComponentRegistry.register(PositionComponent);
             
             manager.addComponent(1, new TestComponent(100));
             let mask = manager.getComponentMask(1);
