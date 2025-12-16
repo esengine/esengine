@@ -122,33 +122,62 @@ jobs:
 
   # SignPath 代码签名（Windows）
   # SignPath OSS code signing for Windows
-  # 注意：需要先在 https://signpath.io 申请 OSS 证书
-  # Note: Apply for OSS certificate at https://signpath.io first
-  # 并配置 GitHub Secrets: SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
-  # Configure GitHub Secrets: SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID
+  #
+  # 配置步骤 | Setup Steps:
+  # 1. 在 SignPath 门户创建项目 | Create project in SignPath portal
+  # 2. 导入 .signpath/artifact-configuration.xml | Import artifact configuration
+  # 3. 使用 'test-signing' 策略测试 | Use 'test-signing' policy for testing
+  #    生产环境改为 'release-signing' | Change to 'release-signing' for production
+  # 4. 配置 GitHub Secrets | Configure GitHub Secrets:
+  #    - SIGNPATH_API_TOKEN: API token from SignPath
+  #    - SIGNPATH_ORGANIZATION_ID: Your organization ID
+  #
+  # 文档 | Documentation: https://about.signpath.io/documentation/trusted-build-systems/github
   sign-windows:
     needs: build-tauri
     runs-on: ubuntu-latest
-    if: success() && secrets.SIGNPATH_API_TOKEN != ''
+    # 只有在构建成功时才运行 | Only run on successful build
+    if: success()
 
     steps:
+      - name: Check SignPath configuration
+        id: check-signpath
+        run: |
+          if [ -n "${{ secrets.SIGNPATH_API_TOKEN }}" ] && [ -n "${{ secrets.SIGNPATH_ORGANIZATION_ID }}" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+            echo "SignPath is configured, proceeding with code signing"
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "SignPath secrets not configured, skipping code signing"
+            echo "To enable: add SIGNPATH_API_TOKEN and SIGNPATH_ORGANIZATION_ID secrets"
+          fi
+
       - name: Checkout
+        if: steps.check-signpath.outputs.enabled == 'true'
         uses: actions/checkout@v4
 
       - name: Download Windows artifact
+        if: steps.check-signpath.outputs.enabled == 'true'
         uses: actions/download-artifact@v4
         with:
           name: windows-unsigned
           path: ./artifacts
 
+      - name: List artifacts for signing
+        if: steps.check-signpath.outputs.enabled == 'true'
+        run: |
+          echo "Files to be signed:"
+          find ./artifacts -type f \( -name "*.exe" -o -name "*.msi" \) | head -20
+
       - name: Submit to SignPath for code signing
+        if: steps.check-signpath.outputs.enabled == 'true'
         id: signpath
         uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: 'ecs-framework'
-          signing-policy-slug: 'release-signing'
+          signing-policy-slug: 'test-signing'
           artifact-configuration-slug: 'default'
           github-artifact-name: 'windows-unsigned'
           wait-for-completion: true
@@ -156,6 +185,7 @@ jobs:
           output-artifact-directory: './signed'
 
       - name: Upload signed artifacts to release
+        if: steps.check-signpath.outputs.enabled == 'true'
         uses: softprops/action-gh-release@v1
         with:
           files: ./signed/*
@@ -165,9 +195,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # 构建成功后，创建 PR 更新版本号
+  # Create PR to update version after successful build
   update-version-pr:
-    needs: sign-windows
-    if: github.event_name == 'workflow_dispatch' && success()
+    needs: [build-tauri, sign-windows]
+    # 即使签名跳过也要运行 | Run even if signing is skipped
+    if: github.event_name == 'workflow_dispatch' && !failure()
     runs-on: ubuntu-latest
 
     steps:
