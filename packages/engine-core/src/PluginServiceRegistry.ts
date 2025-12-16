@@ -65,6 +65,58 @@ export interface IEngineBridge {
      * Set clear color
      */
     setClearColor(r: number, g: number, b: number, a: number): void;
+
+    // ===== Texture State API (Optional) =====
+    // ===== 纹理状态 API（可选）=====
+
+    /**
+     * 获取纹理加载状态
+     * Get texture loading state
+     *
+     * @param id 纹理 ID | Texture ID
+     * @returns 状态字符串: 'loading', 'ready', 或 'failed:reason'
+     *          State string: 'loading', 'ready', or 'failed:reason'
+     */
+    getTextureState?(id: number): string;
+
+    /**
+     * 检查纹理是否就绪
+     * Check if texture is ready for rendering
+     *
+     * @param id 纹理 ID | Texture ID
+     * @returns 纹理数据已加载则返回 true | true if texture data is loaded
+     */
+    isTextureReady?(id: number): boolean;
+
+    /**
+     * 获取正在加载的纹理数量
+     * Get count of textures currently loading
+     *
+     * @returns 处于加载状态的纹理数量 | Number of textures in loading state
+     */
+    getTextureLoadingCount?(): number;
+
+    /**
+     * 异步加载纹理（等待完成）
+     * Load texture asynchronously (wait for completion)
+     *
+     * 与 loadTexture 不同，此方法会等待纹理实际加载完成。
+     * Unlike loadTexture, this method waits until texture is actually loaded.
+     *
+     * @param id 纹理 ID | Texture ID
+     * @param url 图片 URL | Image URL
+     * @returns 纹理就绪时解析的 Promise | Promise that resolves when texture is ready
+     */
+    loadTextureAsync?(id: number, url: string): Promise<void>;
+
+    /**
+     * 等待所有加载中的纹理完成
+     * Wait for all loading textures to complete
+     *
+     * @param timeout 最大等待时间（毫秒，默认30000）| Max wait time in ms (default 30000)
+     * @returns 所有纹理加载完成时解析 | Resolves when all textures are loaded
+     */
+    waitForAllTextures?(timeout?: number): Promise<void>;
 }
 
 /**

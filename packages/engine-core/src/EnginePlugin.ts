@@ -11,7 +11,7 @@
  * @see docs/architecture/plugin-system-design.md
  */
 
-import type { ComponentRegistry as ComponentRegistryType, IScene, ServiceContainer } from '@esengine/ecs-framework';
+import type { IComponentRegistry, IScene, ServiceContainer } from '@esengine/ecs-framework';
 import { PluginServiceRegistry } from '@esengine/ecs-framework';
 import { TransformComponent } from './TransformComponent';
 import type { ModuleManifest } from './ModuleManifest';
@@ -105,7 +105,7 @@ export interface IRuntimeModule {
      * 注册组件到 ComponentRegistry
      * Register components to ComponentRegistry
      */
-    registerComponents?(registry: typeof ComponentRegistryType): void;
+    registerComponents?(registry: IComponentRegistry): void;
 
     /**
      * 注册服务到 ServiceContainer
@@ -192,7 +192,7 @@ export type IPlugin<TEditorModule = unknown> = IRuntimePlugin<TEditorModule>;
 // ============================================================================
 
 class EngineRuntimeModule implements IRuntimeModule {
-    registerComponents(registry: typeof ComponentRegistryType): void {
+    registerComponents(registry: IComponentRegistry): void {
         registry.register(TransformComponent);
     }
 }
