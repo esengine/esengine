@@ -11,7 +11,7 @@ import {
     Injectable,
     createLogger,
     PlatformDetector,
-    ComponentRegistry as CoreComponentRegistry,
+    GlobalComponentRegistry as CoreComponentRegistry,
     COMPONENT_TYPE_NAME,
     SYSTEM_TYPE_NAME
 } from '@esengine/ecs-framework';
@@ -82,9 +82,27 @@ export class UserCodeService implements IService, IUserCodeService {
      */
     private _hotReloadCoordinator: HotReloadCoordinator;
 
+    /**
+     * 就绪状态 Promise
+     * Ready state promise
+     */
+    private _readyPromise: Promise<void>;
+    private _readyResolve: (() => void) | undefined;
+
     constructor(fileSystem: IFileSystem) {
         this._fileSystem = fileSystem;
         this._hotReloadCoordinator = new HotReloadCoordinator();
+        this._readyPromise = this._createReadyPromise();
+    }
+
+    /**
+     * Create a new ready promise.
+     * 创建新的就绪 Promise。
+     */
+    private _createReadyPromise(): Promise<void> {
+        return new Promise<void>(resolve => {
+            this._readyResolve = resolve;
+        });
     }
 
     /**
@@ -190,28 +208,20 @@ export class UserCodeService implements IService, IUserCodeService {
             const entryPath = `${outputDir}${sep}_entry_${options.target}.ts`;
             await this._fileSystem.writeFile(entryPath, entryContent);
 
-            // Create shim files for framework dependencies | 创建框架依赖的 shim 文件
-            // Returns mapping from package name to shim path
-            // 返回包名到 shim 路径的映射
-            const alias = await this._createDependencyShims(outputDir, options.sdkModules);
-
-            // Determine global name for IIFE output | 确定 IIFE 输出的全局名称
-            const globalName = options.target === UserCodeTarget.Runtime
-                ? EditorConfig.globals.userRuntimeExports
-                : EditorConfig.globals.userEditorExports;
+            // Get external dependencies | 获取外部依赖
+            // SDK marked as external, resolved from global variable at runtime
+            // SDK 标记为外部依赖，运行时从全局变量解析
+            const external = this._getExternalDependencies(options.target, options.sdkModules);
 
             // Compile using esbuild (via Tauri command or direct) | 使用 esbuild 编译
-            // Use IIFE format to avoid ES module import issues in Tauri
-            // 使用 IIFE 格式以避免 Tauri 中的 ES 模块导入问题
+            // Use ESM format for dynamic import() loading | 使用 ESM 格式以支持动态 import() 加载
             const compileResult = await this._runEsbuild({
                 entryPath,
                 outputPath,
-                format: 'iife',  // Always use IIFE for Tauri compatibility | 始终使用 IIFE 以兼容 Tauri
-                globalName,
+                format: 'esm',  // ESM for standard dynamic import() | ESM 用于标准动态 import()
                 sourceMap: options.sourceMap ?? true,
                 minify: options.minify ?? false,
-                external: [],  // Don't use external, use alias instead | 不使用 external，使用 alias
-                alias,
+                external,
                 projectRoot: options.projectPath
             });
 
@@ -259,6 +269,14 @@ export class UserCodeService implements IService, IUserCodeService {
      * Load compiled user code module.
      * 加载编译后的用户代码模块。
      *
+     * Uses Blob URL for ESM dynamic import in Tauri environment.
+     * 在 Tauri 环境中使用 Blob URL 进行 ESM 动态导入。
+     *
+     * Note: Browser's import() only supports http://, https://, and blob:// protocols.
+     * Custom protocols like project:// are not supported for ESM imports.
+     * 注意：浏览器的 import() 只支持 http://、https:// 和 blob:// 协议。
+     * 自定义协议如 project:// 不支持 ESM 导入。
+     *
      * @param modulePath - Path to compiled JS file | 编译后的 JS 文件路径
      * @param target - Target environment | 目标环境
      * @returns Loaded module | 加载的模块
@@ -268,20 +286,23 @@ export class UserCodeService implements IService, IUserCodeService {
             let moduleExports: Record<string, any>;
 
             if (PlatformDetector.isTauriEnvironment()) {
-                // In Tauri, read file content and execute via script tag
-                // 在 Tauri 中，读取文件内容并通过 script 标签执行
-                // This avoids CORS and module resolution issues
-                // 这避免了 CORS 和模块解析问题
+                // Read file content via Tauri and load via Blob URL
+                // 通过 Tauri 读取文件内容并通过 Blob URL 加载
+                // Browser's import() doesn't support custom protocols like project://
+                // 浏览器的 import() 不支持自定义协议如 project://
                 const { invoke } = await import('@tauri-apps/api/core');
 
                 const content = await invoke<string>('read_file_content', {
                     path: modulePath
                 });
 
-                logger.debug(`Loading module via script injection`, { originalPath: modulePath });
+                logger.debug(`Loading ESM module via Blob URL`, {
+                    path: modulePath,
+                    contentLength: content.length
+                });
 
-                // Execute module code and capture exports | 执行模块代码并捕获导出
-                moduleExports = await this._executeModuleCode(content, target);
+                // Load ESM via Blob URL | 通过 Blob URL 加载 ESM
+                moduleExports = await this._loadESMFromContent(content);
             } else {
                 // Fallback to file:// for non-Tauri environments
                 // 非 Tauri 环境使用 file://
@@ -925,6 +946,35 @@ export class UserCodeService implements IService, IUserCodeService {
     }
 
     /**
+     * Wait for user code to be ready (compiled and loaded).
+     * 等待用户代码准备就绪（已编译并加载）。
+     *
+     * @returns Promise that resolves when user code is ready | 当用户代码就绪时解决的 Promise
+     */
+    waitForReady(): Promise<void> {
+        return this._readyPromise;
+    }
+
+    /**
+     * Signal that user code is ready.
+     * 发出用户代码就绪信号。
+     */
+    signalReady(): void {
+        if (this._readyResolve) {
+            this._readyResolve();
+            this._readyResolve = undefined;
+        }
+    }
+
+    /**
+     * Reset the ready state (for project switching).
+     * 重置就绪状态（用于项目切换）。
+     */
+    resetReady(): void {
+        this._readyPromise = this._createReadyPromise();
+    }
+
+    /**
      * Dispose service resources.
      * 释放服务资源。
      */
@@ -1059,44 +1109,6 @@ export class UserCodeService implements IService, IUserCodeService {
     }
 
     /**
-     * Create shim file that maps SDK global variable to module import.
-     * 创建将 SDK 全局变量映射到模块导入的 shim 文件。
-     *
-     * This is used for IIFE format to resolve external dependencies.
-     * Creates a single shim for @esengine/sdk.
-     * 这用于 IIFE 格式解析外部依赖。
-     * 只创建一个 @esengine/sdk 的 shim。
-     *
-     * @param outputDir - Output directory | 输出目录
-     * @param _sdkModules - Deprecated, not used | 已废弃，不再使用
-     * @returns Mapping from package name to shim path | 包名到 shim 路径的映射
-     */
-    private async _createDependencyShims(
-        outputDir: string,
-        _sdkModules?: SDKModuleInfo[]
-    ): Promise<Record<string, string>> {
-        const sep = outputDir.includes('\\') ? '\\' : '/';
-        const sdkGlobalName = EditorConfig.globals.sdk;
-
-        // Create single SDK shim
-        // 创建单一 SDK shim
-        const shimPath = `${outputDir}${sep}_shim_sdk.js`;
-        const shimContent = `// Shim for @esengine/sdk
-// Maps to window.${sdkGlobalName}
-// User code imports from '@esengine/sdk' will use this shim
-module.exports = (typeof window !== 'undefined' && window.${sdkGlobalName}) || {};
-`;
-        await this._fileSystem.writeFile(shimPath, shimContent);
-        const normalizedPath = shimPath.replace(/\\/g, '/');
-
-        logger.info('Created SDK shim', { path: normalizedPath });
-
-        return {
-            '@esengine/sdk': normalizedPath
-        };
-    }
-
-    /**
      * Get external dependencies that should not be bundled.
      * 获取不应打包的外部依赖。
      *
@@ -1122,16 +1134,24 @@ module.exports = (typeof window !== 'undefined' && window.${sdkGlobalName}) || {
      *
      * Uses Tauri command to invoke esbuild CLI.
      * 使用 Tauri 命令调用 esbuild CLI。
+     *
+     * @param options - Compilation options | 编译选项
+     * @returns Compilation result | 编译结果
      */
     private async _runEsbuild(options: {
+        /** Entry file path | 入口文件路径 */
         entryPath: string;
+        /** Output file path | 输出文件路径 */
         outputPath: string;
+        /** Output format (ESM for dynamic import) | 输出格式（ESM 用于动态导入）*/
         format: 'esm' | 'iife';
-        globalName?: string;
+        /** Generate source maps | 生成源码映射 */
         sourceMap: boolean;
+        /** Minify output | 压缩输出 */
         minify: boolean;
+        /** External dependencies (not bundled) | 外部依赖（不打包）*/
         external: string[];
-        alias?: Record<string, string>;
+        /** Project root for resolving paths | 项目根路径用于解析路径 */
         projectRoot: string;
     }): Promise<{ success: boolean; errors: CompileError[] }> {
         try {
@@ -1143,12 +1163,8 @@ module.exports = (typeof window !== 'undefined' && window.${sdkGlobalName}) || {
                     entry: options.entryPath,
                     output: options.outputPath,
                     format: options.format,
-                    aliasCount: options.alias ? Object.keys(options.alias).length : 0
+                    external: options.external
                 });
-
-                if (options.alias) {
-                    logger.debug('esbuild alias mappings:', options.alias);
-                }
 
                 // Use Tauri command | 使用 Tauri 命令
                 const { invoke } = await import('@tauri-apps/api/core');
@@ -1167,11 +1183,9 @@ module.exports = (typeof window !== 'undefined' && window.${sdkGlobalName}) || {
                         entryPath: options.entryPath,
                         outputPath: options.outputPath,
                         format: options.format,
-                        globalName: options.globalName,
                         sourceMap: options.sourceMap,
                         minify: options.minify,
                         external: options.external,
-                        alias: options.alias,
                         projectRoot: options.projectRoot
                     }
                 });
@@ -1206,52 +1220,30 @@ module.exports = (typeof window !== 'undefined' && window.${sdkGlobalName}) || {
     }
 
     /**
-     * Execute compiled module code and return exports.
-     * 执行编译后的模块代码并返回导出。
+     * Load ESM module from JavaScript content string.
+     * 从 JavaScript 内容字符串加载 ESM 模块。
      *
-     * The code should be in IIFE format that sets a global variable.
-     * 代码应该是设置全局变量的 IIFE 格式。
+     * Uses Blob URL to enable dynamic import() of ESM content.
+     * 使用 Blob URL 实现 ESM 内容的动态 import()。
      *
-     * @param code - Compiled JavaScript code | 编译后的 JavaScript 代码
-     * @param target - Target environment | 目标环境
+     * @param content - JavaScript module content (ESM format) | JavaScript 模块内容（ESM 格式）
      * @returns Module exports | 模块导出
      */
-    private async _executeModuleCode(
-        code: string,
-        target: UserCodeTarget
-    ): Promise<Record<string, any>> {
-        // Determine global name based on target | 根据目标确定全局名称
-        const globalName = target === UserCodeTarget.Runtime
-            ? EditorConfig.globals.userRuntimeExports
-            : EditorConfig.globals.userEditorExports;
-
-        // Clear any previous exports | 清除之前的导出
-        (window as any)[globalName] = undefined;
+    private async _loadESMFromContent(content: string): Promise<Record<string, any>> {
+        // Create Blob URL for ESM module | 为 ESM 模块创建 Blob URL
+        const blob = new Blob([content], { type: 'application/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
 
         try {
-            // esbuild generates: var __USER_RUNTIME_EXPORTS__ = (() => {...})();
-            // When executed via new Function(), var declarations stay in function scope
-            // We need to replace "var globalName" with "window.globalName" to expose it
-            // esbuild 生成: var __USER_RUNTIME_EXPORTS__ = (() => {...})();
-            // 通过 new Function() 执行时，var 声明在函数作用域内
-            // 需要替换 "var globalName" 为 "window.globalName" 以暴露到全局
-            const modifiedCode = code.replace(
-                new RegExp(`^"use strict";\\s*var ${globalName}`, 'm'),
-                `"use strict";\nwindow.${globalName}`
-            );
+            // Dynamic import the ESM module | 动态导入 ESM 模块
+            const moduleExports = await import(/* @vite-ignore */ blobUrl);
 
-            // Execute the IIFE code | 执行 IIFE 代码
-            // eslint-disable-next-line no-new-func
-            const executeScript = new Function(modifiedCode);
-            executeScript();
-
-            // Get exports from global | 从全局获取导出
-            const exports = (window as any)[globalName] || {};
-
-            return exports;
-        } catch (error) {
-            logger.error('Failed to execute user code | 执行用户代码失败:', error);
-            throw error;
+            // Return all exports | 返回所有导出
+            return { ...moduleExports };
+        } finally {
+            // Always revoke Blob URL to prevent memory leaks
+            // 始终撤销 Blob URL 以防止内存泄漏
+            URL.revokeObjectURL(blobUrl);
         }
     }
 

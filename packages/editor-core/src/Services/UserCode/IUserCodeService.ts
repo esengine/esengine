@@ -71,16 +71,14 @@ export interface UserCodeCompileOptions {
     sourceMap?: boolean;
     /** Whether to minify output | 是否压缩输出 */
     minify?: boolean;
-    /** Output format | 输出格式 */
+    /** Output format (default: 'esm') | 输出格式（默认：'esm'）*/
     format?: 'esm' | 'iife';
     /**
-     * SDK modules for shim generation.
-     * 用于生成 shim 的 SDK 模块列表。
+     * SDK modules information (reserved for future use).
+     * SDK 模块信息（保留供将来使用）。
      *
-     * If provided, shims will be created for these modules.
-     * Typically obtained from RuntimeResolver.getAvailableModules().
-     * 如果提供，将为这些模块创建 shim。
-     * 通常从 RuntimeResolver.getAvailableModules() 获取。
+     * Currently SDK is handled via external dependencies and global variable.
+     * 当前 SDK 通过外部依赖和全局变量处理。
      */
     sdkModules?: SDKModuleInfo[];
 }
@@ -382,6 +380,37 @@ export interface IUserCodeService {
      * 检查是否正在监视。
      */
     isWatching(): boolean;
+
+    /**
+     * Wait for user code to be ready (compiled and loaded).
+     * 等待用户代码准备就绪（已编译并加载）。
+     *
+     * This method is used to synchronize scene loading with user code compilation.
+     * Call this before loading a scene to ensure user components are registered.
+     * 此方法用于同步场景加载与用户代码编译。
+     * 在加载场景之前调用此方法以确保用户组件已注册。
+     *
+     * @returns Promise that resolves when user code is ready | 当用户代码就绪时解决的 Promise
+     */
+    waitForReady(): Promise<void>;
+
+    /**
+     * Signal that user code is ready.
+     * 发出用户代码就绪信号。
+     *
+     * Called after user code compilation and registration is complete.
+     * 在用户代码编译和注册完成后调用。
+     */
+    signalReady(): void;
+
+    /**
+     * Reset the ready state (for project switching).
+     * 重置就绪状态（用于项目切换）。
+     *
+     * Called when opening a new project to reset the ready promise.
+     * 打开新项目时调用以重置就绪 Promise。
+     */
+    resetReady(): void;
 }
 
 import { EditorConfig } from '../../Config';
