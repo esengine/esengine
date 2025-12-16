@@ -7,7 +7,7 @@ import {
     Scene,
     PrefabSerializer,
     HierarchySystem,
-    ComponentRegistry
+    GlobalComponentRegistry
 } from '@esengine/ecs-framework';
 import type { ComponentType } from '@esengine/ecs-framework';
 import type { SceneResourceManager } from '@esengine/asset-system';
@@ -24,6 +24,10 @@ export interface SceneState {
     sceneName: string;
     isModified: boolean;
     isSaved: boolean;
+    /** 文件最后已知的修改时间（毫秒）| Last known file modification time (ms) */
+    lastKnownMtime: number | null;
+    /** 文件是否被外部修改 | Whether file was modified externally */
+    externallyModified: boolean;
 }
 
 /**
@@ -55,7 +59,9 @@ export class SceneManagerService implements IService {
         currentScenePath: null,
         sceneName: 'Untitled',
         isModified: false,
-        isSaved: false
+        isSaved: false,
+        lastKnownMtime: null,
+        externallyModified: false
     };
 
     /** 预制体编辑模式状态 | Prefab edit mode state */
@@ -118,7 +124,9 @@ export class SceneManagerService implements IService {
             currentScenePath: null,
             sceneName: 'Untitled',
             isModified: false,
-            isSaved: false
+            isSaved: false,
+            lastKnownMtime: null,
+            externallyModified: false
         };
 
         // 同步到 EntityStore
@@ -148,6 +156,18 @@ export class SceneManagerService implements IService {
             }
         }
 
+        // 在加载新场景前，清理旧场景的纹理映射（释放 GPU 资源）
+        // Before loading new scene, clear old scene's texture mappings (release GPU resources)
+        // 注意：路径稳定 ID 缓存 (_pathIdCache) 不会被清除
+        // Note: Path-stable ID cache (_pathIdCache) is NOT cleared
+        if (this.sceneResourceManager) {
+            const oldScene = Core.scene as Scene | null;
+            if (oldScene && this.sceneState.currentScenePath) {
+                logger.info(`[openScene] Unloading old scene resources from: ${this.sceneState.currentScenePath}`);
+                await this.sceneResourceManager.unloadSceneResources(oldScene);
+            }
+        }
+
         try {
             const jsonData = await this.fileAPI.readFileContent(path);
 
@@ -165,9 +185,41 @@ export class SceneManagerService implements IService {
             // Ensure isEditorMode is set in editor to defer component lifecycle callbacks
             scene.isEditorMode = true;
 
+            // 调试：检查缺失的组件类型 | Debug: check missing component types
+            const registeredComponents = GlobalComponentRegistry.getAllComponentNames();
+            try {
+                const sceneData = JSON.parse(jsonData);
+                const requiredTypes = new Set<string>();
+                for (const entity of sceneData.entities || []) {
+                    for (const comp of entity.components || []) {
+                        requiredTypes.add(comp.type);
+                    }
+                }
+
+                // 检查缺失的组件类型 | Check missing component types
+                const missingTypes = Array.from(requiredTypes).filter(t => !registeredComponents.has(t));
+                if (missingTypes.length > 0) {
+                    logger.warn(`[SceneManagerService.openScene] Missing component types (scene will load without these):`, missingTypes);
+                    logger.debug(`Registered components (${registeredComponents.size}):`, Array.from(registeredComponents.keys()));
+                }
+            } catch (e) {
+                // JSON parsing should not fail at this point since we validated earlier
+            }
+
+            // 调试：反序列化前场景状态 | Debug: scene state before deserialize
+            logger.info(`[openScene] Before deserialize: entities.count = ${scene.entities.count}`);
+
             scene.deserialize(jsonData, {
                 strategy: 'replace'
             });
+
+            // 调试：反序列化后场景状态 | Debug: scene state after deserialize
+            logger.info(`[openScene] After deserialize: entities.count = ${scene.entities.count}`);
+            if (scene.entities.count > 0) {
+                const entityNames: string[] = [];
+                scene.entities.forEach(e => entityNames.push(e.name));
+                logger.info(`[openScene] Entity names: ${entityNames.join(', ')}`);
+            }
 
             // 加载场景资源 / Load scene resources
             if (this.sceneResourceManager) {
@@ -179,11 +231,23 @@ export class SceneManagerService implements IService {
             const fileName = path.split(/[/\\]/).pop() || 'Untitled';
             const sceneName = fileName.replace('.ecs', '');
 
+            // 获取文件修改时间 | Get file modification time
+            let mtime: number | null = null;
+            if (this.fileAPI.getFileMtime) {
+                try {
+                    mtime = await this.fileAPI.getFileMtime(path);
+                } catch (e) {
+                    logger.warn('Failed to get file mtime:', e);
+                }
+            }
+
             this.sceneState = {
                 currentScenePath: path,
                 sceneName,
                 isModified: false,
-                isSaved: true
+                isSaved: true,
+                lastKnownMtime: mtime,
+                externallyModified: false
             };
 
             this.entityStore?.syncFromScene();
@@ -200,10 +264,20 @@ export class SceneManagerService implements IService {
         }
     }
 
-    public async saveScene(): Promise<void> {
+    public async saveScene(force: boolean = false): Promise<void> {
         if (!this.sceneState.currentScenePath) {
             await this.saveSceneAs();
             return;
+        }
+
+        // 检查文件是否被外部修改 | Check if file was modified externally
+        if (!force && await this.checkExternalModification()) {
+            // 发布事件让 UI 显示确认对话框 | Publish event for UI to show confirmation dialog
+            await this.messageHub.publish('scene:externalModification', {
+                path: this.sceneState.currentScenePath,
+                sceneName: this.sceneState.sceneName
+            });
+            return; // 等待用户确认 | Wait for user confirmation
         }
 
         try {
@@ -219,8 +293,18 @@ export class SceneManagerService implements IService {
 
             await this.fileAPI.saveProject(this.sceneState.currentScenePath, jsonData);
 
+            // 更新 mtime | Update mtime
+            if (this.fileAPI.getFileMtime) {
+                try {
+                    this.sceneState.lastKnownMtime = await this.fileAPI.getFileMtime(this.sceneState.currentScenePath);
+                } catch (e) {
+                    logger.warn('Failed to update file mtime after save:', e);
+                }
+            }
+
             this.sceneState.isModified = false;
             this.sceneState.isSaved = true;
+            this.sceneState.externallyModified = false;
 
             await this.messageHub.publish('scene:saved', {
                 path: this.sceneState.currentScenePath
@@ -228,6 +312,89 @@ export class SceneManagerService implements IService {
             logger.info(`Scene saved: ${this.sceneState.currentScenePath}`);
         } catch (error) {
             logger.error('Failed to save scene:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 检查场景文件是否被外部修改
+     * Check if scene file was modified externally
+     *
+     * @returns true 如果文件被外部修改 | true if file was modified externally
+     */
+    public async checkExternalModification(): Promise<boolean> {
+        const path = this.sceneState.currentScenePath;
+        const lastMtime = this.sceneState.lastKnownMtime;
+
+        if (!path || lastMtime === null || !this.fileAPI.getFileMtime) {
+            return false;
+        }
+
+        try {
+            const currentMtime = await this.fileAPI.getFileMtime(path);
+            const isModified = currentMtime > lastMtime;
+
+            if (isModified) {
+                this.sceneState.externallyModified = true;
+                logger.warn(`Scene file externally modified: ${path} (${lastMtime} -> ${currentMtime})`);
+            }
+
+            return isModified;
+        } catch (e) {
+            logger.warn('Failed to check file mtime:', e);
+            return false;
+        }
+    }
+
+    /**
+     * 重新加载当前场景（放弃本地更改）
+     * Reload current scene (discard local changes)
+     */
+    public async reloadScene(): Promise<void> {
+        const path = this.sceneState.currentScenePath;
+        if (!path) {
+            logger.warn('No scene to reload');
+            return;
+        }
+
+        // 强制打开场景，绕过修改检查 | Force open scene, bypass modification check
+        const scene = Core.scene as Scene | null;
+        if (!scene) {
+            throw new Error('No active scene');
+        }
+
+        try {
+            const jsonData = await this.fileAPI.readFileContent(path);
+            const validation = SceneSerializer.validate(jsonData);
+            if (!validation.valid) {
+                throw new Error(`场景文件损坏: ${validation.errors?.join(', ')}`);
+            }
+
+            scene.isEditorMode = true;
+            scene.deserialize(jsonData, { strategy: 'replace' });
+
+            if (this.sceneResourceManager) {
+                await this.sceneResourceManager.loadSceneResources(scene);
+            }
+
+            // 更新 mtime | Update mtime
+            if (this.fileAPI.getFileMtime) {
+                try {
+                    this.sceneState.lastKnownMtime = await this.fileAPI.getFileMtime(path);
+                } catch (e) {
+                    logger.warn('Failed to update file mtime after reload:', e);
+                }
+            }
+
+            this.sceneState.isModified = false;
+            this.sceneState.isSaved = true;
+            this.sceneState.externallyModified = false;
+
+            this.entityStore?.syncFromScene();
+            await this.messageHub.publish('scene:reloaded', { path });
+            logger.info(`Scene reloaded: ${path}`);
+        } catch (error) {
+            logger.error('Failed to reload scene:', error);
             throw error;
         }
     }
@@ -269,11 +436,23 @@ export class SceneManagerService implements IService {
             const fileName = path.split(/[/\\]/).pop() || 'Untitled';
             const sceneName = fileName.replace('.ecs', '');
 
+            // 获取文件修改时间 | Get file modification time
+            let mtime: number | null = null;
+            if (this.fileAPI.getFileMtime) {
+                try {
+                    mtime = await this.fileAPI.getFileMtime(path);
+                } catch (e) {
+                    logger.warn('Failed to get file mtime after save:', e);
+                }
+            }
+
             this.sceneState = {
                 currentScenePath: path,
                 sceneName,
                 isModified: false,
-                isSaved: true
+                isSaved: true,
+                lastKnownMtime: mtime,
+                externallyModified: false
             };
 
             await this.messageHub.publish('scene:saved', { path });
@@ -405,11 +584,11 @@ export class SceneManagerService implements IService {
             }
 
             // 6. 获取组件注册表 | Get component registry
-            // ComponentRegistry.getAllComponentNames() 返回 Map<string, Function>
+            // GlobalComponentRegistry.getAllComponentNames() 返回 Map<string, Function>
             // 需要转换为 Map<string, ComponentType>
-            const nameToType = ComponentRegistry.getAllComponentNames();
+            const nameToType = GlobalComponentRegistry.getAllComponentNames();
             const componentRegistry = new Map<string, ComponentType>();
-            nameToType.forEach((type, name) => {
+            nameToType.forEach((type: Function, name: string) => {
                 componentRegistry.set(name, type as ComponentType);
             });
 
@@ -471,7 +650,9 @@ export class SceneManagerService implements IService {
                 currentScenePath: null,
                 sceneName: `Prefab: ${prefabName}`,
                 isModified: false,
-                isSaved: true
+                isSaved: true,
+                lastKnownMtime: null,
+                externallyModified: false
             };
 
             // 11. 同步到 EntityStore | Sync to EntityStore
@@ -537,7 +718,9 @@ export class SceneManagerService implements IService {
                 currentScenePath: originalState.originalScenePath,
                 sceneName: originalState.originalSceneName,
                 isModified: originalState.originalSceneModified,
-                isSaved: !originalState.originalSceneModified
+                isSaved: !originalState.originalSceneModified,
+                lastKnownMtime: null,
+                externallyModified: false
             };
 
             // 5. 清除预制体编辑模式状态 | Clear prefab edit mode state
