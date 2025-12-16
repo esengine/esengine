@@ -306,7 +306,15 @@ export const en: Translations = {
         openFailed: 'Failed to open scene',
         savedSuccess: 'Scene saved: {{name}}',
         saveFailed: 'Failed to save scene',
-        saveAsFailed: 'Failed to save scene as'
+        saveAsFailed: 'Failed to save scene as',
+        reloadedSuccess: 'Scene reloaded: {{name}}',
+        reloadFailed: 'Failed to reload scene',
+        externalChange: {
+            title: 'Scene Changed',
+            message: 'Scene "{{name}}" has been modified externally. Do you want to reload?',
+            reload: 'Reload',
+            ignore: 'Ignore'
+        }
     },
 
     // ========================================
@@ -372,6 +380,15 @@ export const en: Translations = {
     },
 
     // ========================================
+    // User Code
+    // ========================================
+    usercode: {
+        compileSuccess: 'Scripts compiled ({{count}} exports)',
+        compileError: 'Script compilation failed',
+        hotReloadSuccess: 'Scripts hot reloaded'
+    },
+
+    // ========================================
     // Loading
     // ========================================
     loading: {
@@ -432,7 +449,8 @@ export const en: Translations = {
             portManager: 'Port Manager',
             settings: 'Settings',
             devtools: 'Developer Tools',
-            build: 'Build Settings'
+            build: 'Build Settings',
+            renderDebug: 'Render Debug'
         },
         help: {
             title: 'Help',
