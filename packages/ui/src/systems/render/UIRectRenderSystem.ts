@@ -11,10 +11,7 @@
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
-import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
-import { UIProgressBarComponent } from '../../components/widgets/UIProgressBarComponent';
-import { UISliderComponent } from '../../components/widgets/UISliderComponent';
-import { UIScrollViewComponent } from '../../components/widgets/UIScrollViewComponent';
+import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import { getUIRenderCollector } from './UIRenderCollector';
 import { getUIRenderTransform, renderBorder, renderShadow, getNinePatchTopLeft } from './UIRenderUtils';
 
@@ -40,13 +37,9 @@ export class UIRectRenderSystem extends EntitySystem {
         const collector = getUIRenderCollector();
 
         for (const entity of entities) {
-            // Skip if entity has specialized widget components
-            // (they have their own render systems)
-            // 如果实体有专门的 widget 组件，跳过（它们有自己的渲染系统）
-            if (entity.hasComponent(UIButtonComponent) ||
-                entity.hasComponent(UIProgressBarComponent) ||
-                entity.hasComponent(UISliderComponent) ||
-                entity.hasComponent(UIScrollViewComponent)) {
+            // Skip if entity has UIWidgetMarker (has specialized render system)
+            // 如果实体有 UIWidgetMarker 标记（有专门的渲染系统），跳过
+            if (entity.hasComponent(UIWidgetMarker)) {
                 continue;
             }
 

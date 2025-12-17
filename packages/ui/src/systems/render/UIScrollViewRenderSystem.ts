@@ -10,6 +10,7 @@
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIScrollViewComponent } from '../../components/widgets/UIScrollViewComponent';
+import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import { getUIRenderCollector } from './UIRenderCollector';
 import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
 
@@ -45,6 +46,12 @@ export class UIScrollViewRenderSystem extends EntitySystem {
 
             // 空值检查 | Null check
             if (!transform || !scrollView) continue;
+
+            // 确保添加 UIWidgetMarker
+            // Ensure UIWidgetMarker is added
+            if (!entity.hasComponent(UIWidgetMarker)) {
+                entity.addComponent(new UIWidgetMarker());
+            }
 
             // 使用工具函数获取渲染变换数据
             // Use utility function to get render transform data

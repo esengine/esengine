@@ -12,6 +12,7 @@ import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
 import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
 import { UIInteractableComponent } from '../../components/UIInteractableComponent';
+import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import { getUIRenderCollector } from './UIRenderCollector';
 import { getUIRenderTransform, renderBorder, getNinePatchTopLeft } from './UIRenderUtils';
 
@@ -48,6 +49,12 @@ export class UIButtonRenderSystem extends EntitySystem {
 
             // 空值检查 | Null check
             if (!transform || !button) continue;
+
+            // 确保添加 UIWidgetMarker 以便 UIRectRenderSystem 跳过此实体
+            // Ensure UIWidgetMarker is added so UIRectRenderSystem skips this entity
+            if (!entity.hasComponent(UIWidgetMarker)) {
+                entity.addComponent(new UIWidgetMarker());
+            }
 
             // 使用工具函数获取渲染变换数据
             // Use utility function to get render transform data

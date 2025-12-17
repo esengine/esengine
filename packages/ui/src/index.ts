@@ -97,6 +97,7 @@ export {
 
 export { TextBlinkComponent } from './components/TextBlinkComponent';
 export { SceneLoadTriggerComponent } from './components/SceneLoadTriggerComponent';
+export { UIWidgetMarker } from './components/UIWidgetMarker';
 
 export {
     UILayoutComponent,
