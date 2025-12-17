@@ -1010,6 +1010,302 @@ export class EngineBridge implements ITextureEngineBridge {
         });
     }
 
+    // ===== Shader API =====
+    // ===== 着色器 API =====
+
+    /**
+     * Compile and register a custom shader program.
+     * 编译并注册自定义着色器程序。
+     *
+     * @param vertexSource - Vertex shader GLSL source | 顶点着色器 GLSL 源代码
+     * @param fragmentSource - Fragment shader GLSL source | 片段着色器 GLSL 源代码
+     * @returns Promise resolving to shader ID | 解析为着色器 ID 的 Promise
+     */
+    async compileShader(vertexSource: string, fragmentSource: string): Promise<number> {
+        if (!this.initialized) throw new Error('Engine not initialized');
+        return this.getEngine().compileShader(vertexSource, fragmentSource);
+    }
+
+    /**
+     * Compile and register a shader with a specific ID.
+     * 使用特定 ID 编译并注册着色器。
+     *
+     * @param shaderId - Desired shader ID | 期望的着色器 ID
+     * @param vertexSource - Vertex shader GLSL source | 顶点着色器 GLSL 源代码
+     * @param fragmentSource - Fragment shader GLSL source | 片段着色器 GLSL 源代码
+     */
+    async compileShaderWithId(shaderId: number, vertexSource: string, fragmentSource: string): Promise<void> {
+        if (!this.initialized) throw new Error('Engine not initialized');
+        this.getEngine().compileShaderWithId(shaderId, vertexSource, fragmentSource);
+    }
+
+    /**
+     * Check if a shader exists.
+     * 检查着色器是否存在。
+     *
+     * @param shaderId - Shader ID to check | 要检查的着色器 ID
+     */
+    hasShader(shaderId: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().hasShader(shaderId);
+    }
+
+    /**
+     * Remove a shader.
+     * 移除着色器。
+     *
+     * @param shaderId - Shader ID to remove | 要移除的着色器 ID
+     */
+    removeShader(shaderId: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().removeShader(shaderId);
+    }
+
+    // ===== Material Management API =====
+    // ===== 材质管理 API =====
+
+    /**
+     * Create a new material.
+     * 创建新材质。
+     *
+     * @param name - Material name | 材质名称
+     * @param shaderId - Shader ID to use | 使用的着色器 ID
+     * @param blendMode - Blend mode | 混合模式
+     * @returns Material ID | 材质 ID
+     */
+    createMaterial(name: string, shaderId: number, blendMode: number): number {
+        if (!this.initialized) return -1;
+        return this.getEngine().createMaterial(name, shaderId, blendMode);
+    }
+
+    /**
+     * Create a material with a specific ID.
+     * 使用特定 ID 创建材质。
+     *
+     * @param materialId - Desired material ID | 期望的材质 ID
+     * @param name - Material name | 材质名称
+     * @param shaderId - Shader ID to use | 使用的着色器 ID
+     * @param blendMode - Blend mode | 混合模式
+     */
+    createMaterialWithId(materialId: number, name: string, shaderId: number, blendMode: number): void {
+        if (!this.initialized) return;
+        this.getEngine().createMaterialWithId(materialId, name, shaderId, blendMode);
+    }
+
+    /**
+     * Check if a material exists.
+     * 检查材质是否存在。
+     *
+     * @param materialId - Material ID to check | 要检查的材质 ID
+     */
+    hasMaterial(materialId: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().hasMaterial(materialId);
+    }
+
+    /**
+     * Remove a material.
+     * 移除材质。
+     *
+     * @param materialId - Material ID to remove | 要移除的材质 ID
+     */
+    removeMaterial(materialId: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().removeMaterial(materialId);
+    }
+
+    // ===== Material Uniform API =====
+    // ===== 材质 Uniform API =====
+
+    /**
+     * Set a float uniform on a material.
+     * 设置材质的浮点 uniform。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param name - Uniform name | Uniform 名称
+     * @param value - Float value | 浮点值
+     * @returns Whether the operation succeeded | 操作是否成功
+     */
+    setMaterialFloat(materialId: number, name: string, value: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().setMaterialFloat(materialId, name, value);
+    }
+
+    /**
+     * Set a vec2 uniform on a material.
+     * 设置材质的 vec2 uniform。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param name - Uniform name | Uniform 名称
+     * @param x - X component | X 分量
+     * @param y - Y component | Y 分量
+     * @returns Whether the operation succeeded | 操作是否成功
+     */
+    setMaterialVec2(materialId: number, name: string, x: number, y: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().setMaterialVec2(materialId, name, x, y);
+    }
+
+    /**
+     * Set a vec3 uniform on a material.
+     * 设置材质的 vec3 uniform。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param name - Uniform name | Uniform 名称
+     * @param x - X component | X 分量
+     * @param y - Y component | Y 分量
+     * @param z - Z component | Z 分量
+     * @returns Whether the operation succeeded | 操作是否成功
+     */
+    setMaterialVec3(materialId: number, name: string, x: number, y: number, z: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().setMaterialVec3(materialId, name, x, y, z);
+    }
+
+    /**
+     * Set a vec4 uniform on a material.
+     * 设置材质的 vec4 uniform。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param name - Uniform name | Uniform 名称
+     * @param x - X component | X 分量
+     * @param y - Y component | Y 分量
+     * @param z - Z component | Z 分量
+     * @param w - W component | W 分量
+     * @returns Whether the operation succeeded | 操作是否成功
+     */
+    setMaterialVec4(materialId: number, name: string, x: number, y: number, z: number, w: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().setMaterialVec4(materialId, name, x, y, z, w);
+    }
+
+    /**
+     * Set a color uniform on a material.
+     * 设置材质的颜色 uniform。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param name - Uniform name | Uniform 名称
+     * @param r - Red component (0-1) | 红色分量 (0-1)
+     * @param g - Green component (0-1) | 绿色分量 (0-1)
+     * @param b - Blue component (0-1) | 蓝色分量 (0-1)
+     * @param a - Alpha component (0-1) | Alpha 分量 (0-1)
+     * @returns Whether the operation succeeded | 操作是否成功
+     */
+    setMaterialColor(materialId: number, name: string, r: number, g: number, b: number, a: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().setMaterialColor(materialId, name, r, g, b, a);
+    }
+
+    /**
+     * Set a material's blend mode.
+     * 设置材质的混合模式。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param blendMode - Blend mode (0=None, 1=Alpha, 2=Additive, 3=Multiply, 4=Screen, 5=PremultipliedAlpha)
+     *                    混合模式 (0=无, 1=Alpha, 2=叠加, 3=正片叠底, 4=滤色, 5=预乘Alpha)
+     * @returns Whether the operation succeeded | 操作是否成功
+     */
+    setMaterialBlendMode(materialId: number, blendMode: number): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().setMaterialBlendMode(materialId, blendMode);
+    }
+
+    // ===== Dynamic Atlas API =====
+    // ===== 动态图集 API =====
+
+    /**
+     * Create a blank texture for dynamic atlas.
+     * 为动态图集创建空白纹理。
+     *
+     * This creates a texture that can be filled later using `updateTextureRegion`.
+     * Used for runtime atlas generation to batch UI elements with different textures.
+     * 创建一个可以稍后使用 `updateTextureRegion` 填充的纹理。
+     * 用于运行时图集生成，以批处理使用不同纹理的 UI 元素。
+     *
+     * @param width - Texture width in pixels (recommended: 2048) | 纹理宽度（推荐：2048）
+     * @param height - Texture height in pixels (recommended: 2048) | 纹理高度（推荐：2048）
+     * @returns Texture ID for the created blank texture | 创建的空白纹理ID
+     */
+    createBlankTexture(width: number, height: number): number {
+        if (!this.initialized) return -1;
+        return this.getEngine().createBlankTexture(width, height);
+    }
+
+    /**
+     * Update a region of an existing texture with pixel data.
+     * 使用像素数据更新现有纹理的区域。
+     *
+     * This is used for dynamic atlas to copy individual textures into the atlas.
+     * 用于动态图集将单个纹理复制到图集纹理中。
+     *
+     * @param id - The texture ID to update | 要更新的纹理ID
+     * @param x - X offset in the texture | 纹理中的X偏移
+     * @param y - Y offset in the texture | 纹理中的Y偏移
+     * @param width - Width of the region to update | 要更新的区域宽度
+     * @param height - Height of the region to update | 要更新的区域高度
+     * @param pixels - RGBA pixel data (Uint8Array, 4 bytes per pixel) | RGBA像素数据（每像素4字节）
+     */
+    updateTextureRegion(
+        id: number,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        pixels: Uint8Array
+    ): void {
+        if (!this.initialized) return;
+        this.getEngine().updateTextureRegion(id, x, y, width, height, pixels);
+    }
+
+    /**
+     * Apply material overrides to a material.
+     * 将材质覆盖应用到材质。
+     *
+     * @param materialId - Material ID | 材质 ID
+     * @param overrides - Material property overrides | 材质属性覆盖
+     */
+    applyMaterialOverrides(materialId: number, overrides: Record<string, { type: string; value: number | number[] }>): void {
+        if (!this.initialized || !overrides) return;
+
+        for (const [name, override] of Object.entries(overrides)) {
+            const { type, value } = override;
+
+            switch (type) {
+                case 'float':
+                    this.setMaterialFloat(materialId, name, value as number);
+                    break;
+                case 'vec2':
+                    {
+                        const v = value as number[];
+                        this.setMaterialVec2(materialId, name, v[0], v[1]);
+                    }
+                    break;
+                case 'vec3':
+                    {
+                        const v = value as number[];
+                        this.setMaterialVec3(materialId, name, v[0], v[1], v[2]);
+                    }
+                    break;
+                case 'vec4':
+                    {
+                        const v = value as number[];
+                        this.setMaterialVec4(materialId, name, v[0], v[1], v[2], v[3]);
+                    }
+                    break;
+                case 'color':
+                    {
+                        const v = value as number[];
+                        this.setMaterialColor(materialId, name, v[0], v[1], v[2], v[3] ?? 1.0);
+                    }
+                    break;
+                case 'int':
+                    // Int is passed as float | Int 作为 float 传递
+                    this.setMaterialFloat(materialId, name, value as number);
+                    break;
+            }
+        }
+    }
+
     /**
      * Dispose the bridge and release resources.
      * 销毁桥接并释放资源。

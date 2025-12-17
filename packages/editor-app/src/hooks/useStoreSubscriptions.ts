@@ -21,6 +21,8 @@ interface UseStoreSubscriptionsOptions {
     entityStore: EntityStoreService | null;
     sceneManager: SceneManagerService | null;
     enabled: boolean;
+    /** 是否处于 Play 模式 | Whether in play mode */
+    isPlaying?: boolean;
 }
 
 /**
@@ -35,8 +37,10 @@ export function useStoreSubscriptions({
     entityStore,
     sceneManager,
     enabled,
+    isPlaying = false,
 }: UseStoreSubscriptionsOptions): void {
     const initializedRef = useRef(false);
+    const lastEntityCountRef = useRef(0);
 
     // ===== HierarchyStore 订阅 | HierarchyStore subscriptions =====
     useEffect(() => {
@@ -129,7 +133,25 @@ export function useStoreSubscriptions({
         });
         const unsubSaved = messageHub.subscribe('scene:saved', updateSceneInfo);
         const unsubModified = messageHub.subscribe('scene:modified', updateSceneInfo);
-        const unsubRestored = messageHub.subscribe('scene:restored', updateEntities);
+        // scene:restored 在 Stop 时触发，需要同时更新场景信息和实体列表
+        // scene:restored is triggered on Stop, needs to update both scene info and entities
+        const unsubRestored = messageHub.subscribe('scene:restored', () => {
+            updateSceneInfo();
+            updateEntities();
+        });
+
+        // 订阅运行时场景切换事件（Play 模式下的场景切换）
+        // Subscribe to runtime scene change event (scene switching in Play mode)
+        const unsubRuntimeSceneChanged = messageHub.subscribe('runtime:scene:changed', (data: any) => {
+            if (data.sceneName) {
+                setSceneInfo({
+                    sceneName: `[Play] ${data.sceneName}`,
+                    sceneFilePath: data.path || null,
+                    isModified: false,
+                });
+            }
+            updateEntities();
+        });
 
         // 订阅实体事件 | Subscribe to entity events
         const unsubAdd = messageHub.subscribe('entity:added', updateEntities);
@@ -150,6 +172,7 @@ export function useStoreSubscriptions({
             unsubSaved();
             unsubModified();
             unsubRestored();
+            unsubRuntimeSceneChanged();
             unsubAdd();
             unsubRemove();
             unsubClear();
@@ -348,4 +371,43 @@ export function useStoreSubscriptions({
             unsubPropertyChanged();
         };
     }, [enabled, messageHub]);
+
+    // ===== Play 模式实时同步 | Play mode real-time sync =====
+    // 在 Play 模式下定期检查场景实体变化，同步到层级面板
+    // Periodically check scene entity changes in play mode and sync to hierarchy panel
+    useEffect(() => {
+        if (!enabled || !entityStore || !isPlaying) return;
+
+        const { setEntities } = useHierarchyStore.getState();
+
+        // 同步实体列表（检查是否有变化）
+        // Sync entity list (check for changes)
+        const syncEntities = () => {
+            const scene = Core.scene;
+            if (!scene) return;
+
+            const currentCount = scene.entities.count;
+
+            // 只有实体数量变化时才同步（性能优化）
+            // Only sync when entity count changes (performance optimization)
+            if (currentCount !== lastEntityCountRef.current) {
+                lastEntityCountRef.current = currentCount;
+                entityStore.syncFromScene();
+                setEntities([...entityStore.getRootEntities()]);
+            }
+        };
+
+        // 每 500ms 检查一次（Play 模式下足够实时）
+        // Check every 500ms (real-time enough for play mode)
+        const intervalId = setInterval(syncEntities, 500);
+
+        // 立即同步一次
+        // Sync immediately
+        syncEntities();
+
+        return () => {
+            clearInterval(intervalId);
+            lastEntityCountRef.current = 0;
+        };
+    }, [enabled, entityStore, isPlaying]);
 }

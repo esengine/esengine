@@ -77,7 +77,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
                     {
                         rotation,
                         pivotX,
-                        pivotY
+                        pivotY,
+                        entityId: entity.id
                     }
                 );
             }
@@ -94,7 +95,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
                     orderInLayer + 2,
                     transform,
                     pivotX,
-                    pivotY
+                    pivotY,
+                    entity.id
                 );
             }
 
@@ -106,13 +108,13 @@ export class UIProgressBarRenderSystem extends EntitySystem {
                     this.renderSegmentedFill(
                         collector, renderX, renderY, width, height,
                         progress, progressBar, alpha, sortingLayer, orderInLayer + 1, transform,
-                        pivotX, pivotY
+                        pivotX, pivotY, entity.id
                     );
                 } else {
                     this.renderSolidFill(
                         collector, renderX, renderY, width, height,
                         progress, progressBar, alpha, sortingLayer, orderInLayer + 1, transform,
-                        pivotX, pivotY
+                        pivotX, pivotY, entity.id
                     );
                 }
             }
@@ -136,7 +138,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
         orderInLayer: number,
         transform: UITransformComponent,
         pivotX: number,
-        pivotY: number
+        pivotY: number,
+        entityId: number
     ): void {
         const rotation = transform.worldRotation ?? transform.rotation;
 
@@ -201,7 +204,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             {
                 rotation,
                 pivotX: 0.5,
-                pivotY: 0.5
+                pivotY: 0.5,
+                entityId
             }
         );
     }
@@ -223,7 +227,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
         orderInLayer: number,
         transform: UITransformComponent,
         pivotX: number,
-        pivotY: number
+        pivotY: number,
+        entityId: number
     ): void {
         const rotation = transform.worldRotation ?? transform.rotation;
         const segments = progressBar.segments;
@@ -307,7 +312,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
                 {
                     rotation,
                     pivotX: 0.5,
-                    pivotY: 0.5
+                    pivotY: 0.5,
+                    entityId
                 }
             );
         }
@@ -330,7 +336,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
         orderInLayer: number,
         transform: UITransformComponent,
         pivotX: number,
-        pivotY: number
+        pivotY: number,
+        entityId: number
     ): void {
         const rotation = transform.worldRotation ?? transform.rotation;
 
@@ -345,7 +352,7 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             (left + right) / 2, top - borderWidth / 2,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Bottom border
@@ -353,7 +360,7 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             (left + right) / 2, bottom + borderWidth / 2,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Left border (excluding corners)
@@ -362,7 +369,7 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             left + borderWidth / 2, (top + bottom) / 2,
             borderWidth, sideBorderHeight,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Right border (excluding corners)
@@ -370,7 +377,7 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             right - borderWidth / 2, (top + bottom) / 2,
             borderWidth, sideBorderHeight,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 

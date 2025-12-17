@@ -22,6 +22,9 @@ body {
   background-color: var(--color-bg-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 禁用全局文本选择，原生应用风格 | Disable global text selection for native app feel */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 button {
@@ -35,6 +38,9 @@ textarea,
 select {
   font-family: inherit;
   font-size: inherit;
+  /* 输入框允许文本选择 | Allow text selection in inputs */
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 :focus-visible {
@@ -45,6 +51,18 @@ select {
 ::selection {
   background-color: var(--color-primary);
   color: var(--color-text-inverse);
+}
+
+/* 允许特定元素文本选择 | Allow text selection for specific elements */
+.selectable,
+pre,
+code,
+.code-preview-content,
+.file-preview-content,
+.output-log-content,
+.json-viewer {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* 全局滚动条样式 */

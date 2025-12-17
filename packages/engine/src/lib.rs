@@ -722,4 +722,60 @@ impl GameEngine {
     pub fn clear_all_textures(&mut self) {
         self.engine.clear_all_textures();
     }
+
+    // ===== Dynamic Atlas API =====
+    // ===== 动态图集 API =====
+
+    /// Create a blank texture for dynamic atlas.
+    /// 为动态图集创建空白纹理。
+    ///
+    /// This creates a texture that can be filled later using `updateTextureRegion`.
+    /// Used for runtime atlas generation to batch UI elements with different textures.
+    /// 创建一个可以稍后使用 `updateTextureRegion` 填充的纹理。
+    /// 用于运行时图集生成，以批处理使用不同纹理的 UI 元素。
+    ///
+    /// # Arguments | 参数
+    /// * `width` - Texture width in pixels (recommended: 2048) | 纹理宽度（推荐：2048）
+    /// * `height` - Texture height in pixels (recommended: 2048) | 纹理高度（推荐：2048）
+    ///
+    /// # Returns | 返回
+    /// The texture ID for the created blank texture | 创建的空白纹理ID
+    #[wasm_bindgen(js_name = createBlankTexture)]
+    pub fn create_blank_texture(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> std::result::Result<u32, JsValue> {
+        self.engine
+            .create_blank_texture(width, height)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Update a region of an existing texture with pixel data.
+    /// 使用像素数据更新现有纹理的区域。
+    ///
+    /// This is used for dynamic atlas to copy individual textures into the atlas.
+    /// 用于动态图集将单个纹理复制到图集纹理中。
+    ///
+    /// # Arguments | 参数
+    /// * `id` - The texture ID to update | 要更新的纹理ID
+    /// * `x` - X offset in the texture | 纹理中的X偏移
+    /// * `y` - Y offset in the texture | 纹理中的Y偏移
+    /// * `width` - Width of the region to update | 要更新的区域宽度
+    /// * `height` - Height of the region to update | 要更新的区域高度
+    /// * `pixels` - RGBA pixel data (Uint8Array, 4 bytes per pixel) | RGBA像素数据（每像素4字节）
+    #[wasm_bindgen(js_name = updateTextureRegion)]
+    pub fn update_texture_region(
+        &self,
+        id: u32,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> std::result::Result<(), JsValue> {
+        self.engine
+            .update_texture_region(id, x, y, width, height, pixels)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
 }

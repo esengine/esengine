@@ -2,6 +2,11 @@ import { EntitySystem, Matcher, Entity, ECSSystem, HierarchyComponent } from '@e
 import { UITransformComponent } from '../components/UITransformComponent';
 import { UILayoutComponent, UILayoutType, UIJustifyContent, UIAlignItems } from '../components/UILayoutComponent';
 
+/** 度转弧度常量 | Degrees to radians constant */
+const DEG_TO_RAD = Math.PI / 180;
+/** 弧度转度常量 | Radians to degrees constant */
+const RAD_TO_DEG = 180 / Math.PI;
+
 /**
  * 2D 变换矩阵类型
  * 2D transformation matrix type
@@ -648,13 +653,14 @@ export class UILayoutSystem extends EntitySystem {
 
         // 构建变换矩阵: Translate(-pivot) -> Scale -> Rotate -> Translate(position + pivot)
         // 最终矩阵将轴心点作为旋转/缩放中心
+        // 顺时针旋转矩阵 | Clockwise rotation matrix
         return {
             a: scaleX * cos,
-            b: scaleX * sin,
-            c: scaleY * -sin,
+            b: -scaleX * sin,
+            c: scaleY * sin,
             d: scaleY * cos,
-            tx: x + px - (scaleX * cos * px - scaleY * sin * py),
-            ty: y + py - (scaleX * sin * px + scaleY * cos * py)
+            tx: x + px - (scaleX * cos * px + scaleY * sin * py),
+            ty: y + py - (-scaleX * sin * px + scaleY * cos * py)
         };
     }
 
@@ -704,13 +710,13 @@ export class UILayoutSystem extends EntitySystem {
      * Update element's world transformation matrix
      */
     private updateWorldMatrix(transform: UITransformComponent, parentMatrix: Matrix2D | null): void {
-        // 计算本地矩阵
+        // 计算本地矩阵（度转弧度）
         const localMatrix = this.calculateLocalMatrix(
             transform.pivotX,
             transform.pivotY,
             transform.computedWidth,
             transform.computedHeight,
-            transform.rotation,
+            transform.rotation * DEG_TO_RAD,
             transform.scaleX,
             transform.scaleY,
             transform.worldX,
@@ -724,9 +730,9 @@ export class UILayoutSystem extends EntitySystem {
             transform.localToWorldMatrix = localMatrix;
         }
 
-        // 从世界矩阵分解出世界旋转和缩放
+        // 从世界矩阵分解出世界旋转和缩放（弧度转度）
         const decomposed = this.decomposeMatrix(transform.localToWorldMatrix);
-        transform.worldRotation = decomposed.rotation;
+        transform.worldRotation = decomposed.rotation * RAD_TO_DEG;
         transform.worldScaleX = decomposed.scaleX;
         transform.worldScaleY = decomposed.scaleY;
     }

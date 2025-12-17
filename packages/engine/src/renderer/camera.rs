@@ -1,5 +1,12 @@
 //! 2D camera implementation.
 //! 2D相机实现。
+//!
+//! Uses left-hand coordinate system convention:
+//! 使用左手坐标系约定：
+//! - X axis: positive to the right / X 轴：正方向向右
+//! - Y axis: positive upward (in world space) / Y 轴：正方向向上（世界空间）
+//! - Z axis: positive into the screen / Z 轴：正方向指向屏幕内
+//! - Positive rotation: clockwise (when viewed from +Z) / 正旋转：顺时针（从 +Z 观察）
 
 use crate::math::Vec2;
 use glam::Mat3;
@@ -67,6 +74,7 @@ impl Camera2D {
     /// - World: Y-up, origin at camera position | 世界坐标：Y向上，原点在相机位置
     /// - Screen: Y-down, origin at top-left | 屏幕坐标：Y向下，原点在左上角
     /// - NDC: Y-up, origin at center [-1, 1] | NDC：Y向上，原点在中心
+    /// - Rotation: positive = clockwise | 旋转：正 = 顺时针
     ///
     /// When zoom=1, 1 world unit = 1 screen pixel.
     /// 当zoom=1时，1个世界单位 = 1个屏幕像素。
@@ -81,8 +89,8 @@ impl Camera2D {
         let sx = 2.0 / self.width * self.zoom;
         let sy = 2.0 / self.height * self.zoom;
 
-        // Handle rotation
-        // 处理旋转
+        // Handle rotation (clockwise positive)
+        // 处理旋转（顺时针为正）
         let cos = self.rotation.cos();
         let sin = self.rotation.sin();
 
@@ -97,15 +105,17 @@ impl Camera2D {
         // 组合缩放、旋转和平移
         // Matrix = Scale * Rotation * Translation (applied right to left)
         // 矩阵 = 缩放 * 旋转 * 平移（从右到左应用）
+        // Clockwise rotation: [cos, -sin; sin, cos]
+        // 顺时针旋转矩阵
         if self.rotation != 0.0 {
-            // With rotation: need to rotate the translation as well
-            // 有旋转时：平移也需要旋转
-            let rtx = tx * cos - ty * sin;
-            let rty = tx * sin + ty * cos;
+            // With rotation: need to rotate the translation as well (clockwise)
+            // 有旋转时：平移也需要旋转（顺时针）
+            let rtx = tx * cos + ty * sin;
+            let rty = -tx * sin + ty * cos;
 
             Mat3::from_cols(
-                glam::Vec3::new(sx * cos, sx * sin, 0.0),
-                glam::Vec3::new(-sy * sin, sy * cos, 0.0),
+                glam::Vec3::new(sx * cos, -sx * sin, 0.0),
+                glam::Vec3::new(sy * sin, sy * cos, 0.0),
                 glam::Vec3::new(rtx, rty, 1.0),
             )
         } else {
@@ -124,6 +134,7 @@ impl Camera2D {
     ///
     /// Screen: (0,0) at top-left, Y-down | 屏幕：(0,0)在左上角，Y向下
     /// World: Y-up, camera at center | 世界：Y向上，相机在中心
+    /// Rotation: positive = clockwise | 旋转：正 = 顺时针
     pub fn screen_to_world(&self, screen: Vec2) -> Vec2 {
         // Convert screen to NDC-like coordinates (centered, Y-up)
         // 将屏幕坐标转换为类NDC坐标（居中，Y向上）
@@ -138,11 +149,15 @@ impl Camera2D {
         if self.rotation != 0.0 {
             // Apply inverse rotation around camera position
             // 围绕相机位置应用反向旋转
+            // Inverse of clockwise θ is clockwise -θ
+            // 顺时针 θ 的逆变换是顺时针 -θ
             let dx = world_x - self.position.x;
             let dy = world_y - self.position.y;
-            let cos = (-self.rotation).cos();
-            let sin = (-self.rotation).sin();
+            let cos = self.rotation.cos(); // cos(-θ) = cos(θ)
+            let sin = self.rotation.sin(); // for clockwise -θ: use -sin(θ)
 
+            // Clockwise rotation with -θ: x' = x*cos + y*(-sin), y' = -x*(-sin) + y*cos
+            // 用 -θ 做顺时针旋转
             Vec2::new(
                 dx * cos - dy * sin + self.position.x,
                 dx * sin + dy * cos + self.position.y,
@@ -157,14 +172,19 @@ impl Camera2D {
     ///
     /// World: Y-up | 世界：Y向上
     /// Screen: (0,0) at top-left, Y-down | 屏幕：(0,0)在左上角，Y向下
+    /// Rotation: positive = clockwise | 旋转：正 = 顺时针
     pub fn world_to_screen(&self, world: Vec2) -> Vec2 {
         let dx = world.x - self.position.x;
         let dy = world.y - self.position.y;
 
+        // Apply clockwise rotation
+        // 应用顺时针旋转
         let (rx, ry) = if self.rotation != 0.0 {
             let cos = self.rotation.cos();
             let sin = self.rotation.sin();
-            (dx * cos - dy * sin, dx * sin + dy * cos)
+            // Clockwise: x' = x*cos + y*sin, y' = -x*sin + y*cos
+            // 顺时针旋转公式
+            (dx * cos + dy * sin, -dx * sin + dy * cos)
         } else {
             (dx, dy)
         };

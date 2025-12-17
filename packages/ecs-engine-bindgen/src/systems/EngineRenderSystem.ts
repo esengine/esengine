@@ -12,7 +12,7 @@ import { SpriteComponent } from '@esengine/sprite';
 import type { EngineBridge } from '../core/EngineBridge';
 import { RenderBatcher } from '../core/RenderBatcher';
 import type { ITransformComponent } from '../core/SpriteRenderHelper';
-import type { SpriteRenderData } from '../types';
+import type { SpriteRenderData, MaterialOverrides } from '../types';
 
 /**
  * Render data from a provider
@@ -47,6 +47,10 @@ export interface ProviderRenderData {
      * Overrides sortingLayer's bScreenSpace setting, for particles that need dynamic render space.
      */
     bScreenSpace?: boolean;
+    /** Material IDs for each primitive. | 每个原语的材质 ID。 */
+    materialIds?: Uint32Array;
+    /** Material overrides (per-group). | 材质覆盖（按组）。 */
+    materialOverrides?: MaterialOverrides;
 }
 
 /**
@@ -218,6 +222,18 @@ export class EngineRenderSystem extends EntitySystem {
     // 为 false（编辑器模式）时，UI 在世界空间渲染，跟随编辑器相机
     private previewMode: boolean = false;
 
+    // ===== Material Instance Management =====
+    // ===== 材质实例管理 =====
+    // Maps (baseMaterialId, overridesHash) → instanceMaterialId
+    // 映射 (基础材质ID, 覆盖哈希) → 实例材质ID
+    private materialInstanceMap: Map<string, number> = new Map();
+    // Next instance ID (starts at 10000 to avoid collision with built-in materials)
+    // 下一个实例 ID（从 10000 开始以避免与内置材质冲突）
+    private nextMaterialInstanceId: number = 10000;
+    // Track instances used this frame for cleanup
+    // 跟踪本帧使用的实例以便清理
+    private usedInstancesThisFrame: Set<number> = new Set();
+
     /**
      * Create a new engine render system.
      * 创建新的引擎渲染系统。
@@ -320,6 +336,10 @@ export class EngineRenderSystem extends EntitySystem {
         if (this.previewMode && screenSpaceItems.length > 0) {
             this.renderScreenSpacePass(screenSpaceItems);
         }
+
+        // ===== Cleanup unused material instances =====
+        // ===== 清理未使用的材质实例 =====
+        this.cleanupUnusedMaterialInstances();
     }
 
     /**
@@ -481,6 +501,11 @@ export class EngineRenderSystem extends EntitySystem {
 
         if (!this.batcher.isEmpty) {
             const sprites = this.batcher.getSprites();
+
+            // Apply material overrides before rendering
+            // 在渲染前应用材质覆盖
+            this.applySpriteMaterialOverrides(sprites);
+
             this.bridge.submitSprites(sprites);
         }
 
@@ -539,6 +564,11 @@ export class EngineRenderSystem extends EntitySystem {
 
         if (!this.batcher.isEmpty) {
             const sprites = this.batcher.getSprites();
+
+            // Apply material overrides before rendering
+            // 在渲染前应用材质覆盖
+            this.applySpriteMaterialOverrides(sprites);
+
             this.bridge.submitSprites(sprites);
             // Render overlay (without clearing screen)
             // 渲染叠加层（不清屏）
@@ -548,6 +578,147 @@ export class EngineRenderSystem extends EntitySystem {
         // Restore world space camera
         // 恢复世界空间相机
         this.bridge.popScreenSpaceMode();
+    }
+
+    /**
+     * Generate a hash key for material overrides.
+     * 为材质覆盖生成哈希键。
+     *
+     * @param overrides - Material overrides | 材质覆盖
+     * @returns Hash string | 哈希字符串
+     */
+    private hashMaterialOverrides(overrides: MaterialOverrides): string {
+        // Sort keys for consistent hashing
+        // 排序键以保持一致的哈希
+        const sortedKeys = Object.keys(overrides).sort();
+        const parts: string[] = [];
+        for (const key of sortedKeys) {
+            const override = overrides[key];
+            if (override) {
+                const valueStr = Array.isArray(override.value)
+                    ? override.value.map(v => v.toFixed(4)).join(',')
+                    : override.value.toFixed(4);
+                parts.push(`${key}:${valueStr}`);
+            }
+        }
+        return parts.join('|');
+    }
+
+    /**
+     * Get or create a material instance for a specific base material + overrides combination.
+     * 为特定的基础材质+覆盖组合获取或创建材质实例。
+     *
+     * This ensures each unique (baseMaterial, overrides) combination gets its own
+     * material instance, preventing shared material state issues.
+     * 这确保每个唯一的（基础材质，覆盖）组合都有自己的材质实例，
+     * 防止共享材质状态问题。
+     *
+     * @param baseMaterialId - Base material ID (e.g., 1 for Grayscale) | 基础材质ID
+     * @param overrides - Material property overrides | 材质属性覆盖
+     * @returns Instance material ID | 实例材质ID
+     */
+    private getOrCreateMaterialInstance(baseMaterialId: number, overrides: MaterialOverrides): number {
+        const overridesHash = this.hashMaterialOverrides(overrides);
+        const instanceKey = `${baseMaterialId}:${overridesHash}`;
+
+        // Check if instance already exists
+        // 检查实例是否已存在
+        let instanceId = this.materialInstanceMap.get(instanceKey);
+        if (instanceId !== undefined) {
+            this.usedInstancesThisFrame.add(instanceId);
+            return instanceId;
+        }
+
+        // Create new instance
+        // 创建新实例
+        instanceId = this.nextMaterialInstanceId++;
+        this.materialInstanceMap.set(instanceKey, instanceId);
+        this.usedInstancesThisFrame.add(instanceId);
+
+        // Clone the base material with the new ID
+        // 使用新ID克隆基础材质
+        // For built-in materials, shaderId = materialId (1:1 mapping)
+        // 对于内置材质，shaderId = materialId（1:1 映射）
+        const shaderId = baseMaterialId;
+        const blendMode = 1; // Alpha blending
+        this.bridge.createMaterialWithId(instanceId, `Instance_${baseMaterialId}_${instanceId}`, shaderId, blendMode);
+
+        // Apply overrides to the new instance
+        // 将覆盖应用到新实例
+        this.bridge.applyMaterialOverrides(instanceId, overrides);
+
+        return instanceId;
+    }
+
+    /**
+     * Clean up unused material instances.
+     * 清理未使用的材质实例。
+     *
+     * Called at the end of each frame to remove instances that were not used.
+     * 在每帧结束时调用，移除未使用的实例。
+     */
+    private cleanupUnusedMaterialInstances(): void {
+        const toRemove: string[] = [];
+
+        for (const [key, instanceId] of this.materialInstanceMap.entries()) {
+            if (!this.usedInstancesThisFrame.has(instanceId)) {
+                this.bridge.removeMaterial(instanceId);
+                toRemove.push(key);
+            }
+        }
+
+        for (const key of toRemove) {
+            this.materialInstanceMap.delete(key);
+        }
+
+        // Clear the used set for next frame
+        // 清除已用集合以便下一帧
+        this.usedInstancesThisFrame.clear();
+    }
+
+    /**
+     * Apply material overrides from sprites to the engine.
+     * 将 sprites 的材质覆盖应用到引擎。
+     *
+     * For sprites with overrides, this creates unique material instances
+     * to ensure each sprite's overrides don't affect other sprites.
+     * 对于有覆盖的精灵，这会创建唯一的材质实例，
+     * 确保每个精灵的覆盖不会影响其他精灵。
+     */
+    private applySpriteMaterialOverrides(sprites: SpriteRenderData[]): void {
+        // Track which instance materials we've already applied overrides to this frame
+        // 跟踪本帧已应用覆盖的实例材质
+        const appliedInstances = new Set<number>();
+
+        for (const sprite of sprites) {
+            const baseMaterialId = sprite.materialId;
+
+            // Skip if no material or no overrides
+            // 如果没有材质或没有覆盖，跳过
+            if (!baseMaterialId || baseMaterialId <= 0 || !sprite.materialOverrides) {
+                continue;
+            }
+
+            const overrideKeys = Object.keys(sprite.materialOverrides);
+            if (overrideKeys.length === 0) {
+                continue;
+            }
+
+            // Get or create a unique material instance for this sprite's overrides
+            // 为此精灵的覆盖获取或创建唯一的材质实例
+            const instanceId = this.getOrCreateMaterialInstance(baseMaterialId, sprite.materialOverrides);
+
+            // Update the sprite to use the instance material
+            // 更新精灵以使用实例材质
+            sprite.materialId = instanceId;
+
+            // Apply overrides if not already done for this instance
+            // 如果尚未为此实例应用覆盖，则应用
+            if (!appliedInstances.has(instanceId)) {
+                this.bridge.applyMaterialOverrides(instanceId, sprite.materialOverrides);
+                appliedInstances.add(instanceId);
+            }
+        }
     }
 
     /**
@@ -561,6 +732,11 @@ export class EngineRenderSystem extends EntitySystem {
         if (textureId === 0 && data.textureGuid) {
             textureId = this.bridge.getOrLoadTextureByPath(this.resolveAssetPath(data.textureGuid));
         }
+
+        // Check for material data
+        // 检查材质数据
+        const hasMaterialIds = data.materialIds && data.materialIds.length > 0;
+        const hasMaterialOverrides = data.materialOverrides && Object.keys(data.materialOverrides).length > 0;
 
         const sprites: SpriteRenderData[] = [];
         for (let i = 0; i < data.tileCount; i++) {
@@ -586,6 +762,15 @@ export class EngineRenderSystem extends EntitySystem {
                 uv,
                 color: data.colors[i]
             };
+
+            // Add material data if present
+            // 如果存在材质数据，添加它
+            if (hasMaterialIds) {
+                renderData.materialId = data.materialIds![i];
+            }
+            if (hasMaterialOverrides) {
+                renderData.materialOverrides = data.materialOverrides;
+            }
 
             sprites.push(renderData);
         }

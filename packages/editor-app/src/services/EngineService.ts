@@ -12,7 +12,18 @@ import { CameraConfig, EngineBridgeToken, RenderSystemToken, EngineIntegrationTo
 import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { SpriteComponent, SpriteAnimatorComponent, SpriteAnimatorSystemToken } from '@esengine/sprite';
 import { ParticleSystemComponent } from '@esengine/particle';
-import { invalidateUIRenderCaches, UIRenderProviderToken, UIInputSystemToken } from '@esengine/ui';
+import {
+    invalidateUIRenderCaches,
+    UIRenderProviderToken,
+    UIInputSystemToken,
+    initializeDynamicAtlasService,
+    reinitializeDynamicAtlasService,
+    registerTexturePathMapping,
+    AtlasExpansionStrategy,
+    type IAtlasEngineBridge,
+    type DynamicAtlasConfig
+} from '@esengine/ui';
+import { SettingsService } from './SettingsService';
 import * as esEngine from '@esengine/engine';
 import {
     AssetManager,
@@ -67,6 +78,9 @@ export class EngineService {
 
     // 编辑器相机状态（用于恢复）
     private _editorCameraState = { x: 0, y: 0, zoom: 1 };
+
+    // 当前选中的实体 IDs（用于高亮）| Currently selected entity IDs (for highlighting)
+    private _selectedEntityIds: number[] = [];
 
     private constructor() {}
 
@@ -145,6 +159,13 @@ export class EngineService {
             });
 
             await this._runtime.initialize();
+
+            // 设置 MaterialManager 的引擎桥接（上传内置 shader 到 GPU）
+            // Set engine bridge for MaterialManager (upload built-in shaders to GPU)
+            const materialManager = getMaterialManager();
+            if (materialManager && this._runtime.bridge) {
+                materialManager.setEngineBridge(this._runtime.bridge);
+            }
 
             // 启用性能分析器（编辑器模式默认启用）
             ProfilerSDK.setEnabled(true);
@@ -502,6 +523,58 @@ export class EngineService {
 
                 this._sceneResourceManager = new SceneResourceManager();
                 this._sceneResourceManager.setResourceLoader(this._engineIntegration);
+
+                // 初始化动态图集服务（用于 UI 合批）
+                // Initialize dynamic atlas service (for UI batching)
+                const bridge = this._runtime.bridge;
+                if (bridge.createBlankTexture && bridge.updateTextureRegion) {
+                    const atlasBridge: IAtlasEngineBridge = {
+                        createBlankTexture: (width: number, height: number) => {
+                            return bridge.createBlankTexture(width, height);
+                        },
+                        updateTextureRegion: (
+                            id: number,
+                            x: number,
+                            y: number,
+                            width: number,
+                            height: number,
+                            pixels: Uint8Array
+                        ) => {
+                            bridge.updateTextureRegion(id, x, y, width, height, pixels);
+                        }
+                    };
+
+                    // 从设置中获取动态图集配置
+                    // Get dynamic atlas config from settings
+                    const settingsService = SettingsService.getInstance();
+                    const atlasEnabled = settingsService.get('project.dynamicAtlas.enabled', true);
+
+                    if (atlasEnabled) {
+                        const strategyValue = settingsService.get<string>('project.dynamicAtlas.expansionStrategy', 'fixed');
+                        const expansionStrategy = strategyValue === 'dynamic'
+                            ? AtlasExpansionStrategy.Dynamic
+                            : AtlasExpansionStrategy.Fixed;
+                        const fixedPageSize = settingsService.get('project.dynamicAtlas.fixedPageSize', 1024);
+                        const maxPages = settingsService.get('project.dynamicAtlas.maxPages', 4);
+                        const maxTextureSize = settingsService.get('project.dynamicAtlas.maxTextureSize', 512);
+
+                        initializeDynamicAtlasService(atlasBridge, {
+                            expansionStrategy,
+                            initialPageSize: 256,    // 动态模式起始大小 | Dynamic mode initial size
+                            fixedPageSize,           // 固定模式页面大小 | Fixed mode page size
+                            maxPageSize: 2048,       // 最大页面大小 | Max page size
+                            maxPages,
+                            maxTextureSize,
+                            padding: 1
+                        });
+                    }
+
+                    // 注册纹理加载回调，当纹理加载时自动注册路径映射
+                    // Register texture load callback to register path mapping when textures load
+                    EngineIntegration.onTextureLoad((guid: string, path: string, _textureId: number) => {
+                        registerTexturePathMapping(guid, path);
+                    });
+                }
 
                 const sceneManagerService = Core.services.tryResolve<SceneManagerService>(SceneManagerService);
                 if (sceneManagerService) {
@@ -1137,9 +1210,19 @@ export class EngineService {
 
     /**
      * Set selected entity IDs for gizmo display.
+     * 设置选中的实体 ID 用于 Gizmo 显示。
      */
     setSelectedEntityIds(ids: number[]): void {
+        this._selectedEntityIds = [...ids];
         this._runtime?.setSelectedEntityIds(ids);
+    }
+
+    /**
+     * Get currently selected entity IDs.
+     * 获取当前选中的实体 IDs。
+     */
+    getSelectedEntityIds(): number[] {
+        return [...this._selectedEntityIds];
     }
 
     /**
@@ -1227,6 +1310,76 @@ export class EngineService {
      */
     getRuntime(): GameRuntime | null {
         return this._runtime;
+    }
+
+    /**
+     * Reinitialize dynamic atlas with current settings.
+     * 使用当前设置重新初始化动态图集。
+     *
+     * Call this when dynamic atlas settings change to apply them.
+     * 当动态图集设置更改时调用此方法以应用更改。
+     */
+    reinitializeDynamicAtlas(): void {
+        const bridge = this._runtime?.bridge;
+        if (!bridge?.createBlankTexture || !bridge?.updateTextureRegion) {
+            logger.warn('Dynamic atlas requires createBlankTexture and updateTextureRegion');
+            return;
+        }
+
+        const atlasBridge: IAtlasEngineBridge = {
+            createBlankTexture: (width: number, height: number) => {
+                return bridge.createBlankTexture!(width, height);
+            },
+            updateTextureRegion: (
+                id: number,
+                x: number,
+                y: number,
+                width: number,
+                height: number,
+                pixels: Uint8Array
+            ) => {
+                bridge.updateTextureRegion!(id, x, y, width, height, pixels);
+            }
+        };
+
+        // 从设置中获取动态图集配置
+        // Get dynamic atlas config from settings
+        const settingsService = SettingsService.getInstance();
+        const atlasEnabled = settingsService.get('project.dynamicAtlas.enabled', true);
+
+        if (!atlasEnabled) {
+            logger.info('Dynamic atlas is disabled');
+            return;
+        }
+
+        const strategyValue = settingsService.get<string>('project.dynamicAtlas.expansionStrategy', 'fixed');
+        const expansionStrategy = strategyValue === 'dynamic'
+            ? AtlasExpansionStrategy.Dynamic
+            : AtlasExpansionStrategy.Fixed;
+        const fixedPageSize = settingsService.get('project.dynamicAtlas.fixedPageSize', 1024);
+        const maxPages = settingsService.get('project.dynamicAtlas.maxPages', 4);
+        const maxTextureSize = settingsService.get('project.dynamicAtlas.maxTextureSize', 512);
+
+        logger.info('Dynamic atlas settings read from SettingsService:', {
+            strategyValue,
+            expansionStrategy: expansionStrategy === AtlasExpansionStrategy.Dynamic ? 'dynamic' : 'fixed',
+            fixedPageSize,
+            maxPages,
+            maxTextureSize
+        });
+
+        const config: DynamicAtlasConfig = {
+            expansionStrategy,
+            initialPageSize: 256,
+            fixedPageSize,
+            maxPageSize: 2048,
+            maxPages,
+            maxTextureSize,
+            padding: 1
+        };
+
+        reinitializeDynamicAtlasService(atlasBridge, config);
+        logger.info('Dynamic atlas reinitialized with config:', config);
     }
 
     /**

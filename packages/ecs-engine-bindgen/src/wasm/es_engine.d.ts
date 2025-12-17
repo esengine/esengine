@@ -270,6 +270,27 @@ export class GameEngine {
    */
   clearAllTextures(): void;
   /**
+   * Create a blank texture for dynamic atlas.
+   * 为动态图集创建空白纹理。
+   *
+   * @param width - Texture width in pixels | 纹理宽度
+   * @param height - Texture height in pixels | 纹理高度
+   * @returns Texture ID | 纹理ID
+   */
+  createBlankTexture(width: number, height: number): number;
+  /**
+   * Update a region of an existing texture with pixel data.
+   * 使用像素数据更新现有纹理的区域。
+   *
+   * @param id - Texture ID | 纹理ID
+   * @param x - X offset | X偏移
+   * @param y - Y offset | Y偏移
+   * @param width - Region width | 区域宽度
+   * @param height - Region height | 区域高度
+   * @param pixels - RGBA pixel data | RGBA像素数据
+   */
+  updateTextureRegion(id: number, x: number, y: number, width: number, height: number, pixels: Uint8Array): void;
+  /**
    * Render to a specific viewport.
    * 渲染到特定视口。
    */

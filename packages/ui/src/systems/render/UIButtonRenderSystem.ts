@@ -10,7 +10,8 @@
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
-import { UIRenderComponent } from '../../components/UIRenderComponent';
+import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
+import { UIInteractableComponent } from '../../components/UIInteractableComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
 
 /**
@@ -71,22 +72,68 @@ export class UIButtonRenderSystem extends EntitySystem {
             // Render texture if in texture or both mode
             // 如果在纹理或两者模式下，渲染纹理
             if (button.useTexture()) {
-                const textureGuid = button.getStateTextureGuid('normal');
+                // 根据交互状态获取正确的纹理
+                // Get correct texture based on interaction state
+                const interactable = entity.getComponent(UIInteractableComponent);
+                const state = interactable?.getState() ?? 'normal';
+                const textureGuid = button.getStateTextureGuid(state);
+
                 if (textureGuid) {
-                    collector.addRect(
-                        renderX, renderY,
-                        width, height,
-                        0xFFFFFF,  // White tint for texture
-                        alpha,
-                        sortingLayer,
-                        orderInLayer,
-                        {
-                            rotation,
-                            pivotX,
-                            pivotY,
-                            textureGuid
-                        }
-                    );
+                    // 检查是否需要使用九宫格渲染
+                    // Check if nine-patch rendering is needed
+                    const isNinePatch = render &&
+                        render.type === UIRenderType.NinePatch &&
+                        render.textureWidth > 0 &&
+                        render.textureHeight > 0;
+
+                    // 使用按钮的当前颜色作为纹理着色（Color Tint Transition）
+                    // Use button's current color as texture tint (Color Tint Transition)
+                    // normalColor 为白色时，正常显示；其他状态颜色会对纹理进行着色
+                    // When normalColor is white, texture displays normally; other state colors tint the texture
+                    const textureTint = button.currentColor;
+
+                    if (isNinePatch) {
+                        // Nine-patch rendering for buttons
+                        // 按钮的九宫格渲染
+                        // addNinePatch expects top-left corner coordinates
+                        // Y-up coordinate system: top = bottom + height
+                        const topLeftX = x;
+                        const topLeftY = y + height;
+                        collector.addNinePatch(
+                            topLeftX, topLeftY,
+                            width, height,
+                            render.ninePatchMargins,
+                            render.textureWidth,
+                            render.textureHeight,
+                            textureTint,
+                            alpha,
+                            sortingLayer,
+                            orderInLayer,
+                            {
+                                rotation,
+                                textureGuid,
+                                entityId: entity.id
+                            }
+                        );
+                    } else {
+                        // Standard texture rendering
+                        // 标准纹理渲染
+                        collector.addRect(
+                            renderX, renderY,
+                            width, height,
+                            textureTint,
+                            alpha,
+                            sortingLayer,
+                            orderInLayer,
+                            {
+                                rotation,
+                                pivotX,
+                                pivotY,
+                                textureGuid,
+                                entityId: entity.id
+                            }
+                        );
+                    }
                 }
             }
 
@@ -105,7 +152,8 @@ export class UIButtonRenderSystem extends EntitySystem {
                         {
                             rotation,
                             pivotX,
-                            pivotY
+                            pivotY,
+                            entityId: entity.id
                         }
                     );
                 }
@@ -124,7 +172,8 @@ export class UIButtonRenderSystem extends EntitySystem {
                     orderInLayer + 2,
                     rotation,
                     pivotX,
-                    pivotY
+                    pivotY,
+                    entity.id
                 );
             }
         }
@@ -145,7 +194,8 @@ export class UIButtonRenderSystem extends EntitySystem {
         orderInLayer: number,
         rotation: number,
         pivotX: number,
-        pivotY: number
+        pivotY: number,
+        entityId: number
     ): void {
         // 计算矩形的边界（相对于 pivot 中心）
         const left = centerX - width * pivotX;
@@ -158,7 +208,7 @@ export class UIButtonRenderSystem extends EntitySystem {
             (left + right) / 2, top - borderWidth / 2,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Bottom border
@@ -166,7 +216,7 @@ export class UIButtonRenderSystem extends EntitySystem {
             (left + right) / 2, bottom + borderWidth / 2,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Left border (excluding corners)
@@ -175,7 +225,7 @@ export class UIButtonRenderSystem extends EntitySystem {
             left + borderWidth / 2, (top + bottom) / 2,
             borderWidth, sideBorderHeight,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Right border (excluding corners)
@@ -183,7 +233,7 @@ export class UIButtonRenderSystem extends EntitySystem {
             right - borderWidth / 2, (top + bottom) / 2,
             borderWidth, sideBorderHeight,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 }

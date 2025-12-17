@@ -1223,6 +1223,32 @@ export const zh: Translations = {
                     label: '模块列表',
                     description: '取消勾选不需要的模块。核心模块不能禁用。新增的模块会自动启用。'
                 }
+            },
+            dynamicAtlas: {
+                title: '动态图集',
+                description: '运行时图集配置，用于 UI 合批优化',
+                enabled: {
+                    label: '启用动态图集',
+                    description: '启用运行时动态图集以减少 Draw Call'
+                },
+                expansionStrategy: {
+                    label: '扩展策略',
+                    description: '选择图集的扩展方式',
+                    fixed: '固定大小（无重建开销）',
+                    dynamic: '动态扩展（内存效率更高）'
+                },
+                fixedPageSize: {
+                    label: '页面大小',
+                    description: '固定模式下每个图集页面的大小'
+                },
+                maxPages: {
+                    label: '最大页数',
+                    description: '允许的最大图集页面数量'
+                },
+                maxTextureSize: {
+                    label: '最大纹理尺寸',
+                    description: '可加入图集的最大单个纹理尺寸，超过此尺寸的纹理将不会被合批'
+                }
             }
         }
     }

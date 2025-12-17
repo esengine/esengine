@@ -125,7 +125,8 @@ export const BuiltInShaders = {
     Grayscale: 1,
     Tint: 2,
     Flash: 3,
-    Outline: 4
+    Outline: 4,
+    Shiny: 5
 } as const;
 
 /**

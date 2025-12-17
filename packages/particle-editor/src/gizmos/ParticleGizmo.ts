@@ -148,7 +148,10 @@ function particleSystemGizmoProvider(
     const shapeWidth = (asset?.shapeWidth ?? 0) * scaleX;
     const shapeHeight = (asset?.shapeHeight ?? 0) * scaleY;
     const shapeAngle = (asset?.shapeAngle ?? 30) * Math.PI / 180; // 转换为弧度
-    const direction = ((asset?.direction ?? 90) * Math.PI / 180) + worldRotation; // 转换为弧度并应用世界旋转
+    // 转换为弧度并应用世界旋转 | Convert to radians and apply world rotation
+    // worldRotation 是度(顺时针)，转为弧度(逆时针)用于数学计算
+    // worldRotation is degrees(clockwise), convert to radians(counter-clockwise) for math
+    const direction = ((asset?.direction ?? 90) * Math.PI / 180) - (worldRotation * Math.PI / 180);
 
     // 根据发射形状绘制 Gizmo | Draw gizmo based on emission shape
     switch (emissionShape) {

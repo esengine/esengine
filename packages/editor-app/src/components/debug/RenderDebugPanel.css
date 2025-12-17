@@ -399,6 +399,24 @@
     flex-shrink: 0;
 }
 
+/* Batch breaker item highlight */
+.event-item.batch-breaker {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.event-item.batch-breaker:hover {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.event-item .event-name.batch-breaker {
+    color: #f59e0b;
+    font-weight: 500;
+}
+
+.event-item .event-icon.breaker {
+    color: #f59e0b;
+}
+
 /* ==================== Right Panel ==================== */
 .render-debug-right {
     flex: 1;
@@ -536,6 +554,28 @@
     font-weight: 600;
 }
 
+/* Batch fix tip */
+.batch-fix-tip {
+    padding: 8px 10px;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 4px;
+    color: #ffc107;
+    font-size: 10px;
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+/* Batch breaker warning */
+.batch-breaker-warning {
+    color: #f59e0b !important;
+    background: rgba(245, 158, 11, 0.15);
+    border-radius: 3px;
+    padding: 4px 8px !important;
+    margin: 0 !important;
+    border-top: none !important;
+}
+
 /* ==================== Stats Bar ==================== */
 .render-debug-stats {
     display: flex;
@@ -630,4 +670,148 @@
     color: #666;
     word-break: break-all;
     line-height: 1.3;
+}
+
+/* ==================== Clickable Stats ==================== */
+.render-debug-stats .stat-item.clickable {
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: background 0.15s;
+}
+
+.render-debug-stats .stat-item.clickable:hover {
+    background: #3a3a3a;
+}
+
+.render-debug-stats .stat-item.atlas-enabled {
+    color: #10b981;
+}
+
+.render-debug-stats .stat-item.atlas-disabled {
+    color: #666;
+}
+
+/* ==================== Atlas Preview Modal ==================== */
+.atlas-preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.atlas-preview-content {
+    background: #1e1e1e;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    width: 600px;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.atlas-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #2d2d2d;
+    border-bottom: 1px solid #1a1a1a;
+    font-weight: 500;
+}
+
+.atlas-page-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    background: #252525;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.atlas-page-tab {
+    padding: 4px 10px;
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #aaa;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.atlas-page-tab:hover {
+    background: #3a3a3a;
+    color: #ccc;
+}
+
+.atlas-page-tab.active {
+    background: #4a9eff;
+    border-color: #4a9eff;
+    color: #fff;
+}
+
+.atlas-preview-canvas-container {
+    flex: 1;
+    min-height: 350px;
+    padding: 12px;
+    background: #1a1a1a;
+}
+
+.atlas-preview-canvas-container canvas {
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+.atlas-preview-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #252525;
+    border-top: 1px solid #1a1a1a;
+    min-height: 40px;
+}
+
+.atlas-preview-info .hint {
+    color: #666;
+    font-style: italic;
+}
+
+.atlas-entry-info {
+    display: flex;
+    gap: 6px;
+    font-size: 10px;
+}
+
+.atlas-entry-info .label {
+    color: #888;
+}
+
+.atlas-entry-info .value {
+    color: #4a9eff;
+    font-family: 'Consolas', monospace;
+}
+
+.atlas-preview-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 8px 14px;
+    background: #2d2d2d;
+    border-top: 1px solid #1a1a1a;
+    font-size: 10px;
+    color: #888;
+}
+
+.atlas-preview-stats .error {
+    color: #ef4444;
 }

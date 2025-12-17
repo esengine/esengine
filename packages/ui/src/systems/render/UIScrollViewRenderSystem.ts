@@ -76,7 +76,8 @@ export class UIScrollViewRenderSystem extends EntitySystem {
                 this.renderVerticalScrollbar(
                     collector,
                     baseX, baseY, width, height,
-                    scrollView, alpha, sortingLayer, orderInLayer, rotation
+                    scrollView, alpha, sortingLayer, orderInLayer, rotation,
+                    entity.id
                 );
             }
 
@@ -86,7 +87,8 @@ export class UIScrollViewRenderSystem extends EntitySystem {
                 this.renderHorizontalScrollbar(
                     collector,
                     baseX, baseY, width, height,
-                    scrollView, alpha, sortingLayer, orderInLayer, rotation
+                    scrollView, alpha, sortingLayer, orderInLayer, rotation,
+                    entity.id
                 );
             }
         }
@@ -104,7 +106,8 @@ export class UIScrollViewRenderSystem extends EntitySystem {
         alpha: number,
         sortingLayer: string,
         orderInLayer: number,
-        rotation: number
+        rotation: number,
+        entityId: number
     ): void {
         const scrollbarWidth = scrollView.scrollbarWidth;
         const hasHorizontal = scrollView.needsHorizontalScrollbar(viewWidth);
@@ -125,7 +128,7 @@ export class UIScrollViewRenderSystem extends EntitySystem {
                 scrollView.scrollbarTrackAlpha * alpha,
                 sortingLayer,
                 orderInLayer + 5,
-                { rotation, pivotX: 0.5, pivotY: 0.5 }
+                { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
             );
         }
 
@@ -149,7 +152,7 @@ export class UIScrollViewRenderSystem extends EntitySystem {
             handleAlpha * alpha,
             sortingLayer,
             orderInLayer + 6,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 
@@ -165,7 +168,8 @@ export class UIScrollViewRenderSystem extends EntitySystem {
         alpha: number,
         sortingLayer: string,
         orderInLayer: number,
-        rotation: number
+        rotation: number,
+        entityId: number
     ): void {
         const scrollbarWidth = scrollView.scrollbarWidth;
         const hasVertical = scrollView.needsVerticalScrollbar(viewHeight);
@@ -186,7 +190,7 @@ export class UIScrollViewRenderSystem extends EntitySystem {
                 scrollView.scrollbarTrackAlpha * alpha,
                 sortingLayer,
                 orderInLayer + 5,
-                { rotation, pivotX: 0.5, pivotY: 0.5 }
+                { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
             );
         }
 
@@ -210,7 +214,7 @@ export class UIScrollViewRenderSystem extends EntitySystem {
             handleAlpha * alpha,
             sortingLayer,
             orderInLayer + 6,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 }

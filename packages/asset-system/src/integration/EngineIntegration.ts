@@ -132,6 +132,12 @@ interface DataAssetEntry {
 }
 
 /**
+ * Texture load callback type
+ * 纹理加载回调类型
+ */
+export type TextureLoadCallback = (guid: string, path: string, textureId: number) => void;
+
+/**
  * Asset system engine integration
  * 资产系统引擎集成
  */
@@ -145,6 +151,50 @@ export class EngineIntegration {
     // 路径稳定 ID 缓存（跨 Play/Stop 循环保持稳定）
     // Path-stable ID cache (persists across Play/Stop cycles)
     private static _pathIdCache = new Map<string, number>();
+
+    // 纹理加载回调（用于动态图集集成等）
+    // Texture load callback (for dynamic atlas integration, etc.)
+    private static _textureLoadCallbacks: TextureLoadCallback[] = [];
+
+    /**
+     * Register a callback to be called when textures are loaded
+     * 注册纹理加载时调用的回调
+     *
+     * This can be used for dynamic atlas integration.
+     * 可用于动态图集集成。
+     *
+     * @param callback - Callback function | 回调函数
+     */
+    static onTextureLoad(callback: TextureLoadCallback): void {
+        if (!EngineIntegration._textureLoadCallbacks.includes(callback)) {
+            EngineIntegration._textureLoadCallbacks.push(callback);
+        }
+    }
+
+    /**
+     * Remove a texture load callback
+     * 移除纹理加载回调
+     */
+    static removeTextureLoadCallback(callback: TextureLoadCallback): void {
+        const index = EngineIntegration._textureLoadCallbacks.indexOf(callback);
+        if (index >= 0) {
+            EngineIntegration._textureLoadCallbacks.splice(index, 1);
+        }
+    }
+
+    /**
+     * Notify all callbacks of a texture load
+     * 通知所有回调纹理已加载
+     */
+    private static notifyTextureLoad(guid: string, path: string, textureId: number): void {
+        for (const callback of EngineIntegration._textureLoadCallbacks) {
+            try {
+                callback(guid, path, textureId);
+            } catch (e) {
+                console.error('[EngineIntegration] Error in texture load callback:', e);
+            }
+        }
+    }
 
     // Audio resource mappings | 音频资源映射
     private _audioIdMap = new Map<AssetGUID, number>();
@@ -308,6 +358,10 @@ export class EngineIntegration {
         // 缓存映射 / Cache mapping
         this._textureIdMap.set(guid, stableId);
         this._pathToTextureId.set(assetPath, stableId);
+
+        // 通知回调（用于动态图集等）
+        // Notify callbacks (for dynamic atlas, etc.)
+        EngineIntegration.notifyTextureLoad(guid, engineUrl, stableId);
 
         return stableId;
     }

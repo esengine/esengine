@@ -46,6 +46,9 @@ export class AssetLoaderFactory implements IAssetLoaderFactory {
 
         // 预制体加载器 / Prefab loader
         this._loaders.set(AssetType.Prefab, new PrefabLoader());
+
+        // 注：Shader 和 Material 加载器由 material-system 模块注册
+        // Note: Shader and Material loaders are registered by material-system module
     }
 
     /**

@@ -2,7 +2,13 @@
  * MaterialSystemPlugin for ES Engine.
  * ES引擎的材质系统插件。
  *
- * 注意：材质系统不注册独立组件，材质作为渲染组件（如 SpriteComponent）的属性使用
+ * Provides:
+ * - Material and Shader management
+ * - Built-in shaders (Default, Grayscale, Tint, Flash, Outline, Shiny)
+ *
+ * 提供：
+ * - 材质和着色器管理
+ * - 内置着色器
  */
 
 import { MaterialManager, getMaterialManager } from './MaterialManager';
@@ -82,7 +88,9 @@ const manifest: ModuleManifest = {
     defaultEnabled: true,
     isEngineModule: true,
     dependencies: ['core', 'asset-system'],
-    exports: { other: ['Material', 'Shader', 'MaterialManager'] },
+    exports: {
+        other: ['Material', 'Shader', 'MaterialManager']
+    },
     requiresWasm: false
 };
 

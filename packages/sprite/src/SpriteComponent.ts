@@ -1,27 +1,11 @@
 import type { AssetReference } from '@esengine/asset-system';
 import { Component, ECSComponent, Property, Serializable, Serialize } from '@esengine/ecs-framework';
 import { SortingLayers, type ISortable } from '@esengine/engine-core';
-
-/**
- * Material property override value.
- * 材质属性覆盖值。
- *
- * Used to override specific uniform parameters on a per-instance basis
- * without creating a new material instance.
- * 用于在每个实例上覆盖特定的 uniform 参数，而无需创建新的材质实例。
- */
-export interface MaterialPropertyOverride {
-    /** Uniform type. | Uniform 类型。 */
-    type: 'float' | 'vec2' | 'vec3' | 'vec4' | 'color' | 'int';
-    /** Uniform value. | Uniform 值。 */
-    value: number | number[];
-}
-
-/**
- * Material property overrides map.
- * 材质属性覆盖映射。
- */
-export type MaterialOverrides = Record<string, MaterialPropertyOverride>;
+import type {
+    IMaterialOverridable,
+    MaterialPropertyOverride,
+    MaterialOverrides
+} from '@esengine/material-system';
 
 /**
  * 精灵组件 - 管理2D图像渲染
@@ -32,7 +16,7 @@ export type MaterialOverrides = Record<string, MaterialPropertyOverride>;
  */
 @ECSComponent('Sprite', { requires: ['Transform'] })
 @Serializable({ version: 5, typeId: 'Sprite' })
-export class SpriteComponent extends Component implements ISortable {
+export class SpriteComponent extends Component implements ISortable, IMaterialOverridable {
     /**
      * 纹理资产 GUID
      * Texture asset GUID

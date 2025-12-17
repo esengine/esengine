@@ -184,23 +184,108 @@ export interface IAudioAsset {
 }
 
 /**
+ * Shader property type
+ * 着色器属性类型
+ */
+export type ShaderPropertyType = 'float' | 'vec2' | 'vec3' | 'vec4' | 'int' | 'sampler2D' | 'mat3' | 'mat4';
+
+/**
+ * Shader property definition
+ * 着色器属性定义
+ */
+export interface IShaderProperty {
+    /** 属性名称（uniform 名） / Property name (uniform name) */
+    name: string;
+    /** 属性类型 / Property type */
+    type: ShaderPropertyType;
+    /** 默认值 / Default value */
+    default: number | number[];
+    /** 显示名称（编辑器用） / Display name for editor */
+    displayName?: string;
+    /** 值范围（用于 float/int） / Value range for float/int */
+    range?: [number, number];
+    /** 是否隐藏（内部使用） / Hidden from inspector */
+    hidden?: boolean;
+}
+
+/**
+ * Shader asset interface
+ * 着色器资产接口
+ *
+ * Shader assets contain GLSL source code and property definitions.
+ * 着色器资产包含 GLSL 源代码和属性定义。
+ */
+export interface IShaderAsset {
+    /** 着色器名称 / Shader name (e.g., "UI/Shiny") */
+    name: string;
+    /** 顶点着色器源代码 / Vertex shader GLSL source */
+    vertex: string;
+    /** 片段着色器源代码 / Fragment shader GLSL source */
+    fragment: string;
+    /** 属性定义列表 / Property definitions */
+    properties: IShaderProperty[];
+    /** 编译后的着色器 ID（运行时填充） / Compiled shader ID (runtime) */
+    shaderId?: number;
+}
+
+/**
+ * Material property value
+ * 材质属性值
+ */
+export type MaterialPropertyValue = number | number[] | string;
+
+/**
+ * Material animator configuration
+ * 材质动画器配置
+ */
+export interface IMaterialAnimator {
+    /** 要动画的属性名 / Property to animate */
+    property: string;
+    /** 起始值 / Start value */
+    from: number;
+    /** 结束值 / End value */
+    to: number;
+    /** 持续时间（秒） / Duration in seconds */
+    duration: number;
+    /** 是否循环 / Loop animation */
+    loop?: boolean;
+    /** 循环间隔（秒） / Delay between loops */
+    loopDelay?: number;
+    /** 缓动函数 / Easing function */
+    easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+    /** 是否自动播放 / Auto play on start */
+    autoPlay?: boolean;
+}
+
+/**
  * Material asset interface
  * 材质资产接口
+ *
+ * Material assets reference a shader and define property values.
+ * 材质资产引用着色器并定义属性值。
  */
 export interface IMaterialAsset {
-    /** 着色器名称 / Shader name */
+    /** 材质名称 / Material name */
+    name: string;
+    /** 着色器 GUID 或内置路径 / Shader GUID or built-in path (e.g., "builtin://shaders/Shiny") */
     shader: string;
-    /** 材质属性 / Material properties */
-    properties: Map<string, unknown>;
-    /** 纹理映射 / Texture slot mappings */
-    textures: Map<string, AssetGUID>;
+    /** 材质属性值 / Material property values */
+    properties: Record<string, MaterialPropertyValue>;
+    /** 纹理映射 / Texture slot mappings (property name -> texture GUID) */
+    textures?: Record<string, AssetGUID>;
     /** 渲染状态 / Render states */
-    renderStates: {
+    renderStates?: {
         cullMode?: 'none' | 'front' | 'back';
-        blendMode?: 'none' | 'alpha' | 'additive' | 'multiply';
+        blendMode?: 'none' | 'alpha' | 'additive' | 'multiply' | 'screen';
         depthTest?: boolean;
         depthWrite?: boolean;
     };
+    /** 动画器配置（可选） / Animator configuration (optional) */
+    animator?: IMaterialAnimator;
+    /** 运行时：编译后的着色器 ID / Runtime: compiled shader ID */
+    _shaderId?: number;
+    /** 运行时：引擎材质 ID / Runtime: engine material ID */
+    _materialId?: number;
 }
 
 // 预制体资产接口从专用文件导出 | Prefab asset interface exported from dedicated file

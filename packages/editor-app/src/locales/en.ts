@@ -1223,6 +1223,32 @@ export const en: Translations = {
                     label: 'Module List',
                     description: 'Uncheck modules you do not need. Core modules cannot be disabled. New modules are enabled by default.'
                 }
+            },
+            dynamicAtlas: {
+                title: 'Dynamic Atlas',
+                description: 'Runtime atlas configuration for UI batching optimization',
+                enabled: {
+                    label: 'Enable Dynamic Atlas',
+                    description: 'Enable runtime dynamic atlas to reduce Draw Calls'
+                },
+                expansionStrategy: {
+                    label: 'Expansion Strategy',
+                    description: 'Choose how the atlas expands',
+                    fixed: 'Fixed Size (No rebuild cost)',
+                    dynamic: 'Dynamic Expansion (Better memory efficiency)'
+                },
+                fixedPageSize: {
+                    label: 'Page Size',
+                    description: 'Size of each atlas page in fixed mode'
+                },
+                maxPages: {
+                    label: 'Max Pages',
+                    description: 'Maximum number of atlas pages allowed'
+                },
+                maxTextureSize: {
+                    label: 'Max Texture Size',
+                    description: 'Maximum size of individual textures that can be added to the atlas'
+                }
             }
         }
     }

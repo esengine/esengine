@@ -52,6 +52,16 @@ interface PropertyOptionsBase {
     label?: string;
     /** 是否只读 | Read-only flag */
     readOnly?: boolean;
+    /**
+     * 是否在 Inspector 中隐藏
+     * Whether to hide this property in Inspector
+     *
+     * Hidden properties are still serialized but not shown in the default PropertyInspector.
+     * Useful when a custom Inspector handles the property.
+     * 隐藏的属性仍然会被序列化，但不会在默认的 PropertyInspector 中显示。
+     * 适用于自定义 Inspector 处理该属性的情况。
+     */
+    hidden?: boolean;
     /** Action buttons | 操作按钮 */
     actions?: PropertyAction[];
     /** 此属性控制的其他组件属性 | Properties this field controls */

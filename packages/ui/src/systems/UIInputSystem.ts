@@ -418,11 +418,12 @@ export class UIInputSystem extends EntitySystem {
         const button = entity.getComponent(UIButtonComponent);
         if (!button || button.disabled) return;
 
-        // 更新目标颜色和当前颜色
+        // 更新目标颜色，让 UIAnimationSystem 处理平滑过渡
+        // Update target color, let UIAnimationSystem handle smooth transition
         const stateColor = button.getStateColor(interactable.getState());
         button.targetColor = stateColor;
-        // 直接设置 currentColor 以便立即看到效果（动画系统会平滑过渡）
-        button.currentColor = stateColor;
+        // 注意：不要直接设置 currentColor，由 UIAnimationSystem.updateButtonColor() 进行插值
+        // Note: Don't set currentColor directly, let UIAnimationSystem.updateButtonColor() interpolate
 
         // 处理长按
         if (interactable.pressed) {

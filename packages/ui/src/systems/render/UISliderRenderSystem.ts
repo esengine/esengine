@@ -89,7 +89,7 @@ export class UISliderRenderSystem extends EntitySystem {
                         slider.trackAlpha * alpha,
                         sortingLayer,
                         orderInLayer,
-                        { rotation, pivotX: 0.5, pivotY: 0.5 }
+                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                     );
                 } else {
                     collector.addRect(
@@ -99,7 +99,7 @@ export class UISliderRenderSystem extends EntitySystem {
                         slider.trackAlpha * alpha,
                         sortingLayer,
                         orderInLayer,
-                        { rotation, pivotX: 0.5, pivotY: 0.5 }
+                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                     );
                 }
             }
@@ -119,7 +119,7 @@ export class UISliderRenderSystem extends EntitySystem {
                         slider.fillAlpha * alpha,
                         sortingLayer,
                         orderInLayer + 1,
-                        { rotation, pivotX: 0.5, pivotY: 0.5 }
+                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                     );
                 } else {
                     // Fill from bottom
@@ -131,7 +131,7 @@ export class UISliderRenderSystem extends EntitySystem {
                         slider.fillAlpha * alpha,
                         sortingLayer,
                         orderInLayer + 1,
-                        { rotation, pivotX: 0.5, pivotY: 0.5 }
+                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                     );
                 }
             }
@@ -143,7 +143,7 @@ export class UISliderRenderSystem extends EntitySystem {
                     collector, centerX, centerY,
                     trackLength, trackThickness,
                     slider, alpha, sortingLayer, orderInLayer,
-                    isHorizontal, rotation
+                    isHorizontal, rotation, entity.id
                 );
             }
 
@@ -167,7 +167,7 @@ export class UISliderRenderSystem extends EntitySystem {
                     0.3 * alpha,
                     sortingLayer,
                     orderInLayer + 2,
-                    { rotation, pivotX: 0.5, pivotY: 0.5 }
+                    { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                 );
             }
 
@@ -180,7 +180,7 @@ export class UISliderRenderSystem extends EntitySystem {
                 alpha,
                 sortingLayer,
                 orderInLayer + 3,
-                { rotation, pivotX: 0.5, pivotY: 0.5 }
+                { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
             );
 
             // Handle border (if any)
@@ -195,7 +195,8 @@ export class UISliderRenderSystem extends EntitySystem {
                     alpha,
                     sortingLayer,
                     orderInLayer + 4,
-                    rotation
+                    rotation,
+                    entity.id
                 );
             }
         }
@@ -214,7 +215,8 @@ export class UISliderRenderSystem extends EntitySystem {
         sortingLayer: string,
         orderInLayer: number,
         isHorizontal: boolean,
-        rotation: number
+        rotation: number,
+        entityId: number
     ): void {
         const tickCount = slider.tickCount + 2; // Include start and end ticks
         const tickSize = slider.tickSize;
@@ -246,7 +248,7 @@ export class UISliderRenderSystem extends EntitySystem {
                 alpha,
                 sortingLayer,
                 orderInLayer,
-                { rotation, pivotX: 0.5, pivotY: 0.5 }
+                { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
             );
         }
     }
@@ -264,7 +266,8 @@ export class UISliderRenderSystem extends EntitySystem {
         alpha: number,
         sortingLayer: string,
         orderInLayer: number,
-        rotation: number
+        rotation: number,
+        entityId: number
     ): void {
         const halfW = width / 2;
         const halfH = height / 2;
@@ -275,7 +278,7 @@ export class UISliderRenderSystem extends EntitySystem {
             x, y - halfH + halfB,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Bottom
@@ -283,7 +286,7 @@ export class UISliderRenderSystem extends EntitySystem {
             x, y + halfH - halfB,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Left
@@ -291,7 +294,7 @@ export class UISliderRenderSystem extends EntitySystem {
             x - halfW + halfB, y,
             borderWidth, height - borderWidth * 2,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Right
@@ -299,7 +302,7 @@ export class UISliderRenderSystem extends EntitySystem {
             x + halfW - halfB, y,
             borderWidth, height - borderWidth * 2,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 }

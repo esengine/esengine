@@ -151,11 +151,11 @@ export class UITransformComponent extends Component implements ISortable {
     // ===== 变换 Transform =====
 
     /**
-     * 旋转角度（弧度）
-     * Rotation angle in radians
+     * 旋转角度（度，顺时针为正）
+     * Rotation angle in degrees (clockwise positive)
      */
     @Serialize()
-    @Property({ type: 'number', label: 'Rotation', step: 0.01 })
+    @Property({ type: 'number', label: 'Rotation', step: 1 })
     public rotation: number = 0;
 
     /**
@@ -258,8 +258,8 @@ export class UITransformComponent extends Component implements ISortable {
     public worldVisible: boolean = true;
 
     /**
-     * 计算后的世界旋转（弧度，考虑父元素旋转）
-     * Computed world rotation in radians (considering parent rotation)
+     * 计算后的世界旋转（度，顺时针为正，考虑父元素旋转）
+     * Computed world rotation in degrees (clockwise positive, considering parent rotation)
      */
     public worldRotation: number = 0;
 

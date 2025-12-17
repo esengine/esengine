@@ -149,11 +149,13 @@ describe('Vector2', () => {
   });
 
   describe('变换操作', () => {
-    test('rotate方法应正确旋转向量', () => {
+    test('rotate方法应正确旋转向量（顺时针）', () => {
+      // Clockwise rotation: (1, 0) rotated 90° clockwise = (0, -1)
+      // 顺时针旋转：(1, 0) 顺时针旋转 90° = (0, -1)
       const v = new Vector2(1, 0);
       v.rotate(Math.PI / 2);
       expectFloatsEqual(v.x, 0, 1e-10);
-      expectFloatsEqual(v.y, 1, 1e-10);
+      expectFloatsEqual(v.y, -1, 1e-10);
     });
 
     test('reflect方法应正确反射向量', () => {

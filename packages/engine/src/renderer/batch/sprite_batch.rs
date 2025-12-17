@@ -168,8 +168,15 @@ impl SpriteBatch {
 
     /// Set up vertex attribute pointers.
     /// 设置顶点属性指针。
+    ///
+    /// Vertex layout (9 floats per vertex):
+    /// 顶点布局（每顶点 9 个浮点数）:
+    /// - location 0: position (2 floats) - offset 0
+    /// - location 1: tex_coord (2 floats) - offset 8
+    /// - location 2: color (4 floats) - offset 16
+    /// - location 3: aspect_ratio (1 float) - offset 32
     fn setup_vertex_attributes(gl: &WebGl2RenderingContext) {
-        let stride = (FLOATS_PER_VERTEX * 4) as i32;
+        let stride = (FLOATS_PER_VERTEX * 4) as i32; // 9 * 4 = 36 bytes
 
         // Position attribute (location = 0) | 位置属性
         gl.enable_vertex_attrib_array(0);
@@ -202,6 +209,19 @@ impl SpriteBatch {
             false,
             stride,
             16, // 4 floats * 4 bytes
+        );
+
+        // Aspect ratio attribute (location = 3) | 宽高比属性
+        // Used by shaders for aspect-ratio-aware transformations
+        // 用于着色器中的宽高比感知变换
+        gl.enable_vertex_attrib_array(3);
+        gl.vertex_attrib_pointer_with_i32(
+            3,
+            1,
+            WebGl2RenderingContext::FLOAT,
+            false,
+            stride,
+            32, // (2 + 2 + 4) floats * 4 bytes
         );
     }
 
@@ -302,6 +322,14 @@ impl SpriteBatch {
             let width = scale_x;
             let height = scale_y;
 
+            // Calculate aspect ratio (width / height), default 1.0 for degenerate cases
+            // 计算宽高比（宽度/高度），退化情况下默认为 1.0
+            let aspect_ratio = if height.abs() > 0.001 {
+                width / height
+            } else {
+                1.0
+            };
+
             let batch_key = BatchKey {
                 material_id: material_ids[i],
                 texture_id: texture_ids[i],
@@ -316,7 +344,7 @@ impl SpriteBatch {
             Self::add_sprite_vertices_to_batch(
                 batch,
                 x, y, width, height, rotation, origin_x, origin_y,
-                u0, v0, u1, v1, color_arr,
+                u0, v0, u1, v1, color_arr, aspect_ratio,
             );
         }
 
@@ -326,6 +354,9 @@ impl SpriteBatch {
 
     /// Add vertices for a single sprite to a batch.
     /// 为单个精灵添加顶点到批次。
+    ///
+    /// Each vertex contains: position(2) + tex_coord(2) + color(4) + aspect_ratio(1) = 9 floats
+    /// 每个顶点包含: 位置(2) + 纹理坐标(2) + 颜色(4) + 宽高比(1) = 9 个浮点数
     #[inline]
     fn add_sprite_vertices_to_batch(
         batch: &mut Vec<f32>,
@@ -341,6 +372,7 @@ impl SpriteBatch {
         u1: f32,
         v1: f32,
         color: [f32; 4],
+        aspect_ratio: f32,
     ) {
         let cos = rotation.cos();
         let sin = rotation.sin();
@@ -393,6 +425,10 @@ impl SpriteBatch {
 
             // Color | 颜色
             batch.extend_from_slice(&color);
+
+            // Aspect ratio (same for all 4 vertices of a quad)
+            // 宽高比（四边形的 4 个顶点相同）
+            batch.push(aspect_ratio);
         }
     }
 

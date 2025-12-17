@@ -1500,6 +1500,9 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
+      '@esengine/material-system':
+        specifier: workspace:*
+        version: link:../material-system
       rimraf:
         specifier: ^5.0.5
         version: 5.0.10
@@ -1647,6 +1650,9 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
+      '@esengine/material-system':
+        specifier: workspace:*
+        version: link:../material-system
       rimraf:
         specifier: ^5.0.5
         version: 5.0.10
@@ -1675,6 +1681,9 @@ importers:
       '@esengine/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
+      '@esengine/material-system':
+        specifier: workspace:*
+        version: link:../material-system
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27

@@ -4,6 +4,9 @@ import { Color } from '@esengine/ecs-framework-math';
 import type { IRenderDataProvider } from '@esengine/ecs-engine-bindgen';
 import { TilemapComponent, type ITilemapLayerData } from '../TilemapComponent';
 
+/** 度转弧度常量 | Degrees to radians constant */
+const DEG_TO_RAD = Math.PI / 180;
+
 /**
  * Tilemap render data for a single tilemap layer
  * 单个瓦片地图图层的渲染数据
@@ -186,9 +189,10 @@ export class TilemapRenderingSystem extends EntitySystem implements IRenderDataP
         const colorValue = Color.packHexAlpha(tilemap.color, effectiveAlpha);
 
         // Calculate rotation parameters
-        // 计算旋转参数
-        const cos = Math.cos(transform.rotation.z);
-        const sin = Math.sin(transform.rotation.z);
+        // 计算旋转参数（度转弧度）
+        const rotationRad = transform.rotation.z * DEG_TO_RAD;
+        const cos = Math.cos(rotationRad);
+        const sin = Math.sin(rotationRad);
 
         // Tilemap rotation pivot
         // Tilemap 旋转中心点
@@ -221,10 +225,10 @@ export class TilemapRenderingSystem extends EntitySystem implements IRenderDataP
                 const localX = transform.position.x + col * tileWidth * transform.scale.x + (tileWidth * transform.scale.x) / 2 - pivotX;
                 const localY = transform.position.y + (height - 1 - row) * tileHeight * transform.scale.y + (tileHeight * transform.scale.y) / 2 - pivotY;
 
-                // Apply rotation transform
-                // 应用旋转变换
-                const rotatedX = localX * cos - localY * sin + pivotX;
-                const rotatedY = localX * sin + localY * cos + pivotY;
+                // Apply rotation transform (clockwise positive)
+                // 应用旋转变换（顺时针为正）
+                const rotatedX = localX * cos + localY * sin + pivotX;
+                const rotatedY = -localX * sin + localY * cos + pivotY;
 
                 // Transform: [x, y, rotation, scaleX, scaleY, originX, originY]
                 const tOffset = idx * 7;
@@ -301,9 +305,10 @@ export class TilemapRenderingSystem extends EntitySystem implements IRenderDataP
         );
 
         // Calculate rotation parameters
-        // 计算旋转参数
-        const cos = Math.cos(transform.rotation.z);
-        const sin = Math.sin(transform.rotation.z);
+        // 计算旋转参数（度转弧度）
+        const rotationRad = transform.rotation.z * DEG_TO_RAD;
+        const cos = Math.cos(rotationRad);
+        const sin = Math.sin(rotationRad);
 
         // Tilemap rotation pivot
         // Tilemap 旋转中心点
@@ -320,10 +325,10 @@ export class TilemapRenderingSystem extends EntitySystem implements IRenderDataP
                 const localX = transform.position.x + col * tileWidth * transform.scale.x + (tileWidth * transform.scale.x) / 2 - pivotX;
                 const localY = transform.position.y + (height - 1 - row) * tileHeight * transform.scale.y + (tileHeight * transform.scale.y) / 2 - pivotY;
 
-                // Apply rotation transform
-                // 应用旋转变换
-                const rotatedX = localX * cos - localY * sin + pivotX;
-                const rotatedY = localX * sin + localY * cos + pivotY;
+                // Apply rotation transform (clockwise positive)
+                // 应用旋转变换（顺时针为正）
+                const rotatedX = localX * cos + localY * sin + pivotX;
+                const rotatedY = -localX * sin + localY * cos + pivotY;
 
                 const tOffset = idx * 7;
                 renderData.transforms[tOffset] = rotatedX;

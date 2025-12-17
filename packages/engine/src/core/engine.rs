@@ -374,6 +374,32 @@ impl Engine {
         self.texture_manager.clear_all();
     }
 
+    /// Create a blank texture for dynamic atlas.
+    /// 为动态图集创建空白纹理。
+    ///
+    /// This creates a texture that can be filled later using `update_texture_region`.
+    /// 创建一个可以稍后使用 `update_texture_region` 填充的纹理。
+    pub fn create_blank_texture(&mut self, width: u32, height: u32) -> Result<u32> {
+        self.texture_manager.create_blank_texture(width, height)
+    }
+
+    /// Update a region of an existing texture.
+    /// 更新现有纹理的区域。
+    ///
+    /// Used for dynamic atlas to copy textures into the atlas.
+    /// 用于动态图集将纹理复制到图集中。
+    pub fn update_texture_region(
+        &self,
+        id: u32,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Result<()> {
+        self.texture_manager.update_texture_region(id, x, y, width, height, pixels)
+    }
+
     /// 获取纹理加载状态
     /// Get texture loading state
     pub fn get_texture_state(&self, id: u32) -> crate::renderer::texture::TextureState {

@@ -98,10 +98,16 @@ export class UIRectRenderSystem extends EntitySystem {
                     {
                         rotation,
                         pivotX,
-                        pivotY
+                        pivotY,
+                        entityId: entity.id
                     }
                 );
             }
+
+            // Get material data from UIRenderComponent
+            // 从 UIRenderComponent 获取材质数据
+            const materialId = render.getMaterialId();
+            const materialOverrides = render.hasOverrides() ? render.materialOverrides : undefined;
 
             // Render texture if present
             // 如果有纹理，渲染纹理
@@ -134,7 +140,10 @@ export class UIRectRenderSystem extends EntitySystem {
                         {
                             rotation,
                             textureId,
-                            textureGuid
+                            textureGuid,
+                            materialId,
+                            materialOverrides,
+                            entityId: entity.id
                         }
                     );
                 } else {
@@ -155,7 +164,10 @@ export class UIRectRenderSystem extends EntitySystem {
                             textureGuid,
                             uv: render.textureUV
                                 ? [render.textureUV.u0, render.textureUV.v0, render.textureUV.u1, render.textureUV.v1]
-                                : undefined
+                                : undefined,
+                            materialId,
+                            materialOverrides,
+                            entityId: entity.id
                         }
                     );
                 }
@@ -173,7 +185,10 @@ export class UIRectRenderSystem extends EntitySystem {
                     {
                         rotation,
                         pivotX,
-                        pivotY
+                        pivotY,
+                        materialId,
+                        materialOverrides,
+                        entityId: entity.id
                     }
                 );
             }
@@ -191,7 +206,8 @@ export class UIRectRenderSystem extends EntitySystem {
                     orderInLayer + 1, // Border renders above main content
                     rotation,
                     pivotX,
-                    pivotY
+                    pivotY,
+                    entity.id
                 );
             }
         }
@@ -212,7 +228,8 @@ export class UIRectRenderSystem extends EntitySystem {
         orderInLayer: number,
         rotation: number,
         pivotX: number,
-        pivotY: number
+        pivotY: number,
+        entityId: number
     ): void {
         // 计算矩形的左下角位置（相对于 pivot 中心）
         const left = centerX - width * pivotX;
@@ -227,7 +244,7 @@ export class UIRectRenderSystem extends EntitySystem {
             topBorderCenterX, topBorderCenterY,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Bottom border
@@ -236,7 +253,7 @@ export class UIRectRenderSystem extends EntitySystem {
             topBorderCenterX, bottomBorderCenterY,
             width, borderWidth,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Left border (excluding corners)
@@ -247,7 +264,7 @@ export class UIRectRenderSystem extends EntitySystem {
             leftBorderCenterX, sideBorderCenterY,
             borderWidth, sideBorderHeight,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
 
         // Right border (excluding corners)
@@ -256,7 +273,7 @@ export class UIRectRenderSystem extends EntitySystem {
             rightBorderCenterX, sideBorderCenterY,
             borderWidth, sideBorderHeight,
             borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
+            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 }

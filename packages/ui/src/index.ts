@@ -76,6 +76,13 @@ export {
 } from './components/UIRenderComponent';
 
 export {
+    type UIMaterialPropertyOverride,
+    type UIMaterialOverrides
+} from './systems/render/UIRenderCollector';
+
+export { UIShinyEffectComponent } from './components/UIShinyEffectComponent';
+
+export {
     UIInteractableComponent,
     type UICursorType
 } from './components/UIInteractableComponent';
@@ -137,8 +144,12 @@ export {
     getUIRenderCollector,
     resetUIRenderCollector,
     invalidateUIRenderCaches,
+    requestTextureForAtlas,
+    clearTextureRequestCache,
     type UIRenderPrimitive,
     type ProviderRenderData,
+    type BatchBreakReason,
+    type BatchDebugInfo,
     // Render systems
     UIRenderBeginSystem,
     UIRectRenderSystem,
@@ -146,7 +157,8 @@ export {
     UIButtonRenderSystem,
     UIProgressBarRenderSystem,
     UISliderRenderSystem,
-    UIScrollViewRenderSystem
+    UIScrollViewRenderSystem,
+    UIShinyEffectSystem
 } from './systems/render';
 
 // Rendering
@@ -176,3 +188,25 @@ export {
     UIRenderProviderToken,
     UITextRenderSystemToken
 } from './tokens';
+
+// Dynamic Atlas | 动态图集
+export {
+    BinPacker,
+    DynamicAtlasManager,
+    getDynamicAtlasManager,
+    setDynamicAtlasManager,
+    AtlasExpansionStrategy,
+    DynamicAtlasService,
+    getDynamicAtlasService,
+    setDynamicAtlasService,
+    initializeDynamicAtlasService,
+    reinitializeDynamicAtlasService,
+    registerTexturePathMapping,
+    getTexturePathByGuid,
+    clearTexturePathMappings,
+    type PackedRect,
+    type AtlasEntry,
+    type IAtlasEngineBridge,
+    type DynamicAtlasConfig,
+    type TextureInfo
+} from './atlas';

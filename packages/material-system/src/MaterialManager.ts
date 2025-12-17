@@ -14,7 +14,8 @@ import {
     GRAYSCALE_FRAGMENT_SHADER,
     TINT_FRAGMENT_SHADER,
     FLASH_FRAGMENT_SHADER,
-    OUTLINE_FRAGMENT_SHADER
+    OUTLINE_FRAGMENT_SHADER,
+    SHINY_FRAGMENT_SHADER
 } from './Shader';
 import { BuiltInMaterials, BuiltInShaders, UniformType } from './types';
 import type { IAssetManager } from '@esengine/asset-system';
@@ -103,10 +104,67 @@ export class MaterialManager {
      * Set the engine bridge for GPU operations.
      * 设置用于GPU操作的引擎桥接。
      *
+     * When set, uploads all built-in shaders to the GPU.
+     * 设置后，将所有内置着色器上传到GPU。
+     *
      * @param bridge - Engine bridge instance. | 引擎桥接实例。
      */
     setEngineBridge(bridge: IEngineBridge): void {
         this.engineBridge = bridge;
+
+        // Upload all existing shaders to the engine
+        // 将所有现有着色器上传到引擎
+        this.uploadShadersToEngine();
+    }
+
+    /**
+     * Upload all registered shaders to the engine.
+     * 将所有已注册的着色器上传到引擎。
+     *
+     * Called automatically when engine bridge is set.
+     * 设置引擎桥接时自动调用。
+     */
+    private uploadShadersToEngine(): void {
+        if (!this.engineBridge) return;
+
+        let shadersUploaded = 0;
+        let materialsCreated = 0;
+
+        for (const [shaderId, shader] of this.shaders) {
+            // Skip if already compiled
+            // 跳过已编译的着色器
+            if (shader.compiled) continue;
+
+            try {
+                // Compile shader
+                // 编译着色器
+                this.engineBridge.compileShaderWithId(
+                    shaderId,
+                    shader.vertexSource,
+                    shader.fragmentSource
+                );
+                shader.markCompiled();
+                shadersUploaded++;
+                logger.debug(`Uploaded shader ${shader.name} (ID: ${shaderId}) to engine`);
+
+                // Create a material for this shader if it doesn't exist in the engine
+                // 为此着色器创建材质（如果引擎中不存在）
+                // This allows sprites to reference the shader via materialId
+                // 这允许精灵通过 materialId 引用着色器
+                if (!this.engineBridge.hasMaterial(shaderId)) {
+                    // Use shaderId as materialId for built-in shaders (1:1 mapping)
+                    // 对于内置着色器，使用 shaderId 作为 materialId（1:1 映射）
+                    // BlendMode 1 = Alpha blending
+                    this.engineBridge.createMaterialWithId(shaderId, shader.name, shaderId, 1);
+                    materialsCreated++;
+                    logger.debug(`Created material ${shader.name} (ID: ${shaderId}) for shader`);
+                }
+            } catch (e) {
+                logger.error(`Failed to upload shader ${shader.name} (ID: ${shaderId}):`, e);
+            }
+        }
+
+        logger.info(`Uploaded ${shadersUploaded} shaders and created ${materialsCreated} materials | 已上传 ${shadersUploaded} 个着色器，创建 ${materialsCreated} 个材质`);
     }
 
     /**
@@ -138,6 +196,7 @@ export class MaterialManager {
             { id: BuiltInShaders.Tint, name: 'Tint', vertex: DEFAULT_VERTEX_SHADER, fragment: TINT_FRAGMENT_SHADER },
             { id: BuiltInShaders.Flash, name: 'Flash', vertex: DEFAULT_VERTEX_SHADER, fragment: FLASH_FRAGMENT_SHADER },
             { id: BuiltInShaders.Outline, name: 'Outline', vertex: DEFAULT_VERTEX_SHADER, fragment: OUTLINE_FRAGMENT_SHADER },
+            { id: BuiltInShaders.Shiny, name: 'Shiny', vertex: DEFAULT_VERTEX_SHADER, fragment: SHINY_FRAGMENT_SHADER },
         ];
 
         for (const { id, name, vertex, fragment } of builtInShaders) {

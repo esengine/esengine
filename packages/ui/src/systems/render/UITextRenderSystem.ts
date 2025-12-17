@@ -138,12 +138,13 @@ export class UITextRenderSystem extends EntitySystem {
                 0xFFFFFF,  // White tint (color is baked into texture)
                 alpha,
                 sortingLayer,
-                orderInLayer + 1,  // Text renders above background
+                orderInLayer,  // 使用 worldOrderInLayer，子节点已经通过 depth 保证在父节点之上
                 {
                     rotation,
                     pivotX,
                     pivotY,
-                    textureId
+                    textureId,
+                    entityId: entity.id
                 }
             );
         }
@@ -238,6 +239,10 @@ export class UITextRenderSystem extends EntitySystem {
             // 通知回调新纹理
             if (this.onTextureCreated) {
                 this.onTextureCreated(textureId, dataUrl);
+            } else {
+                // 警告：回调未设置（只输出一次）
+                // Warning: callback not set (output once only)
+                console.warn('[UITextRenderSystem] onTextureCreated callback not set! Text will not render.');
             }
 
             // Update cache

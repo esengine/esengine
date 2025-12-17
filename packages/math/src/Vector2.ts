@@ -282,25 +282,35 @@ export class Vector2 implements IVector2 {
     }
 
     /**
-   * 获取垂直向量（逆时针旋转90度）
-   * @returns 新的垂直向量
-   */
+     * 获取垂直向量（顺时针旋转90度）
+     * Get perpendicular vector (clockwise 90 degrees)
+     * @returns 新的垂直向量
+     */
     perpendicular(): Vector2 {
-        return new Vector2(-this.y, this.x);
+        // Clockwise 90° rotation: (x, y) -> (y, -x)
+        // 顺时针旋转 90°
+        return new Vector2(this.y, -this.x);
     }
 
     // 变换操作
 
     /**
-   * 向量旋转
-   * @param angle 旋转角度（弧度）
-   * @returns 当前向量实例（链式调用）
-   */
+     * 向量旋转（顺时针为正）
+     * Rotate vector (clockwise positive)
+     *
+     * 使用左手坐标系约定：正角度 = 顺时针旋转
+     * Uses left-hand coordinate system: positive angle = clockwise
+     *
+     * @param angle 旋转角度（弧度）
+     * @returns 当前向量实例（链式调用）
+     */
     rotate(angle: number): this {
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
-        const x = this.x * cos - this.y * sin;
-        const y = this.x * sin + this.y * cos;
+        // Clockwise rotation: x' = x*cos + y*sin, y' = -x*sin + y*cos
+        // 顺时针旋转公式
+        const x = this.x * cos + this.y * sin;
+        const y = -this.x * sin + this.y * cos;
         this.x = x;
         this.y = y;
         return this;

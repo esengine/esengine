@@ -413,4 +413,136 @@ impl TextureManager {
         // 重置ID计数器（1保留给第一个纹理，0给默认纹理）
         self.next_id = 1;
     }
+
+    /// Create a blank texture with specified dimensions.
+    /// 创建具有指定尺寸的空白纹理。
+    ///
+    /// This is used for dynamic atlas creation where textures
+    /// are later filled with content using `update_texture_region`.
+    /// 用于动态图集创建，之后使用 `update_texture_region` 填充内容。
+    ///
+    /// # Arguments | 参数
+    /// * `width` - Texture width in pixels | 纹理宽度（像素）
+    /// * `height` - Texture height in pixels | 纹理高度（像素）
+    ///
+    /// # Returns | 返回
+    /// The texture ID for the created texture | 创建的纹理ID
+    pub fn create_blank_texture(&mut self, width: u32, height: u32) -> Result<u32> {
+        let texture = self.gl
+            .create_texture()
+            .ok_or_else(|| EngineError::TextureLoadFailed("Failed to create blank texture".into()))?;
+
+        self.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture));
+
+        // Initialize with transparent pixels
+        // 使用透明像素初始化
+        let _ = self.gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+            WebGl2RenderingContext::TEXTURE_2D,
+            0,
+            WebGl2RenderingContext::RGBA as i32,
+            width as i32,
+            height as i32,
+            0,
+            WebGl2RenderingContext::RGBA,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            None, // NULL data - allocate but don't fill
+        );
+
+        // Set texture parameters for atlas use
+        // 设置图集使用的纹理参数
+        self.gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_WRAP_S,
+            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+        );
+        self.gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_WRAP_T,
+            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+        );
+        self.gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+            WebGl2RenderingContext::LINEAR as i32,
+        );
+        self.gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+            WebGl2RenderingContext::LINEAR as i32,
+        );
+
+        // Assign ID and store
+        // 分配ID并存储
+        let id = self.next_id;
+        self.next_id += 1;
+
+        self.textures.insert(id, Texture::new(texture, width, height));
+        self.texture_states.borrow_mut().insert(id, TextureState::Ready);
+
+        log::debug!("Created blank texture {} ({}x{}) | 创建空白纹理 {} ({}x{})", id, width, height, id, width, height);
+
+        Ok(id)
+    }
+
+    /// Update a region of an existing texture with pixel data.
+    /// 使用像素数据更新现有纹理的区域。
+    ///
+    /// This is used for dynamic atlas to copy individual textures
+    /// into the atlas texture.
+    /// 用于动态图集将单个纹理复制到图集纹理中。
+    ///
+    /// # Arguments | 参数
+    /// * `id` - The texture ID to update | 要更新的纹理ID
+    /// * `x` - X offset in the texture | 纹理中的X偏移
+    /// * `y` - Y offset in the texture | 纹理中的Y偏移
+    /// * `width` - Width of the region to update | 要更新的区域宽度
+    /// * `height` - Height of the region to update | 要更新的区域高度
+    /// * `pixels` - RGBA pixel data (4 bytes per pixel) | RGBA像素数据（每像素4字节）
+    ///
+    /// # Returns | 返回
+    /// Ok(()) on success, Err if texture not found or update failed
+    /// 成功时返回 Ok(())，纹理未找到或更新失败时返回 Err
+    pub fn update_texture_region(
+        &self,
+        id: u32,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Result<()> {
+        let texture = self.textures.get(&id)
+            .ok_or_else(|| EngineError::TextureLoadFailed(format!("Texture {} not found", id)))?;
+
+        // Validate pixel data size
+        // 验证像素数据大小
+        let expected_size = (width * height * 4) as usize;
+        if pixels.len() != expected_size {
+            return Err(EngineError::TextureLoadFailed(format!(
+                "Pixel data size mismatch: expected {}, got {} | 像素数据大小不匹配：预期 {}，实际 {}",
+                expected_size, pixels.len(), expected_size, pixels.len()
+            )));
+        }
+
+        self.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture.handle));
+
+        // Use texSubImage2D to update a region
+        // 使用 texSubImage2D 更新区域
+        self.gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+            WebGl2RenderingContext::TEXTURE_2D,
+            0,
+            x as i32,
+            y as i32,
+            width as i32,
+            height as i32,
+            WebGl2RenderingContext::RGBA,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            Some(pixels),
+        ).map_err(|e| EngineError::TextureLoadFailed(format!("texSubImage2D failed: {:?}", e)))?;
+
+        log::trace!("Updated texture {} region ({},{}) {}x{} | 更新纹理 {} 区域 ({},{}) {}x{}",
+            id, x, y, width, height, id, x, y, width, height);
+
+        Ok(())
+    }
 }

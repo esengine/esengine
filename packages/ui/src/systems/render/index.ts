@@ -18,8 +18,14 @@ export {
     registerCacheInvalidationCallback,
     unregisterCacheInvalidationCallback,
     invalidateUIRenderCaches,
+    requestTextureForAtlas,
+    clearTextureRequestCache,
     type UIRenderPrimitive,
-    type ProviderRenderData
+    type ProviderRenderData,
+    type UIMaterialPropertyOverride,
+    type UIMaterialOverrides,
+    type BatchBreakReason,
+    type BatchDebugInfo
 } from './UIRenderCollector';
 
 // Render systems
@@ -31,3 +37,4 @@ export { UIButtonRenderSystem } from './UIButtonRenderSystem';
 export { UIProgressBarRenderSystem } from './UIProgressBarRenderSystem';
 export { UISliderRenderSystem } from './UISliderRenderSystem';
 export { UIScrollViewRenderSystem } from './UIScrollViewRenderSystem';
+export { UIShinyEffectSystem } from './UIShinyEffectSystem';

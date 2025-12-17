@@ -58,7 +58,7 @@ export { PrefabLoader } from './loaders/PrefabLoader';
 
 // Integration
 export { EngineIntegration } from './integration/EngineIntegration';
-export type { ITextureEngineBridge } from './integration/EngineIntegration';
+export type { ITextureEngineBridge, TextureLoadCallback } from './integration/EngineIntegration';
 
 // Services
 export { SceneResourceManager } from './services/SceneResourceManager';

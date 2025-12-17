@@ -26,18 +26,21 @@ import {
     Download,
     Radio,
     Square,
-    Type
+    Type,
+    Grid3x3
 } from 'lucide-react';
 import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { emit, emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { renderDebugService, type RenderDebugSnapshot, type SpriteDebugInfo, type ParticleDebugInfo, type UIDebugInfo } from '../../services/RenderDebugService';
+import { renderDebugService, type RenderDebugSnapshot, type SpriteDebugInfo, type ParticleDebugInfo, type UIDebugInfo, type UniformDebugValue, type AtlasStats, type AtlasPageDebugInfo, type AtlasEntryDebugInfo } from '../../services/RenderDebugService';
+import type { BatchDebugInfo } from '@esengine/ui';
+import { EngineService } from '../../services/EngineService';
 import './RenderDebugPanel.css';
 
 /**
  * 渲染事件类型
  * Render event type
  */
-type RenderEventType = 'clear' | 'sprite' | 'particle' | 'ui' | 'batch' | 'draw';
+type RenderEventType = 'clear' | 'sprite' | 'particle' | 'ui' | 'batch' | 'draw' | 'ui-batch';
 
 /**
  * 渲染事件
@@ -52,6 +55,8 @@ interface RenderEvent {
     data?: SpriteDebugInfo | ParticleDebugInfo | UIDebugInfo | any;
     drawCalls?: number;
     vertices?: number;
+    /** 合批调试信息 | Batch debug info */
+    batchInfo?: BatchDebugInfo;
 }
 
 interface RenderDebugPanelProps {
@@ -74,6 +79,10 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
     const [frameHistory, setFrameHistory] = useState<RenderDebugSnapshot[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1); // -1 表示实时模式 | -1 means live mode
 
+    // 图集预览状态 | Atlas preview state
+    const [showAtlasPreview, setShowAtlasPreview] = useState(false);
+    const [selectedAtlasPage, setSelectedAtlasPage] = useState(0);
+
     // 窗口拖动状态 | Window drag state
     const [position, setPosition] = useState({ x: 100, y: 60 });
     const [size, setSize] = useState({ width: 900, height: 600 });
@@ -83,6 +92,39 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const windowRef = useRef<HTMLDivElement>(null);
+
+    // 高亮相关 | Highlight related
+    const previousSelectedIdsRef = useRef<number[] | null>(null);
+    const engineService = useRef(EngineService.getInstance());
+
+    // 处理事件选中并高亮实体 | Handle event selection and highlight entity
+    const handleEventSelect = useCallback((event: RenderEvent | null) => {
+        setSelectedEvent(event);
+
+        // 获取实体 ID | Get entity ID
+        const entityId = event?.data?.entityId;
+
+        if (entityId !== undefined) {
+            // 保存原始选中状态（只保存一次）| Save original selection (only once)
+            if (previousSelectedIdsRef.current === null) {
+                previousSelectedIdsRef.current = engineService.current.getSelectedEntityIds?.() || [];
+            }
+            // 高亮选中的实体 | Highlight selected entity
+            engineService.current.setSelectedEntityIds([entityId]);
+        } else if (previousSelectedIdsRef.current !== null) {
+            // 恢复原始选中状态 | Restore original selection
+            engineService.current.setSelectedEntityIds(previousSelectedIdsRef.current);
+            previousSelectedIdsRef.current = null;
+        }
+    }, []);
+
+    // 面板关闭时恢复原始选中状态 | Restore original selection when panel closes
+    useEffect(() => {
+        if (!visible && previousSelectedIdsRef.current !== null) {
+            engineService.current.setSelectedEntityIds(previousSelectedIdsRef.current);
+            previousSelectedIdsRef.current = null;
+        }
+    }, [visible]);
 
     // 弹出为独立窗口 | Pop out to separate window
     const handlePopOut = useCallback(async () => {
@@ -181,8 +223,85 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
             });
         });
 
-        // UI 元素 | UI elements
-        if (snap.uiElements && snap.uiElements.length > 0) {
+        // UI 批次和元素 | UI batches and elements
+        // 使用 entityIds 进行精确的批次-元素匹配 | Use entityIds for precise batch-element matching
+        if (snap.uiBatches && snap.uiBatches.length > 0) {
+            const uiChildren: RenderEvent[] = [];
+
+            // 构建 entityId -> UI 元素的映射 | Build entityId -> UI element map
+            const uiElementMap = new Map<number, UIDebugInfo>();
+            snap.uiElements?.forEach(ui => {
+                if (ui.entityId !== undefined) {
+                    uiElementMap.set(ui.entityId, ui);
+                }
+            });
+
+            // 为每个批次创建事件，包含其子元素 | Create events for each batch with its child elements
+            snap.uiBatches.forEach((batch) => {
+                const reasonLabels: Record<string, string> = {
+                    'first': '',
+                    'sortingLayer': '⚠️ Layer',
+                    'texture': '⚠️ Texture',
+                    'material': '⚠️ Material'
+                };
+                const reasonLabel = reasonLabels[batch.reason] || '';
+                const batchName = batch.reason === 'first'
+                    ? `DC ${batch.batchIndex}: ${batch.primitiveCount} prims`
+                    : `DC ${batch.batchIndex} ${reasonLabel}: ${batch.primitiveCount} prims`;
+
+                // 从 entityIds 获取此批次的 UI 元素 | Get UI elements for this batch from entityIds
+                const batchElements: RenderEvent[] = [];
+                const entityIds = batch.entityIds ?? [];
+                const firstEntityId = batch.firstEntityId;
+
+                entityIds.forEach((entityId) => {
+                    const ui = uiElementMap.get(entityId);
+                    if (ui) {
+                        // 使用 firstEntityId 精确标记打断批次的元素 | Use firstEntityId to precisely mark batch breaker
+                        const isBreaker = entityId === firstEntityId && batch.reason !== 'first';
+                        batchElements.push({
+                            id: eventId++,
+                            type: 'ui' as RenderEventType,
+                            name: isBreaker
+                                ? `⚡ ${ui.type}: ${ui.entityName}`
+                                : `${ui.type}: ${ui.entityName}`,
+                            data: {
+                                ...ui,
+                                isBatchBreaker: isBreaker,
+                                breakReason: isBreaker ? batch.reason : undefined,
+                                batchIndex: batch.batchIndex
+                            },
+                            drawCalls: 0,
+                            vertices: 4
+                        });
+                    }
+                });
+
+                uiChildren.push({
+                    id: eventId++,
+                    type: 'ui-batch' as RenderEventType,
+                    name: batchName,
+                    batchInfo: batch,
+                    children: batchElements.length > 0 ? batchElements : undefined,
+                    expanded: batchElements.length > 0 && batchElements.length <= 10,
+                    drawCalls: 1,
+                    vertices: batch.primitiveCount * 4
+                });
+            });
+
+            const totalPrimitives = snap.uiBatches.reduce((sum, b) => sum + b.primitiveCount, 0);
+            const dcCount = snap.uiBatches.length;
+            newEvents.push({
+                id: eventId++,
+                type: 'batch',
+                name: `UI Render (${dcCount} DC, ${snap.uiElements?.length ?? 0} elements)`,
+                children: uiChildren,
+                expanded: true,
+                drawCalls: dcCount,
+                vertices: totalPrimitives * 4
+            });
+        } else if (snap.uiElements && snap.uiElements.length > 0) {
+            // 回退：没有批次信息时按元素显示 | Fallback: show by element when no batch info
             const uiChildren: RenderEvent[] = snap.uiElements.map((ui) => ({
                 id: eventId++,
                 type: 'ui' as RenderEventType,
@@ -234,9 +353,9 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
         if (snap) {
             setSnapshot(snap);
             setEvents(buildEventsFromSnapshot(snap));
-            setSelectedEvent(null);
+            handleEventSelect(null);
         }
-    }, [frameHistory, buildEventsFromSnapshot]);
+    }, [frameHistory, buildEventsFromSnapshot, handleEventSelect]);
 
     // 返回实时模式 | Return to live mode
     const goLive = useCallback(() => {
@@ -467,62 +586,122 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
             ctx.textAlign = 'left';
             ctx.fillText(`${particles.length} particles sampled`, margin, rect.height - 6);
 
-        } else if (data?.uv) {
-            // Sprite 或单个粒子：显示 UV 区域 | Sprite or single particle: show UV region
-            const uv = data.uv;
-            const previewSize = Math.min(viewWidth, viewHeight);
+        } else if (data?.uv || data?.textureUrl) {
+            // Sprite 或 UI 元素：显示纹理和 UV 区域 | Sprite or UI element: show texture and UV region
+            const uv = data.uv ?? [0, 0, 1, 1];
+            const previewSize = Math.min(viewWidth, viewHeight) - 30; // 留出底部文字空间
             const offsetX = (rect.width - previewSize) / 2;
-            const offsetY = (rect.height - previewSize) / 2;
+            const offsetY = margin;
 
-            // 绘制纹理边框 | Draw texture border
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(offsetX, offsetY, previewSize, previewSize);
-
-            // 如果是粒子帧，显示 TextureSheet 网格 | If particle frame, show TextureSheet grid
-            const tilesX = data._animTilesX ?? (data.systemName ? 1 : 1);
-            const tilesY = data._animTilesY ?? 1;
-
-            if (tilesX > 1 || tilesY > 1) {
-                const cellWidth = previewSize / tilesX;
-                const cellHeight = previewSize / tilesY;
-
-                // 绘制网格 | Draw grid
-                ctx.strokeStyle = '#2a2a2a';
-                for (let i = 0; i <= tilesX; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(offsetX + i * cellWidth, offsetY);
-                    ctx.lineTo(offsetX + i * cellWidth, offsetY + previewSize);
-                    ctx.stroke();
-                }
-                for (let j = 0; j <= tilesY; j++) {
-                    ctx.beginPath();
-                    ctx.moveTo(offsetX, offsetY + j * cellHeight);
-                    ctx.lineTo(offsetX + previewSize, offsetY + j * cellHeight);
-                    ctx.stroke();
+            // 绘制棋盘格背景（透明度指示）| Draw checkerboard background (transparency indicator)
+            const checkerSize = 8;
+            for (let cx = 0; cx < previewSize; cx += checkerSize) {
+                for (let cy = 0; cy < previewSize; cy += checkerSize) {
+                    const isLight = ((cx / checkerSize) + (cy / checkerSize)) % 2 === 0;
+                    ctx.fillStyle = isLight ? '#2a2a2a' : '#1f1f1f';
+                    ctx.fillRect(offsetX + cx, offsetY + cy, checkerSize, checkerSize);
                 }
             }
 
-            // 高亮 UV 区域 | Highlight UV region
-            const x = offsetX + uv[0] * previewSize;
-            const y = offsetY + uv[1] * previewSize;
-            const w = (uv[2] - uv[0]) * previewSize;
-            const h = (uv[3] - uv[1]) * previewSize;
+            // 如果有纹理 URL，加载并绘制纹理 | If texture URL exists, load and draw texture
+            if (data.textureUrl) {
+                const img = document.createElement('img');
+                img.onload = () => {
+                    // 重新获取 context（异步回调中需要）| Re-get context (needed in async callback)
+                    const ctx2 = canvas.getContext('2d');
+                    if (!ctx2) return;
+                    ctx2.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-            ctx.fillStyle = 'rgba(74, 158, 255, 0.3)';
-            ctx.fillRect(x, y, w, h);
-            ctx.strokeStyle = '#4a9eff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, w, h);
+                    // 绘制纹理 | Draw texture
+                    ctx2.drawImage(img, offsetX, offsetY, previewSize, previewSize);
 
-            // 显示 UV 坐标 | Show UV coordinates
-            ctx.fillStyle = '#4a9eff';
-            ctx.font = '10px Consolas, monospace';
-            ctx.textAlign = 'left';
-            ctx.fillText(`UV: [${uv.map((v: number) => v.toFixed(3)).join(', ')}]`, offsetX, offsetY + previewSize + 14);
+                    // 高亮 UV 区域 | Highlight UV region
+                    const x = offsetX + uv[0] * previewSize;
+                    const y = offsetY + uv[1] * previewSize;
+                    const w = (uv[2] - uv[0]) * previewSize;
+                    const h = (uv[3] - uv[1]) * previewSize;
 
-            if (data.frame !== undefined) {
-                ctx.fillText(`Frame: ${data.frame}`, offsetX, offsetY + previewSize + 26);
+                    ctx2.fillStyle = 'rgba(74, 158, 255, 0.2)';
+                    ctx2.fillRect(x, y, w, h);
+                    ctx2.strokeStyle = '#4a9eff';
+                    ctx2.lineWidth = 2;
+                    ctx2.strokeRect(x, y, w, h);
+
+                    // 绘制边框 | Draw border
+                    ctx2.strokeStyle = '#444';
+                    ctx2.lineWidth = 1;
+                    ctx2.strokeRect(offsetX, offsetY, previewSize, previewSize);
+
+                    // 显示信息 | Show info
+                    ctx2.fillStyle = '#4a9eff';
+                    ctx2.font = '10px Consolas, monospace';
+                    ctx2.textAlign = 'left';
+                    const infoY = offsetY + previewSize + 14;
+                    ctx2.fillText(`UV: [${uv.map((v: number) => v.toFixed(3)).join(', ')}]`, offsetX, infoY);
+                    if (data.aspectRatio !== undefined) {
+                        ctx2.fillStyle = '#10b981';
+                        ctx2.fillText(`aspectRatio: ${data.aspectRatio.toFixed(4)}`, offsetX + 180, infoY);
+                    }
+                    if (data.color) {
+                        ctx2.fillStyle = '#f59e0b';
+                        ctx2.fillText(`color: ${data.color}`, offsetX, infoY + 12);
+                    }
+                };
+                img.src = data.textureUrl;
+            } else {
+                // 没有纹理时绘制占位符 | Draw placeholder when no texture
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(offsetX, offsetY, previewSize, previewSize);
+
+                // 如果是粒子帧，显示 TextureSheet 网格 | If particle frame, show TextureSheet grid
+                const tilesX = data._animTilesX ?? 1;
+                const tilesY = data._animTilesY ?? 1;
+
+                if (tilesX > 1 || tilesY > 1) {
+                    const cellWidth = previewSize / tilesX;
+                    const cellHeight = previewSize / tilesY;
+
+                    ctx.strokeStyle = '#2a2a2a';
+                    for (let i = 0; i <= tilesX; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(offsetX + i * cellWidth, offsetY);
+                        ctx.lineTo(offsetX + i * cellWidth, offsetY + previewSize);
+                        ctx.stroke();
+                    }
+                    for (let j = 0; j <= tilesY; j++) {
+                        ctx.beginPath();
+                        ctx.moveTo(offsetX, offsetY + j * cellHeight);
+                        ctx.lineTo(offsetX + previewSize, offsetY + j * cellHeight);
+                        ctx.stroke();
+                    }
+                }
+
+                // 高亮 UV 区域 | Highlight UV region
+                const x = offsetX + uv[0] * previewSize;
+                const y = offsetY + uv[1] * previewSize;
+                const w = (uv[2] - uv[0]) * previewSize;
+                const h = (uv[3] - uv[1]) * previewSize;
+
+                ctx.fillStyle = 'rgba(74, 158, 255, 0.3)';
+                ctx.fillRect(x, y, w, h);
+                ctx.strokeStyle = '#4a9eff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, w, h);
+
+                // 显示信息 | Show info
+                ctx.fillStyle = '#4a9eff';
+                ctx.font = '10px Consolas, monospace';
+                ctx.textAlign = 'left';
+                const infoY = offsetY + previewSize + 14;
+                ctx.fillText(`UV: [${uv.map((v: number) => v.toFixed(3)).join(', ')}]`, offsetX, infoY);
+                if (data.aspectRatio !== undefined) {
+                    ctx.fillStyle = '#10b981';
+                    ctx.fillText(`aspectRatio: ${data.aspectRatio.toFixed(4)}`, offsetX + 180, infoY);
+                }
+                if (data.frame !== undefined) {
+                    ctx.fillText(`Frame: ${data.frame}`, offsetX, infoY + 12);
+                }
             }
         } else {
             // 其他事件类型 | Other event types
@@ -707,7 +886,7 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
                                         event={event}
                                         depth={0}
                                         selected={selectedEvent?.id === event.id}
-                                        onSelect={setSelectedEvent}
+                                        onSelect={handleEventSelect}
                                         onToggle={toggleExpand}
                                     />
                                 ))
@@ -767,10 +946,39 @@ export const RenderDebugPanel: React.FC<RenderDebugPanelProps> = ({ visible, onC
                     <Image size={12} />
                     <span>Systems: {snapshot?.particles?.length ?? 0}</span>
                 </div>
+                {/* 动态图集统计 | Dynamic atlas stats */}
+                {snapshot?.atlasStats && (
+                    <div
+                        className={`stat-item clickable ${snapshot.atlasStats.enabled ? 'atlas-enabled' : 'atlas-disabled'}`}
+                        title={
+                            snapshot.atlasStats.enabled
+                                ? `Click to view atlas. ${snapshot.atlasStats.pageCount} pages, ${snapshot.atlasStats.textureCount} textures, ${(snapshot.atlasStats.averageOccupancy * 100).toFixed(0)}% occupancy`
+                                : 'Dynamic Atlas: Disabled'
+                        }
+                        onClick={() => snapshot.atlasStats?.enabled && setShowAtlasPreview(true)}
+                    >
+                        <Grid3x3 size={12} />
+                        <span>
+                            Atlas: {snapshot.atlasStats.enabled
+                                ? `${snapshot.atlasStats.textureCount}/${snapshot.atlasStats.pageCount}p`
+                                : 'Off'}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* 调整大小手柄（独立模式下隐藏）| Resize handle (hidden in standalone mode) */}
             {!standalone && <div className="resize-handle" onMouseDown={handleResizeMouseDown} />}
+
+            {/* 图集预览弹窗 | Atlas preview modal */}
+            {showAtlasPreview && snapshot?.atlasStats?.pages && (
+                <AtlasPreviewModal
+                    atlasStats={snapshot.atlasStats}
+                    selectedPage={selectedAtlasPage}
+                    onSelectPage={setSelectedAtlasPage}
+                    onClose={() => setShowAtlasPreview(false)}
+                />
+            )}
         </div>
     );
 };
@@ -788,12 +996,14 @@ interface EventItemProps {
 const EventItem: React.FC<EventItemProps> = ({ event, depth, selected, onSelect, onToggle }) => {
     const hasChildren = event.children && event.children.length > 0;
     const iconSize = 12;
+    const isBatchBreaker = event.data?.isBatchBreaker === true;
 
     const getTypeIcon = () => {
         switch (event.type) {
             case 'sprite': return <Image size={iconSize} className="event-icon sprite" />;
             case 'particle': return <Sparkles size={iconSize} className="event-icon particle" />;
-            case 'ui': return <Square size={iconSize} className="event-icon ui" />;
+            case 'ui': return <Square size={iconSize} className={`event-icon ui ${isBatchBreaker ? 'breaker' : ''}`} />;
+            case 'ui-batch': return <Layers size={iconSize} className="event-icon ui" />;
             case 'batch': return <Layers size={iconSize} className="event-icon batch" />;
             default: return <Monitor size={iconSize} className="event-icon" />;
         }
@@ -802,7 +1012,7 @@ const EventItem: React.FC<EventItemProps> = ({ event, depth, selected, onSelect,
     return (
         <>
             <div
-                className={`event-item ${selected ? 'selected' : ''}`}
+                className={`event-item ${selected ? 'selected' : ''} ${isBatchBreaker ? 'batch-breaker' : ''}`}
                 style={{ paddingLeft: 8 + depth * 16 }}
                 onClick={() => onSelect(event)}
             >
@@ -814,8 +1024,8 @@ const EventItem: React.FC<EventItemProps> = ({ event, depth, selected, onSelect,
                     <span className="expand-icon placeholder" />
                 )}
                 {getTypeIcon()}
-                <span className="event-name">{event.name}</span>
-                {event.drawCalls !== undefined && (
+                <span className={`event-name ${isBatchBreaker ? 'batch-breaker' : ''}`}>{event.name}</span>
+                {event.drawCalls !== undefined && event.drawCalls > 0 && (
                     <span className="event-draws">{event.drawCalls}</span>
                 )}
             </div>
@@ -948,12 +1158,56 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
         });
     }, [event, data]);
 
+    const batchInfo = event.batchInfo;
+
     return (
         <div className="details-grid">
             <DetailRow label="Event" value={event.name} />
             <DetailRow label="Type" value={event.type} />
             <DetailRow label="Draw Calls" value={event.drawCalls?.toString() ?? '-'} />
             <DetailRow label="Vertices" value={event.vertices?.toString() ?? '-'} />
+
+            {/* UI 批次信息 | UI batch info */}
+            {event.type === 'ui-batch' && batchInfo && (
+                <>
+                    <div className="details-section">Batch Break Reason</div>
+                    <DetailRow
+                        label="Reason"
+                        value={batchInfo.reason === 'first' ? 'First batch' : batchInfo.reason}
+                        highlight={batchInfo.reason !== 'first'}
+                    />
+                    <DetailRow label="Detail" value={batchInfo.detail} />
+                    <div className="details-section">Batch Properties</div>
+                    <DetailRow label="Batch Index" value={batchInfo.batchIndex.toString()} />
+                    <DetailRow label="Primitives" value={batchInfo.primitiveCount.toString()} />
+                    <DetailRow label="Sorting Layer" value={batchInfo.sortingLayer} />
+                    <DetailRow label="Order" value={batchInfo.orderInLayer.toString()} />
+                    <DetailRow
+                        label="Texture"
+                        value={batchInfo.textureKey.startsWith('atlas:')
+                            ? `🗂️ ${batchInfo.textureKey}`
+                            : batchInfo.textureKey}
+                        highlight={batchInfo.textureKey.startsWith('atlas:')}
+                    />
+                    <DetailRow label="Material ID" value={batchInfo.materialId.toString()} />
+                    {batchInfo.reason !== 'first' && (
+                        <>
+                            <div className="details-section">How to Fix</div>
+                            <div className="batch-fix-tip">
+                                {batchInfo.reason === 'sortingLayer' && (
+                                    <span>将这些元素放在同一个排序层中</span>
+                                )}
+                                {batchInfo.reason === 'texture' && (
+                                    <span>使用相同的纹理，或将纹理合并到图集中</span>
+                                )}
+                                {batchInfo.reason === 'material' && (
+                                    <span>使用相同的材质/着色器</span>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </>
+            )}
 
             {data && (
                 <>
@@ -971,6 +1225,17 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
                             <DetailRow label="Sort Layer" value={data.sortingLayer || 'Default'} />
                             <DetailRow label="Order" value={data.orderInLayer?.toString() ?? '0'} />
                             <DetailRow label="Alpha" value={data.alpha?.toFixed(2) ?? '1.00'} />
+                            <div className="details-section">Material</div>
+                            <DetailRow label="Shader" value={data.shaderName ?? 'DefaultSprite'} highlight />
+                            <DetailRow label="Shader ID" value={data.materialId?.toString() ?? '0'} />
+                            {data.uniforms && Object.keys(data.uniforms).length > 0 && (
+                                <>
+                                    <div className="details-section">Uniforms</div>
+                                    <UniformList uniforms={data.uniforms} />
+                                </>
+                            )}
+                            <div className="details-section">Vertex Attributes</div>
+                            <DetailRow label="aspectRatio" value={data.aspectRatio?.toFixed(4) ?? '1.0000'} highlight />
                         </>
                     )}
 
@@ -1018,6 +1283,19 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
                     {/* UI 元素数据 | UI element data */}
                     {event.type === 'ui' && data.entityName && (
                         <>
+                            {/* 如果是打断合批的元素，显示警告 | Show warning if this element breaks batching */}
+                            {data.isBatchBreaker && (
+                                <>
+                                    <div className="details-section batch-breaker-warning">⚡ Batch Breaker</div>
+                                    <div className="batch-fix-tip">
+                                        此元素导致了新的 Draw Call。
+                                        {data.breakReason === 'sortingLayer' && ' 原因：排序层与前一个元素不同。'}
+                                        {data.breakReason === 'orderInLayer' && ' 原因：层内顺序与前一个元素不同。'}
+                                        {data.breakReason === 'texture' && ' 原因：纹理与前一个元素不同。'}
+                                        {data.breakReason === 'material' && ' 原因：材质/着色器与前一个元素不同。'}
+                                    </div>
+                                </>
+                            )}
                             <DetailRow label="Entity" value={data.entityName} />
                             <DetailRow label="Type" value={data.type} highlight />
                             <DetailRow label="Position" value={`(${data.x?.toFixed(0)}, ${data.y?.toFixed(0)})`} />
@@ -1026,13 +1304,19 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
                             <DetailRow label="Rotation" value={`${((data.rotation ?? 0) * 180 / Math.PI).toFixed(1)}°`} />
                             <DetailRow label="Visible" value={data.visible ? 'Yes' : 'No'} />
                             <DetailRow label="Alpha" value={data.alpha?.toFixed(2) ?? '1.00'} />
-                            <DetailRow label="Sort Layer" value={data.sortingLayer || 'UI'} />
+                            <div className="details-section">Sorting</div>
+                            <DetailRow label="Sort Layer" value={data.sortingLayer || 'UI'} highlight={data.isBatchBreaker && data.breakReason === 'sortingLayer'} />
                             <DetailRow label="Order" value={data.orderInLayer?.toString() ?? '0'} />
+                            <DetailRow label="Depth" value={data.depth?.toString() ?? '0'} />
+                            <DetailRow label="World Order" value={data.worldOrderInLayer?.toString() ?? '0'} highlight />
                             {data.backgroundColor && (
                                 <DetailRow label="Background" value={data.backgroundColor} />
                             )}
                             {data.textureGuid && (
                                 <TexturePreview textureUrl={data.textureUrl} texturePath={data.textureGuid} />
+                            )}
+                            {!data.textureGuid && data.isBatchBreaker && data.breakReason === 'texture' && (
+                                <DetailRow label="Texture" value="(none / solid)" highlight />
                             )}
                             {data.text && (
                                 <>
@@ -1041,6 +1325,17 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
                                     {data.fontSize && <DetailRow label="Font Size" value={data.fontSize.toString()} />}
                                 </>
                             )}
+                            <div className="details-section">Material</div>
+                            <DetailRow label="Shader" value={data.shaderName ?? 'DefaultSprite'} highlight={data.isBatchBreaker && data.breakReason === 'material'} />
+                            <DetailRow label="Shader ID" value={data.materialId?.toString() ?? '0'} highlight={data.isBatchBreaker && data.breakReason === 'material'} />
+                            {data.uniforms && Object.keys(data.uniforms).length > 0 && (
+                                <>
+                                    <div className="details-section">Uniforms</div>
+                                    <UniformList uniforms={data.uniforms} />
+                                </>
+                            )}
+                            <div className="details-section">Vertex Attributes</div>
+                            <DetailRow label="aspectRatio" value={data.aspectRatio?.toFixed(4) ?? '1.0000'} highlight />
                         </>
                     )}
                 </>
@@ -1055,5 +1350,351 @@ const DetailRow: React.FC<{ label: string; value: string; highlight?: boolean }>
         <span className="detail-value">{value}</span>
     </div>
 );
+
+/**
+ * 格式化 uniform 值
+ * Format uniform value
+ */
+function formatUniformValue(uniform: UniformDebugValue): string {
+    const { type, value } = uniform;
+    if (typeof value === 'number') {
+        return type === 'int' ? value.toString() : value.toFixed(4);
+    }
+    if (Array.isArray(value)) {
+        return value.map(v => v.toFixed(3)).join(', ');
+    }
+    return String(value);
+}
+
+/**
+ * Uniform 列表组件
+ * Uniform list component
+ */
+const UniformList: React.FC<{ uniforms: Record<string, UniformDebugValue> }> = ({ uniforms }) => {
+    const entries = Object.entries(uniforms);
+    if (entries.length === 0) {
+        return <DetailRow label="Uniforms" value="(none)" />;
+    }
+    return (
+        <>
+            {entries.map(([name, uniform]) => (
+                <DetailRow
+                    key={name}
+                    label={name.replace(/^u_/, '')}
+                    value={`${formatUniformValue(uniform)} (${uniform.type})`}
+                />
+            ))}
+        </>
+    );
+};
+
+/**
+ * 图集预览弹窗组件
+ * Atlas Preview Modal Component
+ */
+interface AtlasPreviewModalProps {
+    atlasStats: AtlasStats;
+    selectedPage: number;
+    onSelectPage: (page: number) => void;
+    onClose: () => void;
+}
+
+const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
+    atlasStats,
+    selectedPage,
+    onSelectPage,
+    onClose
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [hoveredEntry, setHoveredEntry] = useState<AtlasEntryDebugInfo | null>(null);
+    const [loadedImages, setLoadedImages] = useState<Map<string, HTMLImageElement>>(new Map());
+
+    // 缩放和平移状态 | Zoom and pan state
+    const [zoom, setZoom] = useState(1);
+    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    const [isPanning, setIsPanning] = useState(false);
+    const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+    const currentPage = atlasStats.pages[selectedPage];
+
+    // 重置视图当页面切换时 | Reset view when page changes
+    useEffect(() => {
+        setZoom(1);
+        setPanOffset({ x: 0, y: 0 });
+    }, [selectedPage]);
+
+    // 预加载所有纹理图像 | Preload all texture images
+    useEffect(() => {
+        if (!currentPage) return;
+
+        const newImages = new Map<string, HTMLImageElement>();
+        let loadCount = 0;
+        const totalCount = currentPage.entries.filter(e => e.dataUrl).length;
+
+        currentPage.entries.forEach(entry => {
+            if (entry.dataUrl) {
+                const img = document.createElement('img');
+                img.onload = () => {
+                    newImages.set(entry.guid, img);
+                    loadCount++;
+                    if (loadCount === totalCount) {
+                        setLoadedImages(new Map(newImages));
+                    }
+                };
+                img.onerror = () => {
+                    loadCount++;
+                    if (loadCount === totalCount) {
+                        setLoadedImages(new Map(newImages));
+                    }
+                };
+                img.src = entry.dataUrl;
+            }
+        });
+
+        // 如果没有图像需要加载，立即设置空 Map
+        if (totalCount === 0) {
+            setLoadedImages(new Map());
+        }
+    }, [currentPage]);
+
+    // 绘制图集预览 | Draw atlas preview
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || !currentPage) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const pageSize = currentPage.width;
+        // 基础缩放：让图集适应画布 | Base scale: fit atlas to canvas
+        const baseScale = Math.min(rect.width, rect.height) / pageSize * 0.9;
+        // 应用用户缩放 | Apply user zoom
+        const scale = baseScale * zoom;
+        // 计算中心偏移 + 用户平移 | Calculate center offset + user pan
+        const offsetX = (rect.width - pageSize * scale) / 2 + panOffset.x;
+        const offsetY = (rect.height - pageSize * scale) / 2 + panOffset.y;
+
+        // 背景 | Background
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, rect.width, rect.height);
+
+        // 棋盘格背景（在图集区域内）| Checkerboard background (inside atlas area)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(offsetX, offsetY, pageSize * scale, pageSize * scale);
+        ctx.clip();
+
+        const checkerSize = Math.max(8, 16 * zoom);
+        for (let cx = 0; cx < pageSize * scale; cx += checkerSize) {
+            for (let cy = 0; cy < pageSize * scale; cy += checkerSize) {
+                const isLight = (Math.floor(cx / checkerSize) + Math.floor(cy / checkerSize)) % 2 === 0;
+                ctx.fillStyle = isLight ? '#2a2a2a' : '#222';
+                ctx.fillRect(offsetX + cx, offsetY + cy, checkerSize, checkerSize);
+            }
+        }
+        ctx.restore();
+
+        // 绘制图集边框 | Draw atlas border
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(offsetX, offsetY, pageSize * scale, pageSize * scale);
+
+        // 绘制每个纹理区域 | Draw each texture region
+        const colors = ['#4a9eff', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+        currentPage.entries.forEach((entry, idx) => {
+            const x = offsetX + entry.x * scale;
+            const y = offsetY + entry.y * scale;
+            const w = entry.width * scale;
+            const h = entry.height * scale;
+
+            const color = colors[idx % colors.length] ?? '#4a9eff';
+            const isHovered = hoveredEntry?.guid === entry.guid;
+
+            // 尝试绘制图像 | Try to draw image
+            const img = loadedImages.get(entry.guid);
+            if (img) {
+                ctx.drawImage(img, x, y, w, h);
+            } else {
+                // 没有图像时显示占位背景 | Show placeholder when no image
+                ctx.fillStyle = `${color}40`;
+                ctx.fillRect(x, y, w, h);
+            }
+
+            // 边框 | Border
+            ctx.strokeStyle = isHovered ? '#fff' : (img ? '#333' : color);
+            ctx.lineWidth = isHovered ? 2 : 1;
+            ctx.strokeRect(x, y, w, h);
+
+            // 高亮时显示尺寸标签 | Show size label when hovered
+            if (isHovered || (!img && w > 30 && h > 20)) {
+                // 半透明背景 | Semi-transparent background
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                const labelText = `${entry.width}x${entry.height}`;
+                ctx.font = `${Math.max(10, 10 * zoom)}px Consolas`;
+                const textWidth = ctx.measureText(labelText).width;
+                ctx.fillRect(x + w / 2 - textWidth / 2 - 4, y + h / 2 - 8, textWidth + 8, 16);
+
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.fillText(labelText, x + w / 2, y + h / 2 + 4);
+            }
+        });
+
+        // 绘制信息 | Draw info
+        ctx.fillStyle = '#666';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${currentPage.width}x${currentPage.height} | ${(currentPage.occupancy * 100).toFixed(1)}% | Zoom: ${(zoom * 100).toFixed(0)}%`, 8, rect.height - 8);
+
+    }, [currentPage, hoveredEntry, loadedImages, zoom, panOffset]);
+
+    // 鼠标悬停检测和拖动 | Mouse hover detection and dragging
+    const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+        const canvas = canvasRef.current;
+        if (!canvas || !currentPage) return;
+
+        // 处理拖动平移 | Handle pan dragging
+        if (isPanning) {
+            const dx = e.clientX - lastMousePos.x;
+            const dy = e.clientY - lastMousePos.y;
+            setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+            setLastMousePos({ x: e.clientX, y: e.clientY });
+            return;
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const pageSize = currentPage.width;
+        const baseScale = Math.min(rect.width, rect.height) / pageSize * 0.9;
+        const scale = baseScale * zoom;
+        const offsetX = (rect.width - pageSize * scale) / 2 + panOffset.x;
+        const offsetY = (rect.height - pageSize * scale) / 2 + panOffset.y;
+
+        // 检查是否悬停在某个条目上 | Check if hovering over an entry
+        let found: AtlasEntryDebugInfo | null = null;
+        for (const entry of currentPage.entries) {
+            const x = offsetX + entry.x * scale;
+            const y = offsetY + entry.y * scale;
+            const w = entry.width * scale;
+            const h = entry.height * scale;
+
+            if (mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h) {
+                found = entry;
+                break;
+            }
+        }
+        setHoveredEntry(found);
+    }, [currentPage, isPanning, lastMousePos, zoom, panOffset]);
+
+    // 滚轮缩放 | Wheel zoom
+    const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        setZoom(prev => Math.max(0.5, Math.min(10, prev * delta)));
+    }, []);
+
+    // 开始拖动 | Start dragging
+    const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (e.button === 0 || e.button === 1) { // 左键或中键 | Left or middle button
+            setIsPanning(true);
+            setLastMousePos({ x: e.clientX, y: e.clientY });
+        }
+    }, []);
+
+    // 结束拖动 | End dragging
+    const handleMouseUp = useCallback(() => {
+        setIsPanning(false);
+    }, []);
+
+    // 双击重置视图 | Double click to reset view
+    const handleDoubleClick = useCallback(() => {
+        setZoom(1);
+        setPanOffset({ x: 0, y: 0 });
+    }, []);
+
+    return (
+        <div className="atlas-preview-modal" onClick={onClose}>
+            <div className="atlas-preview-content" onClick={e => e.stopPropagation()}>
+                <div className="atlas-preview-header">
+                    <span>Dynamic Atlas Preview</span>
+                    <button className="window-btn" onClick={onClose}>
+                        <X size={14} />
+                    </button>
+                </div>
+
+                {/* 页面选择器 | Page selector */}
+                {atlasStats.pages.length > 1 && (
+                    <div className="atlas-page-tabs">
+                        {atlasStats.pages.map((page, idx) => (
+                            <button
+                                key={idx}
+                                className={`atlas-page-tab ${selectedPage === idx ? 'active' : ''}`}
+                                onClick={() => onSelectPage(idx)}
+                            >
+                                Page {idx} ({(page.occupancy * 100).toFixed(0)}%)
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* 图集可视化 | Atlas visualization */}
+                <div className="atlas-preview-canvas-container">
+                    <canvas
+                        ref={canvasRef}
+                        onMouseMove={handleMouseMove}
+                        onMouseDown={handleMouseDown}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={() => { setHoveredEntry(null); setIsPanning(false); }}
+                        onWheel={handleWheel}
+                        onDoubleClick={handleDoubleClick}
+                        style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+                    />
+                </div>
+
+                {/* 悬停信息 | Hover info */}
+                <div className="atlas-preview-info">
+                    {hoveredEntry ? (
+                        <>
+                            <div className="atlas-entry-info">
+                                <span className="label">GUID:</span>
+                                <span className="value">{hoveredEntry.guid.slice(0, 8)}...</span>
+                            </div>
+                            <div className="atlas-entry-info">
+                                <span className="label">Position:</span>
+                                <span className="value">({hoveredEntry.x}, {hoveredEntry.y})</span>
+                            </div>
+                            <div className="atlas-entry-info">
+                                <span className="label">Size:</span>
+                                <span className="value">{hoveredEntry.width} x {hoveredEntry.height}</span>
+                            </div>
+                            <div className="atlas-entry-info">
+                                <span className="label">UV:</span>
+                                <span className="value">[{hoveredEntry.uv.map(v => v.toFixed(3)).join(', ')}]</span>
+                            </div>
+                        </>
+                    ) : (
+                        <span className="hint">Scroll to zoom, drag to pan, double-click to reset</span>
+                    )}
+                </div>
+
+                {/* 统计信息 | Statistics */}
+                <div className="atlas-preview-stats">
+                    <span>Total: {atlasStats.textureCount} textures in {atlasStats.pageCount} page(s)</span>
+                    <span>Avg Occupancy: {(atlasStats.averageOccupancy * 100).toFixed(1)}%</span>
+                    {atlasStats.loadingCount > 0 && <span>Loading: {atlasStats.loadingCount}</span>}
+                    {atlasStats.failedCount > 0 && <span className="error">Failed: {atlasStats.failedCount}</span>}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default RenderDebugPanel;

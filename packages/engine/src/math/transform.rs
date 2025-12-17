@@ -82,15 +82,22 @@ impl Transform2D {
     ///
     /// The matrix is constructed as: T * R * S (translate, rotate, scale).
     /// 矩阵构造顺序为：T * R * S（平移、旋转、缩放）。
+    ///
+    /// Uses left-hand coordinate system convention:
+    /// 使用左手坐标系约定：
+    /// - Positive rotation = clockwise (when viewed from +Z)
+    /// - 正旋转 = 顺时针（从 +Z 方向观察时）
     pub fn to_matrix(&self) -> Mat3 {
         let cos = self.rotation.cos();
         let sin = self.rotation.sin();
 
         // Construct TRS matrix directly for performance
         // 直接构造TRS矩阵以提高性能
+        // Clockwise rotation: [cos, -sin; sin, cos] (column-major)
+        // 顺时针旋转矩阵
         Mat3::from_cols(
-            glam::Vec3::new(cos * self.scale.x, sin * self.scale.x, 0.0),
-            glam::Vec3::new(-sin * self.scale.y, cos * self.scale.y, 0.0),
+            glam::Vec3::new(cos * self.scale.x, -sin * self.scale.x, 0.0),
+            glam::Vec3::new(sin * self.scale.y, cos * self.scale.y, 0.0),
             glam::Vec3::new(self.position.x, self.position.y, 1.0),
         )
     }
@@ -101,6 +108,9 @@ impl Transform2D {
     /// # Arguments | 参数
     /// * `width` - Sprite width | 精灵宽度
     /// * `height` - Sprite height | 精灵高度
+    ///
+    /// Uses left-hand coordinate system (clockwise positive rotation).
+    /// 使用左手坐标系（顺时针正旋转）。
     pub fn to_matrix_with_origin(&self, width: f32, height: f32) -> Mat3 {
         let ox = -self.origin.x * width * self.scale.x;
         let oy = -self.origin.y * height * self.scale.y;
@@ -108,14 +118,16 @@ impl Transform2D {
         let cos = self.rotation.cos();
         let sin = self.rotation.sin();
 
-        // Apply origin offset after rotation
-        // 在旋转后应用原点偏移
-        let tx = self.position.x + ox * cos - oy * sin;
-        let ty = self.position.y + ox * sin + oy * cos;
+        // Apply origin offset after rotation (clockwise rotation)
+        // 在旋转后应用原点偏移（顺时针旋转）
+        let tx = self.position.x + ox * cos + oy * sin;
+        let ty = self.position.y - ox * sin + oy * cos;
 
+        // Clockwise rotation matrix
+        // 顺时针旋转矩阵
         Mat3::from_cols(
-            glam::Vec3::new(cos * self.scale.x, sin * self.scale.x, 0.0),
-            glam::Vec3::new(-sin * self.scale.y, cos * self.scale.y, 0.0),
+            glam::Vec3::new(cos * self.scale.x, -sin * self.scale.x, 0.0),
+            glam::Vec3::new(sin * self.scale.y, cos * self.scale.y, 0.0),
             glam::Vec3::new(tx, ty, 1.0),
         )
     }

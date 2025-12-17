@@ -321,6 +321,15 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         scaleSnapRef.current = scaleSnapValue;
     }, [playState, camera2DZoom, camera2DOffset, transformMode, snapEnabled, gridSnapValue, rotationSnapValue, scaleSnapValue]);
 
+    // 发布 Play 状态变化事件，用于层级面板实时同步
+    // Publish play state change event for hierarchy panel real-time sync
+    useEffect(() => {
+        messageHub?.publish('viewport:playState:changed', {
+            playState,
+            isPlaying: playState === 'playing'
+        });
+    }, [playState, messageHub]);
+
     // Snap helper functions
     const snapToGrid = useCallback((value: number): number => {
         if (!snapEnabledRef.current || gridSnapRef.current <= 0) return value;
@@ -904,8 +913,19 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
                             await EngineService.getInstance().loadSceneResources();
 
+                            // 同步 EntityStore 并通知层级面板更新
+                            // Sync EntityStore and notify hierarchy panel to update
                             const entityStore = Core.services.tryResolve(EntityStoreService);
                             entityStore?.syncFromScene();
+
+                            // 发布运行时场景切换事件，通知层级面板更新
+                            // Publish runtime scene change event to notify hierarchy panel
+                            const sceneName = fullPath.split(/[/\\]/).pop()?.replace('.ecs', '') || 'Unknown';
+                            messageHub?.publish('runtime:scene:changed', {
+                                path: fullPath,
+                                sceneName,
+                                isPlayMode: true
+                            });
                         }
 
                         console.log(`[Viewport] Scene loaded in play mode: ${scenePath}`);
