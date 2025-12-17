@@ -11,6 +11,7 @@ import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framewor
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIProgressBarComponent, UIProgressDirection } from '../../components/widgets/UIProgressBarComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
+import { getUIRenderTransform, renderBorder, lerpColor, type UIRenderTransform } from './UIRenderUtils';
 
 /**
  * UI ProgressBar Render System
@@ -44,60 +45,37 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             // 空值检查 | Null check
             if (!transform || !progressBar) continue;
 
-            if (!transform.worldVisible) continue;
-
-            const x = transform.worldX ?? transform.x;
-            const y = transform.worldY ?? transform.y;
-            // 使用世界缩放和旋转
-            const scaleX = transform.worldScaleX ?? transform.scaleX;
-            const scaleY = transform.worldScaleY ?? transform.scaleY;
-            const rotation = transform.worldRotation ?? transform.rotation;
-            const width = (transform.computedWidth ?? transform.width) * scaleX;
-            const height = (transform.computedHeight ?? transform.height) * scaleY;
-            const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
-            const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.worldOrderInLayer;
-            // 使用 transform 的 pivot 作为旋转/缩放中心
-            const pivotX = transform.pivotX;
-            const pivotY = transform.pivotY;
-            // 渲染位置 = 左下角 + pivot 偏移
-            const renderX = x + width * pivotX;
-            const renderY = y + height * pivotY;
+            // 使用工具函数获取渲染变换数据
+            // Use utility function to get render transform data
+            const rt = getUIRenderTransform(transform);
+            if (!rt) continue;
 
             // Render background
             // 渲染背景
             if (progressBar.backgroundAlpha > 0) {
                 collector.addRect(
-                    renderX, renderY, width, height,
+                    rt.renderX, rt.renderY, rt.width, rt.height,
                     progressBar.backgroundColor,
-                    progressBar.backgroundAlpha * alpha,
-                    sortingLayer,
-                    orderInLayer,
+                    progressBar.backgroundAlpha * rt.alpha,
+                    rt.sortingLayer,
+                    rt.orderInLayer,
                     {
-                        rotation,
-                        pivotX,
-                        pivotY,
+                        rotation: rt.rotation,
+                        pivotX: rt.pivotX,
+                        pivotY: rt.pivotY,
                         entityId: entity.id
                     }
                 );
             }
 
-            // Render border
-            // 渲染边框
+            // Render border (using utility)
+            // 渲染边框（使用工具函数）
             if (progressBar.borderWidth > 0) {
-                this.renderBorder(
-                    collector, renderX, renderY, width, height,
-                    progressBar.borderWidth,
-                    progressBar.borderColor,
-                    alpha,
-                    sortingLayer,
-                    orderInLayer + 2,
-                    transform,
-                    pivotX,
-                    pivotY,
-                    entity.id
-                );
+                renderBorder(collector, rt, {
+                    borderWidth: progressBar.borderWidth,
+                    borderColor: progressBar.borderColor,
+                    borderAlpha: 1
+                }, entity.id, 2);
             }
 
             // Render fill
@@ -105,17 +83,9 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             const progress = progressBar.getProgress();
             if (progress > 0 && progressBar.fillAlpha > 0) {
                 if (progressBar.showSegments) {
-                    this.renderSegmentedFill(
-                        collector, renderX, renderY, width, height,
-                        progress, progressBar, alpha, sortingLayer, orderInLayer + 1, transform,
-                        pivotX, pivotY, entity.id
-                    );
+                    this.renderSegmentedFill(collector, rt, progress, progressBar, entity.id);
                 } else {
-                    this.renderSolidFill(
-                        collector, renderX, renderY, width, height,
-                        progress, progressBar, alpha, sortingLayer, orderInLayer + 1, transform,
-                        pivotX, pivotY, entity.id
-                    );
+                    this.renderSolidFill(collector, rt, progress, progressBar, entity.id);
                 }
             }
         }
@@ -124,71 +94,60 @@ export class UIProgressBarRenderSystem extends EntitySystem {
     /**
      * Render solid fill rectangle
      * 渲染实心填充矩形
-     *
-     * Note: centerX, centerY is the pivot position of the progress bar
-     * 注意：centerX, centerY 是进度条的 pivot 位置
      */
     private renderSolidFill(
         collector: ReturnType<typeof getUIRenderCollector>,
-        centerX: number, centerY: number, width: number, height: number,
+        rt: UIRenderTransform,
         progress: number,
         progressBar: UIProgressBarComponent,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        transform: UITransformComponent,
-        pivotX: number,
-        pivotY: number,
         entityId: number
     ): void {
-        const rotation = transform.worldRotation ?? transform.rotation;
-
         // 计算进度条的边界（相对于 pivot 中心）
-        const left = centerX - width * pivotX;
-        const bottom = centerY - height * pivotY;
+        const left = rt.renderX - rt.width * rt.pivotX;
+        const bottom = rt.renderY - rt.height * rt.pivotY;
 
         let fillX: number;
         let fillY: number;
-        let fillWidth = width;
-        let fillHeight = height;
+        let fillWidth = rt.width;
+        let fillHeight = rt.height;
 
         // Calculate fill dimensions based on direction
         // 根据方向计算填充尺寸
         switch (progressBar.direction) {
             case UIProgressDirection.LeftToRight:
-                fillWidth = width * progress;
+                fillWidth = rt.width * progress;
                 fillX = left + fillWidth / 2;
-                fillY = bottom + height / 2;
+                fillY = bottom + rt.height / 2;
                 break;
 
             case UIProgressDirection.RightToLeft:
-                fillWidth = width * progress;
-                fillX = left + width - fillWidth / 2;
-                fillY = bottom + height / 2;
+                fillWidth = rt.width * progress;
+                fillX = left + rt.width - fillWidth / 2;
+                fillY = bottom + rt.height / 2;
                 break;
 
             case UIProgressDirection.BottomToTop:
-                fillHeight = height * progress;
-                fillX = left + width / 2;
+                fillHeight = rt.height * progress;
+                fillX = left + rt.width / 2;
                 fillY = bottom + fillHeight / 2;
                 break;
 
             case UIProgressDirection.TopToBottom:
-                fillHeight = height * progress;
-                fillX = left + width / 2;
-                fillY = bottom + height - fillHeight / 2;
+                fillHeight = rt.height * progress;
+                fillX = left + rt.width / 2;
+                fillY = bottom + rt.height - fillHeight / 2;
                 break;
 
             default:
                 fillX = left + fillWidth / 2;
-                fillY = bottom + height / 2;
+                fillY = bottom + rt.height / 2;
         }
 
-        // Determine fill color (gradient or solid)
-        // 确定填充颜色（渐变或实心）
+        // Determine fill color (gradient or solid, using utility)
+        // 确定填充颜色（渐变或实心，使用工具函数）
         let fillColor = progressBar.fillColor;
         if (progressBar.useGradient) {
-            fillColor = this.lerpColor(
+            fillColor = lerpColor(
                 progressBar.gradientStartColor,
                 progressBar.gradientEndColor,
                 progress
@@ -198,11 +157,11 @@ export class UIProgressBarRenderSystem extends EntitySystem {
         collector.addRect(
             fillX, fillY, fillWidth, fillHeight,
             fillColor,
-            progressBar.fillAlpha * alpha,
-            sortingLayer,
-            orderInLayer,
+            progressBar.fillAlpha * rt.alpha,
+            rt.sortingLayer,
+            rt.orderInLayer + 1,
             {
-                rotation,
+                rotation: rt.rotation,
                 pivotX: 0.5,
                 pivotY: 0.5,
                 entityId
@@ -213,24 +172,14 @@ export class UIProgressBarRenderSystem extends EntitySystem {
     /**
      * Render segmented fill
      * 渲染分段填充
-     *
-     * Note: centerX, centerY is the pivot position of the progress bar
-     * 注意：centerX, centerY 是进度条的 pivot 位置
      */
     private renderSegmentedFill(
         collector: ReturnType<typeof getUIRenderCollector>,
-        centerX: number, centerY: number, width: number, height: number,
+        rt: UIRenderTransform,
         progress: number,
         progressBar: UIProgressBarComponent,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        transform: UITransformComponent,
-        pivotX: number,
-        pivotY: number,
         entityId: number
     ): void {
-        const rotation = transform.worldRotation ?? transform.rotation;
         const segments = progressBar.segments;
         const gap = progressBar.segmentGap;
         const filledSegments = Math.ceil(progress * segments);
@@ -239,8 +188,8 @@ export class UIProgressBarRenderSystem extends EntitySystem {
                             progressBar.direction === UIProgressDirection.RightToLeft;
 
         // 计算进度条的边界（相对于 pivot 中心）
-        const left = centerX - width * pivotX;
-        const bottom = centerY - height * pivotY;
+        const left = rt.renderX - rt.width * rt.pivotX;
+        const bottom = rt.renderY - rt.height * rt.pivotY;
 
         // Calculate segment dimensions
         // 计算段尺寸
@@ -248,11 +197,11 @@ export class UIProgressBarRenderSystem extends EntitySystem {
         let segmentHeight: number;
 
         if (isHorizontal) {
-            segmentWidth = (width - gap * (segments - 1)) / segments;
-            segmentHeight = height;
+            segmentWidth = (rt.width - gap * (segments - 1)) / segments;
+            segmentHeight = rt.height;
         } else {
-            segmentWidth = width;
-            segmentHeight = (height - gap * (segments - 1)) / segments;
+            segmentWidth = rt.width;
+            segmentHeight = (rt.height - gap * (segments - 1)) / segments;
         }
 
         for (let i = 0; i < filledSegments && i < segments; i++) {
@@ -264,140 +213,56 @@ export class UIProgressBarRenderSystem extends EntitySystem {
             switch (progressBar.direction) {
                 case UIProgressDirection.LeftToRight:
                     segCenterX = left + i * (segmentWidth + gap) + segmentWidth / 2;
-                    segCenterY = bottom + height / 2;
+                    segCenterY = bottom + rt.height / 2;
                     break;
 
                 case UIProgressDirection.RightToLeft:
-                    segCenterX = left + width - i * (segmentWidth + gap) - segmentWidth / 2;
-                    segCenterY = bottom + height / 2;
+                    segCenterX = left + rt.width - i * (segmentWidth + gap) - segmentWidth / 2;
+                    segCenterY = bottom + rt.height / 2;
                     break;
 
                 case UIProgressDirection.TopToBottom:
-                    segCenterX = left + width / 2;
-                    segCenterY = bottom + height - i * (segmentHeight + gap) - segmentHeight / 2;
+                    segCenterX = left + rt.width / 2;
+                    segCenterY = bottom + rt.height - i * (segmentHeight + gap) - segmentHeight / 2;
                     break;
 
                 case UIProgressDirection.BottomToTop:
-                    segCenterX = left + width / 2;
+                    segCenterX = left + rt.width / 2;
                     segCenterY = bottom + i * (segmentHeight + gap) + segmentHeight / 2;
                     break;
 
                 default:
                     segCenterX = left + i * (segmentWidth + gap) + segmentWidth / 2;
-                    segCenterY = bottom + height / 2;
+                    segCenterY = bottom + rt.height / 2;
             }
 
-            // Determine segment color
-            // 确定段颜色
+            // Determine segment color (using utility)
+            // 确定段颜色（使用工具函数）
             let segmentColor = progressBar.fillColor;
             if (progressBar.useGradient) {
                 const t = segments > 1 ? i / (segments - 1) : 0;
-                segmentColor = this.lerpColor(
+                segmentColor = lerpColor(
                     progressBar.gradientStartColor,
                     progressBar.gradientEndColor,
                     t
                 );
             }
 
-            // Use center position with pivot 0.5, 0.5
-            // 使用中心位置，pivot 0.5, 0.5
             collector.addRect(
                 segCenterX, segCenterY,
                 segmentWidth,
                 segmentHeight,
                 segmentColor,
-                progressBar.fillAlpha * alpha,
-                sortingLayer,
-                orderInLayer,
+                progressBar.fillAlpha * rt.alpha,
+                rt.sortingLayer,
+                rt.orderInLayer + 1,
                 {
-                    rotation,
+                    rotation: rt.rotation,
                     pivotX: 0.5,
                     pivotY: 0.5,
                     entityId
                 }
             );
         }
-    }
-
-    /**
-     * Render border
-     * 渲染边框
-     *
-     * Note: centerX, centerY is the pivot position of the progress bar
-     * 注意：centerX, centerY 是进度条的 pivot 位置
-     */
-    private renderBorder(
-        collector: ReturnType<typeof getUIRenderCollector>,
-        centerX: number, centerY: number, width: number, height: number,
-        borderWidth: number,
-        borderColor: number,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        transform: UITransformComponent,
-        pivotX: number,
-        pivotY: number,
-        entityId: number
-    ): void {
-        const rotation = transform.worldRotation ?? transform.rotation;
-
-        // 计算边界（相对于 pivot 中心）
-        const left = centerX - width * pivotX;
-        const bottom = centerY - height * pivotY;
-        const right = left + width;
-        const top = bottom + height;
-
-        // Top border
-        collector.addRect(
-            (left + right) / 2, top - borderWidth / 2,
-            width, borderWidth,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-
-        // Bottom border
-        collector.addRect(
-            (left + right) / 2, bottom + borderWidth / 2,
-            width, borderWidth,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-
-        // Left border (excluding corners)
-        const sideBorderHeight = height - borderWidth * 2;
-        collector.addRect(
-            left + borderWidth / 2, (top + bottom) / 2,
-            borderWidth, sideBorderHeight,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-
-        // Right border (excluding corners)
-        collector.addRect(
-            right - borderWidth / 2, (top + bottom) / 2,
-            borderWidth, sideBorderHeight,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-    }
-
-    /**
-     * Linear interpolation between two colors
-     * 两种颜色之间的线性插值
-     */
-    private lerpColor(color1: number, color2: number, t: number): number {
-        const r1 = (color1 >> 16) & 0xFF;
-        const g1 = (color1 >> 8) & 0xFF;
-        const b1 = color1 & 0xFF;
-
-        const r2 = (color2 >> 16) & 0xFF;
-        const g2 = (color2 >> 8) & 0xFF;
-        const b2 = color2 & 0xFF;
-
-        const r = Math.round(r1 + (r2 - r1) * t);
-        const g = Math.round(g1 + (g2 - g1) * t);
-        const b = Math.round(b1 + (b2 - b1) * t);
-
-        return (r << 16) | (g << 8) | b;
     }
 }
