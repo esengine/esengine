@@ -254,3 +254,15 @@ export {
     isValidNinePatchMargins,
     getNinePatchMinSize
 } from './utils';
+
+// Dirty Flag Utilities | 脏标记工具
+export {
+    UIDirtyFlags,
+    type IDirtyTrackable,
+    DirtyOnChange,
+    DirtyTracker,
+    markFrameDirty,
+    isFrameDirty,
+    getDirtyComponentCount,
+    clearFrameDirty
+} from './utils';

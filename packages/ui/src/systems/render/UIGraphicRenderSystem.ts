@@ -63,7 +63,7 @@ export class UIGraphicRenderSystem extends EntitySystem {
 
             // Mark graphic as rendered (clear dirty flag)
             // 标记图形已渲染（清除脏标记）
-            graphic.clearDirty();
+            graphic.clearDirtyFlags();
         }
     }
 

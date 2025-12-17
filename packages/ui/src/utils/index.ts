@@ -17,3 +17,15 @@ export {
     isValidNinePatchMargins,
     getNinePatchMinSize
 } from './UITextureUtils';
+
+export {
+    // Dirty flag utilities | 脏标记工具
+    UIDirtyFlags,
+    type IDirtyTrackable,
+    DirtyOnChange,
+    DirtyTracker,
+    markFrameDirty,
+    isFrameDirty,
+    getDirtyComponentCount,
+    clearFrameDirty
+} from './UIDirtyFlags';
