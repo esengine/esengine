@@ -98,6 +98,7 @@ export {
 export { TextBlinkComponent } from './components/TextBlinkComponent';
 export { SceneLoadTriggerComponent } from './components/SceneLoadTriggerComponent';
 export { UIWidgetMarker } from './components/UIWidgetMarker';
+export { UICanvasComponent, UICanvasRenderMode } from './components/UICanvasComponent';
 
 export {
     UILayoutComponent,

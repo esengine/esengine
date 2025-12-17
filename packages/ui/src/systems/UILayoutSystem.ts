@@ -1,6 +1,8 @@
 import { EntitySystem, Matcher, Entity, ECSSystem, HierarchyComponent } from '@esengine/ecs-framework';
+import { SortingLayers } from '@esengine/engine-core';
 import { UITransformComponent } from '../components/UITransformComponent';
 import { UILayoutComponent, UILayoutType, UIJustifyContent, UIAlignItems } from '../components/UILayoutComponent';
+import { UICanvasComponent } from '../components/UICanvasComponent';
 
 /** 度转弧度常量 | Degrees to radians constant */
 const DEG_TO_RAD = Math.PI / 180;
@@ -18,6 +20,21 @@ interface Matrix2D {
     d: number;   // scaleY * cos(rotation)
     tx: number;  // translateX
     ty: number;  // translateY
+}
+
+/**
+ * Canvas 上下文（用于传播设置给子元素）
+ * Canvas context (for propagating settings to children)
+ */
+interface CanvasContext {
+    /** Canvas 实体 ID | Canvas entity ID */
+    entityId: number | null;
+    /** 排序层 | Sorting layer */
+    sortingLayer: string;
+    /** 基础层内顺序 | Base order in layer */
+    baseSortOrder: number;
+    /** 像素完美 | Pixel perfect */
+    pixelPerfect: boolean;
 }
 
 /**
@@ -100,8 +117,17 @@ export class UILayoutSystem extends EntitySystem {
         // 根元素使用单位矩阵作为父矩阵
         const identityMatrix: Matrix2D = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 
+        // 默认 Canvas 上下文
+        // Default Canvas context
+        const defaultCanvasContext: CanvasContext = {
+            entityId: null,
+            sortingLayer: SortingLayers.UI,
+            baseSortOrder: 0,
+            pixelPerfect: false
+        };
+
         for (const entity of rootEntities) {
-            this.layoutEntity(entity, parentX, parentY, this.canvasWidth, this.canvasHeight, 1, identityMatrix, true, 0);
+            this.layoutEntity(entity, parentX, parentY, this.canvasWidth, this.canvasHeight, 1, identityMatrix, true, 0, defaultCanvasContext);
         }
     }
 
@@ -118,10 +144,35 @@ export class UILayoutSystem extends EntitySystem {
         parentAlpha: number,
         parentMatrix: Matrix2D,
         parentVisible: boolean = true,
-        depth: number = 0
+        depth: number = 0,
+        canvasContext: CanvasContext
     ): void {
         const transform = entity.getComponent(UITransformComponent);
         if (!transform) return;
+
+        // 检查此实体是否有 UICanvasComponent
+        // Check if this entity has UICanvasComponent
+        const canvas = entity.getComponent(UICanvasComponent);
+        let currentCanvasContext = canvasContext;
+
+        if (canvas) {
+            // 此实体是一个 Canvas，创建新的 Canvas 上下文
+            // This entity is a Canvas, create new Canvas context
+            currentCanvasContext = {
+                entityId: entity.id,
+                sortingLayer: canvas.sortingLayerName,
+                baseSortOrder: canvas.sortOrder,
+                pixelPerfect: canvas.pixelPerfect
+            };
+            canvas.canvasId = entity.id;
+            canvas.dirty = false;
+        }
+
+        // 应用 Canvas 设置到 transform
+        // Apply Canvas settings to transform
+        transform.canvasEntityId = currentCanvasContext.entityId;
+        transform.worldSortingLayer = currentCanvasContext.sortingLayer;
+        transform.pixelPerfect = currentCanvasContext.pixelPerfect;
 
         // 计算锚点位置
         // X 轴：向右为正，anchorMinX=0 是左边，anchorMinX=1 是右边
@@ -207,9 +258,9 @@ export class UILayoutSystem extends EntitySystem {
 
         // 计算世界层内顺序（子元素总是渲染在父元素之上）
         // Calculate world order in layer (children always render on top of parents)
-        // 公式：depth * 1000 + localOrderInLayer
-        // Formula: depth * 1000 + localOrderInLayer
-        transform.worldOrderInLayer = depth * 1000 + transform.orderInLayer;
+        // 公式：canvasBaseSortOrder + depth * 1000 + localOrderInLayer
+        // Formula: canvasBaseSortOrder + depth * 1000 + localOrderInLayer
+        transform.worldOrderInLayer = currentCanvasContext.baseSortOrder + depth * 1000 + transform.orderInLayer;
 
         // 使用矩阵乘法计算世界变换
         this.updateWorldMatrix(transform, parentMatrix);
@@ -227,7 +278,7 @@ export class UILayoutSystem extends EntitySystem {
         // 检查是否有布局组件
         const layout = entity.getComponent(UILayoutComponent);
         if (layout && layout.type !== UILayoutType.None) {
-            this.layoutChildren(layout, transform, children, depth + 1);
+            this.layoutChildren(layout, transform, children, depth + 1, currentCanvasContext);
         } else {
             // 无布局组件，直接递归处理子元素
             for (const child of children) {
@@ -240,7 +291,8 @@ export class UILayoutSystem extends EntitySystem {
                     transform.worldAlpha,
                     transform.localToWorldMatrix,
                     transform.worldVisible,
-                    depth + 1
+                    depth + 1,
+                    currentCanvasContext
                 );
             }
         }
@@ -254,7 +306,8 @@ export class UILayoutSystem extends EntitySystem {
         layout: UILayoutComponent,
         parentTransform: UITransformComponent,
         children: Entity[],
-        depth: number
+        depth: number,
+        canvasContext: CanvasContext
     ): void {
         const contentStartX = parentTransform.worldX + layout.paddingLeft;
         // Y-up 系统：worldY 是底部，顶部 = worldY + height
@@ -266,13 +319,13 @@ export class UILayoutSystem extends EntitySystem {
 
         switch (layout.type) {
             case UILayoutType.Horizontal:
-                this.layoutHorizontal(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth);
+                this.layoutHorizontal(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth, canvasContext);
                 break;
             case UILayoutType.Vertical:
-                this.layoutVertical(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth);
+                this.layoutVertical(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth, canvasContext);
                 break;
             case UILayoutType.Grid:
-                this.layoutGrid(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth);
+                this.layoutGrid(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth, canvasContext);
                 break;
             default:
                 // 默认按正常方式递归（传递顶部 Y）
@@ -286,7 +339,8 @@ export class UILayoutSystem extends EntitySystem {
                         parentTransform.worldAlpha,
                         parentTransform.localToWorldMatrix,
                         parentTransform.worldVisible,
-                        depth
+                        depth,
+                        canvasContext
                     );
                 }
         }
@@ -304,7 +358,8 @@ export class UILayoutSystem extends EntitySystem {
         startY: number,
         contentWidth: number,
         contentHeight: number,
-        depth: number
+        depth: number,
+        canvasContext: CanvasContext
     ): void {
         // 计算总子元素宽度
         const childSizes = children.map(child => {
@@ -383,14 +438,18 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.worldAlpha = parentTransform.worldAlpha * childTransform.alpha;
             // 传播世界可见性 | Propagate world visibility
             childTransform.worldVisible = parentTransform.worldVisible && childTransform.visible;
-            // 计算世界层内顺序 | Calculate world order in layer
-            childTransform.worldOrderInLayer = depth * 1000 + childTransform.orderInLayer;
+            // 计算世界层内顺序（包含 Canvas 基础排序）| Calculate world order in layer (with Canvas base sort)
+            childTransform.worldOrderInLayer = canvasContext.baseSortOrder + depth * 1000 + childTransform.orderInLayer;
+            // 传播 Canvas 设置 | Propagate Canvas settings
+            childTransform.canvasEntityId = canvasContext.entityId;
+            childTransform.worldSortingLayer = canvasContext.sortingLayer;
+            childTransform.pixelPerfect = canvasContext.pixelPerfect;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
             childTransform.layoutDirty = false;
 
             // 递归处理子元素的子元素
-            this.processChildrenRecursive(child, childTransform, depth);
+            this.processChildrenRecursive(child, childTransform, depth, canvasContext);
 
             offsetX += size.width + gap;
         }
@@ -409,7 +468,8 @@ export class UILayoutSystem extends EntitySystem {
         startY: number,
         contentWidth: number,
         contentHeight: number,
-        depth: number
+        depth: number,
+        canvasContext: CanvasContext
     ): void {
         // 计算总子元素高度
         const childSizes = children.map(child => {
@@ -486,13 +546,17 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.worldAlpha = parentTransform.worldAlpha * childTransform.alpha;
             // 传播世界可见性 | Propagate world visibility
             childTransform.worldVisible = parentTransform.worldVisible && childTransform.visible;
-            // 计算世界层内顺序 | Calculate world order in layer
-            childTransform.worldOrderInLayer = depth * 1000 + childTransform.orderInLayer;
+            // 计算世界层内顺序（包含 Canvas 基础排序）| Calculate world order in layer (with Canvas base sort)
+            childTransform.worldOrderInLayer = canvasContext.baseSortOrder + depth * 1000 + childTransform.orderInLayer;
+            // 传播 Canvas 设置 | Propagate Canvas settings
+            childTransform.canvasEntityId = canvasContext.entityId;
+            childTransform.worldSortingLayer = canvasContext.sortingLayer;
+            childTransform.pixelPerfect = canvasContext.pixelPerfect;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
             childTransform.layoutDirty = false;
 
-            this.processChildrenRecursive(child, childTransform, depth);
+            this.processChildrenRecursive(child, childTransform, depth, canvasContext);
 
             // 移动到下一个元素的顶部位置（向下 = Y 减小）
             currentTopY -= size.height + gap;
@@ -512,7 +576,8 @@ export class UILayoutSystem extends EntitySystem {
         startY: number,
         contentWidth: number,
         _contentHeight: number,
-        depth: number
+        depth: number,
+        canvasContext: CanvasContext
     ): void {
         const columns = layout.columns;
         const gapX = layout.getHorizontalGap();
@@ -547,13 +612,17 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.worldAlpha = parentTransform.worldAlpha * childTransform.alpha;
             // 传播世界可见性 | Propagate world visibility
             childTransform.worldVisible = parentTransform.worldVisible && childTransform.visible;
-            // 计算世界层内顺序 | Calculate world order in layer
-            childTransform.worldOrderInLayer = depth * 1000 + childTransform.orderInLayer;
+            // 计算世界层内顺序（包含 Canvas 基础排序）| Calculate world order in layer (with Canvas base sort)
+            childTransform.worldOrderInLayer = canvasContext.baseSortOrder + depth * 1000 + childTransform.orderInLayer;
+            // 传播 Canvas 设置 | Propagate Canvas settings
+            childTransform.canvasEntityId = canvasContext.entityId;
+            childTransform.worldSortingLayer = canvasContext.sortingLayer;
+            childTransform.pixelPerfect = canvasContext.pixelPerfect;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
             childTransform.layoutDirty = false;
 
-            this.processChildrenRecursive(child, childTransform, depth);
+            this.processChildrenRecursive(child, childTransform, depth, canvasContext);
         }
     }
 
@@ -590,7 +659,7 @@ export class UILayoutSystem extends EntitySystem {
      * 递归处理子元素
      * Recursively process children
      */
-    private processChildrenRecursive(entity: Entity, parentTransform: UITransformComponent, depth: number): void {
+    private processChildrenRecursive(entity: Entity, parentTransform: UITransformComponent, depth: number, canvasContext: CanvasContext): void {
         const children = this.getUIChildren(entity);
         if (children.length === 0) return;
 
@@ -599,7 +668,7 @@ export class UILayoutSystem extends EntitySystem {
 
         const layout = entity.getComponent(UILayoutComponent);
         if (layout && layout.type !== UILayoutType.None) {
-            this.layoutChildren(layout, parentTransform, children, depth + 1);
+            this.layoutChildren(layout, parentTransform, children, depth + 1, canvasContext);
         } else {
             for (const child of children) {
                 this.layoutEntity(
@@ -611,7 +680,8 @@ export class UILayoutSystem extends EntitySystem {
                     parentTransform.worldAlpha,
                     parentTransform.localToWorldMatrix,
                     parentTransform.worldVisible,
-                    depth + 1
+                    depth + 1,
+                    canvasContext
                 );
             }
         }

@@ -285,6 +285,27 @@ export class UITransformComponent extends Component implements ISortable {
     public worldOrderInLayer: number = 0;
 
     /**
+     * 所属 Canvas 实体 ID（由 UILayoutSystem 计算）
+     * Owning Canvas entity ID (computed by UILayoutSystem)
+     *
+     * 如果为 null，表示没有父 Canvas（使用默认设置）。
+     * If null, indicates no parent Canvas (use default settings).
+     */
+    public canvasEntityId: number | null = null;
+
+    /**
+     * 计算后的世界排序层（从 Canvas 继承）
+     * Computed world sorting layer (inherited from Canvas)
+     */
+    public worldSortingLayer: string = SortingLayers.UI;
+
+    /**
+     * 是否启用像素完美渲染（从 Canvas 继承）
+     * Whether pixel-perfect rendering is enabled (inherited from Canvas)
+     */
+    public pixelPerfect: boolean = false;
+
+    /**
      * 本地到世界的 2D 变换矩阵（只读，由 UILayoutSystem 计算）
      * Local to world 2D transformation matrix (readonly, computed by UILayoutSystem)
      */

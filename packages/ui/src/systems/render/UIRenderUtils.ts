@@ -61,7 +61,9 @@ export function getUIRenderTransform(transform: UITransformComponent): UIRenderT
     const rotation = transform.worldRotation ?? transform.rotation;
     const pivotX = transform.pivotX;
     const pivotY = transform.pivotY;
-    const sortingLayer = transform.sortingLayer;
+    // 使用继承自 Canvas 的排序层，如果没有则回退到组件本身的排序层
+    // Use Canvas-inherited sorting layer, fallback to component's own sortingLayer
+    const sortingLayer = transform.worldSortingLayer ?? transform.sortingLayer;
     const orderInLayer = transform.worldOrderInLayer;
 
     // Render position = bottom-left corner + pivot offset
