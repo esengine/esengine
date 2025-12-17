@@ -13,6 +13,7 @@ import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
 import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
 import { UIInteractableComponent } from '../../components/UIInteractableComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
+import { getUIRenderTransform, renderBorder, getNinePatchTopLeft } from './UIRenderUtils';
 
 /**
  * UI Button Render System
@@ -48,26 +49,10 @@ export class UIButtonRenderSystem extends EntitySystem {
             // 空值检查 | Null check
             if (!transform || !button) continue;
 
-            if (!transform.worldVisible) continue;
-
-            const x = transform.worldX ?? transform.x;
-            const y = transform.worldY ?? transform.y;
-            // 使用世界缩放和旋转
-            const scaleX = transform.worldScaleX ?? transform.scaleX;
-            const scaleY = transform.worldScaleY ?? transform.scaleY;
-            const rotation = transform.worldRotation ?? transform.rotation;
-            const width = (transform.computedWidth ?? transform.width) * scaleX;
-            const height = (transform.computedHeight ?? transform.height) * scaleY;
-            const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
-            const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.worldOrderInLayer;
-            // 使用 transform 的 pivot 作为旋转/缩放中心
-            const pivotX = transform.pivotX;
-            const pivotY = transform.pivotY;
-            // 渲染位置 = 左下角 + pivot 偏移
-            const renderX = x + width * pivotX;
-            const renderY = y + height * pivotY;
+            // 使用工具函数获取渲染变换数据
+            // Use utility function to get render transform data
+            const rt = getUIRenderTransform(transform);
+            if (!rt) continue;
 
             // Render texture if in texture or both mode
             // 如果在纹理或两者模式下，渲染纹理
@@ -88,29 +73,24 @@ export class UIButtonRenderSystem extends EntitySystem {
 
                     // 使用按钮的当前颜色作为纹理着色（Color Tint Transition）
                     // Use button's current color as texture tint (Color Tint Transition)
-                    // normalColor 为白色时，正常显示；其他状态颜色会对纹理进行着色
-                    // When normalColor is white, texture displays normally; other state colors tint the texture
                     const textureTint = button.currentColor;
 
                     if (isNinePatch) {
-                        // Nine-patch rendering for buttons
-                        // 按钮的九宫格渲染
-                        // addNinePatch expects top-left corner coordinates
-                        // Y-up coordinate system: top = bottom + height
-                        const topLeftX = x;
-                        const topLeftY = y + height;
+                        // Nine-patch rendering for buttons (using utility)
+                        // 按钮的九宫格渲染（使用工具函数）
+                        const topLeft = getNinePatchTopLeft(rt);
                         collector.addNinePatch(
-                            topLeftX, topLeftY,
-                            width, height,
+                            topLeft.x, topLeft.y,
+                            rt.width, rt.height,
                             render.ninePatchMargins,
                             render.textureWidth,
                             render.textureHeight,
                             textureTint,
-                            alpha,
-                            sortingLayer,
-                            orderInLayer,
+                            rt.alpha,
+                            rt.sortingLayer,
+                            rt.orderInLayer,
                             {
-                                rotation,
+                                rotation: rt.rotation,
                                 textureGuid,
                                 entityId: entity.id
                             }
@@ -119,16 +99,16 @@ export class UIButtonRenderSystem extends EntitySystem {
                         // Standard texture rendering
                         // 标准纹理渲染
                         collector.addRect(
-                            renderX, renderY,
-                            width, height,
+                            rt.renderX, rt.renderY,
+                            rt.width, rt.height,
                             textureTint,
-                            alpha,
-                            sortingLayer,
-                            orderInLayer,
+                            rt.alpha,
+                            rt.sortingLayer,
+                            rt.orderInLayer,
                             {
-                                rotation,
-                                pivotX,
-                                pivotY,
+                                rotation: rt.rotation,
+                                pivotX: rt.pivotX,
+                                pivotY: rt.pivotY,
                                 textureGuid,
                                 entityId: entity.id
                             }
@@ -143,97 +123,31 @@ export class UIButtonRenderSystem extends EntitySystem {
                 const bgAlpha = render?.backgroundAlpha ?? 1;
                 if (bgAlpha > 0) {
                     collector.addRect(
-                        renderX, renderY,
-                        width, height,
+                        rt.renderX, rt.renderY,
+                        rt.width, rt.height,
                         button.currentColor,
-                        bgAlpha * alpha,
-                        sortingLayer,
-                        orderInLayer + (button.useTexture() ? 1 : 0),
+                        bgAlpha * rt.alpha,
+                        rt.sortingLayer,
+                        rt.orderInLayer + (button.useTexture() ? 1 : 0),
                         {
-                            rotation,
-                            pivotX,
-                            pivotY,
+                            rotation: rt.rotation,
+                            pivotX: rt.pivotX,
+                            pivotY: rt.pivotY,
                             entityId: entity.id
                         }
                     );
                 }
             }
 
-            // Render border if UIRenderComponent has border
-            // 如果 UIRenderComponent 有边框，渲染边框
+            // Render border if UIRenderComponent has border (using utility)
+            // 如果 UIRenderComponent 有边框，渲染边框（使用工具函数）
             if (render && render.borderWidth > 0 && render.borderAlpha > 0) {
-                this.renderBorder(
-                    collector,
-                    renderX, renderY, width, height,
-                    render.borderWidth,
-                    render.borderColor,
-                    render.borderAlpha * alpha,
-                    sortingLayer,
-                    orderInLayer + 2,
-                    rotation,
-                    pivotX,
-                    pivotY,
-                    entity.id
-                );
+                renderBorder(collector, rt, {
+                    borderWidth: render.borderWidth,
+                    borderColor: render.borderColor,
+                    borderAlpha: render.borderAlpha
+                }, entity.id, 2);
             }
         }
-    }
-
-    /**
-     * Render border using pivot-based coordinates
-     * 使用基于 pivot 的坐标渲染边框
-     */
-    private renderBorder(
-        collector: ReturnType<typeof getUIRenderCollector>,
-        centerX: number, centerY: number,
-        width: number, height: number,
-        borderWidth: number,
-        borderColor: number,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        rotation: number,
-        pivotX: number,
-        pivotY: number,
-        entityId: number
-    ): void {
-        // 计算矩形的边界（相对于 pivot 中心）
-        const left = centerX - width * pivotX;
-        const bottom = centerY - height * pivotY;
-        const right = left + width;
-        const top = bottom + height;
-
-        // Top border
-        collector.addRect(
-            (left + right) / 2, top - borderWidth / 2,
-            width, borderWidth,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-
-        // Bottom border
-        collector.addRect(
-            (left + right) / 2, bottom + borderWidth / 2,
-            width, borderWidth,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-
-        // Left border (excluding corners)
-        const sideBorderHeight = height - borderWidth * 2;
-        collector.addRect(
-            left + borderWidth / 2, (top + bottom) / 2,
-            borderWidth, sideBorderHeight,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
-
-        // Right border (excluding corners)
-        collector.addRect(
-            right - borderWidth / 2, (top + bottom) / 2,
-            borderWidth, sideBorderHeight,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
-        );
     }
 }

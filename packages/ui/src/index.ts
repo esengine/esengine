@@ -106,6 +106,22 @@ export {
     type UIPadding
 } from './components/UILayoutComponent';
 
+// Components - Base (new architecture)
+// 基础组件（新架构）
+export {
+    UIGraphicComponent,
+    UIImageComponent,
+    UISelectableComponent,
+    DEFAULT_COLOR_BLOCK,
+    type UIImageType,
+    type UIFillMethod,
+    type UIFillOrigin,
+    type UISelectableState,
+    type UITransitionType,
+    type UIColorBlock,
+    type UISpriteState
+} from './components/base';
+
 // Components - Widgets
 export {
     UIButtonComponent,
@@ -152,13 +168,24 @@ export {
     type BatchDebugInfo,
     // Render systems
     UIRenderBeginSystem,
+    UIGraphicRenderSystem,
     UIRectRenderSystem,
     UITextRenderSystem,
     UIButtonRenderSystem,
     UIProgressBarRenderSystem,
     UISliderRenderSystem,
     UIScrollViewRenderSystem,
-    UIShinyEffectSystem
+    UIShinyEffectSystem,
+    // Render utilities
+    getUIRenderTransform,
+    renderBorder,
+    renderShadow,
+    lerpColor,
+    packColorWithAlpha,
+    getNinePatchTopLeft,
+    type UIRenderTransform,
+    type BorderRenderOptions,
+    type ShadowRenderOptions
 } from './systems/render';
 
 // Rendering

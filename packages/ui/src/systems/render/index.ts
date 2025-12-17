@@ -31,6 +31,7 @@ export {
 // Render systems
 // 渲染系统
 export { UIRenderBeginSystem } from './UIRenderBeginSystem';
+export { UIGraphicRenderSystem } from './UIGraphicRenderSystem';
 export { UIRectRenderSystem } from './UIRectRenderSystem';
 export { UITextRenderSystem } from './UITextRenderSystem';
 export { UIButtonRenderSystem } from './UIButtonRenderSystem';
@@ -38,3 +39,17 @@ export { UIProgressBarRenderSystem } from './UIProgressBarRenderSystem';
 export { UISliderRenderSystem } from './UISliderRenderSystem';
 export { UIScrollViewRenderSystem } from './UIScrollViewRenderSystem';
 export { UIShinyEffectSystem } from './UIShinyEffectSystem';
+
+// Render utilities
+// 渲染工具
+export {
+    getUIRenderTransform,
+    renderBorder,
+    renderShadow,
+    lerpColor,
+    packColorWithAlpha,
+    getNinePatchTopLeft,
+    type UIRenderTransform,
+    type BorderRenderOptions,
+    type ShadowRenderOptions
+} from './UIRenderUtils';
