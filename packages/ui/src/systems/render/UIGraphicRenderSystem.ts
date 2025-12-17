@@ -15,6 +15,7 @@ import { UIGraphicComponent } from '../../components/base/UIGraphicComponent';
 import { UIImageComponent } from '../../components/base/UIImageComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
 import { getUIRenderTransform, getNinePatchTopLeft, type UIRenderTransform } from './UIRenderUtils';
+import { isValidTextureGuid, defaultUV } from '../../utils/UITextureUtils';
 
 /**
  * UI Graphic Render System
@@ -108,6 +109,10 @@ export class UIGraphicRenderSystem extends EntitySystem {
         const color = graphic.color;
         const materialId = graphic.materialId > 0 ? graphic.materialId : undefined;
 
+        // Get validated texture GUID
+        // 获取验证后的纹理 GUID
+        const textureGuid = isValidTextureGuid(image.textureGuid) ? image.textureGuid : undefined;
+
         // Handle different image types
         // 处理不同的图像类型
         if (image.isSliced()) {
@@ -126,7 +131,7 @@ export class UIGraphicRenderSystem extends EntitySystem {
                 rt.orderInLayer,
                 {
                     rotation: rt.rotation,
-                    textureGuid: image.textureGuid,
+                    textureGuid,
                     textureId: image.textureId,
                     materialId,
                     entityId
@@ -150,9 +155,9 @@ export class UIGraphicRenderSystem extends EntitySystem {
                     rotation: rt.rotation,
                     pivotX: rt.pivotX,
                     pivotY: rt.pivotY,
-                    textureGuid: image.textureGuid,
+                    textureGuid,
                     textureId: image.textureId,
-                    uv: image.uv,
+                    uv: image.uv ?? defaultUV(),
                     materialId,
                     entityId
                 }
@@ -174,6 +179,7 @@ export class UIGraphicRenderSystem extends EntitySystem {
         const alpha = graphic.alpha * rt.alpha;
         const color = graphic.color;
         const materialId = graphic.materialId > 0 ? graphic.materialId : undefined;
+        const textureGuid = isValidTextureGuid(image.textureGuid) ? image.textureGuid : undefined;
 
         // Calculate filled dimensions based on fillAmount and fillMethod
         // 根据 fillAmount 和 fillMethod 计算填充尺寸
@@ -242,7 +248,7 @@ export class UIGraphicRenderSystem extends EntitySystem {
                 rotation: rt.rotation,
                 pivotX: rt.pivotX,
                 pivotY: rt.pivotY,
-                textureGuid: image.textureGuid,
+                textureGuid,
                 textureId: image.textureId,
                 uv: [fillU0, fillV0, fillU1, fillV1],
                 materialId,

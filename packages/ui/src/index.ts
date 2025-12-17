@@ -239,3 +239,18 @@ export {
     type DynamicAtlasConfig,
     type TextureInfo
 } from './atlas';
+
+// Texture Utilities | 纹理工具
+export {
+    type UITextureDescriptor,
+    type UINinePatchDescriptor,
+    isValidTexture,
+    isValidTextureGuid,
+    getTextureKey,
+    defaultUV,
+    normalizeTextureDescriptor,
+    extractTextureGuid,
+    mergeTextureDescriptors,
+    isValidNinePatchMargins,
+    getNinePatchMinSize
+} from './utils';
