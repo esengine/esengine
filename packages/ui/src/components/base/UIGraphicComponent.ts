@@ -162,42 +162,6 @@ export class UIGraphicComponent extends Component implements IDirtyTrackable {
         this._dirtyFlags &= ~flags;
     }
 
-    // ===== Legacy compatibility =====
-
-    /**
-     * Internal dirty flag - set when visual properties change
-     * 内部脏标记 - 当视觉属性改变时设置
-     * @deprecated Use isDirty() instead | 请使用 isDirty() 代替
-     */
-    get _isDirty(): boolean {
-        return this.isDirty();
-    }
-    set _isDirty(value: boolean) {
-        if (value) {
-            this.markDirty(UIDirtyFlags.Visual);
-        } else {
-            this.clearDirtyFlags();
-        }
-    }
-
-    /**
-     * Mark this graphic as needing re-render
-     * 标记此图形需要重新渲染
-     * @deprecated Use markDirty(UIDirtyFlags.Visual) instead | 请使用 markDirty(UIDirtyFlags.Visual) 代替
-     */
-    setDirty(): void {
-        this.markDirty(UIDirtyFlags.Visual);
-    }
-
-    /**
-     * Clear the dirty flag
-     * 清除脏标记
-     * @deprecated Use clearDirtyFlags() instead | 请使用 clearDirtyFlags() 代替
-     */
-    clearDirty(): void {
-        this.clearDirtyFlags();
-    }
-
     /**
      * Get the packed color with alpha (0xAARRGGBB)
      * 获取带透明度的打包颜色 (0xAARRGGBB)
