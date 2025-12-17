@@ -11,6 +11,7 @@ import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framewor
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UISliderComponent, UISliderOrientation } from '../../components/widgets/UISliderComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
+import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
 
 /**
  * UI Slider Render System
@@ -44,64 +45,32 @@ export class UISliderRenderSystem extends EntitySystem {
             // 空值检查 | Null check
             if (!transform || !slider) continue;
 
-            if (!transform.worldVisible) continue;
-
-            const x = transform.worldX ?? transform.x;
-            const y = transform.worldY ?? transform.y;
-            // 使用世界缩放
-            const scaleX = transform.worldScaleX ?? transform.scaleX;
-            const scaleY = transform.worldScaleY ?? transform.scaleY;
-            const rotation = transform.worldRotation ?? transform.rotation;
-            const width = (transform.computedWidth ?? transform.width) * scaleX;
-            const height = (transform.computedHeight ?? transform.height) * scaleY;
-            const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
-            const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.worldOrderInLayer;
-            // 使用 transform 的 pivot 计算中心位置
-            const pivotX = transform.pivotX;
-            const pivotY = transform.pivotY;
-            // 渲染位置 = 左下角 + pivot 偏移
-            const renderX = x + width * pivotX;
-            const renderY = y + height * pivotY;
+            // 使用工具函数获取渲染变换数据
+            // Use utility function to get render transform data
+            const rt = getUIRenderTransform(transform);
+            if (!rt) continue;
 
             const isHorizontal = slider.orientation === UISliderOrientation.Horizontal;
             const progress = slider.getProgress();
 
-            // Calculate track dimensions and position
-            // 计算轨道尺寸和位置
-            const trackLength = isHorizontal ? width : height;
+            // Calculate track dimensions
+            // 计算轨道尺寸
+            const trackLength = isHorizontal ? rt.width : rt.height;
             const trackThickness = slider.trackThickness;
-
-            // Calculate center position based on pivot
-            // 基于 pivot 计算中心位置
-            const centerX = renderX;
-            const centerY = renderY;
 
             // Render track (using center position with pivot 0.5)
             // 渲染轨道（使用中心位置，pivot 0.5）
             if (slider.trackAlpha > 0) {
-                if (isHorizontal) {
-                    collector.addRect(
-                        centerX, centerY,
-                        trackLength, trackThickness,
-                        slider.trackColor,
-                        slider.trackAlpha * alpha,
-                        sortingLayer,
-                        orderInLayer,
-                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
-                    );
-                } else {
-                    collector.addRect(
-                        centerX, centerY,
-                        trackThickness, trackLength,
-                        slider.trackColor,
-                        slider.trackAlpha * alpha,
-                        sortingLayer,
-                        orderInLayer,
-                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
-                    );
-                }
+                collector.addRect(
+                    rt.renderX, rt.renderY,
+                    isHorizontal ? trackLength : trackThickness,
+                    isHorizontal ? trackThickness : trackLength,
+                    slider.trackColor,
+                    slider.trackAlpha * rt.alpha,
+                    rt.sortingLayer,
+                    rt.orderInLayer,
+                    { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
+                );
             }
 
             // Render fill
@@ -111,27 +80,27 @@ export class UISliderRenderSystem extends EntitySystem {
 
                 if (isHorizontal) {
                     // Fill from left
-                    const fillX = centerX - trackLength / 2 + fillLength / 2;
+                    const fillX = rt.renderX - trackLength / 2 + fillLength / 2;
                     collector.addRect(
-                        fillX, centerY,
+                        fillX, rt.renderY,
                         fillLength, trackThickness,
                         slider.fillColor,
-                        slider.fillAlpha * alpha,
-                        sortingLayer,
-                        orderInLayer + 1,
-                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
+                        slider.fillAlpha * rt.alpha,
+                        rt.sortingLayer,
+                        rt.orderInLayer + 1,
+                        { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                     );
                 } else {
                     // Fill from bottom
-                    const fillY = centerY + trackLength / 2 - fillLength / 2;
+                    const fillY = rt.renderY + trackLength / 2 - fillLength / 2;
                     collector.addRect(
-                        centerX, fillY,
+                        rt.renderX, fillY,
                         trackThickness, fillLength,
                         slider.fillColor,
-                        slider.fillAlpha * alpha,
-                        sortingLayer,
-                        orderInLayer + 1,
-                        { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
+                        slider.fillAlpha * rt.alpha,
+                        rt.sortingLayer,
+                        rt.orderInLayer + 1,
+                        { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                     );
                 }
             }
@@ -139,23 +108,18 @@ export class UISliderRenderSystem extends EntitySystem {
             // Render ticks
             // 渲染刻度
             if (slider.showTicks && slider.tickCount > 0) {
-                this.renderTicks(
-                    collector, centerX, centerY,
-                    trackLength, trackThickness,
-                    slider, alpha, sortingLayer, orderInLayer,
-                    isHorizontal, rotation, entity.id
-                );
+                this.renderTicks(collector, rt, trackLength, trackThickness, slider, isHorizontal, entity.id);
             }
 
             // Render handle
             // 渲染手柄
             const handleColor = slider.getCurrentHandleColor();
             const handleX = isHorizontal
-                ? centerX - trackLength / 2 + trackLength * progress
-                : centerX;
+                ? rt.renderX - trackLength / 2 + trackLength * progress
+                : rt.renderX;
             const handleY = isHorizontal
-                ? centerY
-                : centerY + trackLength / 2 - trackLength * progress;
+                ? rt.renderY
+                : rt.renderY + trackLength / 2 - trackLength * progress;
 
             // Handle shadow (if enabled)
             // 手柄阴影（如果启用）
@@ -164,10 +128,10 @@ export class UISliderRenderSystem extends EntitySystem {
                     handleX + 1, handleY + 2,
                     slider.handleWidth, slider.handleHeight,
                     0x000000,
-                    0.3 * alpha,
-                    sortingLayer,
-                    orderInLayer + 2,
-                    { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
+                    0.3 * rt.alpha,
+                    rt.sortingLayer,
+                    rt.orderInLayer + 2,
+                    { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
                 );
             }
 
@@ -177,10 +141,10 @@ export class UISliderRenderSystem extends EntitySystem {
                 handleX, handleY,
                 slider.handleWidth, slider.handleHeight,
                 handleColor,
-                alpha,
-                sortingLayer,
-                orderInLayer + 3,
-                { rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
+                rt.alpha,
+                rt.sortingLayer,
+                rt.orderInLayer + 3,
+                { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId: entity.id }
             );
 
             // Handle border (if any)
@@ -192,10 +156,10 @@ export class UISliderRenderSystem extends EntitySystem {
                     slider.handleWidth, slider.handleHeight,
                     slider.handleBorderWidth,
                     slider.handleBorderColor,
-                    alpha,
-                    sortingLayer,
-                    orderInLayer + 4,
-                    rotation,
+                    rt.alpha,
+                    rt.sortingLayer,
+                    rt.orderInLayer + 4,
+                    rt.rotation,
                     entity.id
                 );
             }
@@ -208,14 +172,11 @@ export class UISliderRenderSystem extends EntitySystem {
      */
     private renderTicks(
         collector: ReturnType<typeof getUIRenderCollector>,
-        centerX: number, centerY: number,
-        trackLength: number, trackThickness: number,
+        rt: UIRenderTransform,
+        trackLength: number,
+        trackThickness: number,
         slider: UISliderComponent,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
         isHorizontal: boolean,
-        rotation: number,
         entityId: number
     ): void {
         const tickCount = slider.tickCount + 2; // Include start and end ticks
@@ -230,13 +191,13 @@ export class UISliderRenderSystem extends EntitySystem {
             let tickHeight: number;
 
             if (isHorizontal) {
-                tickX = centerX - trackLength / 2 + trackLength * t;
-                tickY = centerY + trackThickness / 2 + tickSize / 2 + 2;
+                tickX = rt.renderX - trackLength / 2 + trackLength * t;
+                tickY = rt.renderY + trackThickness / 2 + tickSize / 2 + 2;
                 tickWidth = 2;
                 tickHeight = tickSize;
             } else {
-                tickX = centerX + trackThickness / 2 + tickSize / 2 + 2;
-                tickY = centerY + trackLength / 2 - trackLength * t;
+                tickX = rt.renderX + trackThickness / 2 + tickSize / 2 + 2;
+                tickY = rt.renderY + trackLength / 2 - trackLength * t;
                 tickWidth = tickSize;
                 tickHeight = 2;
             }
@@ -245,10 +206,10 @@ export class UISliderRenderSystem extends EntitySystem {
                 tickX, tickY,
                 tickWidth, tickHeight,
                 slider.tickColor,
-                alpha,
-                sortingLayer,
-                orderInLayer,
-                { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
+                rt.alpha,
+                rt.sortingLayer,
+                rt.orderInLayer,
+                { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId }
             );
         }
     }

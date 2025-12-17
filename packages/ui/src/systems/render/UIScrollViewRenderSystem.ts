@@ -11,6 +11,7 @@ import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framewor
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIScrollViewComponent } from '../../components/widgets/UIScrollViewComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
+import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
 
 /**
  * UI ScrollView Render System
@@ -45,51 +46,26 @@ export class UIScrollViewRenderSystem extends EntitySystem {
             // 空值检查 | Null check
             if (!transform || !scrollView) continue;
 
-            if (!transform.worldVisible) continue;
+            // 使用工具函数获取渲染变换数据
+            // Use utility function to get render transform data
+            const rt = getUIRenderTransform(transform);
+            if (!rt) continue;
 
-            const x = transform.worldX ?? transform.x;
-            const y = transform.worldY ?? transform.y;
-            // 使用世界缩放
-            const scaleX = transform.worldScaleX ?? transform.scaleX;
-            const scaleY = transform.worldScaleY ?? transform.scaleY;
-            const rotation = transform.worldRotation ?? transform.rotation;
-            const width = (transform.computedWidth ?? transform.width) * scaleX;
-            const height = (transform.computedHeight ?? transform.height) * scaleY;
-            const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
-            const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.worldOrderInLayer;
-            // 使用 transform 的 pivot 计算位置
-            const pivotX = transform.pivotX;
-            const pivotY = transform.pivotY;
-            // 渲染位置 = 左下角 + pivot 偏移
-            const renderX = x + width * pivotX;
-            const renderY = y + height * pivotY;
-
-            // 计算边界
-            const baseX = renderX - width * pivotX;
-            const baseY = renderY - height * pivotY;
+            // 计算边界（左下角）
+            // Calculate bounds (bottom-left corner)
+            const baseX = rt.renderX - rt.width * rt.pivotX;
+            const baseY = rt.renderY - rt.height * rt.pivotY;
 
             // Render vertical scrollbar
             // 渲染垂直滚动条
-            if (scrollView.needsVerticalScrollbar(height)) {
-                this.renderVerticalScrollbar(
-                    collector,
-                    baseX, baseY, width, height,
-                    scrollView, alpha, sortingLayer, orderInLayer, rotation,
-                    entity.id
-                );
+            if (scrollView.needsVerticalScrollbar(rt.height)) {
+                this.renderVerticalScrollbar(collector, rt, baseX, baseY, scrollView, entity.id);
             }
 
             // Render horizontal scrollbar
             // 渲染水平滚动条
-            if (scrollView.needsHorizontalScrollbar(width)) {
-                this.renderHorizontalScrollbar(
-                    collector,
-                    baseX, baseY, width, height,
-                    scrollView, alpha, sortingLayer, orderInLayer, rotation,
-                    entity.id
-                );
+            if (scrollView.needsHorizontalScrollbar(rt.width)) {
+                this.renderHorizontalScrollbar(collector, rt, baseX, baseY, scrollView, entity.id);
             }
         }
     }
@@ -100,22 +76,19 @@ export class UIScrollViewRenderSystem extends EntitySystem {
      */
     private renderVerticalScrollbar(
         collector: ReturnType<typeof getUIRenderCollector>,
-        baseX: number, baseY: number,
-        viewWidth: number, viewHeight: number,
+        rt: UIRenderTransform,
+        baseX: number,
+        baseY: number,
         scrollView: UIScrollViewComponent,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        rotation: number,
         entityId: number
     ): void {
         const scrollbarWidth = scrollView.scrollbarWidth;
-        const hasHorizontal = scrollView.needsHorizontalScrollbar(viewWidth);
-        const trackHeight = hasHorizontal ? viewHeight - scrollbarWidth : viewHeight;
+        const hasHorizontal = scrollView.needsHorizontalScrollbar(rt.width);
+        const trackHeight = hasHorizontal ? rt.height - scrollbarWidth : rt.height;
 
         // Track position (right side of viewport)
         // 轨道位置（视口右侧）
-        const trackX = baseX + viewWidth - scrollbarWidth / 2;
+        const trackX = baseX + rt.width - scrollbarWidth / 2;
         const trackY = baseY + trackHeight / 2;
 
         // Render track
@@ -125,16 +98,16 @@ export class UIScrollViewRenderSystem extends EntitySystem {
                 trackX, trackY,
                 scrollbarWidth, trackHeight,
                 scrollView.scrollbarTrackColor,
-                scrollView.scrollbarTrackAlpha * alpha,
-                sortingLayer,
-                orderInLayer + 5,
-                { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
+                scrollView.scrollbarTrackAlpha * rt.alpha,
+                rt.sortingLayer,
+                rt.orderInLayer + 5,
+                { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId }
             );
         }
 
         // Calculate handle metrics
         // 计算手柄尺寸
-        const metrics = scrollView.getVerticalScrollbarMetrics(viewHeight);
+        const metrics = scrollView.getVerticalScrollbarMetrics(rt.height);
         const handleY = baseY + metrics.position + metrics.size / 2;
 
         // Handle alpha (different when hovered)
@@ -149,10 +122,10 @@ export class UIScrollViewRenderSystem extends EntitySystem {
             trackX, handleY,
             scrollbarWidth - 2, metrics.size,
             scrollView.scrollbarColor,
-            handleAlpha * alpha,
-            sortingLayer,
-            orderInLayer + 6,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
+            handleAlpha * rt.alpha,
+            rt.sortingLayer,
+            rt.orderInLayer + 6,
+            { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 
@@ -162,23 +135,20 @@ export class UIScrollViewRenderSystem extends EntitySystem {
      */
     private renderHorizontalScrollbar(
         collector: ReturnType<typeof getUIRenderCollector>,
-        baseX: number, baseY: number,
-        viewWidth: number, viewHeight: number,
+        rt: UIRenderTransform,
+        baseX: number,
+        baseY: number,
         scrollView: UIScrollViewComponent,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        rotation: number,
         entityId: number
     ): void {
         const scrollbarWidth = scrollView.scrollbarWidth;
-        const hasVertical = scrollView.needsVerticalScrollbar(viewHeight);
-        const trackWidth = hasVertical ? viewWidth - scrollbarWidth : viewWidth;
+        const hasVertical = scrollView.needsVerticalScrollbar(rt.height);
+        const trackWidth = hasVertical ? rt.width - scrollbarWidth : rt.width;
 
         // Track position (bottom of viewport)
         // 轨道位置（视口底部）
         const trackX = baseX + trackWidth / 2;
-        const trackY = baseY + viewHeight - scrollbarWidth / 2;
+        const trackY = baseY + rt.height - scrollbarWidth / 2;
 
         // Render track
         // 渲染轨道
@@ -187,16 +157,16 @@ export class UIScrollViewRenderSystem extends EntitySystem {
                 trackX, trackY,
                 trackWidth, scrollbarWidth,
                 scrollView.scrollbarTrackColor,
-                scrollView.scrollbarTrackAlpha * alpha,
-                sortingLayer,
-                orderInLayer + 5,
-                { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
+                scrollView.scrollbarTrackAlpha * rt.alpha,
+                rt.sortingLayer,
+                rt.orderInLayer + 5,
+                { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId }
             );
         }
 
         // Calculate handle metrics
         // 计算手柄尺寸
-        const metrics = scrollView.getHorizontalScrollbarMetrics(viewWidth);
+        const metrics = scrollView.getHorizontalScrollbarMetrics(rt.width);
         const handleX = baseX + metrics.position + metrics.size / 2;
 
         // Handle alpha (different when hovered)
@@ -211,10 +181,10 @@ export class UIScrollViewRenderSystem extends EntitySystem {
             handleX, trackY,
             metrics.size, scrollbarWidth - 2,
             scrollView.scrollbarColor,
-            handleAlpha * alpha,
-            sortingLayer,
-            orderInLayer + 6,
-            { rotation, pivotX: 0.5, pivotY: 0.5, entityId }
+            handleAlpha * rt.alpha,
+            rt.sortingLayer,
+            rt.orderInLayer + 6,
+            { rotation: rt.rotation, pivotX: 0.5, pivotY: 0.5, entityId }
         );
     }
 }
