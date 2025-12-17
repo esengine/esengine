@@ -216,13 +216,13 @@ export class UIGraphicRenderSystem extends EntitySystem {
                 }
                 break;
 
-            // Radial fill modes (simplified - render as simple rect for now)
-            // 径向填充模式（简化 - 目前作为简单矩形渲染）
+            // Radial fill modes - approximate with multiple segments
+            // 径向填充模式 - 使用多个分段近似
             case 'radial90':
             case 'radial180':
             case 'radial360':
-                // TODO: Implement radial fill with custom shader or geometry
-                break;
+                this.renderRadialFill(collector, rt, graphic, image, entityId);
+                return; // Early return - radial fill handles its own rendering
         }
 
         // Apply original UV mapping if present
@@ -255,5 +255,131 @@ export class UIGraphicRenderSystem extends EntitySystem {
                 entityId
             }
         );
+    }
+
+    /**
+     * Render radial fill using multiple quad segments
+     * 使用多个矩形分段渲染径向填充
+     *
+     * This approximates a pie-shaped fill by rendering multiple narrow quads
+     * that fan out from the center.
+     * 通过渲染多个从中心扇形展开的窄矩形来近似饼形填充。
+     */
+    private renderRadialFill(
+        collector: ReturnType<typeof getUIRenderCollector>,
+        rt: UIRenderTransform,
+        graphic: UIGraphicComponent,
+        image: UIImageComponent,
+        entityId: number
+    ): void {
+        const alpha = graphic.alpha * rt.alpha;
+        const color = graphic.color;
+        const materialId = graphic.materialId > 0 ? graphic.materialId : undefined;
+        const textureGuid = isValidTextureGuid(image.textureGuid) ? image.textureGuid : undefined;
+        const fillAmount = Math.max(0, Math.min(1, image.fillAmount));
+
+        if (fillAmount <= 0) return;
+
+        // Determine the total angle range based on fill method
+        // 根据填充方法确定总角度范围
+        let totalAngle: number;
+        switch (image.fillMethod) {
+            case 'radial90': totalAngle = Math.PI / 2; break;
+            case 'radial180': totalAngle = Math.PI; break;
+            case 'radial360': totalAngle = Math.PI * 2; break;
+            default: return;
+        }
+
+        // Calculate fill angle
+        // 计算填充角度
+        const fillAngle = totalAngle * fillAmount;
+
+        // Determine start angle based on origin
+        // 根据起点确定起始角度
+        let startAngle: number;
+        switch (image.fillOrigin) {
+            case 'top': startAngle = -Math.PI / 2; break;
+            case 'right': startAngle = 0; break;
+            case 'bottom': startAngle = Math.PI / 2; break;
+            case 'left': startAngle = Math.PI; break;
+            default: startAngle = -Math.PI / 2; break; // Default: top
+        }
+
+        // Direction: clockwise or counter-clockwise
+        // 方向：顺时针或逆时针
+        const direction = image.fillClockwise ? 1 : -1;
+
+        // Calculate center and radius
+        // 计算中心和半径
+        const centerX = rt.x + rt.width / 2;
+        const centerY = rt.y + rt.height / 2;
+        const radiusX = rt.width / 2;
+        const radiusY = rt.height / 2;
+
+        // Number of segments for smooth appearance (more segments = smoother)
+        // 分段数量（更多分段 = 更平滑）
+        const numSegments = Math.max(4, Math.ceil(fillAngle * 16 / Math.PI));
+
+        // Render segments as quads from center
+        // 从中心渲染分段为矩形
+        const angleStep = fillAngle / numSegments;
+
+        for (let i = 0; i < numSegments; i++) {
+            const angle1 = startAngle + direction * angleStep * i;
+            const angle2 = startAngle + direction * angleStep * (i + 1);
+
+            // Calculate quad corners
+            // 计算矩形角点
+            const cos1 = Math.cos(angle1);
+            const sin1 = Math.sin(angle1);
+            const cos2 = Math.cos(angle2);
+            const sin2 = Math.sin(angle2);
+
+            // For each segment, render a triangle-like quad
+            // 对于每个分段，渲染一个类似三角形的矩形
+            // We approximate by rendering a small rect at the outer edge
+            // 我们通过在外边缘渲染一个小矩形来近似
+
+            // Calculate midpoint of the arc segment
+            // 计算弧段的中点
+            const midAngle = (angle1 + angle2) / 2;
+            const midCos = Math.cos(midAngle);
+            const midSin = Math.sin(midAngle);
+
+            // Segment width and position
+            // 分段宽度和位置
+            const segmentWidth = Math.abs(radiusX * (cos2 - cos1)) + Math.abs(radiusY * (sin2 - sin1));
+            const segmentHeight = Math.sqrt(radiusX * radiusX + radiusY * radiusY);
+
+            // Position at the midpoint direction from center
+            // 从中心沿中点方向定位
+            const segX = centerX + midCos * radiusX * 0.5;
+            const segY = centerY + midSin * radiusY * 0.5;
+
+            // Calculate UV for this segment
+            // 计算此分段的 UV
+            const u0 = 0.5 + midCos * 0.5 * fillAmount;
+            const v0 = 0.5 + midSin * 0.5 * fillAmount;
+
+            collector.addRect(
+                segX, segY,
+                Math.max(2, segmentWidth + 2), // Ensure minimum width with overlap
+                segmentHeight * 0.55, // Slightly more than half to ensure coverage
+                color,
+                alpha,
+                rt.sortingLayer,
+                rt.orderInLayer,
+                {
+                    rotation: midAngle + Math.PI / 2, // Rotate to face outward
+                    pivotX: 0.5,
+                    pivotY: 0,
+                    textureGuid,
+                    textureId: image.textureId,
+                    uv: [u0 - 0.1, v0 - 0.1, u0 + 0.1, v0 + 0.1],
+                    materialId,
+                    entityId
+                }
+            );
+        }
     }
 }

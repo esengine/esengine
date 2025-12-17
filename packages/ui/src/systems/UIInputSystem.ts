@@ -387,11 +387,22 @@ export class UIInputSystem extends EntitySystem {
 
         const transform = entity.getComponent(UITransformComponent)!;
 
-        // 更新手柄悬停状态
-        // TODO: 更精确的手柄命中测试
+        // 更新手柄悬停状态（精确命中测试）
+        // Update handle hover state (precise hit testing)
+        const isInSlider = transform.containsPoint(this.mouseX, this.mouseY);
+        const isInHandle = slider.isPointInHandle(
+            this.mouseX,
+            this.mouseY,
+            transform.worldX,
+            transform.worldY,
+            transform.computedWidth,
+            transform.computedHeight
+        );
+        slider.handleHovered = isInHandle;
 
-        // 处理拖拽
-        if (this.mouseButtons[MouseButton.Left] && transform.containsPoint(this.mouseX, this.mouseY)) {
+        // 处理拖拽：点击手柄或轨道都可以开始拖拽
+        // Handle drag: clicking handle or track can start dragging
+        if (this.mouseButtons[MouseButton.Left] && isInSlider) {
             if (!slider.dragging) {
                 slider.dragging = true;
                 slider.dragStartValue = slider.value;
