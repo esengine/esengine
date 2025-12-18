@@ -13,7 +13,10 @@ import {
     UIButtonComponent,
     UIProgressBarComponent,
     UISliderComponent,
-    UIScrollViewComponent
+    UIScrollViewComponent,
+    UIToggleComponent,
+    UIInputFieldComponent,
+    UIDropdownComponent
 } from './components';
 import { TextBlinkComponent } from './components/TextBlinkComponent';
 import { SceneLoadTriggerComponent } from './components/SceneLoadTriggerComponent';
@@ -21,6 +24,7 @@ import { UIShinyEffectComponent } from './components/UIShinyEffectComponent';
 import { UILayoutSystem } from './systems/UILayoutSystem';
 import { UIInputSystem } from './systems/UIInputSystem';
 import { UIAnimationSystem } from './systems/UIAnimationSystem';
+import { UISliderFillSystem } from './systems/UISliderFillSystem';
 import { UIRenderDataProvider } from './systems/UIRenderDataProvider';
 import { TextBlinkSystem } from './systems/TextBlinkSystem';
 import { SceneLoadTriggerSystem } from './systems/SceneLoadTriggerSystem';
@@ -32,6 +36,9 @@ import {
     UIProgressBarRenderSystem,
     UISliderRenderSystem,
     UIScrollViewRenderSystem,
+    UIToggleRenderSystem,
+    UIInputFieldRenderSystem,
+    UIDropdownRenderSystem,
     UIShinyEffectSystem
 } from './systems/render';
 import {
@@ -60,6 +67,9 @@ class UIRuntimeModule implements IRuntimeModule {
         registry.register(UIProgressBarComponent);
         registry.register(UISliderComponent);
         registry.register(UIScrollViewComponent);
+        registry.register(UIToggleComponent);
+        registry.register(UIInputFieldComponent);
+        registry.register(UIDropdownComponent);
         registry.register(TextBlinkComponent);
         registry.register(SceneLoadTriggerComponent);
         registry.register(UIShinyEffectComponent);
@@ -68,6 +78,11 @@ class UIRuntimeModule implements IRuntimeModule {
     createSystems(scene: IScene, context: SystemContext): void {
         // 从服务注册表获取依赖 | Get dependencies from service registry
         const engineBridge = context.services.get(EngineBridgeToken);
+
+        // Slider fill control system (runs before layout to modify anchors)
+        // 滑块填充控制系统（在布局之前运行以修改锚点）
+        const sliderFillSystem = new UISliderFillSystem();
+        scene.addSystem(sliderFillSystem);
 
         const layoutSystem = new UILayoutSystem();
         scene.addSystem(layoutSystem);
@@ -105,6 +120,15 @@ class UIRuntimeModule implements IRuntimeModule {
 
         const buttonRenderSystem = new UIButtonRenderSystem();
         scene.addSystem(buttonRenderSystem);
+
+        const toggleRenderSystem = new UIToggleRenderSystem();
+        scene.addSystem(toggleRenderSystem);
+
+        const inputFieldRenderSystem = new UIInputFieldRenderSystem();
+        scene.addSystem(inputFieldRenderSystem);
+
+        const dropdownRenderSystem = new UIDropdownRenderSystem();
+        scene.addSystem(dropdownRenderSystem);
 
         const textRenderSystem = new UITextRenderSystem();
         scene.addSystem(textRenderSystem);

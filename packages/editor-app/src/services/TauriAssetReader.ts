@@ -49,6 +49,9 @@ export class TauriAssetReader implements IAssetReader {
 
         return new Promise((resolve, reject) => {
             const image = new Image();
+            // 允许跨域访问，防止 canvas 被污染
+            // Allow cross-origin access to prevent canvas tainting
+            image.crossOrigin = 'anonymous';
             image.onload = () => resolve(image);
             image.onerror = () => reject(new Error(`Failed to load image: ${absolutePath}`));
             image.src = assetUrl;

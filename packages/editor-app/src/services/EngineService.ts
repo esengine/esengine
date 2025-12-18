@@ -6,7 +6,7 @@
  * Uses the unified GameRuntime architecture
  */
 
-import { GizmoRegistry, EntityStoreService, MessageHub, SceneManagerService, ProjectService, PluginManager, IPluginManager, AssetRegistryService, type SystemContext } from '@esengine/editor-core';
+import { GizmoRegistry, EntityStoreService, MessageHub, SceneManagerService, ProjectService, PluginManager, IPluginManager, AssetRegistryService, GizmoInteractionService, GizmoInteractionServiceToken, type SystemContext } from '@esengine/editor-core';
 import { Core, Scene, Entity, SceneSerializer, ProfilerSDK, createLogger, PluginServiceRegistry } from '@esengine/ecs-framework';
 import { CameraConfig, EngineBridgeToken, RenderSystemToken, EngineIntegrationToken } from '@esengine/ecs-engine-bindgen';
 import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
@@ -33,8 +33,12 @@ import {
     SceneResourceManager,
     AssetType,
     AssetManagerToken,
-    isValidGUID
+    isValidGUID,
+    setGlobalAssetDatabase,
+    setGlobalEngineBridge,
+    setGlobalAssetFileLoader
 } from '@esengine/asset-system';
+import { EditorAssetFileLoader } from './EditorAssetFileLoader';
 import {
     GameRuntime,
     createGameRuntime,
@@ -67,6 +71,7 @@ export class EngineService {
     private _modulesInitialized = false;
     private _running = false;
     private _canvasId: string | null = null;
+    private _gizmoInteractionService: GizmoInteractionService | null = null;
 
     // 资产系统相关
     private _assetManager: AssetManager | null = null;
@@ -177,6 +182,21 @@ export class EngineService {
                 (component) =>
                     GizmoRegistry.hasProvider(component.constructor as any)
             );
+
+            // 初始化 Gizmo 交互服务
+            // Initialize Gizmo Interaction Service
+            this._gizmoInteractionService = new GizmoInteractionService();
+            Core.pluginServices.register(GizmoInteractionServiceToken, this._gizmoInteractionService);
+
+            // 设置 Gizmo 交互函数到渲染系统
+            // Set gizmo interaction functions to render system
+            if (this._runtime.renderSystem) {
+                this._runtime.renderSystem.setGizmoInteraction(
+                    (entityId: number, baseColor: { r: number; g: number; b: number; a: number }, isSelected: boolean) =>
+                        this._gizmoInteractionService!.getHighlightColor(entityId, baseColor, isSelected),
+                    () => this._gizmoInteractionService!.getHoveredEntityId()
+                );
+            }
 
             // 初始化资产系统
             await this._initializeAssetSystem();
@@ -458,6 +478,22 @@ export class EngineService {
             // 将 AssetRegistryService 的数据同步到 assetManager 的数据库
             await this._syncAssetRegistryToManager();
 
+            // 设置全局资产数据库（供渲染系统查询 sprite 元数据）
+            // Set global asset database (for render systems to query sprite metadata)
+            setGlobalAssetDatabase(this._assetManager.getDatabase());
+
+            // 设置全局资产文件加载器（供动态图集服务等使用）
+            // Set global asset file loader (for DynamicAtlasService etc.)
+            const editorAssetFileLoader = new EditorAssetFileLoader(assetReader, {
+                getProjectPath: () => {
+                    if (projectService && projectService.isProjectOpen()) {
+                        return projectService.getCurrentProject()?.path ?? null;
+                    }
+                    return null;
+                }
+            });
+            setGlobalAssetFileLoader(editorAssetFileLoader);
+
             const pathTransformerFn = (path: string) => {
                 if (!path.startsWith('http://') && !path.startsWith('https://') &&
                     !path.startsWith('data:') && !path.startsWith('asset://')) {
@@ -482,6 +518,33 @@ export class EngineService {
             });
 
             if (this._runtime?.bridge) {
+                // 为 EngineBridge 设置路径解析器（用于 getTextureInfoByPath 等方法）
+                // Set path resolver for EngineBridge (for getTextureInfoByPath etc.)
+                this._runtime.bridge.setPathResolver((assetPath: string) => {
+                    // 空路径直接返回
+                    if (!assetPath) return assetPath;
+
+                    // 已经是 URL 则直接返回
+                    if (assetPath.startsWith('http://') ||
+                        assetPath.startsWith('https://') ||
+                        assetPath.startsWith('data:') ||
+                        assetPath.startsWith('asset://')) {
+                        return assetPath;
+                    }
+
+                    // 使用 pathTransformerFn 转换路径为 Tauri URL
+                    let fullPath = assetPath;
+                    // 如果路径不以 'assets/' 开头，添加前缀
+                    if (!assetPath.startsWith('assets/') && !assetPath.startsWith('assets\\')) {
+                        fullPath = `assets/${assetPath}`;
+                    }
+                    return pathTransformerFn(fullPath);
+                });
+
+                // 设置全局引擎桥（供渲染系统查询纹理尺寸 - 唯一事实来源）
+                // Set global engine bridge (for render systems to query texture dimensions - single source of truth)
+                setGlobalEngineBridge(this._runtime.bridge);
+
                 this._engineIntegration = new EngineIntegration(this._assetManager, this._runtime.bridge);
 
                 // 为 EngineIntegration 设置使用 Tauri URL 转换的 PathResolver
@@ -643,6 +706,13 @@ export class EngineService {
             // 1. Check for explicit loaderType in .meta file (user override)
             // 1. 检查 .meta 文件中的显式 loaderType（用户覆盖）
             const meta = metaManager.getMetaByGUID(asset.guid);
+
+            // Debug: log meta for textures with importSettings
+            // 调试：记录有 importSettings 的纹理 meta
+            if (meta?.importSettings?.spriteSettings) {
+                console.log(`[EngineService] Syncing asset with spriteSettings: ${asset.path}`, meta.importSettings.spriteSettings);
+            }
+
             if (meta?.loaderType) {
                 assetType = meta.loaderType;
             }
@@ -680,10 +750,13 @@ export class EngineService {
                 size: asset.size,
                 hash: asset.hash || '',
                 dependencies: [],
-                labels: [],
+                labels: meta?.labels || [],
                 tags: new Map(),
                 lastModified: asset.lastModified,
-                version: 1
+                version: 1,
+                // 包含 importSettings（包含 spriteSettings 等）用于渲染系统查询
+                // Include importSettings (contains spriteSettings etc.) for render systems to query
+                importSettings: meta?.importSettings as Record<string, unknown> | undefined
             });
         }
 
@@ -757,10 +830,13 @@ export class EngineService {
                         size: asset.size,
                         hash: asset.hash || '',
                         dependencies: [],
-                        labels: [],
+                        labels: meta?.labels || [],
                         tags: new Map(),
                         lastModified: asset.lastModified,
-                        version: 1
+                        version: 1,
+                        // 包含 importSettings（包含 spriteSettings 等）用于渲染系统查询
+                        // Include importSettings (contains spriteSettings etc.) for render systems to query
+                        importSettings: meta?.importSettings as Record<string, unknown> | undefined
                     });
 
                     logger.debug(`Asset synced to runtime: ${asset.path} (${data.guid})`);
@@ -1226,6 +1302,14 @@ export class EngineService {
     }
 
     /**
+     * Get gizmo interaction service.
+     * 获取 Gizmo 交互服务。
+     */
+    getGizmoInteractionService(): GizmoInteractionService | null {
+        return this._gizmoInteractionService;
+    }
+
+    /**
      * Set transform tool mode.
      */
     setTransformMode(mode: 'select' | 'move' | 'rotate' | 'scale'): void {
@@ -1395,7 +1479,12 @@ export class EngineService {
             // 切换项目时清空数据库以释放内存
             this._assetManager.getDatabase().clear();
             this._assetManager = null;
+            // 清除全局资产数据库引用 | Clear global asset database reference
+            setGlobalAssetDatabase(null);
         }
+
+        // 清除全局引擎桥引用 | Clear global engine bridge reference
+        setGlobalEngineBridge(null);
 
         this._engineIntegration = null;
 

@@ -11,6 +11,43 @@ import {
 } from '../types/AssetTypes';
 
 /**
+ * 纹理 Sprite 信息（从 meta 文件的 importSettings 读取）
+ * Texture sprite info (read from meta file's importSettings)
+ */
+export interface ITextureSpriteInfo {
+    /**
+     * 九宫格切片边距 [top, right, bottom, left]
+     * Nine-patch slice border
+     */
+    sliceBorder?: [number, number, number, number];
+    /**
+     * Sprite 锚点 [x, y]（0-1 归一化）
+     * Sprite pivot point (0-1 normalized)
+     */
+    pivot?: [number, number];
+    /**
+     * 纹理宽度（可选，需要纹理已加载）
+     * Texture width (optional, requires texture to be loaded)
+     */
+    width?: number;
+    /**
+     * 纹理高度（可选，需要纹理已加载）
+     * Texture height (optional, requires texture to be loaded)
+     */
+    height?: number;
+}
+
+/**
+ * Sprite settings in import settings
+ * 导入设置中的 Sprite 设置
+ */
+interface ISpriteSettings {
+    sliceBorder?: [number, number, number, number];
+    pivot?: [number, number];
+    pixelsPerUnit?: number;
+}
+
+/**
  * Asset database implementation
  * 资产数据库实现
  */
@@ -210,6 +247,37 @@ export class AssetDatabase {
     getMetadataByPath(path: string): IAssetMetadata | undefined {
         const guid = this._pathToGuid.get(path);
         return guid ? this._metadata.get(guid) : undefined;
+    }
+
+    /**
+     * Get texture sprite info from metadata
+     * 从元数据获取纹理 Sprite 信息
+     *
+     * Extracts spriteSettings from importSettings if available.
+     * 如果可用，从 importSettings 提取 spriteSettings。
+     *
+     * @param guid - Texture asset GUID | 纹理资产 GUID
+     * @returns Sprite info or undefined if not found/not a texture | Sprite 信息或未找到/非纹理则为 undefined
+     */
+    getTextureSpriteInfo(guid: AssetGUID): ITextureSpriteInfo | undefined {
+        const metadata = this._metadata.get(guid);
+        if (!metadata) return undefined;
+
+        // Check if it's a texture asset
+        // 检查是否是纹理资产
+        if (metadata.type !== AssetType.Texture) return undefined;
+
+        // Extract spriteSettings from importSettings
+        // 从 importSettings 提取 spriteSettings
+        const importSettings = metadata.importSettings as Record<string, unknown> | undefined;
+        const spriteSettings = importSettings?.spriteSettings as ISpriteSettings | undefined;
+
+        if (!spriteSettings) return undefined;
+
+        return {
+            sliceBorder: spriteSettings.sliceBorder,
+            pivot: spriteSettings.pivot
+        };
     }
 
     /**

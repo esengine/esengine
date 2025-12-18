@@ -14,7 +14,7 @@ import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIGraphicComponent } from '../../components/base/UIGraphicComponent';
 import { UIImageComponent } from '../../components/base/UIImageComponent';
 import { getUIRenderCollector } from './UIRenderCollector';
-import { getUIRenderTransform, getNinePatchTopLeft, type UIRenderTransform } from './UIRenderUtils';
+import { getUIRenderTransform, getNinePatchPosition, type UIRenderTransform } from './UIRenderUtils';
 import { isValidTextureGuid, defaultUV } from '../../utils/UITextureUtils';
 
 /**
@@ -29,7 +29,7 @@ import { isValidTextureGuid, defaultUV } from '../../utils/UITextureUtils';
  * - UIGraphicComponent：基础可视元素（颜色矩形）
  * - UIImageComponent：纹理显示（简单、切片、平铺、填充）
  */
-@ECSSystem('UIGraphicRender', { updateOrder: 99 })
+@ECSSystem('UIGraphicRender', { updateOrder: 102, runInEditMode: true })
 export class UIGraphicRenderSystem extends EntitySystem {
     constructor() {
         // Match entities with UITransformComponent and UIGraphicComponent
@@ -118,9 +118,9 @@ export class UIGraphicRenderSystem extends EntitySystem {
         if (image.isSliced()) {
             // Nine-patch (sliced) rendering
             // 九宫格（切片）渲染
-            const topLeft = getNinePatchTopLeft(rt);
+            const pos = getNinePatchPosition(rt);
             collector.addNinePatch(
-                topLeft.x, topLeft.y,
+                pos.x, pos.y,
                 rt.width, rt.height,
                 image.sliceBorder,
                 image.textureWidth,
@@ -131,6 +131,8 @@ export class UIGraphicRenderSystem extends EntitySystem {
                 rt.orderInLayer,
                 {
                     rotation: rt.rotation,
+                    pivotX: pos.pivotX,
+                    pivotY: pos.pivotY,
                     textureGuid,
                     textureId: image.textureId,
                     materialId,
@@ -211,7 +213,7 @@ export class UIGraphicRenderSystem extends EntitySystem {
                 } else {
                     // Top origin
                     fillHeight = rt.height * fillAmount;
-                    fillY = rt.renderY + rt.height * (1 - fillAmount) * (1 - rt.pivotY);
+                    fillY = rt.renderY + rt.height * (1 - fillAmount) * rt.pivotY;
                     fillV0 = 1 - fillAmount;
                 }
                 break;

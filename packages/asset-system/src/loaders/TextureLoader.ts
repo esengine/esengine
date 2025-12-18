@@ -17,6 +17,16 @@ interface IEngineBridgeGlobal {
 }
 
 /**
+ * Sprite settings from texture meta
+ * 纹理 meta 中的 Sprite 设置
+ */
+interface ISpriteSettings {
+    sliceBorder?: [number, number, number, number];
+    pivot?: [number, number];
+    pixelsPerUnit?: number;
+}
+
+/**
  * 获取全局引擎桥接
  * Get global engine bridge
  */
@@ -61,13 +71,22 @@ export class TextureLoader implements IAssetLoader<ITextureAsset> {
 
         const image = content.image;
 
+        // Read sprite settings from import settings
+        // 从导入设置读取 sprite 设置
+        const importSettings = context.metadata.importSettings as Record<string, unknown> | undefined;
+        const spriteSettings = importSettings?.spriteSettings as ISpriteSettings | undefined;
+
         const textureAsset: ITextureAsset = {
             textureId: TextureLoader._nextTextureId++,
             width: image.width,
             height: image.height,
             format: 'rgba',
             hasMipmaps: false,
-            data: image
+            data: image,
+            // Include sprite settings if available
+            // 如果有则包含 sprite 设置
+            sliceBorder: spriteSettings?.sliceBorder,
+            pivot: spriteSettings?.pivot
         };
 
         // Upload to GPU if bridge exists.

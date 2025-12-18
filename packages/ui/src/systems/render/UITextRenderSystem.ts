@@ -47,7 +47,7 @@ interface TextTextureCache {
  * 2. 缓存纹理以避免每帧重新生成
  * 3. 向收集器提交纹理渲染原语
  */
-@ECSSystem('UITextRender', { updateOrder: 120 })
+@ECSSystem('UITextRender', { updateOrder: 120, runInEditMode: true })
 export class UITextRenderSystem extends EntitySystem {
     private textCanvas: HTMLCanvasElement | null = null;
     private textCtx: CanvasRenderingContext2D | null = null;
@@ -108,7 +108,9 @@ export class UITextRenderSystem extends EntitySystem {
             // 使用世界缩放和旋转
             const scaleX = transform.worldScaleX ?? transform.scaleX;
             const scaleY = transform.worldScaleY ?? transform.scaleY;
-            const rotation = transform.worldRotation ?? transform.rotation;
+            // 角度转弧度 | Convert degrees to radians
+            const rotationDegrees = transform.worldRotation ?? transform.rotation;
+            const rotation = (rotationDegrees * Math.PI) / 180;
             const width = (transform.computedWidth ?? transform.width) * scaleX;
             const height = (transform.computedHeight ?? transform.height) * scaleY;
             const alpha = transform.worldAlpha ?? transform.alpha;

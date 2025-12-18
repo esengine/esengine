@@ -212,6 +212,24 @@ impl GameEngine {
         self.engine.get_texture_id_by_path(path)
     }
 
+    /// Get texture size by path.
+    /// 按路径获取纹理尺寸。
+    ///
+    /// Returns an array [width, height] or null if not found.
+    /// 返回数组 [width, height]，如果未找到则返回 null。
+    ///
+    /// # Arguments | 参数
+    /// * `path` - Image path to lookup | 要查找的图片路径
+    #[wasm_bindgen(js_name = getTextureSizeByPath)]
+    pub fn get_texture_size_by_path(&self, path: &str) -> Option<js_sys::Float32Array> {
+        self.engine.get_texture_size_by_path(path).map(|(w, h)| {
+            let arr = js_sys::Float32Array::new_with_length(2);
+            arr.set_index(0, w);
+            arr.set_index(1, h);
+            arr
+        })
+    }
+
     /// Get or load texture by path.
     /// 按路径获取或加载纹理。
     ///

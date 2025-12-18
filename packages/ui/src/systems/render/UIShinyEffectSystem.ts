@@ -33,7 +33,7 @@ interface AutoAnimState {
  * 闪光效果动画系统
  * Shiny effect animation system
  */
-@ECSSystem('UIShinyEffect', { updateOrder: 98 })
+@ECSSystem('UIShinyEffect', { updateOrder: 98, runInEditMode: true })
 export class UIShinyEffectSystem extends EntitySystem {
     private autoAnimStates: Map<number, AutoAnimState> = new Map();
 

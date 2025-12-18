@@ -384,17 +384,33 @@ export class EngineBridge implements ITextureEngineBridge {
     }
 
     /**
-     * Get texture information.
-     * 获取纹理信息。
+     * Get texture info by path.
+     * 通过路径获取纹理信息。
      *
-     * @param id - Texture ID | 纹理ID
+     * This is the primary API for getting texture dimensions.
+     * The Rust engine is the single source of truth for texture dimensions.
+     * 这是获取纹理尺寸的主要 API。
+     * Rust 引擎是纹理尺寸的唯一事实来源。
+     *
+     * @param path - Image path/URL | 图片路径/URL
+     * @returns Texture info or null if not loaded | 纹理信息或未加载则为 null
      */
-    getTextureInfo(id: number): { width: number; height: number } | null {
+    getTextureInfoByPath(path: string): { width: number; height: number } | null {
         if (!this.initialized) return null;
-        // TODO: Implement in Rust engine
-        // TODO: 在Rust引擎中实现
-        // Return default values for now / 暂时返回默认值
-        return { width: 64, height: 64 };
+
+        // Resolve path if resolver is set
+        // 如果设置了解析器，则解析路径
+        const resolvedPath = this.pathResolver ? this.pathResolver(path) : path;
+
+        // Query Rust engine for texture size
+        // 向 Rust 引擎查询纹理尺寸
+        const result = this.getEngine().getTextureSizeByPath(resolvedPath);
+        if (!result) return null;
+
+        return {
+            width: result[0],
+            height: result[1]
+        };
     }
 
     /**

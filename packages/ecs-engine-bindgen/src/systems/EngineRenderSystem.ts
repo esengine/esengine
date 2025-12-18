@@ -137,6 +137,24 @@ export type GizmoDataProviderFn = (
 export type HasGizmoProviderFn = (component: Component) => boolean;
 
 /**
+ * Function type for getting highlight color for gizmo.
+ * Used to inject GizmoInteractionService functionality from editor layer.
+ * 获取 gizmo 高亮颜色的函数类型。
+ * 用于从编辑器层注入 GizmoInteractionService 功能。
+ */
+export type GizmoHighlightColorFn = (
+    entityId: number,
+    baseColor: GizmoColorInternal,
+    isSelected: boolean
+) => GizmoColorInternal;
+
+/**
+ * Function type for getting hovered entity ID.
+ * 获取悬停实体 ID 的函数类型。
+ */
+export type GetHoveredEntityIdFn = () => number | null;
+
+/**
  * Type for transform component constructor.
  * 变换组件构造函数类型。
  */
@@ -201,6 +219,11 @@ export class EngineRenderSystem extends EntitySystem {
     // Gizmo 注册表函数（从编辑器层注入）
     private gizmoDataProvider: GizmoDataProviderFn | null = null;
     private hasGizmoProvider: HasGizmoProviderFn | null = null;
+
+    // Gizmo interaction functions (injected from editor layer)
+    // Gizmo 交互函数（从编辑器层注入）
+    private gizmoHighlightColorFn: GizmoHighlightColorFn | null = null;
+    private getHoveredEntityIdFn: GetHoveredEntityIdFn | null = null;
 
     // UI Canvas boundary settings
     // UI 画布边界设置
@@ -786,10 +809,15 @@ export class EngineRenderSystem extends EntitySystem {
         const scene = Core.scene;
         if (!scene || !this.gizmoDataProvider || !this.hasGizmoProvider) return;
 
+        // Get hovered entity ID for highlight
+        // 获取悬停的实体 ID 用于高亮
+        const hoveredEntityId = this.getHoveredEntityIdFn?.() ?? null;
+
         // Iterate all entities in the scene
         // 遍历场景中的所有实体
         for (const entity of scene.entities.buffer) {
             const isSelected = this.selectedEntityIds.has(entity.id);
+            const isHovered = entity.id === hoveredEntityId;
 
             // Check each component for gizmo provider
             // 检查每个组件是否有 gizmo 提供者
@@ -798,6 +826,15 @@ export class EngineRenderSystem extends EntitySystem {
                     try {
                         const gizmoDataArray = this.gizmoDataProvider(component, entity, isSelected);
                         for (const gizmoData of gizmoDataArray) {
+                            // Apply hover highlight color if applicable
+                            // 如果适用，应用悬停高亮颜色
+                            if (isHovered && this.gizmoHighlightColorFn) {
+                                gizmoData.color = this.gizmoHighlightColorFn(
+                                    entity.id,
+                                    gizmoData.color,
+                                    isSelected
+                                );
+                            }
                             this.renderGizmoData(gizmoData);
                         }
                     } catch (e) {
@@ -1220,6 +1257,26 @@ export class EngineRenderSystem extends EntitySystem {
     ): void {
         this.gizmoDataProvider = provider;
         this.hasGizmoProvider = hasProvider;
+    }
+
+    /**
+     * Set gizmo interaction functions.
+     * 设置 gizmo 交互函数。
+     *
+     * This allows the editor layer to inject GizmoInteractionService functionality
+     * for hover highlighting and click selection.
+     * 这允许编辑器层注入 GizmoInteractionService 功能，
+     * 用于悬停高亮和点击选择。
+     *
+     * @param highlightColorFn - Function to get highlight color for gizmo
+     * @param getHoveredEntityIdFn - Function to get currently hovered entity ID
+     */
+    setGizmoInteraction(
+        highlightColorFn: GizmoHighlightColorFn,
+        getHoveredEntityIdFn: GetHoveredEntityIdFn
+    ): void {
+        this.gizmoHighlightColorFn = highlightColorFn;
+        this.getHoveredEntityIdFn = getHoveredEntityIdFn;
     }
 
     /**

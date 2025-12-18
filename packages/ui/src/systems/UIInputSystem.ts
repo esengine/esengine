@@ -5,6 +5,9 @@ import { UIInteractableComponent } from '../components/UIInteractableComponent';
 import { UIButtonComponent } from '../components/widgets/UIButtonComponent';
 import { UISliderComponent } from '../components/widgets/UISliderComponent';
 import { UIScrollViewComponent } from '../components/widgets/UIScrollViewComponent';
+import { UIToggleComponent } from '../components/widgets/UIToggleComponent';
+import { UIInputFieldComponent } from '../components/widgets/UIInputFieldComponent';
+import { UIDropdownComponent } from '../components/widgets/UIDropdownComponent';
 import type { UILayoutSystem } from './UILayoutSystem';
 
 // Re-export MouseButton for backward compatibility
@@ -79,6 +82,12 @@ export class UIInputSystem extends EntitySystem {
     private boundMouseDown: (e: MouseEvent) => void;
     private boundMouseUp: (e: MouseEvent) => void;
     private boundWheel: (e: WheelEvent) => void;
+    private boundKeyDown: (e: KeyboardEvent) => void;
+    private boundKeyUp: (e: KeyboardEvent) => void;
+    private boundKeyPress: (e: KeyboardEvent) => void;
+
+    // ===== 打开的 Dropdown Open Dropdown =====
+    private openDropdown: Entity | null = null;
 
     // ===== UI 布局系统引用 UI Layout System Reference =====
     // 用于获取 UI 画布尺寸以进行坐标转换
@@ -92,6 +101,9 @@ export class UIInputSystem extends EntitySystem {
         this.boundMouseDown = this.onMouseDown.bind(this);
         this.boundMouseUp = this.onMouseUp.bind(this);
         this.boundWheel = this.onWheel.bind(this);
+        this.boundKeyDown = this.onKeyDown.bind(this);
+        this.boundKeyUp = this.onKeyUp.bind(this);
+        this.boundKeyPress = this.onKeyPress.bind(this);
     }
 
     /**
@@ -118,6 +130,12 @@ export class UIInputSystem extends EntitySystem {
         canvas.addEventListener('mouseup', this.boundMouseUp);
         canvas.addEventListener('wheel', this.boundWheel);
 
+        // 键盘事件绑定到 document 以便在焦点状态下捕获
+        // Bind keyboard events to document to capture when focused
+        document.addEventListener('keydown', this.boundKeyDown);
+        document.addEventListener('keyup', this.boundKeyUp);
+        document.addEventListener('keypress', this.boundKeyPress);
+
         // 阻止右键菜单
         canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     }
@@ -134,6 +152,12 @@ export class UIInputSystem extends EntitySystem {
             this.canvas.removeEventListener('wheel', this.boundWheel);
             this.canvas = null;
         }
+
+        // 移除键盘事件监听
+        // Remove keyboard event listeners
+        document.removeEventListener('keydown', this.boundKeyDown);
+        document.removeEventListener('keyup', this.boundKeyUp);
+        document.removeEventListener('keypress', this.boundKeyPress);
     }
 
     /**
@@ -277,7 +301,10 @@ export class UIInputSystem extends EntitySystem {
                 // 处理特殊控件
                 this.handleSlider(entity);
                 this.handleButton(entity, interactable);
+                this.handleToggle(entity, interactable);
                 this.handleScrollView(entity, transform);
+                this.handleInputField(entity, interactable);
+                this.handleDropdown(entity, interactable, transform);
 
                 // 阻止事件传递到下层
                 if (interactable.blockEvents) {
@@ -389,14 +416,19 @@ export class UIInputSystem extends EntitySystem {
 
         // 更新手柄悬停状态（精确命中测试）
         // Update handle hover state (precise hit testing)
+        const worldX = transform.worldX ?? transform.x;
+        const worldY = transform.worldY ?? transform.y;
+        const width = transform.computedWidth ?? transform.width;
+        const height = transform.computedHeight ?? transform.height;
+
         const isInSlider = transform.containsPoint(this.mouseX, this.mouseY);
         const isInHandle = slider.isPointInHandle(
             this.mouseX,
             this.mouseY,
-            transform.worldX,
-            transform.worldY,
-            transform.computedWidth,
-            transform.computedHeight
+            worldX,
+            worldY,
+            width,
+            height
         );
         slider.handleHovered = isInHandle;
 
@@ -411,8 +443,8 @@ export class UIInputSystem extends EntitySystem {
             }
 
             // 计算新值
-            const relativeX = this.mouseX - transform.worldX;
-            const progress = Math.max(0, Math.min(1, relativeX / transform.computedWidth));
+            const relativeX = this.mouseX - worldX;
+            const progress = Math.max(0, Math.min(1, relativeX / width));
             const newValue = slider.minValue + progress * (slider.maxValue - slider.minValue);
 
             if (newValue !== slider.targetValue) {
@@ -454,12 +486,33 @@ export class UIInputSystem extends EntitySystem {
         }
     }
 
+    private handleToggle(entity: Entity, interactable: UIInteractableComponent): void {
+        const toggle = entity.getComponent(UIToggleComponent);
+        if (!toggle || toggle.disabled) return;
+
+        // 更新悬停和按下状态
+        // Update hover and pressed state
+        toggle.hovered = interactable.hovered;
+        toggle.pressed = interactable.pressed;
+
+        // 处理点击切换
+        // Handle click toggle
+        const wasPressed = this.prevMouseButtons[MouseButton.Left];
+        const isPressed = this.mouseButtons[MouseButton.Left];
+
+        if (wasPressed && !isPressed && interactable.hovered) {
+            // 鼠标在元素上释放 - 切换状态
+            // Mouse released over element - toggle state
+            toggle.toggle();
+        }
+    }
+
     private handleScrollView(entity: Entity, transform: UITransformComponent): void {
         const scrollView = entity.getComponent(UIScrollViewComponent);
         if (!scrollView) return;
 
-        const viewportWidth = transform.computedWidth;
-        const viewportHeight = transform.computedHeight;
+        const viewportWidth = transform.computedWidth ?? transform.width;
+        const viewportHeight = transform.computedHeight ?? transform.height;
         const maxScrollX = scrollView.getMaxScrollX(viewportWidth);
         const maxScrollY = scrollView.getMaxScrollY(viewportHeight);
 
@@ -730,6 +783,377 @@ export class UIInputSystem extends EntitySystem {
      */
     public isMouseButtonPressed(button: MouseButton): boolean {
         return this.mouseButtons[button] ?? false;
+    }
+
+    // ===== 键盘事件处理 Keyboard Event Handlers =====
+
+    private onKeyDown(e: KeyboardEvent): void {
+        // 处理 InputField 键盘输入
+        // Handle InputField keyboard input
+        if (this.focusedEntity) {
+            const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+            if (inputField && !inputField.readOnly) {
+                this.handleInputFieldKeyDown(inputField, e);
+                return;
+            }
+        }
+
+        // 处理打开的 Dropdown 键盘导航
+        // Handle open Dropdown keyboard navigation
+        if (this.openDropdown) {
+            const dropdown = this.openDropdown.getComponent(UIDropdownComponent);
+            if (dropdown && dropdown.isOpen) {
+                this.handleDropdownKeyDown(dropdown, e);
+            }
+        }
+    }
+
+    private onKeyUp(_e: KeyboardEvent): void {
+        // 可扩展的按键释放处理
+        // Extensible key release handling
+    }
+
+    private onKeyPress(e: KeyboardEvent): void {
+        // 处理 InputField 字符输入
+        // Handle InputField character input
+        if (this.focusedEntity) {
+            const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+            if (inputField && !inputField.readOnly) {
+                // keypress 用于可打印字符
+                // keypress is for printable characters
+                if (e.key.length === 1) {
+                    this.handleInputFieldCharacter(inputField, e.key, e);
+                }
+            }
+        }
+    }
+
+    private handleInputFieldKeyDown(inputField: UIInputFieldComponent, e: KeyboardEvent): void {
+        const key = e.key;
+        const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+        switch (key) {
+            case 'Backspace':
+                e.preventDefault();
+                if (inputField.hasSelection()) {
+                    inputField.deleteSelection();
+                } else if (inputField.caretPosition > 0) {
+                    // 删除光标前的字符
+                    // Delete character before caret
+                    const text = inputField.text;
+                    inputField.text = text.slice(0, inputField.caretPosition - 1) + text.slice(inputField.caretPosition);
+                    inputField.caretPosition--;
+                    inputField.onValueChanged?.(inputField.text);
+                }
+                break;
+
+            case 'Delete':
+                e.preventDefault();
+                if (inputField.hasSelection()) {
+                    inputField.deleteSelection();
+                } else if (inputField.caretPosition < inputField.text.length) {
+                    // 删除光标后的字符
+                    // Delete character after caret
+                    const text = inputField.text;
+                    inputField.text = text.slice(0, inputField.caretPosition) + text.slice(inputField.caretPosition + 1);
+                    inputField.onValueChanged?.(inputField.text);
+                }
+                break;
+
+            case 'ArrowLeft':
+                e.preventDefault();
+                if (e.shiftKey) {
+                    // 扩展选择
+                    // Extend selection
+                    if (!inputField.hasSelection()) {
+                        inputField.selectionStart = inputField.caretPosition;
+                    }
+                    inputField.caretPosition = Math.max(0, inputField.caretPosition - 1);
+                    inputField.selectionEnd = inputField.caretPosition;
+                } else {
+                    inputField.moveCaret(-1, ctrlOrCmd);
+                    inputField.clearSelection();
+                }
+                break;
+
+            case 'ArrowRight':
+                e.preventDefault();
+                if (e.shiftKey) {
+                    // 扩展选择
+                    // Extend selection
+                    if (!inputField.hasSelection()) {
+                        inputField.selectionStart = inputField.caretPosition;
+                    }
+                    inputField.caretPosition = Math.min(inputField.text.length, inputField.caretPosition + 1);
+                    inputField.selectionEnd = inputField.caretPosition;
+                } else {
+                    inputField.moveCaret(1, ctrlOrCmd);
+                    inputField.clearSelection();
+                }
+                break;
+
+            case 'Home':
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (!inputField.hasSelection()) {
+                        inputField.selectionStart = inputField.caretPosition;
+                    }
+                    inputField.caretPosition = 0;
+                    inputField.selectionEnd = 0;
+                } else {
+                    inputField.caretPosition = 0;
+                    inputField.clearSelection();
+                }
+                break;
+
+            case 'End':
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (!inputField.hasSelection()) {
+                        inputField.selectionStart = inputField.caretPosition;
+                    }
+                    inputField.caretPosition = inputField.text.length;
+                    inputField.selectionEnd = inputField.text.length;
+                } else {
+                    inputField.caretPosition = inputField.text.length;
+                    inputField.clearSelection();
+                }
+                break;
+
+            case 'a':
+                if (ctrlOrCmd) {
+                    e.preventDefault();
+                    inputField.selectAll();
+                }
+                break;
+
+            case 'c':
+                if (ctrlOrCmd && inputField.hasSelection()) {
+                    e.preventDefault();
+                    const selectedText = inputField.getSelectedText();
+                    navigator.clipboard?.writeText(selectedText);
+                }
+                break;
+
+            case 'x':
+                if (ctrlOrCmd && inputField.hasSelection()) {
+                    e.preventDefault();
+                    const selectedText = inputField.getSelectedText();
+                    navigator.clipboard?.writeText(selectedText);
+                    inputField.deleteSelection();
+                }
+                break;
+
+            case 'v':
+                if (ctrlOrCmd) {
+                    e.preventDefault();
+                    navigator.clipboard?.readText().then(text => {
+                        if (text) {
+                            inputField.insertText(text);
+                        }
+                    });
+                }
+                break;
+
+            case 'Enter':
+                if (inputField.lineType === 'multiLine' || inputField.lineType === 'multiLineSubmit') {
+                    if (inputField.lineType === 'multiLineSubmit' && !e.shiftKey) {
+                        inputField.onSubmit?.(inputField.text);
+                    } else {
+                        e.preventDefault();
+                        inputField.insertText('\n');
+                    }
+                } else {
+                    inputField.onSubmit?.(inputField.text);
+                }
+                break;
+
+            case 'Escape':
+                // 取消焦点
+                // Blur focus
+                this.setFocus(null);
+                break;
+        }
+    }
+
+    private handleInputFieldCharacter(inputField: UIInputFieldComponent, char: string, e: KeyboardEvent): void {
+        // 验证字符是否符合内容类型
+        // Validate character against content type
+        if (!inputField.validateInput(char)) {
+            e.preventDefault();
+            return;
+        }
+
+        // 检查字符限制
+        // Check character limit
+        if (inputField.characterLimit > 0 && inputField.text.length >= inputField.characterLimit) {
+            if (!inputField.hasSelection()) {
+                e.preventDefault();
+                return;
+            }
+        }
+
+        e.preventDefault();
+        inputField.insertText(char);
+    }
+
+    private handleDropdownKeyDown(dropdown: UIDropdownComponent, e: KeyboardEvent): void {
+        const key = e.key;
+
+        switch (key) {
+            case 'ArrowUp':
+                e.preventDefault();
+                if (dropdown.hoveredOptionIndex > 0) {
+                    dropdown.hoveredOptionIndex--;
+                } else {
+                    dropdown.hoveredOptionIndex = dropdown.options.length - 1;
+                }
+                break;
+
+            case 'ArrowDown':
+                e.preventDefault();
+                if (dropdown.hoveredOptionIndex < dropdown.options.length - 1) {
+                    dropdown.hoveredOptionIndex++;
+                } else {
+                    dropdown.hoveredOptionIndex = 0;
+                }
+                break;
+
+            case 'Enter':
+            case ' ':
+                e.preventDefault();
+                if (dropdown.hoveredOptionIndex >= 0) {
+                    dropdown.setSelectedIndex(dropdown.hoveredOptionIndex);
+                    dropdown.close();
+                    this.openDropdown = null;
+                }
+                break;
+
+            case 'Escape':
+                e.preventDefault();
+                dropdown.close();
+                this.openDropdown = null;
+                break;
+        }
+    }
+
+    // ===== InputField 交互 InputField Interaction =====
+
+    private handleInputField(entity: Entity, interactable: UIInteractableComponent): void {
+        const inputField = entity.getComponent(UIInputFieldComponent);
+        if (!inputField) return;
+
+        // 更新悬停和聚焦状态
+        // Update hover and focused state
+        inputField.hovered = interactable.hovered;
+        inputField.focused = this.focusedEntity === entity;
+
+        // 处理点击聚焦
+        // Handle click to focus
+        const wasPressed = this.prevMouseButtons[MouseButton.Left];
+        const isPressed = this.mouseButtons[MouseButton.Left];
+
+        if (!wasPressed && isPressed && interactable.hovered) {
+            this.setFocus(entity);
+            inputField.focused = true;
+
+            // TODO: 可以根据点击位置设置光标位置
+            // TODO: Could set caret position based on click position
+        }
+
+        // 更新光标闪烁
+        // Update caret blink
+        if (inputField.focused) {
+            inputField.caretBlinkTimer += Time.deltaTime;
+            if (inputField.caretBlinkTimer >= inputField.caretBlinkRate) {
+                inputField.caretBlinkTimer = 0;
+                inputField.caretVisible = !inputField.caretVisible;
+            }
+        } else {
+            inputField.caretVisible = false;
+            inputField.caretBlinkTimer = 0;
+        }
+    }
+
+    // ===== Dropdown 交互 Dropdown Interaction =====
+
+    private handleDropdown(entity: Entity, interactable: UIInteractableComponent, transform: UITransformComponent): void {
+        const dropdown = entity.getComponent(UIDropdownComponent);
+        if (!dropdown) return;
+
+        // 更新悬停和按下状态
+        // Update hover and pressed state
+        dropdown.hovered = interactable.hovered;
+        dropdown.pressed = interactable.pressed;
+
+        // 处理点击切换
+        // Handle click toggle
+        const wasPressed = this.prevMouseButtons[MouseButton.Left];
+        const isPressed = this.mouseButtons[MouseButton.Left];
+
+        if (wasPressed && !isPressed) {
+            if (dropdown.isOpen) {
+                // 检查是否点击了选项
+                // Check if clicked on an option
+                const optionIndex = this.getDropdownOptionAtPoint(dropdown, transform);
+                if (optionIndex >= 0) {
+                    dropdown.setSelectedIndex(optionIndex);
+                    dropdown.close();
+                    this.openDropdown = null;
+                } else if (!interactable.hovered) {
+                    // 点击外部关闭
+                    // Click outside to close
+                    dropdown.close();
+                    this.openDropdown = null;
+                }
+            } else if (interactable.hovered && !dropdown.disabled) {
+                // 点击按钮打开
+                // Click button to open
+                dropdown.open();
+                this.openDropdown = entity;
+            }
+        }
+
+        // 更新选项悬停
+        // Update option hover
+        if (dropdown.isOpen) {
+            dropdown.hoveredOptionIndex = this.getDropdownOptionAtPoint(dropdown, transform);
+        }
+    }
+
+    private getDropdownOptionAtPoint(dropdown: UIDropdownComponent, transform: UITransformComponent): number {
+        if (!dropdown.isOpen) return -1;
+
+        const worldX = transform.worldX ?? transform.x;
+        const worldY = transform.worldY ?? transform.y;
+        const width = transform.computedWidth ?? transform.width;
+        const buttonHeight = transform.computedHeight ?? transform.height;
+        const listTop = worldY - buttonHeight;
+        const listHeight = dropdown.getListHeight();
+
+        // 检查是否在列表区域内
+        // Check if within list area
+        if (this.mouseY > listTop || this.mouseY < listTop - listHeight) {
+            return -1;
+        }
+
+        if (this.mouseX < worldX || this.mouseX > worldX + width) {
+            return -1;
+        }
+
+        // 计算点击的选项索引
+        // Calculate clicked option index
+        const relativeY = listTop - this.mouseY - dropdown.scrollOffset;
+        const optionIndex = Math.floor(relativeY / dropdown.optionHeight);
+
+        if (optionIndex >= 0 && optionIndex < dropdown.options.length) {
+            const option = dropdown.options[optionIndex];
+            if (!option?.disabled) {
+                return optionIndex;
+            }
+        }
+
+        return -1;
     }
 
     protected onDestroy(): void {

@@ -10,9 +10,8 @@
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UISliderComponent, UISliderOrientation } from '../../components/widgets/UISliderComponent';
-import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import { getUIRenderCollector } from './UIRenderCollector';
-import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
+import { ensureUIWidgetMarker, getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
 
 /**
  * UI Slider Render System
@@ -30,7 +29,7 @@ import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
  * - 手柄（可拖动的旋钮）
  * - 可选刻度
  */
-@ECSSystem('UISliderRender', { updateOrder: 111 })
+@ECSSystem('UISliderRender', { updateOrder: 105, runInEditMode: true })
 export class UISliderRenderSystem extends EntitySystem {
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UISliderComponent));
@@ -48,8 +47,14 @@ export class UISliderRenderSystem extends EntitySystem {
 
             // 确保添加 UIWidgetMarker
             // Ensure UIWidgetMarker is added
-            if (!entity.hasComponent(UIWidgetMarker)) {
-                entity.addComponent(new UIWidgetMarker());
+            ensureUIWidgetMarker(entity);
+
+            // 初始化 displayValue 和 targetValue（编辑器预览模式需要）
+            // Initialize displayValue and targetValue (needed for editor preview mode)
+            if (!slider._valueInitialized) {
+                slider.displayValue = slider.value;
+                slider.targetValue = slider.value;
+                slider._valueInitialized = true;
             }
 
             // 使用工具函数获取渲染变换数据
@@ -82,7 +87,13 @@ export class UISliderRenderSystem extends EntitySystem {
 
             // Render fill
             // 渲染填充
-            if (progress > 0 && slider.fillAlpha > 0) {
+            // Note: External Fill entity's size/position is controlled by UISliderFillSystem
+            // which modifies its anchors. UILayoutSystem then computes the correct layout.
+            // 注意：外部 Fill 实体的尺寸/位置由 UISliderFillSystem 通过修改锚点来控制。
+            // UILayoutSystem 然后计算正确的布局。
+            if (slider.fillRectEntityId <= 0 && progress > 0 && slider.fillAlpha > 0) {
+                // Built-in fill rendering
+                // 内置填充渲染
                 const fillLength = trackLength * progress;
 
                 if (isHorizontal) {

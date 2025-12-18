@@ -28,6 +28,7 @@ export {
     getSystemTypeName,
     getSystemInstanceTypeName,
     getSystemMetadata,
+    getSystemInstanceMetadata,
     SYSTEM_TYPE_NAME
 } from './TypeDecorators';
 

@@ -349,6 +349,16 @@ impl Engine {
         self.texture_manager.get_texture_id_by_path(path)
     }
 
+    /// Get texture size by path.
+    /// 按路径获取纹理尺寸。
+    ///
+    /// Returns None if texture is not loaded or path not found.
+    /// 如果纹理未加载或路径未找到，返回 None。
+    pub fn get_texture_size_by_path(&self, path: &str) -> Option<(f32, f32)> {
+        let id = self.texture_manager.get_texture_id_by_path(path)?;
+        self.texture_manager.get_texture_size(id)
+    }
+
     /// Get or load texture by path.
     /// 按路径获取或加载纹理。
     pub fn get_or_load_by_path(&mut self, path: &str) -> Result<u32> {

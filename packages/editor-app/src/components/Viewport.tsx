@@ -385,6 +385,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         }
     }, []);
 
+
     // Sync commandManager prop to ref | 同步 commandManager prop 到 ref
     useEffect(() => {
         commandManagerRef.current = commandManager ?? null;
@@ -447,7 +448,33 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             // Left button (0) for transform or camera pan (if no transform mode active)
             else if (e.button === 0) {
                 if (transformModeRef.current === 'select') {
-                    // In select mode, left click pans camera
+                    // In select mode, first check if clicking on a gizmo
+                    // 在选择模式下，首先检查是否点击了 gizmo
+                    const gizmoService = EngineService.getInstance().getGizmoInteractionService();
+                    if (gizmoService) {
+                        const worldPos = screenToWorld(e.clientX, e.clientY);
+                        const zoom = camera2DZoomRef.current;
+                        const hitEntityId = gizmoService.handleClick(worldPos.x, worldPos.y, zoom);
+
+                        if (hitEntityId !== null) {
+                            // Find and select the hit entity
+                            // 找到并选中命中的实体
+                            const scene = Core.scene;
+                            if (scene) {
+                                const hitEntity = scene.entities.findEntityById(hitEntityId);
+                                if (hitEntity && messageHubRef.current) {
+                                    const entityStore = Core.services.tryResolve(EntityStoreService);
+                                    entityStore?.selectEntity(hitEntity);
+                                    messageHubRef.current.publish('entity:selected', { entity: hitEntity });
+                                    e.preventDefault();
+                                    return; // Don't start camera pan
+                                }
+                            }
+                        }
+                    }
+
+                    // No gizmo hit, left click pans camera
+                    // 没有点击到 gizmo，左键拖动相机
                     isDraggingCameraRef.current = true;
                     canvas.style.cursor = 'grabbing';
                 } else {
@@ -487,6 +514,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     x: prev.x - (deltaX * dpr) / zoom,
                     y: prev.y + (deltaY * dpr) / zoom
                 }));
+                lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             } else if (isDraggingTransformRef.current) {
                 // Transform selected entity based on mode
                 const entity = selectedEntityRef.current;
@@ -601,11 +629,30 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                         });
                     }
                 }
+
+                lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             } else {
+                // Not dragging - update gizmo hover state
+                // 没有拖拽时 - 更新 gizmo 悬停状态
+                if (playStateRef.current !== 'playing') {
+                    const gizmoService = EngineService.getInstance().getGizmoInteractionService();
+                    if (gizmoService) {
+                        const worldPos = screenToWorld(e.clientX, e.clientY);
+                        const zoom = camera2DZoomRef.current;
+                        gizmoService.updateMousePosition(worldPos.x, worldPos.y, zoom);
+
+                        // Update cursor based on hover state
+                        // 根据悬停状态更新光标
+                        const hoveredId = gizmoService.getHoveredEntityId();
+                        if (hoveredId !== null) {
+                            canvas.style.cursor = 'pointer';
+                        } else {
+                            canvas.style.cursor = 'grab';
+                        }
+                    }
+                }
                 return;
             }
-
-            lastMousePosRef.current = { x: e.clientX, y: e.clientY };
         };
 
         const handleMouseUp = () => {

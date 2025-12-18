@@ -77,7 +77,8 @@ import {
     Vector3FieldEditor,
     Vector4FieldEditor,
     ColorFieldEditor,
-    AnimationClipsFieldEditor
+    AnimationClipsFieldEditor,
+    EntityRefFieldEditor
 } from '../../infrastructure/field-editors';
 import { TransformComponentInspector } from '../../components/inspectors/component-inspectors/TransformComponentInspector';
 import { buildFileSystem } from '../../services/BuildFileSystemService';
@@ -249,6 +250,7 @@ export class ServiceRegistry {
         fieldEditorRegistry.register(new Vector4FieldEditor());
         fieldEditorRegistry.register(new ColorFieldEditor());
         fieldEditorRegistry.register(new AnimationClipsFieldEditor());
+        fieldEditorRegistry.register(new EntityRefFieldEditor());
 
         // 注册组件检查器
         // Register component inspectors

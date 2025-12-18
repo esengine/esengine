@@ -10,3 +10,4 @@
 
 export * from './IGizmoProvider';
 export * from './GizmoRegistry';
+export * from './GizmoHitTester';

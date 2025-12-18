@@ -309,8 +309,8 @@ export class UIRenderCollector {
      * - 边缘：单向拉伸
      * - 中心：双向拉伸
      *
-     * @param x - X position | X 坐标
-     * @param y - Y position | Y 坐标
+     * @param x - Pivot X position (same as regular rect) | Pivot X 坐标（与普通矩形相同）
+     * @param y - Pivot Y position (same as regular rect) | Pivot Y 坐标（与普通矩形相同）
      * @param width - Target width | 目标宽度
      * @param height - Target height | 目标高度
      * @param margins - Nine-patch margins [top, right, bottom, left] | 九宫格边距
@@ -336,22 +336,44 @@ export class UIRenderCollector {
         orderInLayer: number,
         options?: {
             rotation?: number;
+            /** Pivot X (0-1), default 0.5 | X 轴锚点 (0-1)，默认 0.5 */
+            pivotX?: number;
+            /** Pivot Y (0-1), default 0.5 | Y 轴锚点 (0-1)，默认 0.5 */
+            pivotY?: number;
             textureId?: number;
             textureGuid?: string;
+            /** 纹理路径（用于动态图集加载）| Texture path (for dynamic atlas loading) */
+            texturePath?: string;
             materialId?: number;
             materialOverrides?: UIMaterialOverrides;
             /** 来源实体 ID（用于调试）| Source entity ID (for debugging) */
             entityId?: number;
         }
     ): void {
-        const [marginTop, marginRight, marginBottom, marginLeft] = margins;
+        let [marginTop, marginRight, marginBottom, marginLeft] = margins;
+        const rotation = options?.rotation ?? 0;
+        const pivotX = options?.pivotX ?? 0.5;
+        const pivotY = options?.pivotY ?? 0.5;
 
-        // Ensure minimum size to avoid negative dimensions
-        // 确保最小尺寸以避免负尺寸
+        // Proportionally scale margins if target size is smaller than minimum
+        // 如果目标尺寸小于最小值，按比例缩小边距
         const minWidth = marginLeft + marginRight;
         const minHeight = marginTop + marginBottom;
-        const targetWidth = Math.max(width, minWidth);
-        const targetHeight = Math.max(height, minHeight);
+
+        if (width < minWidth && minWidth > 0) {
+            const scale = width / minWidth;
+            marginLeft *= scale;
+            marginRight *= scale;
+        }
+
+        if (height < minHeight && minHeight > 0) {
+            const scale = height / minHeight;
+            marginTop *= scale;
+            marginBottom *= scale;
+        }
+
+        const targetWidth = width;
+        const targetHeight = height;
 
         // Calculate center dimensions
         // 计算中心区域尺寸
@@ -365,26 +387,49 @@ export class UIRenderCollector {
         const uvTop = marginTop / textureHeight;
         const uvBottom = (textureHeight - marginBottom) / textureHeight;
 
-        // Common options for all patches
-        // 所有 patch 的公共选项
-        // Note: pivotY=1 means position is top-left corner (Y-up coordinate system)
-        // 注意：pivotY=1 表示位置是左上角（Y轴向上坐标系）
+        // Pre-calculate sin/cos for rotation
+        // 预计算旋转的 sin/cos
+        const cos = Math.cos(rotation);
+        const sin = Math.sin(rotation);
+
+        // Calculate top-left corner position (unrotated) relative to pivot point
+        // 计算相对于 pivot 点的左上角位置（未旋转）
+        const topLeftOffsetX = -targetWidth * pivotX;
+        const topLeftOffsetY = targetHeight * (1 - pivotY);
+
+        // Common options for all patches (no rotation per-patch, we handle it via position)
+        // 所有 patch 的公共选项（每个 patch 不单独旋转，我们通过位置处理）
         const baseOptions = {
-            rotation: options?.rotation ?? 0,
-            pivotX: 0,
-            pivotY: 1,
+            rotation: rotation,
+            pivotX: 0.5,
+            pivotY: 0.5,
             textureId: options?.textureId,
             textureGuid: options?.textureGuid,
+            texturePath: options?.texturePath,
             materialId: options?.materialId,
             materialOverrides: options?.materialOverrides,
             entityId: options?.entityId
         };
 
+        // Helper to rotate a point around the pivot
+        // 辅助函数：围绕 pivot 旋转一个点
+        const rotatePoint = (offsetX: number, offsetY: number): { x: number; y: number } => {
+            // Offset is relative to pivot (x, y)
+            // 偏移是相对于 pivot (x, y) 的
+            const rotatedX = offsetX * cos - offsetY * sin;
+            const rotatedY = offsetX * sin + offsetY * cos;
+            return { x: x + rotatedX, y: y + rotatedY };
+        };
+
         // Helper to add a patch with specific UVs
+        // The patch position is specified by its top-left corner offset from the nine-patch's top-left
         // 辅助函数：添加具有特定 UV 的 patch
+        // patch 位置由相对于九宫格左上角的偏移指定
         const addPatch = (
-            px: number,
-            py: number,
+            // Local offset from top-left corner of nine-patch (unrotated)
+            // 相对于九宫格左上角的本地偏移（未旋转）
+            localX: number,
+            localY: number,
             pw: number,
             ph: number,
             u0: number,
@@ -393,43 +438,53 @@ export class UIRenderCollector {
             v1: number
         ) => {
             if (pw <= 0 || ph <= 0) return;
-            this.addRect(px, py, pw, ph, color, alpha, sortingLayer, orderInLayer, {
+
+            // Calculate the center of this patch (relative to pivot)
+            // 计算此 patch 的中心（相对于 pivot）
+            // localX, localY is top-left corner offset from nine-patch's top-left
+            // Add topLeftOffset to get offset from pivot
+            const offsetX = topLeftOffsetX + localX + pw / 2;
+            const offsetY = topLeftOffsetY - localY - ph / 2;
+
+            // Rotate around pivot point
+            // 围绕 pivot 点旋转
+            const rotated = rotatePoint(offsetX, offsetY);
+
+            this.addRect(rotated.x, rotated.y, pw, ph, color, alpha, sortingLayer, orderInLayer, {
                 ...baseOptions,
                 uv: [u0, v0, u1, v1]
             });
         };
 
-        // Y-up coordinate system: y decreases as we go down
-        // Y轴向上坐标系：向下移动时 y 减小
-        // (x, y) is top-left corner, patches extend downward (negative y direction)
-        // (x, y) 是左上角，patch 向下延伸（y 减小方向）
+        // Add all 9 patches (localX, localY relative to top-left of nine-patch)
+        // 添加所有 9 个 patch（localX, localY 相对于九宫格的左上角）
 
         // Top-left corner | 左上角
-        addPatch(x, y, marginLeft, marginTop, 0, 0, uvLeft, uvTop);
+        addPatch(0, 0, marginLeft, marginTop, 0, 0, uvLeft, uvTop);
 
         // Top edge | 顶边
-        addPatch(x + marginLeft, y, centerWidth, marginTop, uvLeft, 0, uvRight, uvTop);
+        addPatch(marginLeft, 0, centerWidth, marginTop, uvLeft, 0, uvRight, uvTop);
 
         // Top-right corner | 右上角
-        addPatch(x + marginLeft + centerWidth, y, marginRight, marginTop, uvRight, 0, 1, uvTop);
+        addPatch(marginLeft + centerWidth, 0, marginRight, marginTop, uvRight, 0, 1, uvTop);
 
-        // Left edge | 左边 (move down = subtract y)
-        addPatch(x, y - marginTop, marginLeft, centerHeight, 0, uvTop, uvLeft, uvBottom);
+        // Left edge | 左边
+        addPatch(0, marginTop, marginLeft, centerHeight, 0, uvTop, uvLeft, uvBottom);
 
         // Center | 中心
-        addPatch(x + marginLeft, y - marginTop, centerWidth, centerHeight, uvLeft, uvTop, uvRight, uvBottom);
+        addPatch(marginLeft, marginTop, centerWidth, centerHeight, uvLeft, uvTop, uvRight, uvBottom);
 
         // Right edge | 右边
-        addPatch(x + marginLeft + centerWidth, y - marginTop, marginRight, centerHeight, uvRight, uvTop, 1, uvBottom);
+        addPatch(marginLeft + centerWidth, marginTop, marginRight, centerHeight, uvRight, uvTop, 1, uvBottom);
 
         // Bottom-left corner | 左下角
-        addPatch(x, y - marginTop - centerHeight, marginLeft, marginBottom, 0, uvBottom, uvLeft, 1);
+        addPatch(0, marginTop + centerHeight, marginLeft, marginBottom, 0, uvBottom, uvLeft, 1);
 
         // Bottom edge | 底边
-        addPatch(x + marginLeft, y - marginTop - centerHeight, centerWidth, marginBottom, uvLeft, uvBottom, uvRight, 1);
+        addPatch(marginLeft, marginTop + centerHeight, centerWidth, marginBottom, uvLeft, uvBottom, uvRight, 1);
 
         // Bottom-right corner | 右下角
-        addPatch(x + marginLeft + centerWidth, y - marginTop - centerHeight, marginRight, marginBottom, uvRight, uvBottom, 1, 1);
+        addPatch(marginLeft + centerWidth, marginTop + centerHeight, marginRight, marginBottom, uvRight, uvBottom, 1, 1);
     }
 
     /**

@@ -7,8 +7,27 @@
  */
 
 import type { Entity } from '@esengine/ecs-framework';
-import type { UITransformComponent } from '../../components/UITransformComponent';
+import { UITransformComponent } from '../../components/UITransformComponent';
+import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import type { UIRenderCollector } from './UIRenderCollector';
+
+/**
+ * Ensure entity has UIWidgetMarker component
+ * 确保实体具有 UIWidgetMarker 组件
+ *
+ * Widget components add this marker to prevent UIRectRenderSystem from
+ * rendering them, as they have their own specialized render systems.
+ *
+ * Widget 组件添加此标记以防止 UIRectRenderSystem 渲染它们，
+ * 因为它们有自己专门的渲染系统。
+ *
+ * @param entity - Entity to check/mark
+ */
+export function ensureUIWidgetMarker(entity: Entity): void {
+    if (!entity.hasComponent(UIWidgetMarker)) {
+        entity.addComponent(new UIWidgetMarker());
+    }
+}
 
 /**
  * Computed transform data for rendering
@@ -45,20 +64,32 @@ export interface UIRenderTransform {
  * Extract render transform data from UITransformComponent
  * 从 UITransformComponent 提取渲染变换数据
  *
+ * 使用 UILayoutSystem 计算的世界坐标。如果 layoutComputed = false，回退到本地坐标。
+ * Uses world coordinates computed by UILayoutSystem. If layoutComputed = false, falls back to local coordinates.
+ *
  * @param transform - UITransformComponent instance
+ * @param _entity - Optional entity (unused, for API compatibility)
  * @returns Computed render transform, or null if not visible
  */
-export function getUIRenderTransform(transform: UITransformComponent): UIRenderTransform | null {
+export function getUIRenderTransform(transform: UITransformComponent, _entity?: Entity): UIRenderTransform | null {
     if (!transform.worldVisible) return null;
 
-    const x = transform.worldX ?? transform.x;
-    const y = transform.worldY ?? transform.y;
+    // 使用 layoutComputed 判断是否使用世界坐标
+    // Use layoutComputed to determine whether to use world coordinates
+    const x = transform.layoutComputed ? transform.worldX : transform.x;
+    const y = transform.layoutComputed ? transform.worldY : transform.y;
     const scaleX = transform.worldScaleX ?? transform.scaleX;
     const scaleY = transform.worldScaleY ?? transform.scaleY;
-    const width = (transform.computedWidth ?? transform.width) * scaleX;
-    const height = (transform.computedHeight ?? transform.height) * scaleY;
+    const width = (transform.layoutComputed && transform.computedWidth > 0
+        ? transform.computedWidth
+        : transform.width) * scaleX;
+    const height = (transform.layoutComputed && transform.computedHeight > 0
+        ? transform.computedHeight
+        : transform.height) * scaleY;
     const alpha = transform.worldAlpha ?? transform.alpha;
-    const rotation = transform.worldRotation ?? transform.rotation;
+    // 角度转弧度 | Convert degrees to radians
+    const rotationDegrees = transform.worldRotation ?? transform.rotation;
+    const rotation = (rotationDegrees * Math.PI) / 180;
     const pivotX = transform.pivotX;
     const pivotY = transform.pivotY;
     // 使用继承自 Canvas 的排序层，如果没有则回退到组件本身的排序层
@@ -261,15 +292,31 @@ export function packColorWithAlpha(color: number, alpha: number): number {
 }
 
 /**
- * Calculate nine-patch top-left coordinates for Y-up coordinate system
- * 为 Y 轴向上坐标系计算九宫格的左上角坐标
+ * Get nine-patch position and pivot for consistent rendering
+ * 获取九宫格位置和 pivot 以实现一致的渲染
+ *
+ * NinePatch now uses the same coordinate system as regular rects:
+ * - Position is the pivot point (same as renderX/renderY)
+ * - Pivot values determine rotation center
+ *
+ * 九宫格现在使用与普通矩形相同的坐标系：
+ * - 位置是 pivot 点（与 renderX/renderY 相同）
+ * - pivot 值决定旋转中心
  *
  * @param rt - Render transform data
- * @returns Top-left coordinates { x, y }
+ * @returns Position and pivot for nine-patch rendering
  */
-export function getNinePatchTopLeft(rt: UIRenderTransform): { x: number; y: number } {
+export function getNinePatchPosition(rt: UIRenderTransform): {
+    x: number;
+    y: number;
+    pivotX: number;
+    pivotY: number;
+} {
     return {
-        x: rt.x,
-        y: rt.y + rt.height
+        x: rt.renderX,
+        y: rt.renderY,
+        pivotX: rt.pivotX,
+        pivotY: rt.pivotY
     };
 }
+

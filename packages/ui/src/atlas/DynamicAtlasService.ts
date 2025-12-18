@@ -14,6 +14,7 @@ import {
     type AtlasEntry,
     type DynamicAtlasConfig
 } from './DynamicAtlasManager';
+import { getGlobalAssetFileLoader } from '@esengine/asset-system';
 
 /**
  * Texture info for atlas
@@ -198,18 +199,25 @@ export class DynamicAtlasService {
     }
 
     /**
-     * Load image from URL
-     * 从 URL 加载图像
+     * Load image from asset path
+     * 从资产路径加载图像
      */
-    private loadImage(url: string): Promise<HTMLImageElement> {
+    private loadImage(assetPath: string): Promise<HTMLImageElement> {
+        // Use global asset file loader if available (recommended)
+        // 如果可用则使用全局资产文件加载器（推荐）
+        const loader = getGlobalAssetFileLoader();
+        if (loader) {
+            return loader.loadImage(assetPath);
+        }
+
+        // Fallback: direct HTMLImageElement loading (for H5/web runtime)
+        // 回退：直接 HTMLImageElement 加载（用于 H5/web 运行时）
         return new Promise((resolve, reject) => {
             const image = new Image();
-            image.crossOrigin = 'anonymous'; // Enable CORS
-
+            image.crossOrigin = 'anonymous';
             image.onload = () => resolve(image);
-            image.onerror = (e) => reject(new Error(`Failed to load image: ${url}`));
-
-            image.src = url;
+            image.onerror = () => reject(new Error(`Failed to load image: ${assetPath}`));
+            image.src = assetPath;
         });
     }
 
@@ -431,6 +439,11 @@ export function setDynamicAtlasService(service: DynamicAtlasService | null): voi
  *
  * If the service is already initialized, returns the existing instance.
  * 如果服务已初始化，则返回现有实例。
+ *
+ * Note: Image loading is handled through the global IAssetFileLoader service.
+ * Make sure to call setGlobalAssetFileLoader() before using atlas service.
+ * 注意：图片加载通过全局 IAssetFileLoader 服务处理。
+ * 确保在使用图集服务之前调用 setGlobalAssetFileLoader()。
  *
  * @param bridge - Engine bridge for texture operations | 纹理操作的引擎桥接
  * @param config - Configuration options | 配置选项

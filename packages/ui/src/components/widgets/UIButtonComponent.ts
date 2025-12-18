@@ -163,6 +163,12 @@ export class UIButtonComponent extends Component {
      */
     public targetColor: number = 0x4A90D9;
 
+    /**
+     * 颜色是否已初始化（用于编辑器预览）
+     * Whether color has been initialized (for editor preview)
+     */
+    public _colorInitialized: boolean = false;
+
     // ===== 回调 Callbacks =====
 
     /**
@@ -308,5 +314,17 @@ export class UIButtonComponent extends Component {
         if (disabledGuid) this.disabledTextureGuid = disabledGuid;
         this.displayMode = 'texture';
         return this;
+    }
+
+    /**
+     * 组件添加到实体时初始化颜色
+     * Initialize colors when component is added to entity
+     */
+    public override onAddedToEntity(): void {
+        super.onAddedToEntity();
+        // 初始化 currentColor 和 targetColor 为 normalColor
+        // Initialize currentColor and targetColor to normalColor
+        this.currentColor = this.normalColor;
+        this.targetColor = this.normalColor;
     }
 }

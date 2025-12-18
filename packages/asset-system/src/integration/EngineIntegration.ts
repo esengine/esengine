@@ -32,12 +32,6 @@ export interface ITextureEngineBridge {
     unloadTexture(id: number): void;
 
     /**
-     * Get texture info
-     * 获取纹理信息
-     */
-    getTextureInfo(id: number): { width: number; height: number } | null;
-
-    /**
      * Get or load texture by path.
      * 按路径获取或加载纹理。
      *
@@ -109,6 +103,20 @@ export interface ITextureEngineBridge {
      * @returns Promise that resolves when texture is ready | 纹理就绪时解析的 Promise
      */
     loadTextureAsync?(id: number, url: string): Promise<void>;
+
+    /**
+     * Get texture info by path.
+     * 通过路径获取纹理信息。
+     *
+     * This is the primary API for getting texture dimensions.
+     * The Rust engine is the single source of truth for texture dimensions.
+     * 这是获取纹理尺寸的主要 API。
+     * Rust 引擎是纹理尺寸的唯一事实来源。
+     *
+     * @param path Image path/URL | 图片路径/URL
+     * @returns Texture info or null if not loaded | 纹理信息或未加载则为 null
+     */
+    getTextureInfoByPath?(path: string): { width: number; height: number } | null;
 }
 
 /**
@@ -141,6 +149,33 @@ export type TextureLoadCallback = (guid: string, path: string, textureId: number
  * Asset system engine integration
  * 资产系统引擎集成
  */
+/**
+ * Texture sprite info (nine-patch border, pivot, etc.)
+ * 纹理 Sprite 信息（九宫格边距、锚点等）
+ */
+export interface ITextureSpriteInfo {
+    /**
+     * 九宫格切片边距 [top, right, bottom, left]
+     * Nine-patch slice border
+     */
+    sliceBorder?: [number, number, number, number];
+    /**
+     * Sprite 锚点 [x, y]（0-1 归一化）
+     * Sprite pivot point (0-1 normalized)
+     */
+    pivot?: [number, number];
+    /**
+     * 纹理宽度
+     * Texture width
+     */
+    width: number;
+    /**
+     * 纹理高度
+     * Texture height
+     */
+    height: number;
+}
+
 export class EngineIntegration {
     private _assetManager: AssetManager;
     private _engineBridge?: ITextureEngineBridge;
@@ -151,6 +186,10 @@ export class EngineIntegration {
     // 路径稳定 ID 缓存（跨 Play/Stop 循环保持稳定）
     // Path-stable ID cache (persists across Play/Stop cycles)
     private static _pathIdCache = new Map<string, number>();
+
+    // 纹理 Sprite 信息缓存（全局静态，可供渲染系统访问）
+    // Texture sprite info cache (global static, accessible by render systems)
+    private static _textureSpriteInfoCache = new Map<AssetGUID, ITextureSpriteInfo>();
 
     // 纹理加载回调（用于动态图集集成等）
     // Texture load callback (for dynamic atlas integration, etc.)
@@ -329,6 +368,16 @@ export class EngineIntegration {
         const result = await this._assetManager.loadAsset<ITextureAsset>(guid);
         const metadata = result.metadata;
         const assetPath = metadata.path;
+        const textureAsset = result.asset;
+
+        // 缓存 sprite 信息（九宫格边距等）到静态缓存
+        // Cache sprite info (slice border, etc.) to static cache
+        EngineIntegration._textureSpriteInfoCache.set(guid, {
+            sliceBorder: textureAsset.sliceBorder,
+            pivot: textureAsset.pivot,
+            width: textureAsset.width,
+            height: textureAsset.height
+        });
 
         // 生成路径稳定 ID
         // Generate path-stable ID
@@ -364,6 +413,30 @@ export class EngineIntegration {
         EngineIntegration.notifyTextureLoad(guid, engineUrl, stableId);
 
         return stableId;
+    }
+
+    /**
+     * Get texture sprite info by GUID (static method for render system access)
+     * 通过 GUID 获取纹理 Sprite 信息（静态方法，供渲染系统访问）
+     *
+     * Returns cached sprite info including nine-patch slice border.
+     * Must call loadTextureByGuid first to populate the cache.
+     * 返回缓存的 sprite 信息，包括九宫格边距。
+     * 必须先调用 loadTextureByGuid 来填充缓存。
+     *
+     * @param guid - Texture asset GUID | 纹理资产 GUID
+     * @returns Sprite info or undefined if not loaded | Sprite 信息或未加载则为 undefined
+     */
+    static getTextureSpriteInfo(guid: AssetGUID): ITextureSpriteInfo | undefined {
+        return EngineIntegration._textureSpriteInfoCache.get(guid);
+    }
+
+    /**
+     * Clear texture sprite info cache
+     * 清除纹理 Sprite 信息缓存
+     */
+    static clearTextureSpriteInfoCache(): void {
+        EngineIntegration._textureSpriteInfoCache.clear();
     }
 
     /**

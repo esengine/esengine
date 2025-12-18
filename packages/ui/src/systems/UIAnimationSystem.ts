@@ -2,6 +2,9 @@ import { EntitySystem, Matcher, Entity, Time, ECSSystem } from '@esengine/ecs-fr
 import { UIProgressBarComponent } from '../components/widgets/UIProgressBarComponent';
 import { UISliderComponent } from '../components/widgets/UISliderComponent';
 import { UIButtonComponent } from '../components/widgets/UIButtonComponent';
+import { UIToggleComponent } from '../components/widgets/UIToggleComponent';
+import { UIDropdownComponent } from '../components/widgets/UIDropdownComponent';
+import { lerpColor } from './render/UIRenderUtils';
 
 /**
  * 缓动函数类型
@@ -139,7 +142,7 @@ export const Easing = UIEasing;
 export class UIAnimationSystem extends EntitySystem {
     constructor() {
         // 匹配有任何动画组件的实体
-        super(Matcher.empty().any(UIButtonComponent, UIProgressBarComponent, UISliderComponent));
+        super(Matcher.empty().any(UIButtonComponent, UIProgressBarComponent, UISliderComponent, UIToggleComponent, UIDropdownComponent));
     }
 
     /**
@@ -162,6 +165,12 @@ export class UIAnimationSystem extends EntitySystem {
 
             // 处理按钮颜色动画
             this.updateButtonColor(entity, dt);
+
+            // 处理 Toggle 动画
+            this.updateToggle(entity, dt);
+
+            // 处理 Dropdown 颜色动画
+            this.updateDropdownColor(entity, dt);
         }
     }
 
@@ -238,7 +247,7 @@ export class UIAnimationSystem extends EntitySystem {
 
         if (button.currentColor !== button.targetColor) {
             // 颜色插值
-            button.currentColor = this.lerpColor(
+            button.currentColor = lerpColor(
                 button.currentColor,
                 button.targetColor,
                 Math.min(1, dt / button.transitionDuration)
@@ -247,23 +256,56 @@ export class UIAnimationSystem extends EntitySystem {
     }
 
     /**
-     * 颜色线性插值
-     * Linear interpolate between two colors
+     * 更新 Toggle 动画
+     * Update toggle animation
      */
-    private lerpColor(from: number, to: number, t: number): number {
-        const fromR = (from >> 16) & 0xFF;
-        const fromG = (from >> 8) & 0xFF;
-        const fromB = from & 0xFF;
+    private updateToggle(entity: Entity, dt: number): void {
+        const toggle = entity.getComponent(UIToggleComponent);
+        if (!toggle) return;
 
-        const toR = (to >> 16) & 0xFF;
-        const toG = (to >> 8) & 0xFF;
-        const toB = to & 0xFF;
+        // 同步目标进度和开关状态
+        // Sync target progress with on state
+        toggle.targetProgress = toggle.isOn ? 1 : 0;
 
-        const r = Math.round(fromR + (toR - fromR) * t);
-        const g = Math.round(fromG + (toG - fromG) * t);
-        const b = Math.round(fromB + (toB - fromB) * t);
+        // 如果显示进度和目标进度不同，进行插值
+        // If display progress differs from target, interpolate
+        if (toggle.displayProgress !== toggle.targetProgress) {
+            const speed = 1 / Math.max(0.01, toggle.transitionDuration);
+            const diff = toggle.targetProgress - toggle.displayProgress;
+            const direction = Math.sign(diff);
+            const step = Math.min(Math.abs(diff), speed * dt);
 
-        return (r << 16) | (g << 8) | b;
+            toggle.displayProgress += direction * step;
+
+            // 接近目标时直接设置
+            // Snap to target when close enough
+            if (Math.abs(toggle.displayProgress - toggle.targetProgress) < 0.01) {
+                toggle.displayProgress = toggle.targetProgress;
+            }
+        }
+    }
+
+    /**
+     * 更新 Dropdown 颜色动画
+     * Update dropdown color animation
+     */
+    private updateDropdownColor(entity: Entity, dt: number): void {
+        const dropdown = entity.getComponent(UIDropdownComponent);
+        if (!dropdown) return;
+
+        // 更新目标颜色基于当前状态
+        // Update target color based on current state
+        dropdown.targetColor = dropdown.getCurrentBackgroundColor();
+
+        if (dropdown.currentColor !== dropdown.targetColor) {
+            // 颜色插值
+            // Color interpolation
+            dropdown.currentColor = lerpColor(
+                dropdown.currentColor,
+                dropdown.targetColor,
+                Math.min(1, dt / dropdown.transitionDuration)
+            );
+        }
     }
 
     /**

@@ -52,6 +52,11 @@ pub struct TextureManager {
     /// 纹理加载状态（使用 Rc<RefCell<>> 以便闭包可以修改）
     /// Texture loading states (using Rc<RefCell<>> so closures can modify)
     texture_states: Rc<RefCell<HashMap<u32, TextureState>>>,
+
+    /// 纹理尺寸缓存（使用 Rc<RefCell<>> 以便闭包可以修改）
+    /// Texture dimensions cache (using Rc<RefCell<>> so closures can modify)
+    /// Key: texture ID, Value: (width, height)
+    texture_dimensions: Rc<RefCell<HashMap<u32, (u32, u32)>>>,
 }
 
 impl TextureManager {
@@ -65,6 +70,7 @@ impl TextureManager {
             next_id: 1, // Start from 1, 0 is reserved for default
             default_texture: None,
             texture_states: Rc::new(RefCell::new(HashMap::new())),
+            texture_dimensions: Rc::new(RefCell::new(HashMap::new())),
         };
 
         // Create default white texture | 创建默认白色纹理
@@ -150,6 +156,9 @@ impl TextureManager {
         let states_for_onload = Rc::clone(&self.texture_states);
         let states_for_onerror = Rc::clone(&self.texture_states);
 
+        // Clone dimensions map for closure | 克隆尺寸映射用于闭包
+        let dimensions_for_onload = Rc::clone(&self.texture_dimensions);
+
         // Load actual image asynchronously | 异步加载实际图片
         let gl = self.gl.clone();
 
@@ -205,6 +214,12 @@ impl TextureManager {
                 WebGl2RenderingContext::LINEAR as i32,
             );
 
+            // 存储纹理尺寸（从加载的图片获取）
+            // Store texture dimensions (from loaded image)
+            let width = image_clone.width();
+            let height = image_clone.height();
+            dimensions_for_onload.borrow_mut().insert(texture_id, (width, height));
+
             // 标记为就绪 | Mark as ready
             states_for_onload.borrow_mut().insert(texture_id, TextureState::Ready);
 
@@ -236,8 +251,21 @@ impl TextureManager {
 
     /// Get texture size by ID.
     /// 按ID获取纹理尺寸。
+    ///
+    /// First checks the dimensions cache (updated when texture loads),
+    /// then falls back to the Texture struct.
+    /// 首先检查尺寸缓存（在纹理加载时更新），
+    /// 然后回退到 Texture 结构体。
     #[inline]
     pub fn get_texture_size(&self, id: u32) -> Option<(f32, f32)> {
+        // Check dimensions cache first (has actual loaded dimensions)
+        // 首先检查尺寸缓存（有实际加载的尺寸）
+        if let Some(&(w, h)) = self.texture_dimensions.borrow().get(&id) {
+            return Some((w as f32, h as f32));
+        }
+
+        // Fall back to texture struct (may have placeholder dimensions)
+        // 回退到纹理结构体（可能是占位符尺寸）
         self.textures
             .get(&id)
             .map(|t| (t.width as f32, t.height as f32))
@@ -329,6 +357,8 @@ impl TextureManager {
         self.path_to_id.retain(|_, &mut v| v != id);
         // Remove state | 移除状态
         self.texture_states.borrow_mut().remove(&id);
+        // Remove dimensions | 移除尺寸
+        self.texture_dimensions.borrow_mut().remove(&id);
     }
 
     /// Load texture by path, returning texture ID.
@@ -409,6 +439,9 @@ impl TextureManager {
         // Clear texture states | 清除纹理状态
         self.texture_states.borrow_mut().clear();
 
+        // Clear texture dimensions | 清除纹理尺寸
+        self.texture_dimensions.borrow_mut().clear();
+
         // Reset ID counter (1 is reserved for first texture, 0 for default)
         // 重置ID计数器（1保留给第一个纹理，0给默认纹理）
         self.next_id = 1;
@@ -478,6 +511,7 @@ impl TextureManager {
 
         self.textures.insert(id, Texture::new(texture, width, height));
         self.texture_states.borrow_mut().insert(id, TextureState::Ready);
+        self.texture_dimensions.borrow_mut().insert(id, (width, height));
 
         log::debug!("Created blank texture {} ({}x{}) | 创建空白纹理 {} ({}x{})", id, width, height, id, width, height);
 

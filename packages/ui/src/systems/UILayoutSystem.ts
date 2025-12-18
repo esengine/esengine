@@ -1,8 +1,8 @@
-import { EntitySystem, Matcher, Entity, ECSSystem, HierarchyComponent } from '@esengine/ecs-framework';
+import { ECSSystem, Entity, EntitySystem, HierarchyComponent, Matcher } from '@esengine/ecs-framework';
 import { SortingLayers } from '@esengine/engine-core';
-import { UITransformComponent } from '../components/UITransformComponent';
-import { UILayoutComponent, UILayoutType, UIJustifyContent, UIAlignItems } from '../components/UILayoutComponent';
 import { UICanvasComponent } from '../components/UICanvasComponent';
+import { UIAlignItems, UIJustifyContent, UILayoutComponent, UILayoutType } from '../components/UILayoutComponent';
+import { UITransformComponent } from '../components/UITransformComponent';
 
 /** 度转弧度常量 | Degrees to radians constant */
 const DEG_TO_RAD = Math.PI / 180;
@@ -50,7 +50,7 @@ interface CanvasContext {
  * 注意：canvasWidth/canvasHeight 是 UI 设计的参考尺寸，不是实际渲染视口大小
  * Note: canvasWidth/canvasHeight is the UI design reference size, not the actual render viewport size
  */
-@ECSSystem('UILayout')
+@ECSSystem('UILayout', { runInEditMode: true })
 export class UILayoutSystem extends EntitySystem {
     /**
      * UI 画布宽度（设计尺寸）
@@ -176,34 +176,38 @@ export class UILayoutSystem extends EntitySystem {
 
         // 计算锚点位置
         // X 轴：向右为正，anchorMinX=0 是左边，anchorMinX=1 是右边
-        // Y 轴：向上为正，anchorMinY=0 是顶部，anchorMinY=1 是底部
+        // Y 轴：向上为正，anchorMinY=0 是底部，anchorMinY=1 是顶部
         // X axis: right is positive, anchorMinX=0 is left, anchorMinX=1 is right
-        // Y axis: up is positive, anchorMinY=0 is top, anchorMinY=1 is bottom
+        // Y axis: up is positive, anchorMinY=0 is bottom, anchorMinY=1 is top
         const anchorMinX = parentX + parentWidth * transform.anchorMinX;
         const anchorMaxX = parentX + parentWidth * transform.anchorMaxX;
-        // Y 轴反转：parentY 是顶部（正值），向下减少
-        // Y axis inverted: parentY is top (positive), decreases downward
-        const anchorMinY = parentY - parentHeight * transform.anchorMinY;
-        const anchorMaxY = parentY - parentHeight * transform.anchorMaxY;
+        // parentY 是顶部，anchorMinY=0 对应底部，anchorMinY=1 对应顶部
+        // parentY is top, anchorMinY=0 maps to bottom, anchorMinY=1 maps to top
+        const anchorMinY = parentY - parentHeight * (1 - transform.anchorMinY);
+        const anchorMaxY = parentY - parentHeight * (1 - transform.anchorMaxY);
 
         // 计算元素尺寸
         let width: number;
         let height: number;
 
         // 如果锚点 min 和 max 相同，使用固定尺寸
+        // If anchor min and max are the same, use fixed size
         if (transform.anchorMinX === transform.anchorMaxX) {
             width = transform.width;
         } else {
-            // 拉伸模式：尺寸由锚点决定
-            width = anchorMaxX - anchorMinX - transform.x;
+            // 拉伸模式：尺寸 = 锚点区域 + sizeDelta（width 字段存储 sizeDelta）
+            // Stretch mode: size = anchor area + sizeDelta (width field stores sizeDelta)
+            const anchorWidth = anchorMaxX - anchorMinX;
+            width = anchorWidth + transform.width;
         }
 
         if (transform.anchorMinY === transform.anchorMaxY) {
             height = transform.height;
         } else {
-            // 拉伸模式：Y 轴反转，anchorMinY > anchorMaxY
-            // Stretch mode: Y axis inverted, anchorMinY > anchorMaxY
-            height = anchorMinY - anchorMaxY - transform.y;
+            // 拉伸模式：尺寸 = 锚点区域 + sizeDelta（height 字段存储 sizeDelta）
+            // Stretch mode: size = anchor area + sizeDelta (height field stores sizeDelta)
+            const anchorHeight = anchorMaxY - anchorMinY;
+            height = anchorHeight + transform.height;
         }
 
         // 应用尺寸约束
@@ -218,31 +222,28 @@ export class UILayoutSystem extends EntitySystem {
         let worldY: number;
 
         if (transform.anchorMinX === transform.anchorMaxX) {
-            // 固定锚点模式
-            // anchor 位置 + position 偏移 - pivot 偏移
-            // 结果是矩形左边缘的 X 坐标
+            // 固定锚点模式：anchor 位置 + position 偏移 - pivot 偏移
+            // Fixed anchor mode: anchor position + offset - pivot offset
             worldX = anchorMinX + transform.x - width * transform.pivotX;
         } else {
-            // 拉伸模式
-            worldX = anchorMinX + transform.x;
+            // 拉伸模式：anchoredPosition 是相对于锚点中心的偏移
+            // Stretch mode: anchoredPosition is offset from anchor center
+            // pivot 位置 = 锚点中心 + anchoredPosition
+            // Pivot position = anchor center + anchoredPosition
+            const anchorCenterX = (anchorMinX + anchorMaxX) / 2;
+            worldX = anchorCenterX + transform.x - width * transform.pivotX;
         }
 
         if (transform.anchorMinY === transform.anchorMaxY) {
-            // 固定锚点模式：Y 轴向上
-            // Fixed anchor mode: Y axis up
-            // anchorMinY 是锚点 Y 位置（anchor=0 在顶部，Y=+540）
-            // position.y 是从锚点的偏移（正值向上）
-            // pivot 决定元素哪个点对齐到 (anchor + position)
-            // worldY 是元素底部的 Y 坐标（与 Gizmo origin=(0,0) 对应）
-            // pivotY=0 意味着元素顶部对齐，pivotY=1 意味着元素底部对齐
-            const anchorPosY = anchorMinY + transform.y;  // anchor 位置 + 偏移
-            // pivotY=0: 顶部对齐，底部 = anchorPos - height
-            // pivotY=0.5: 中心对齐，底部 = anchorPos - height/2
-            // pivotY=1: 底部对齐，底部 = anchorPos
-            worldY = anchorPosY - height * (1 - transform.pivotY);
+            // 固定锚点模式：pivotY=0 是底部，pivotY=1 是顶部
+            // Fixed anchor mode: pivotY=0 is bottom, pivotY=1 is top
+            const anchorPosY = anchorMinY + transform.y;
+            worldY = anchorPosY - height * transform.pivotY;
         } else {
-            // 拉伸模式：worldY 是底部
-            worldY = anchorMaxY - transform.y;
+            // 拉伸模式：anchoredPosition 是相对于锚点中心的偏移
+            // Stretch mode: anchoredPosition is offset from anchor center
+            const anchorCenterY = (anchorMinY + anchorMaxY) / 2;
+            worldY = anchorCenterY + transform.y - height * transform.pivotY;
         }
 
         // 更新布局计算的值
@@ -261,6 +262,9 @@ export class UILayoutSystem extends EntitySystem {
         // 公式：canvasBaseSortOrder + depth * 1000 + localOrderInLayer
         // Formula: canvasBaseSortOrder + depth * 1000 + localOrderInLayer
         transform.worldOrderInLayer = currentCanvasContext.baseSortOrder + depth * 1000 + transform.orderInLayer;
+
+        // 标记布局已计算 | Mark layout as computed
+        transform.layoutComputed = true;
 
         // 使用矩阵乘法计算世界变换
         this.updateWorldMatrix(transform, parentMatrix);
@@ -309,13 +313,20 @@ export class UILayoutSystem extends EntitySystem {
         depth: number,
         canvasContext: CanvasContext
     ): void {
-        const contentStartX = parentTransform.worldX + layout.paddingLeft;
+        // 父元素的世界坐标在此调用前应已计算，使用 ?? 回退以防万一
+        // Parent's world coords should be computed before this call, use ?? fallback just in case
+        const parentWorldX = parentTransform.worldX ?? parentTransform.x;
+        const parentWorldY = parentTransform.worldY ?? parentTransform.y;
+        const parentWidth = parentTransform.computedWidth ?? parentTransform.width;
+        const parentHeight = parentTransform.computedHeight ?? parentTransform.height;
+
+        const contentStartX = parentWorldX + layout.paddingLeft;
         // Y-up 系统：worldY 是底部，顶部 = worldY + height
         // contentStartY 是内容区域的顶部 Y（从顶部减去 paddingTop）
-        const parentTopY = parentTransform.worldY + parentTransform.computedHeight;
+        const parentTopY = parentWorldY + parentHeight;
         const contentStartY = parentTopY - layout.paddingTop;
-        const contentWidth = parentTransform.computedWidth - layout.getHorizontalPadding();
-        const contentHeight = parentTransform.computedHeight - layout.getVerticalPadding();
+        const contentWidth = parentWidth - layout.getHorizontalPadding();
+        const contentHeight = parentHeight - layout.getVerticalPadding();
 
         switch (layout.type) {
             case UILayoutType.Horizontal:
@@ -328,14 +339,13 @@ export class UILayoutSystem extends EntitySystem {
                 this.layoutGrid(layout, parentTransform, children, contentStartX, contentStartY, contentWidth, contentHeight, depth, canvasContext);
                 break;
             default:
-                // 默认按正常方式递归（传递顶部 Y）
                 for (const child of children) {
                     this.layoutEntity(
                         child,
-                        parentTransform.worldX,
+                        parentWorldX,
                         parentTopY,
-                        parentTransform.computedWidth,
-                        parentTransform.computedHeight,
+                        parentWidth,
+                        parentHeight,
                         parentTransform.worldAlpha,
                         parentTransform.localToWorldMatrix,
                         parentTransform.worldVisible,
@@ -446,6 +456,7 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.pixelPerfect = canvasContext.pixelPerfect;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
+            childTransform.layoutComputed = true;
             childTransform.layoutDirty = false;
 
             // 递归处理子元素的子元素
@@ -554,6 +565,7 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.pixelPerfect = canvasContext.pixelPerfect;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
+            childTransform.layoutComputed = true;
             childTransform.layoutDirty = false;
 
             this.processChildrenRecursive(child, childTransform, depth, canvasContext);
@@ -620,6 +632,7 @@ export class UILayoutSystem extends EntitySystem {
             childTransform.pixelPerfect = canvasContext.pixelPerfect;
             // 使用矩阵乘法计算世界旋转和缩放
             this.updateWorldMatrix(childTransform, parentTransform.localToWorldMatrix);
+            childTransform.layoutComputed = true;
             childTransform.layoutDirty = false;
 
             this.processChildrenRecursive(child, childTransform, depth, canvasContext);
@@ -663,8 +676,15 @@ export class UILayoutSystem extends EntitySystem {
         const children = this.getUIChildren(entity);
         if (children.length === 0) return;
 
+        // 父元素的世界坐标在此调用前应已计算，使用 ?? 回退以防万一
+        // Parent's world coords should be computed before this call, use ?? fallback just in case
+        const parentWorldX = parentTransform.worldX ?? parentTransform.x;
+        const parentWorldY = parentTransform.worldY ?? parentTransform.y;
+        const parentWidth = parentTransform.computedWidth ?? parentTransform.width;
+        const parentHeight = parentTransform.computedHeight ?? parentTransform.height;
+
         // 计算子元素的父容器顶部 Y（worldY 是底部，顶部 = 底部 + 高度）
-        const parentTopY = parentTransform.worldY + parentTransform.computedHeight;
+        const parentTopY = parentWorldY + parentHeight;
 
         const layout = entity.getComponent(UILayoutComponent);
         if (layout && layout.type !== UILayoutType.None) {
@@ -673,10 +693,10 @@ export class UILayoutSystem extends EntitySystem {
             for (const child of children) {
                 this.layoutEntity(
                     child,
-                    parentTransform.worldX,
+                    parentWorldX,
                     parentTopY,
-                    parentTransform.computedWidth,
-                    parentTransform.computedHeight,
+                    parentWidth,
+                    parentHeight,
                     parentTransform.worldAlpha,
                     parentTransform.localToWorldMatrix,
                     parentTransform.worldVisible,
@@ -780,17 +800,24 @@ export class UILayoutSystem extends EntitySystem {
      * Update element's world transformation matrix
      */
     private updateWorldMatrix(transform: UITransformComponent, parentMatrix: Matrix2D | null): void {
+        // 此方法在布局计算后调用，worldX/worldY/computedWidth/Height 应已计算
+        // This method is called after layout calculation, worldX/Y/computed values should be ready
+        const worldX = transform.worldX ?? transform.x;
+        const worldY = transform.worldY ?? transform.y;
+        const width = transform.computedWidth ?? transform.width;
+        const height = transform.computedHeight ?? transform.height;
+
         // 计算本地矩阵（度转弧度）
         const localMatrix = this.calculateLocalMatrix(
             transform.pivotX,
             transform.pivotY,
-            transform.computedWidth,
-            transform.computedHeight,
+            width,
+            height,
             transform.rotation * DEG_TO_RAD,
             transform.scaleX,
             transform.scaleY,
-            transform.worldX,
-            transform.worldY
+            worldX,
+            worldY
         );
 
         // 计算世界矩阵

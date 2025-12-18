@@ -21,7 +21,7 @@ export interface ScreenInfo {
  * 此系统应该在 UILayoutSystem 之前执行，以便在布局计算前更新画布尺寸
  * This system should execute before UILayoutSystem to update canvas size before layout calculation
  */
-@ECSSystem('UICanvasScaler')
+@ECSSystem('UICanvasScaler', { runInEditMode: true })
 export class UICanvasScalerSystem extends EntitySystem {
     /**
      * 当前屏幕信息

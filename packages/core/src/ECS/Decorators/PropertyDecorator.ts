@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask';
+export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask' | 'entityRef';
 
 /**
  * 属性资源类型
@@ -204,6 +204,17 @@ interface CollisionMaskPropertyOptions extends PropertyOptionsBase {
 }
 
 /**
+ * 实体引用属性选项
+ * Entity reference property options
+ *
+ * Used for properties that store entity IDs and support drag-and-drop from SceneHierarchy.
+ * 用于存储实体 ID 的属性，支持从场景层级面板拖放。
+ */
+interface EntityRefPropertyOptions extends PropertyOptionsBase {
+    type: 'entityRef';
+}
+
+/**
  * 属性选项联合类型
  * Property options union type
  */
@@ -218,7 +229,8 @@ export type PropertyOptions =
     | ArrayPropertyOptions
     | AnimationClipsPropertyOptions
     | CollisionLayerPropertyOptions
-    | CollisionMaskPropertyOptions;
+    | CollisionMaskPropertyOptions
+    | EntityRefPropertyOptions;
 
 // 使用 Symbol.for 创建全局 Symbol，确保跨包共享元数据
 // Use Symbol.for to create a global Symbol to ensure metadata sharing across packages

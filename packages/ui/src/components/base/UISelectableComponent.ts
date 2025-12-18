@@ -7,6 +7,7 @@
  */
 
 import { Component, ECSComponent, Property, Serializable, Serialize } from '@esengine/ecs-framework';
+import { lerpColor } from '../../systems/render/UIRenderUtils';
 
 /**
  * Interaction state
@@ -309,7 +310,7 @@ export class UISelectableComponent extends Component {
         }
 
         this._transitionProgress = Math.min(1, this._transitionProgress + deltaTime / duration);
-        this._currentColor = this.lerpColor(
+        this._currentColor = lerpColor(
             this._currentColor,
             this._targetColor,
             this._transitionProgress
@@ -365,26 +366,6 @@ export class UISelectableComponent extends Component {
      */
     get isSelected(): boolean {
         return this._isSelected;
-    }
-
-    /**
-     * Linear interpolation between two colors
-     * 两个颜色之间的线性插值
-     */
-    private lerpColor(from: number, to: number, t: number): number {
-        const fromR = (from >> 16) & 0xFF;
-        const fromG = (from >> 8) & 0xFF;
-        const fromB = from & 0xFF;
-
-        const toR = (to >> 16) & 0xFF;
-        const toG = (to >> 8) & 0xFF;
-        const toB = to & 0xFF;
-
-        const r = Math.round(fromR + (toR - fromR) * t);
-        const g = Math.round(fromG + (toG - fromG) * t);
-        const b = Math.round(fromB + (toB - fromB) * t);
-
-        return (r << 16) | (g << 8) | b;
     }
 
     /**

@@ -8,13 +8,13 @@
  */
 
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
+import { getTextureSpriteInfo } from '@esengine/asset-system';
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
-import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
+import { UIRenderComponent } from '../../components/UIRenderComponent';
 import { UIInteractableComponent } from '../../components/UIInteractableComponent';
-import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import { getUIRenderCollector } from './UIRenderCollector';
-import { getUIRenderTransform, renderBorder, getNinePatchTopLeft } from './UIRenderUtils';
+import { ensureUIWidgetMarker, getUIRenderTransform, renderBorder, getNinePatchPosition } from './UIRenderUtils';
 
 /**
  * UI Button Render System
@@ -33,7 +33,7 @@ import { getUIRenderTransform, renderBorder, getNinePatchTopLeft } from './UIRen
  * Note: Button text is rendered by UITextRenderSystem if UITextComponent is present.
  * 注意：如果存在 UITextComponent，按钮文本由 UITextRenderSystem 渲染。
  */
-@ECSSystem('UIButtonRender', { updateOrder: 113 })
+@ECSSystem('UIButtonRender', { updateOrder: 113, runInEditMode: true })
 export class UIButtonRenderSystem extends EntitySystem {
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UIButtonComponent));
@@ -52,8 +52,14 @@ export class UIButtonRenderSystem extends EntitySystem {
 
             // 确保添加 UIWidgetMarker 以便 UIRectRenderSystem 跳过此实体
             // Ensure UIWidgetMarker is added so UIRectRenderSystem skips this entity
-            if (!entity.hasComponent(UIWidgetMarker)) {
-                entity.addComponent(new UIWidgetMarker());
+            ensureUIWidgetMarker(entity);
+
+            // 初始化 currentColor 和 targetColor（编辑器预览模式需要）
+            // Initialize currentColor and targetColor (needed for editor preview mode)
+            if (!button._colorInitialized) {
+                button.currentColor = button.normalColor;
+                button.targetColor = button.normalColor;
+                button._colorInitialized = true;
             }
 
             // 使用工具函数获取渲染变换数据
@@ -71,33 +77,47 @@ export class UIButtonRenderSystem extends EntitySystem {
                 const textureGuid = button.getStateTextureGuid(state);
 
                 if (textureGuid) {
-                    // 检查是否需要使用九宫格渲染
-                    // Check if nine-patch rendering is needed
-                    const isNinePatch = render &&
-                        render.type === UIRenderType.NinePatch &&
-                        render.textureWidth > 0 &&
-                        render.textureHeight > 0;
-
                     // 使用按钮的当前颜色作为纹理着色（Color Tint Transition）
                     // Use button's current color as texture tint (Color Tint Transition)
                     const textureTint = button.currentColor;
 
-                    if (isNinePatch) {
+                    // Try to get nine-patch info from texture's sprite settings
+                    // 尝试从纹理的 sprite 设置获取九宫格信息
+                    let isNinePatch = false;
+                    let ninePatchMargins: [number, number, number, number] | undefined;
+                    let textureWidth = 0;
+                    let textureHeight = 0;
+
+                    const spriteInfo = getTextureSpriteInfo(textureGuid);
+                    if (spriteInfo) {
+                        if (spriteInfo.width !== undefined && spriteInfo.height !== undefined) {
+                            textureWidth = spriteInfo.width;
+                            textureHeight = spriteInfo.height;
+                        }
+                        if (spriteInfo.sliceBorder) {
+                            ninePatchMargins = spriteInfo.sliceBorder;
+                            isNinePatch = true;
+                        }
+                    }
+
+                    if (isNinePatch && ninePatchMargins && textureWidth > 0 && textureHeight > 0) {
                         // Nine-patch rendering for buttons (using utility)
                         // 按钮的九宫格渲染（使用工具函数）
-                        const topLeft = getNinePatchTopLeft(rt);
+                        const pos = getNinePatchPosition(rt);
                         collector.addNinePatch(
-                            topLeft.x, topLeft.y,
+                            pos.x, pos.y,
                             rt.width, rt.height,
-                            render.ninePatchMargins,
-                            render.textureWidth,
-                            render.textureHeight,
+                            ninePatchMargins,
+                            textureWidth,
+                            textureHeight,
                             textureTint,
                             rt.alpha,
                             rt.sortingLayer,
                             rt.orderInLayer,
                             {
                                 rotation: rt.rotation,
+                                pivotX: pos.pivotX,
+                                pivotY: pos.pivotY,
                                 textureGuid,
                                 entityId: entity.id
                             }

@@ -144,6 +144,24 @@ export interface ITextureAsset {
     hasMipmaps: boolean;
     /** 原始数据（如果可用） / Raw image data if available */
     data?: ImageData | HTMLImageElement;
+
+    // ===== Sprite Settings =====
+    // ===== Sprite 设置 =====
+
+    /**
+     * 九宫格切片边距 [top, right, bottom, left]
+     * Nine-patch slice border
+     *
+     * Defines the non-stretchable borders for nine-patch rendering.
+     * 定义九宫格渲染时不可拉伸的边框区域。
+     */
+    sliceBorder?: [number, number, number, number];
+
+    /**
+     * Sprite 锚点 [x, y]（0-1 归一化）
+     * Sprite pivot point (0-1 normalized)
+     */
+    pivot?: [number, number];
 }
 
 /**

@@ -112,6 +112,21 @@ export interface SystemMetadata {
      * Whether enabled by default (default true)
      */
     enabled?: boolean;
+
+    /**
+     * 是否在编辑模式下运行（默认 true）
+     * Whether to run in edit mode (default true)
+     *
+     * 默认情况下，所有系统在编辑模式下都会运行。
+     * 当设置为 false 时，此系统在编辑模式（非 Play 状态）下不会执行。
+     * 适用于物理系统、AI 系统等只应在游戏运行时执行的系统。
+     *
+     * By default, all systems run in edit mode.
+     * When set to false, this system will NOT execute during edit mode
+     * (when not playing). Useful for physics, AI, and other systems
+     * that should only run during gameplay.
+     */
+    runInEditMode?: boolean;
 }
 
 /**
@@ -164,6 +179,17 @@ export function ECSSystem(typeName: string, metadata?: SystemMetadata) {
  */
 export function getSystemMetadata(systemType: new (...args: any[]) => EntitySystem): SystemMetadata | undefined {
     return (systemType as any).__systemMetadata__;
+}
+
+/**
+ * 从系统实例获取元数据
+ * Get metadata from system instance
+ *
+ * @param system 系统实例 | System instance
+ * @returns 系统元数据 | System metadata
+ */
+export function getSystemInstanceMetadata(system: EntitySystem): SystemMetadata | undefined {
+    return getSystemMetadata(system.constructor as new (...args: any[]) => EntitySystem);
 }
 
 /**

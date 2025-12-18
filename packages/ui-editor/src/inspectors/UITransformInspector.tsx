@@ -320,30 +320,35 @@ export class UITransformInspector implements IComponentInspector<UITransformComp
                 return AnchorPreset.StretchAll;
             }
             if (anchorMinX === anchorMaxX && anchorMinY === anchorMaxY) {
-                if (anchorMinX === 0 && anchorMinY === 0) return AnchorPreset.TopLeft;
-                if (anchorMinX === 0.5 && anchorMinY === 0) return AnchorPreset.TopCenter;
-                if (anchorMinX === 1 && anchorMinY === 0) return AnchorPreset.TopRight;
+                // Y-up 坐标系：anchorMinY=1 是顶部，anchorMinY=0 是底部
+                // Y-up coordinate system: anchorMinY=1 is top, anchorMinY=0 is bottom
+                if (anchorMinX === 0 && anchorMinY === 1) return AnchorPreset.TopLeft;
+                if (anchorMinX === 0.5 && anchorMinY === 1) return AnchorPreset.TopCenter;
+                if (anchorMinX === 1 && anchorMinY === 1) return AnchorPreset.TopRight;
                 if (anchorMinX === 0 && anchorMinY === 0.5) return AnchorPreset.MiddleLeft;
                 if (anchorMinX === 0.5 && anchorMinY === 0.5) return AnchorPreset.MiddleCenter;
                 if (anchorMinX === 1 && anchorMinY === 0.5) return AnchorPreset.MiddleRight;
-                if (anchorMinX === 0 && anchorMinY === 1) return AnchorPreset.BottomLeft;
-                if (anchorMinX === 0.5 && anchorMinY === 1) return AnchorPreset.BottomCenter;
-                if (anchorMinX === 1 && anchorMinY === 1) return AnchorPreset.BottomRight;
+                if (anchorMinX === 0 && anchorMinY === 0) return AnchorPreset.BottomLeft;
+                if (anchorMinX === 0.5 && anchorMinY === 0) return AnchorPreset.BottomCenter;
+                if (anchorMinX === 1 && anchorMinY === 0) return AnchorPreset.BottomRight;
             }
             return '';
         };
 
         const handlePresetSelect = (preset: AnchorPreset) => {
+            // [anchorMinX, anchorMinY, anchorMaxX, anchorMaxY]
+            // Y-up 坐标系：Y=1 是顶部，Y=0 是底部
+            // Y-up coordinate system: Y=1 is top, Y=0 is bottom
             const presetValues: Record<AnchorPreset, [number, number, number, number]> = {
-                [AnchorPreset.TopLeft]: [0, 0, 0, 0],
-                [AnchorPreset.TopCenter]: [0.5, 0, 0.5, 0],
-                [AnchorPreset.TopRight]: [1, 0, 1, 0],
+                [AnchorPreset.TopLeft]: [0, 1, 0, 1],
+                [AnchorPreset.TopCenter]: [0.5, 1, 0.5, 1],
+                [AnchorPreset.TopRight]: [1, 1, 1, 1],
                 [AnchorPreset.MiddleLeft]: [0, 0.5, 0, 0.5],
                 [AnchorPreset.MiddleCenter]: [0.5, 0.5, 0.5, 0.5],
                 [AnchorPreset.MiddleRight]: [1, 0.5, 1, 0.5],
-                [AnchorPreset.BottomLeft]: [0, 1, 0, 1],
-                [AnchorPreset.BottomCenter]: [0.5, 1, 0.5, 1],
-                [AnchorPreset.BottomRight]: [1, 1, 1, 1],
+                [AnchorPreset.BottomLeft]: [0, 0, 0, 0],
+                [AnchorPreset.BottomCenter]: [0.5, 0, 0.5, 0],
+                [AnchorPreset.BottomRight]: [1, 0, 1, 0],
                 [AnchorPreset.StretchAll]: [0, 0, 1, 1],
             };
 

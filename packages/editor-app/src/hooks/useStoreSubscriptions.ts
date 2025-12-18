@@ -72,9 +72,38 @@ export function useStoreSubscriptions({
         };
 
         // 处理实体选择 | Handle entity selection
+        // Also expand parent nodes so selected entity is visible
+        // 同时展开父节点以便选中的实体可见
         const handleEntitySelection = (data: { entity: { id: number } | null }) => {
             if (data.entity) {
                 setSelectedIds(new Set([data.entity.id]));
+
+                // Expand all ancestor nodes | 展开所有祖先节点
+                const scene = Core.scene;
+                if (scene) {
+                    const entity = scene.entities.findEntityById(data.entity.id);
+                    if (entity) {
+                        const ancestorIds: number[] = [];
+                        // Use HierarchyComponent to get parent chain
+                        // 使用 HierarchyComponent 获取父节点链
+                        let currentEntity = entity;
+                        let hierarchy = currentEntity.getComponent(HierarchyComponent);
+                        while (hierarchy?.parentId != null) {
+                            ancestorIds.push(hierarchy.parentId);
+                            const parentEntity = scene.entities.findEntityById(hierarchy.parentId);
+                            if (!parentEntity) break;
+                            currentEntity = parentEntity;
+                            hierarchy = currentEntity.getComponent(HierarchyComponent);
+                        }
+                        if (ancestorIds.length > 0) {
+                            setExpandedIds((prev) => {
+                                const next = new Set(prev);
+                                ancestorIds.forEach(id => next.add(id));
+                                return next;
+                            });
+                        }
+                    }
+                }
             } else {
                 setSelectedIds(new Set());
             }

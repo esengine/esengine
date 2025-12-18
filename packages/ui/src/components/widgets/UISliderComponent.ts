@@ -62,6 +62,12 @@ export class UISliderComponent extends Component {
      */
     public displayValue: number = 0;
 
+    /**
+     * 值是否已初始化（用于编辑器预览）
+     * Whether value has been initialized (for editor preview)
+     */
+    public _valueInitialized: boolean = false;
+
     // ===== 方向 Orientation =====
 
     /**
@@ -114,6 +120,14 @@ export class UISliderComponent extends Component {
     public trackRadius: number = 2;
 
     // ===== 填充样式 Fill Style =====
+
+    /**
+     * 外部 Fill 实体 ID（如果设置，将控制该实体的宽度而不是内置渲染）
+     * External Fill entity ID (if set, controls that entity's width instead of built-in rendering)
+     */
+    @Serialize()
+    @Property({ type: 'entityRef', label: 'Fill Rect' })
+    public fillRectEntityId: number = 0;
 
     /**
      * 填充颜色（已滑过的部分）

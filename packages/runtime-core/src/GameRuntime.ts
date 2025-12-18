@@ -23,7 +23,7 @@ import {
     TransformTypeToken,
     CanvasElementToken
 } from '@esengine/engine-core';
-import { AssetManager, EngineIntegration, AssetManagerToken } from '@esengine/asset-system';
+import { AssetManager, EngineIntegration, AssetManagerToken, setGlobalAssetDatabase } from '@esengine/asset-system';
 
 // ============================================================================
 // 本地服务令牌定义 | Local Service Token Definitions
@@ -346,6 +346,10 @@ export class GameRuntime {
             // 8. 创建资产系统
             this._assetManager = new AssetManager();
             this._engineIntegration = new EngineIntegration(this._assetManager, this._bridge);
+
+            // 设置全局资产数据库（供渲染系统查询 sprite 元数据）
+            // Set global asset database (for render systems to query sprite metadata)
+            setGlobalAssetDatabase(this._assetManager.getDatabase());
 
             // 9. 加载并初始化插件（编辑器模式下跳过，由 editor-core 的 PluginManager 处理）
             if (!this._config.skipPluginLoading) {
@@ -1034,6 +1038,8 @@ export class GameRuntime {
         if (this._assetManager) {
             this._assetManager.dispose();
             this._assetManager = null;
+            // 清除全局资产数据库引用 | Clear global asset database reference
+            setGlobalAssetDatabase(null);
         }
 
         this._engineIntegration = null;

@@ -8,6 +8,9 @@ import { UIButtonComponent } from './components/widgets/UIButtonComponent';
 import { UIProgressBarComponent } from './components/widgets/UIProgressBarComponent';
 import { UISliderComponent } from './components/widgets/UISliderComponent';
 import { UIScrollViewComponent } from './components/widgets/UIScrollViewComponent';
+import { UIToggleComponent, type UIToggleStyle } from './components/widgets/UIToggleComponent';
+import { UIInputFieldComponent, type UIInputContentType, type UIInputLineType } from './components/widgets/UIInputFieldComponent';
+import { UIDropdownComponent, type UIDropdownOption } from './components/widgets/UIDropdownComponent';
 
 /**
  * 基础 UI 配置
@@ -123,6 +126,55 @@ export interface UIScrollViewConfig extends UIBaseConfig {
     horizontalScroll?: boolean;
     verticalScroll?: boolean;
     backgroundColor?: number;
+}
+
+/**
+ * 开关配置
+ * Toggle configuration
+ */
+export interface UIToggleConfig extends UIBaseConfig {
+    isOn?: boolean;
+    style?: UIToggleStyle;
+    onColor?: number;
+    offColor?: number;
+    onChange?: (isOn: boolean) => void;
+}
+
+/**
+ * 输入框配置
+ * Input field configuration
+ */
+export interface UIInputFieldConfig extends UIBaseConfig {
+    placeholder?: string;
+    text?: string;
+    contentType?: UIInputContentType;
+    lineType?: UIInputLineType;
+    characterLimit?: number;
+    textColor?: number;
+    placeholderColor?: number;
+    backgroundColor?: number;
+    borderColor?: number;
+    borderWidth?: number;
+    padding?: number;
+    onValueChanged?: (value: string) => void;
+    onSubmit?: (value: string) => void;
+}
+
+/**
+ * 下拉菜单配置
+ * Dropdown configuration
+ */
+export interface UIDropdownConfig extends UIBaseConfig {
+    options?: UIDropdownOption[];
+    selectedIndex?: number;
+    placeholder?: string;
+    buttonColor?: number;
+    textColor?: number;
+    borderColor?: number;
+    listBackgroundColor?: number;
+    optionHeight?: number;
+    maxVisibleOptions?: number;
+    onValueChanged?: (value: string | number, index: number) => void;
 }
 
 /**
@@ -386,6 +438,126 @@ export class UIBuilder {
         scrollView.contentHeight = config.contentHeight ?? (config.height ?? 100);
         scrollView.horizontalScroll = config.horizontalScroll ?? false;
         scrollView.verticalScroll = config.verticalScroll ?? true;
+
+        return entity;
+    }
+
+    /**
+     * 创建开关
+     * Create toggle (checkbox/switch)
+     */
+    public toggle(config: UIToggleConfig): Entity {
+        const entity = this.createBase({
+            ...config,
+            width: config.width ?? (config.style === 'switch' ? 50 : 24),
+            height: config.height ?? 24
+        }, 'Toggle');
+
+        // 渲染组件
+        const render = entity.addComponent(new UIRenderComponent());
+        render.type = UIRenderType.Rect;
+
+        // 交互组件
+        const interactable = entity.addComponent(new UIInteractableComponent());
+        interactable.cursor = 'pointer';
+
+        // 开关组件
+        const toggle = entity.addComponent(new UIToggleComponent());
+        toggle.isOn = config.isOn ?? false;
+        toggle.style = config.style ?? 'checkbox';
+        toggle.onChange = config.onChange;
+
+        if (config.onColor !== undefined) toggle.onColor = config.onColor;
+        if (config.offColor !== undefined) toggle.offColor = config.offColor;
+
+        // 初始化显示状态
+        toggle.displayProgress = toggle.isOn ? 1 : 0;
+        toggle.targetProgress = toggle.displayProgress;
+
+        return entity;
+    }
+
+    /**
+     * 创建文本输入框
+     * Create input field
+     */
+    public inputField(config: UIInputFieldConfig): Entity {
+        const entity = this.createBase({
+            ...config,
+            width: config.width ?? 200,
+            height: config.height ?? 36
+        }, 'InputField');
+
+        // 渲染组件
+        const render = entity.addComponent(new UIRenderComponent());
+        render.type = UIRenderType.Rect;
+        render.backgroundColor = config.backgroundColor ?? 0xFFFFFF;
+
+        // 交互组件
+        const interactable = entity.addComponent(new UIInteractableComponent());
+        interactable.cursor = 'text';
+        interactable.focusable = true;
+
+        // 输入框组件
+        const inputField = entity.addComponent(new UIInputFieldComponent());
+        inputField.placeholder = config.placeholder ?? '';
+        inputField.text = config.text ?? '';
+        inputField.contentType = config.contentType ?? 'standard';
+        inputField.lineType = config.lineType ?? 'singleLine';
+        inputField.characterLimit = config.characterLimit ?? 0;
+        inputField.onValueChanged = config.onValueChanged;
+        inputField.onSubmit = config.onSubmit;
+
+        if (config.textColor !== undefined) inputField.textColor = config.textColor;
+        if (config.placeholderColor !== undefined) inputField.placeholderColor = config.placeholderColor;
+        if (config.backgroundColor !== undefined) inputField.backgroundColor = config.backgroundColor;
+        if (config.borderColor !== undefined) inputField.borderColor = config.borderColor;
+        if (config.borderWidth !== undefined) inputField.borderWidth = config.borderWidth;
+        if (config.padding !== undefined) inputField.padding = config.padding;
+
+        return entity;
+    }
+
+    /**
+     * 创建下拉菜单
+     * Create dropdown
+     */
+    public dropdown(config: UIDropdownConfig): Entity {
+        const entity = this.createBase({
+            ...config,
+            width: config.width ?? 200,
+            height: config.height ?? 36
+        }, 'Dropdown');
+
+        // 渲染组件
+        const render = entity.addComponent(new UIRenderComponent());
+        render.type = UIRenderType.Rect;
+        render.backgroundColor = config.buttonColor ?? 0xFFFFFF;
+
+        // 交互组件
+        const interactable = entity.addComponent(new UIInteractableComponent());
+        interactable.cursor = 'pointer';
+
+        // 下拉菜单组件
+        const dropdown = entity.addComponent(new UIDropdownComponent());
+        dropdown.placeholder = config.placeholder ?? 'Select...';
+        dropdown.selectedIndex = config.selectedIndex ?? -1;
+        dropdown.onValueChanged = config.onValueChanged;
+
+        if (config.options) {
+            dropdown.options = config.options;
+        }
+
+        if (config.buttonColor !== undefined) dropdown.buttonColor = config.buttonColor;
+        if (config.textColor !== undefined) dropdown.textColor = config.textColor;
+        if (config.borderColor !== undefined) dropdown.borderColor = config.borderColor;
+        if (config.listBackgroundColor !== undefined) dropdown.listBackgroundColor = config.listBackgroundColor;
+        if (config.optionHeight !== undefined) dropdown.optionHeight = config.optionHeight;
+        if (config.maxVisibleOptions !== undefined) dropdown.maxVisibleOptions = config.maxVisibleOptions;
+
+        // 初始化颜色
+        dropdown.currentColor = dropdown.buttonColor;
+        dropdown.targetColor = dropdown.buttonColor;
 
         return entity;
     }

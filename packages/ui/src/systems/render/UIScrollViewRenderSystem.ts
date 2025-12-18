@@ -10,9 +10,8 @@
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIScrollViewComponent } from '../../components/widgets/UIScrollViewComponent';
-import { UIWidgetMarker } from '../../components/UIWidgetMarker';
 import { getUIRenderCollector } from './UIRenderCollector';
-import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
+import { ensureUIWidgetMarker, getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
 
 /**
  * UI ScrollView Render System
@@ -31,7 +30,7 @@ import { getUIRenderTransform, type UIRenderTransform } from './UIRenderUtils';
  * Note: The scrollview content area and clipping is handled by the layout system.
  * 注意：滚动视图内容区域和裁剪由布局系统处理。
  */
-@ECSSystem('UIScrollViewRender', { updateOrder: 112 })
+@ECSSystem('UIScrollViewRender', { updateOrder: 112, runInEditMode: true })
 export class UIScrollViewRenderSystem extends EntitySystem {
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UIScrollViewComponent));
@@ -49,9 +48,7 @@ export class UIScrollViewRenderSystem extends EntitySystem {
 
             // 确保添加 UIWidgetMarker
             // Ensure UIWidgetMarker is added
-            if (!entity.hasComponent(UIWidgetMarker)) {
-                entity.addComponent(new UIWidgetMarker());
-            }
+            ensureUIWidgetMarker(entity);
 
             // 使用工具函数获取渲染变换数据
             // Use utility function to get render transform data

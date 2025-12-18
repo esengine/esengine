@@ -38,17 +38,21 @@ export { UIButtonRenderSystem } from './UIButtonRenderSystem';
 export { UIProgressBarRenderSystem } from './UIProgressBarRenderSystem';
 export { UISliderRenderSystem } from './UISliderRenderSystem';
 export { UIScrollViewRenderSystem } from './UIScrollViewRenderSystem';
+export { UIToggleRenderSystem } from './UIToggleRenderSystem';
+export { UIInputFieldRenderSystem } from './UIInputFieldRenderSystem';
+export { UIDropdownRenderSystem } from './UIDropdownRenderSystem';
 export { UIShinyEffectSystem } from './UIShinyEffectSystem';
 
 // Render utilities
 // 渲染工具
 export {
+    ensureUIWidgetMarker,
     getUIRenderTransform,
     renderBorder,
     renderShadow,
     lerpColor,
     packColorWithAlpha,
-    getNinePatchTopLeft,
+    getNinePatchPosition,
     type UIRenderTransform,
     type BorderRenderOptions,
     type ShadowRenderOptions

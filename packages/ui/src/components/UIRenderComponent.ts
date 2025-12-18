@@ -120,41 +120,6 @@ export class UIRenderComponent extends Component implements IMaterialOverridable
      */
     public textureTint: number = 0xFFFFFF;
 
-    // ===== 九宫格 Nine-Patch =====
-
-    /**
-     * 九宫格边距 [top, right, bottom, left]
-     * Nine-patch margins
-     *
-     * Defines the non-stretchable borders for nine-patch rendering.
-     * 定义九宫格渲染时不可拉伸的边框区域。
-     */
-    @Serialize()
-    @Property({ type: 'vector4', label: 'Nine-Patch Margins' })
-    public ninePatchMargins: [number, number, number, number] = [0, 0, 0, 0];
-
-    /**
-     * 源纹理宽度（像素）
-     * Source texture width in pixels
-     *
-     * Required for nine-patch UV calculations.
-     * 九宫格 UV 计算所需。
-     */
-    @Serialize()
-    @Property({ type: 'number', label: 'Texture Width', min: 1 })
-    public textureWidth: number = 0;
-
-    /**
-     * 源纹理高度（像素）
-     * Source texture height in pixels
-     *
-     * Required for nine-patch UV calculations.
-     * 九宫格 UV 计算所需。
-     */
-    @Serialize()
-    @Property({ type: 'number', label: 'Texture Height', min: 1 })
-    public textureHeight: number = 0;
-
     // ===== 边框 Border =====
 
     /**
@@ -268,20 +233,6 @@ export class UIRenderComponent extends Component implements IMaterialOverridable
     public setImage(textureGuid: string | number): this {
         this.type = UIRenderType.Image;
         this.textureGuid = textureGuid;
-        return this;
-    }
-
-    /**
-     * 设置九宫格
-     * Set nine-patch image
-     *
-     * @param textureGuid - 纹理资产 GUID | Texture asset GUID
-     * @param margins - 九宫格边距 | Nine-patch margins
-     */
-    public setNinePatch(textureGuid: string | number, margins: [number, number, number, number]): this {
-        this.type = UIRenderType.NinePatch;
-        this.textureGuid = textureGuid;
-        this.ninePatchMargins = margins;
         return this;
     }
 

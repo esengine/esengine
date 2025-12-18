@@ -147,10 +147,28 @@ export {
     UIScrollbarVisibility
 } from './components/widgets/UIScrollViewComponent';
 
+export {
+    UIToggleComponent,
+    type UIToggleStyle
+} from './components/widgets/UIToggleComponent';
+
+export {
+    UIInputFieldComponent,
+    type UIInputContentType,
+    type UIInputLineType
+} from './components/widgets/UIInputFieldComponent';
+
+export {
+    UIDropdownComponent,
+    type UIDropdownOption
+} from './components/widgets/UIDropdownComponent';
+
 // Systems - Core
 export { UILayoutSystem } from './systems/UILayoutSystem';
 export { UIInputSystem, type UIInputEvent } from './systems/UIInputSystem';
 export { UIAnimationSystem, UIEasing, type EasingFunction, type EasingName } from './systems/UIAnimationSystem';
+export { UISelectableStateSystem } from './systems/UISelectableStateSystem';
+export { UISliderFillSystem } from './systems/UISliderFillSystem';
 export { UIRenderDataProvider, type IUIRenderDataProvider } from './systems/UIRenderDataProvider';
 export { TextBlinkSystem } from './systems/TextBlinkSystem';
 export { SceneLoadTriggerSystem } from './systems/SceneLoadTriggerSystem';
@@ -177,14 +195,18 @@ export {
     UIProgressBarRenderSystem,
     UISliderRenderSystem,
     UIScrollViewRenderSystem,
+    UIToggleRenderSystem,
+    UIInputFieldRenderSystem,
+    UIDropdownRenderSystem,
     UIShinyEffectSystem,
     // Render utilities
+    ensureUIWidgetMarker,
     getUIRenderTransform,
     renderBorder,
     renderShadow,
     lerpColor,
     packColorWithAlpha,
-    getNinePatchTopLeft,
+    getNinePatchPosition,
     type UIRenderTransform,
     type BorderRenderOptions,
     type ShadowRenderOptions
@@ -204,7 +226,10 @@ export {
     type UIProgressBarConfig,
     type UISliderConfig,
     type UIPanelConfig,
-    type UIScrollViewConfig
+    type UIScrollViewConfig,
+    type UIToggleConfig,
+    type UIInputFieldConfig,
+    type UIDropdownConfig
 } from './UIBuilder';
 
 // Runtime module and plugin
@@ -215,7 +240,9 @@ export {
     UILayoutSystemToken,
     UIInputSystemToken,
     UIRenderProviderToken,
-    UITextRenderSystemToken
+    UITextRenderSystemToken,
+    UIAnimationSystemToken,
+    UISelectableStateSystemToken
 } from './tokens';
 
 // Dynamic Atlas | 动态图集

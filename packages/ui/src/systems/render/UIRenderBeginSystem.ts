@@ -22,7 +22,7 @@ import { getUIRenderCollector } from './UIRenderCollector';
  *
  * Update order: 99 (runs before UIRectRenderSystem at 100)
  */
-@ECSSystem('UIRenderBegin', { updateOrder: 99 })
+@ECSSystem('UIRenderBegin', { updateOrder: 99, runInEditMode: true })
 export class UIRenderBeginSystem extends EntitySystem {
     constructor() {
         // Use Matcher.nothing() to indicate this system doesn't process any entities

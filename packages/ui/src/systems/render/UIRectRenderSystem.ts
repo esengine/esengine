@@ -9,11 +9,13 @@
  */
 
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
+import { getTextureSpriteInfo, getGlobalAssetDatabase } from '@esengine/asset-system';
 import { UITransformComponent } from '../../components/UITransformComponent';
-import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
+import { UIRenderComponent } from '../../components/UIRenderComponent';
 import { UIWidgetMarker } from '../../components/UIWidgetMarker';
+import { getDynamicAtlasService } from '../../atlas/DynamicAtlasService';
 import { getUIRenderCollector } from './UIRenderCollector';
-import { getUIRenderTransform, renderBorder, renderShadow, getNinePatchTopLeft } from './UIRenderUtils';
+import { getUIRenderTransform, renderBorder, renderShadow, getNinePatchPosition } from './UIRenderUtils';
 
 /**
  * UI Rect Render System
@@ -27,7 +29,7 @@ import { getUIRenderTransform, renderBorder, renderShadow, getNinePatchTopLeft }
  * 处理具有 UIRenderComponent 但没有专门 widget 组件（如按钮、进度条等）的基础 UI 元素的渲染。
  * 这是简单矩形、图像和面板的"兜底"渲染器。
  */
-@ECSSystem('UIRectRender', { updateOrder: 100 })
+@ECSSystem('UIRectRender', { updateOrder: 100, runInEditMode: true })
 export class UIRectRenderSystem extends EntitySystem {
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UIRenderComponent));
@@ -78,28 +80,68 @@ export class UIRectRenderSystem extends EntitySystem {
                 const textureGuid = typeof render.textureGuid === 'string' ? render.textureGuid : undefined;
                 const textureId = typeof render.textureGuid === 'number' ? render.textureGuid : undefined;
 
+                // Calculate effective alpha (backgroundAlpha affects texture too)
+                // 计算有效透明度（backgroundAlpha 也影响纹理）
+                const effectiveAlpha = render.backgroundAlpha * rt.alpha;
+
+                // Try to get nine-patch info from texture's sprite settings
+                // 尝试从纹理的 sprite 设置获取九宫格信息
+                let ninePatchMargins: [number, number, number, number] | undefined;
+                let textureWidth = 0;
+                let textureHeight = 0;
+                let isNinePatch = false;
+
+                // Get texture path from AssetDatabase for atlas loading
+                // 从 AssetDatabase 获取纹理路径用于图集加载
+                let texturePath: string | undefined;
+                if (textureGuid) {
+                    const assetDb = getGlobalAssetDatabase();
+                    const metadata = assetDb?.getMetadata(textureGuid);
+                    texturePath = metadata?.path;
+
+                    // Get sliceBorder from asset metadata
+                    // 从资产元数据获取九宫格边距
+                    const spriteInfo = getTextureSpriteInfo(textureGuid);
+                    if (spriteInfo?.sliceBorder) {
+                        ninePatchMargins = spriteInfo.sliceBorder;
+                        isNinePatch = true;
+                    }
+
+                    // Get dimensions from DynamicAtlasService (primary source for UI textures)
+                    // 从动态图集服务获取尺寸（UI 纹理的主要来源）
+                    const atlasService = getDynamicAtlasService();
+                    const atlasEntry = atlasService?.getAtlasEntry(textureGuid);
+                    if (atlasEntry) {
+                        textureWidth = atlasEntry.originalWidth;
+                        textureHeight = atlasEntry.originalHeight;
+                    }
+                }
+
                 // Handle nine-patch rendering
+                // Skip if texture is placeholder (1x1) - means texture not yet loaded
                 // 处理九宫格渲染
-                if (render.type === UIRenderType.NinePatch &&
-                    render.textureWidth > 0 &&
-                    render.textureHeight > 0) {
-                    // Use utility to get top-left coordinates
-                    // 使用工具函数获取左上角坐标
-                    const topLeft = getNinePatchTopLeft(rt);
+                // 如果纹理是占位符 (1x1) 则跳过 - 表示纹理尚未加载
+                if (isNinePatch && ninePatchMargins && textureWidth > 1 && textureHeight > 1) {
+                    // Use utility to get position and pivot for consistent rendering
+                    // 使用工具函数获取位置和 pivot 以实现一致的渲染
+                    const pos = getNinePatchPosition(rt);
                     collector.addNinePatch(
-                        topLeft.x, topLeft.y,
+                        pos.x, pos.y,
                         rt.width, rt.height,
-                        render.ninePatchMargins,
-                        render.textureWidth,
-                        render.textureHeight,
+                        ninePatchMargins,
+                        textureWidth,
+                        textureHeight,
                         render.textureTint,
-                        rt.alpha,
+                        effectiveAlpha,
                         rt.sortingLayer,
                         rt.orderInLayer,
                         {
                             rotation: rt.rotation,
+                            pivotX: pos.pivotX,
+                            pivotY: pos.pivotY,
                             textureId,
                             textureGuid,
+                            texturePath,
                             materialId,
                             materialOverrides,
                             entityId: entity.id
@@ -112,7 +154,7 @@ export class UIRectRenderSystem extends EntitySystem {
                         rt.renderX, rt.renderY,
                         rt.width, rt.height,
                         render.textureTint,
-                        rt.alpha,
+                        effectiveAlpha,
                         rt.sortingLayer,
                         rt.orderInLayer,
                         {
@@ -121,6 +163,7 @@ export class UIRectRenderSystem extends EntitySystem {
                             pivotY: rt.pivotY,
                             textureId,
                             textureGuid,
+                            texturePath,
                             uv: render.textureUV
                                 ? [render.textureUV.u0, render.textureUV.v0, render.textureUV.u1, render.textureUV.v1]
                                 : undefined,

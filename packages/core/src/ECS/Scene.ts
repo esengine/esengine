@@ -13,7 +13,7 @@ import { QuerySystem } from './Core/QuerySystem';
 import { TypeSafeEventSystem } from './Core/EventSystem';
 import { ReferenceTracker } from './Core/ReferenceTracker';
 import { IScene, ISceneConfig } from './IScene';
-import { getComponentInstanceTypeName, getSystemInstanceTypeName, getSystemMetadata } from './Decorators';
+import { getComponentInstanceTypeName, getSystemInstanceTypeName, getSystemMetadata, getSystemInstanceMetadata } from './Decorators';
 import { TypedQueryBuilder } from './Core/Query/TypedQuery';
 import {
     SceneSerializer,
@@ -558,7 +558,7 @@ export class Scene implements IScene {
             const updateHandle = ProfilerSDK.beginSample('Systems.update', ProfileCategory.ECS);
             try {
                 for (const system of systems) {
-                    if (system.enabled) {
+                    if (this._shouldSystemRun(system)) {
                         const systemHandle = ProfilerSDK.beginSample(system.systemName, ProfileCategory.ECS);
                         try {
                             system.update();
@@ -577,7 +577,7 @@ export class Scene implements IScene {
             const lateUpdateHandle = ProfilerSDK.beginSample('Systems.lateUpdate', ProfileCategory.ECS);
             try {
                 for (const system of systems) {
-                    if (system.enabled) {
+                    if (this._shouldSystemRun(system)) {
                         const systemHandle = ProfilerSDK.beginSample(`${system.systemName}.late`, ProfileCategory.ECS);
                         try {
                             system.lateUpdate();
@@ -600,6 +600,34 @@ export class Scene implements IScene {
             // 结束性能采样帧
             ProfilerSDK.endFrame();
         }
+    }
+
+    /**
+     * 检查系统是否应该运行
+     * Check if a system should run
+     *
+     * @param system 要检查的系统 | System to check
+     * @returns 是否应该运行 | Whether it should run
+     */
+    private _shouldSystemRun(system: EntitySystem): boolean {
+        // 系统必须启用
+        // System must be enabled
+        if (!system.enabled) {
+            return false;
+        }
+
+        // 非编辑模式下，所有启用的系统都运行
+        // In non-edit mode, all enabled systems run
+        if (!this.isEditorMode) {
+            return true;
+        }
+
+        // 编辑模式下，默认所有系统都运行
+        // 只有明确标记 runInEditMode: false 的系统不运行
+        // In edit mode, all systems run by default
+        // Only systems explicitly marked runInEditMode: false are skipped
+        const metadata = getSystemInstanceMetadata(system);
+        return metadata?.runInEditMode !== false;
     }
 
     /**
