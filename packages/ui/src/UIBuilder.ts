@@ -510,10 +510,13 @@ export class UIBuilder {
 
         if (config.textColor !== undefined) inputField.textColor = config.textColor;
         if (config.placeholderColor !== undefined) inputField.placeholderColor = config.placeholderColor;
-        if (config.backgroundColor !== undefined) inputField.backgroundColor = config.backgroundColor;
-        if (config.borderColor !== undefined) inputField.borderColor = config.borderColor;
-        if (config.borderWidth !== undefined) inputField.borderWidth = config.borderWidth;
         if (config.padding !== undefined) inputField.padding = config.padding;
+
+        // 背景和边框通过 UIRenderComponent 设置
+        // Background and border are set via UIRenderComponent
+        if (config.backgroundColor !== undefined) render.backgroundColor = config.backgroundColor;
+        if (config.borderColor !== undefined) render.borderColor = config.borderColor;
+        if (config.borderWidth !== undefined) render.borderWidth = config.borderWidth;
 
         return entity;
     }

@@ -29,3 +29,12 @@ export {
     getDirtyComponentCount,
     clearFrameDirty
 } from './UIDirtyFlags';
+
+export {
+    // Text measure utilities | 文本测量工具
+    getTextMeasureService,
+    disposeTextMeasureService,
+    type TextMeasureFont,
+    type CharacterPosition,
+    type LineInfo
+} from './TextMeasureService';

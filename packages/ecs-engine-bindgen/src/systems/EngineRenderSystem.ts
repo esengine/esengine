@@ -320,8 +320,10 @@ export class EngineRenderSystem extends EntitySystem {
 
         // Collect all render items separated by render space
         // 按渲染空间分离收集所有渲染项
-        const worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }> = [];
-        const screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }> = [];
+        // addIndex is used for stable sorting when sortKeys are equal
+        // addIndex 用于当 sortKey 相等时实现稳定排序
+        const worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }> = [];
+        const screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }> = [];
 
         // Collect sprites from entities (all in world space)
         // 收集实体的 sprites（都在世界空间）
@@ -335,6 +337,24 @@ export class EngineRenderSystem extends EntitySystem {
         // 收集 UI 渲染数据
         if (this.uiRenderDataProvider) {
             const uiRenderData = this.uiRenderDataProvider.getRenderData();
+            // Use addIndex to preserve original order for stable sorting
+            // 使用 addIndex 保持原始顺序以实现稳定排序
+            let uiAddIndex = 0;
+
+            // DEBUG: 输出 UI 渲染数据
+            // DEBUG: Output UI render data
+            if ((globalThis as any).__UI_RENDER_DEBUG__) {
+                console.log('[EngineRenderSystem] UI render batches:', uiRenderData.map((data, i) => ({
+                    index: i,
+                    orderInLayer: data.orderInLayer,
+                    sortingLayer: data.sortingLayer,
+                    tileCount: data.tileCount,
+                    sortKey: sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer),
+                    textureIds: Array.from(data.textureIds).slice(0, 3), // 只显示前3个 | Show first 3 only
+                    textureGuid: data.textureGuid
+                })));
+            }
+
             for (const data of uiRenderData) {
                 const uiSprites = this.convertProviderDataToSprites(data);
                 if (uiSprites.length > 0) {
@@ -342,9 +362,9 @@ export class EngineRenderSystem extends EntitySystem {
                     // UI always goes to screen space in preview mode, world space in editor mode
                     // UI 在预览模式下始终在屏幕空间，编辑器模式下在世界空间
                     if (this.previewMode) {
-                        screenSpaceItems.push({ sortKey, sprites: uiSprites });
+                        screenSpaceItems.push({ sortKey, sprites: uiSprites, addIndex: uiAddIndex++ });
                     } else {
-                        worldSpaceItems.push({ sortKey, sprites: uiSprites });
+                        worldSpaceItems.push({ sortKey, sprites: uiSprites, addIndex: uiAddIndex++ });
                     }
                 }
             }
@@ -508,11 +528,29 @@ export class EngineRenderSystem extends EntitySystem {
      * 渲染世界空间内容。
      */
     private renderWorldSpacePass(
-        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>
+        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }>
     ): void {
         // Sort by sortKey (lower values render first, appear behind)
+        // Use addIndex as secondary key for stable sorting when sortKeys are equal
         // 按 sortKey 排序（值越小越先渲染，显示在后面）
-        worldSpaceItems.sort((a, b) => a.sortKey - b.sortKey);
+        // 当 sortKey 相等时使用 addIndex 作为次要排序键以实现稳定排序
+        worldSpaceItems.sort((a, b) => {
+            const diff = a.sortKey - b.sortKey;
+            if (diff !== 0) return diff;
+            return (a.addIndex ?? 0) - (b.addIndex ?? 0);
+        });
+
+        // DEBUG: 输出排序后的世界空间渲染项
+        // DEBUG: Output sorted world space items
+        if ((globalThis as any).__UI_RENDER_DEBUG__) {
+            console.log('[EngineRenderSystem] World items after sort:', worldSpaceItems.map((item, i) => ({
+                index: i,
+                sortKey: item.sortKey,
+                addIndex: item.addIndex,
+                spriteCount: item.sprites.length,
+                firstTextureId: item.sprites[0]?.textureId
+            })));
+        }
 
         // Submit all sprites in sorted order
         // 按排序顺序提交所有 sprites
@@ -560,11 +598,15 @@ export class EngineRenderSystem extends EntitySystem {
      * 渲染屏幕空间内容（UI、屏幕覆盖层、模态层）。
      */
     private renderScreenSpacePass(
-        screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>
+        screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }>
     ): void {
-        // Sort by sortKey
-        // 按 sortKey 排序
-        screenSpaceItems.sort((a, b) => a.sortKey - b.sortKey);
+        // Sort by sortKey, use addIndex for stable sorting when equal
+        // 按 sortKey 排序，当相等时使用 addIndex 实现稳定排序
+        screenSpaceItems.sort((a, b) => {
+            const diff = a.sortKey - b.sortKey;
+            if (diff !== 0) return diff;
+            return (a.addIndex ?? 0) - (b.addIndex ?? 0);
+        });
 
         // Switch to screen space projection
         // 切换到屏幕空间投影

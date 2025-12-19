@@ -1,4 +1,5 @@
 import { Component, ECSComponent, Property, Serializable, Serialize } from '@esengine/ecs-framework';
+import { getTextMeasureService, type TextMeasureFont } from '../../utils/TextMeasureService';
 
 /**
  * 输入框类型
@@ -105,23 +106,39 @@ export class UIInputFieldComponent extends Component {
     @Property({ type: 'integer', label: 'Max Lines / 最大行数', min: 1 })
     public maxLines: number = 1;
 
+    // ===== 字体配置 Font Configuration =====
+
+    /**
+     * 字体大小
+     * Font size in pixels
+     */
+    @Serialize()
+    @Property({ type: 'number', label: 'Font Size / 字体大小', min: 8, max: 72 })
+    public fontSize: number = 14;
+
+    /**
+     * 字体系列
+     * Font family
+     */
+    @Serialize()
+    @Property({ type: 'string', label: 'Font Family / 字体系列' })
+    public fontFamily: string = 'Arial, sans-serif';
+
+    /**
+     * 字体粗细
+     * Font weight
+     */
+    @Serialize()
+    @Property({
+        type: 'enum',
+        label: 'Font Weight / 字体粗细',
+        options: ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900']
+    })
+    public fontWeight: string = 'normal';
+
     // ===== 外观配置 Appearance Configuration =====
-
-    /**
-     * 背景颜色
-     * Background color
-     */
-    @Serialize()
-    @Property({ type: 'color', label: 'Background Color / 背景颜色' })
-    public backgroundColor: number = 0xFFFFFF;
-
-    /**
-     * 背景透明度
-     * Background alpha
-     */
-    @Serialize()
-    @Property({ type: 'number', label: 'Background Alpha / 背景透明度', min: 0, max: 1, step: 0.1 })
-    public backgroundAlpha: number = 1;
+    // 注意：背景和边框由 UIRender/UIGraphic 组件配置
+    // Note: Background and border are configured via UIRender/UIGraphic component
 
     /**
      * 文本颜色
@@ -162,30 +179,6 @@ export class UIInputFieldComponent extends Component {
     @Serialize()
     @Property({ type: 'number', label: 'Caret Width / 光标宽度', min: 1, max: 10 })
     public caretWidth: number = 2;
-
-    /**
-     * 边框颜色
-     * Border color
-     */
-    @Serialize()
-    @Property({ type: 'color', label: 'Border Color / 边框颜色' })
-    public borderColor: number = 0xCCCCCC;
-
-    /**
-     * 聚焦时边框颜色
-     * Border color when focused
-     */
-    @Serialize()
-    @Property({ type: 'color', label: 'Focus Border Color / 聚焦边框颜色' })
-    public focusBorderColor: number = 0x3399FF;
-
-    /**
-     * 边框宽度
-     * Border width in pixels
-     */
-    @Serialize()
-    @Property({ type: 'number', label: 'Border Width / 边框宽度', min: 0, max: 10, step: 1 })
-    public borderWidth: number = 1;
 
     /**
      * 内边距
@@ -504,16 +497,6 @@ export class UIInputFieldComponent extends Component {
     }
 
     /**
-     * 获取当前边框颜色
-     * Get current border color based on state
-     */
-    public getCurrentBorderColor(): number {
-        if (this.disabled) return this.borderColor;
-        if (this.focused) return this.focusBorderColor;
-        return this.borderColor;
-    }
-
-    /**
      * 验证单个字符是否可以输入
      * Validate if a single character can be input
      */
@@ -550,6 +533,149 @@ export class UIInputFieldComponent extends Component {
                 return value.toLowerCase();
             default:
                 return value;
+        }
+    }
+
+    // ===== 文本测量方法 Text Measurement Methods =====
+
+    /**
+     * 获取字体配置
+     * Get font configuration for text measurement
+     */
+    public getFontConfig(): TextMeasureFont {
+        return {
+            fontSize: this.fontSize,
+            fontFamily: this.fontFamily,
+            fontWeight: this.fontWeight
+        };
+    }
+
+    /**
+     * 获取 CSS 字体字符串
+     * Get CSS font string
+     */
+    public getCSSFont(): string {
+        return `${this.fontWeight} ${this.fontSize}px ${this.fontFamily}`;
+    }
+
+    /**
+     * 测量显示文本的宽度
+     * Measure display text width
+     */
+    public measureDisplayTextWidth(): number {
+        const service = getTextMeasureService();
+        return service.measureText(this.getDisplayText(), this.getFontConfig());
+    }
+
+    /**
+     * 获取光标的 X 位置
+     * Get caret X position
+     */
+    public getCaretX(): number {
+        const service = getTextMeasureService();
+        const displayText = this.getDisplayText();
+        return service.getXForCharIndex(displayText, this.getFontConfig(), this.caretPosition);
+    }
+
+    /**
+     * 获取选择区域的 X 范围
+     * Get selection X range
+     */
+    public getSelectionXRange(): { startX: number; endX: number; width: number } {
+        const service = getTextMeasureService();
+        const font = this.getFontConfig();
+        const displayText = this.getDisplayText();
+
+        const start = Math.min(this.selectionStart, this.selectionEnd);
+        const end = Math.max(this.selectionStart, this.selectionEnd);
+
+        const startX = service.getXForCharIndex(displayText, font, start);
+        const endX = service.getXForCharIndex(displayText, font, end);
+
+        return {
+            startX,
+            endX,
+            width: endX - startX
+        };
+    }
+
+    /**
+     * 根据 X 位置获取字符索引
+     * Get character index at X position
+     *
+     * @param x - X position relative to text area start | 相对于文本区域开始的 X 位置
+     */
+    public getCharIndexAtX(x: number): number {
+        const service = getTextMeasureService();
+        const displayText = this.getDisplayText();
+        return service.getCharIndexAtX(displayText, this.getFontConfig(), x + this.scrollOffset);
+    }
+
+    /**
+     * 获取当前行的高度
+     * Get line height
+     */
+    public getLineHeight(): number {
+        return this.fontSize * 1.2; // 默认行高系数 | Default line height factor
+    }
+
+    /**
+     * 获取文本行信息（多行模式）
+     * Get text line info (multi-line mode)
+     */
+    public getLineInfo() {
+        const service = getTextMeasureService();
+        return service.getLineInfo(this.getDisplayText(), this.getFontConfig());
+    }
+
+    /**
+     * 获取光标所在行索引
+     * Get line index for caret
+     */
+    public getCaretLineIndex(): number {
+        const service = getTextMeasureService();
+        return service.getLineIndexForChar(this.text, this.caretPosition);
+    }
+
+    /**
+     * 获取光标在当前行的列位置
+     * Get column position of caret in current line
+     */
+    public getCaretColumn(): number {
+        const service = getTextMeasureService();
+        return service.getColumnForChar(this.text, this.caretPosition);
+    }
+
+    /**
+     * 移动光标到指定行和列
+     * Move caret to specified line and column
+     */
+    public moveCaretToLineColumn(lineIndex: number, column: number): void {
+        const service = getTextMeasureService();
+        const newPosition = service.getCharIndexForLineColumn(this.text, lineIndex, column);
+        this.caretPosition = newPosition;
+        this.resetCaretBlink();
+    }
+
+    /**
+     * 更新滚动偏移以确保光标可见
+     * Update scroll offset to ensure caret is visible
+     *
+     * @param visibleWidth - Visible text area width | 可见文本区域宽度
+     */
+    public ensureCaretVisible(visibleWidth: number): void {
+        const caretX = this.getCaretX();
+
+        // 如果光标在可见区域左边
+        // If caret is to the left of visible area
+        if (caretX < this.scrollOffset) {
+            this.scrollOffset = Math.max(0, caretX - 10);
+        }
+
+        // 如果光标在可见区域右边
+        // If caret is to the right of visible area
+        if (caretX > this.scrollOffset + visibleWidth) {
+            this.scrollOffset = caretX - visibleWidth + 10;
         }
     }
 }

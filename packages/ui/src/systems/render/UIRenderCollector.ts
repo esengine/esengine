@@ -497,6 +497,7 @@ export class UIRenderCollector {
         }
 
         this.cache = this.buildRenderData(this.primitives);
+
         return this.cache;
     }
 
@@ -571,12 +572,12 @@ export class UIRenderCollector {
             }
 
             const materialKey = prim.materialId ?? 0;
-            // 合批 key 不包含 orderInLayer - 连续相同纹理/材质的元素可以合批
-            // Batch key doesn't include orderInLayer - consecutive elements with same texture/material can batch
-            const batchKey = `${prim.sortingLayer}:${textureKey}:${materialKey}`;
+            // 合批 key 必须包含 orderInLayer，否则不同深度的元素会被错误合并
+            // Batch key must include orderInLayer, otherwise elements at different depths will be incorrectly merged
+            const batchKey = `${prim.sortingLayer}:${prim.orderInLayer}:${textureKey}:${materialKey}`;
 
-            // 检查是否需要新批次：sortingLayer、texture 或 material 变化
-            // Check if new batch needed: sortingLayer, texture or material changed
+            // 检查是否需要新批次：sortingLayer、orderInLayer、texture 或 material 变化
+            // Check if new batch needed: sortingLayer, orderInLayer, texture or material changed
             const needNewBatch = currentBatchKey !== batchKey;
 
             if (needNewBatch) {
@@ -613,6 +614,7 @@ export class UIRenderCollector {
                     entityIds: [], // 稍后填充 | Fill later
                     firstEntityId: prim.entityId // 第一个实体 ID | First entity ID
                 });
+
                 batchIndex++;
 
                 currentGroup = [];
@@ -649,9 +651,9 @@ export class UIRenderCollector {
 
         this.batchDebugCache = batchDebugInfos;
 
-        // Convert groups to ProviderRenderData
-        // 将分组转换为 ProviderRenderData
-        const result: ProviderRenderData[] = [];
+        // Convert groups to ProviderRenderData with addIndex for stable sorting
+        // 将分组转换为带 addIndex 的 ProviderRenderData 以实现稳定排序
+        const result: Array<{ data: ProviderRenderData; addIndex: number }> = [];
 
         for (const [key, prims] of groups) {
             const count = prims.length;
@@ -768,18 +770,25 @@ export class UIRenderCollector {
                 renderData.materialOverrides = firstPrim.materialOverrides;
             }
 
-            result.push(renderData);
+            result.push({ data: renderData, addIndex: firstPrim.addIndex });
         }
 
-        // Sort result by sortKey
-        // 按 sortKey 排序结果
+        // Sort result by sortKey, then by addIndex for stability
+        // 按 sortKey 排序，然后按 addIndex 保持稳定性
+        // 当 sortKey 相同时，后添加的 batch 渲染在先添加的之上
+        // When sortKey is equal, later-added batches render on top of earlier ones
         result.sort((a, b) => {
-            const sortKeyA = sortingLayerManager.getSortKey(a.sortingLayer, a.orderInLayer);
-            const sortKeyB = sortingLayerManager.getSortKey(b.sortingLayer, b.orderInLayer);
-            return sortKeyA - sortKeyB;
+            const sortKeyA = sortingLayerManager.getSortKey(a.data.sortingLayer, a.data.orderInLayer);
+            const sortKeyB = sortingLayerManager.getSortKey(b.data.sortingLayer, b.data.orderInLayer);
+            if (sortKeyA !== sortKeyB) {
+                return sortKeyA - sortKeyB;
+            }
+            // 稳定排序：addIndex 大的在后面（渲染在上层）
+            // Stable sort: larger addIndex comes later (renders on top)
+            return a.addIndex - b.addIndex;
         });
 
-        return result;
+        return result.map(r => r.data);
     }
 
     /**
@@ -817,24 +826,26 @@ export class UIRenderCollector {
     }
 }
 
-// Global singleton instance
-// 全局单例实例
-let globalCollector: UIRenderCollector | null = null;
-
 // Cache invalidation callbacks
 // 缓存失效回调
 type CacheInvalidationCallback = () => void;
 const cacheInvalidationCallbacks: CacheInvalidationCallback[] = [];
+
+// 使用 globalThis 确保跨模块单例
+// Use globalThis to ensure cross-module singleton
+const COLLECTOR_KEY = '__esengine_ui_render_collector__';
 
 /**
  * Get the global UI render collector instance
  * 获取全局 UI 渲染收集器实例
  */
 export function getUIRenderCollector(): UIRenderCollector {
-    if (!globalCollector) {
-        globalCollector = new UIRenderCollector();
+    // 使用 globalThis 确保即使模块被重复打包也只有一个实例
+    // Use globalThis to ensure single instance even if module is bundled multiple times
+    if (!(globalThis as any)[COLLECTOR_KEY]) {
+        (globalThis as any)[COLLECTOR_KEY] = new UIRenderCollector();
     }
-    return globalCollector;
+    return (globalThis as any)[COLLECTOR_KEY];
 }
 
 /**
@@ -842,7 +853,7 @@ export function getUIRenderCollector(): UIRenderCollector {
  * 重置全局收集器（用于测试或清理）
  */
 export function resetUIRenderCollector(): void {
-    globalCollector = null;
+    (globalThis as any)[COLLECTOR_KEY] = null;
 }
 
 /**

@@ -134,9 +134,33 @@ class UIRuntimeModule implements IRuntimeModule {
         scene.addSystem(textRenderSystem);
 
         if (engineBridge) {
+            // 设置文本渲染系统的纹理回调
+            // Set texture callback for text render system
             textRenderSystem.setTextureCallback((id: number, dataUrl: string) => {
                 engineBridge.loadTexture(id, dataUrl);
             });
+
+            // 设置纹理就绪检查回调，用于检测异步加载的纹理是否已就绪
+            // Set texture ready checker callback to detect if async-loaded texture is ready
+            if (engineBridge.isTextureReady) {
+                textRenderSystem.setTextureReadyChecker((id: number) => {
+                    return engineBridge.isTextureReady!(id);
+                });
+            }
+
+            // 设置输入框渲染系统的纹理回调
+            // Set texture callback for input field render system
+            inputFieldRenderSystem.setTextureCallback((id: number, dataUrl: string) => {
+                engineBridge.loadTexture(id, dataUrl);
+            });
+
+            // 设置输入框渲染系统的纹理就绪检查回调
+            // Set texture ready checker callback for input field render system
+            if (engineBridge.isTextureReady) {
+                inputFieldRenderSystem.setTextureReadyChecker((id: number) => {
+                    return engineBridge.isTextureReady!(id);
+                });
+            }
         }
 
         const uiRenderProvider = new UIRenderDataProvider();

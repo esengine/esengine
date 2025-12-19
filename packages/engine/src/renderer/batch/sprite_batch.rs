@@ -1,7 +1,6 @@
 //! Sprite batch renderer for efficient 2D rendering.
 //! 用于高效2D渲染的精灵批处理渲染器。
 
-use indexmap::IndexMap;
 use web_sys::{
     WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject,
 };
@@ -66,17 +65,23 @@ pub struct SpriteBatch {
     /// 最大精灵数。
     max_sprites: usize,
 
-    /// Per-material-texture vertex data buffers (insertion-ordered).
-    /// 按材质和纹理分组的顶点数据缓冲区（保持插入顺序）。
+    /// Batches stored as (key, vertices) pairs in submission order.
+    /// 按提交顺序存储的批次（键，顶点）对。
     ///
-    /// Uses IndexMap to preserve render order - sprites submitted first
-    /// are rendered first (appear behind later sprites).
-    /// 使用 IndexMap 保持渲染顺序 - 先提交的精灵先渲染（显示在后面）。
-    batches: IndexMap<BatchKey, Vec<f32>>,
+    /// Only consecutive sprites with the same BatchKey are batched together.
+    /// Sprites with the same key but separated by different keys are kept in separate batches
+    /// to preserve correct render order.
+    /// 只有连续的相同 BatchKey 的 sprites 才会合批。
+    /// 相同 key 但被其他 key 分隔的 sprites 保持在独立批次中以保证正确的渲染顺序。
+    batches: Vec<(BatchKey, Vec<f32>)>,
 
     /// Total sprite count across all batches.
     /// 所有批次的总精灵数。
     sprite_count: usize,
+
+    /// Last batch key used, for determining if we can merge into the last batch.
+    /// 上一个使用的批次键，用于判断是否可以合并到最后一个批次。
+    last_batch_key: Option<BatchKey>,
 }
 
 impl SpriteBatch {
@@ -140,8 +145,9 @@ impl SpriteBatch {
             vbo,
             ibo,
             max_sprites,
-            batches: IndexMap::new(),
+            batches: Vec::new(),
             sprite_count: 0,
+            last_batch_key: None,
         })
     }
 
@@ -228,10 +234,9 @@ impl SpriteBatch {
     /// Clear the batch for a new frame.
     /// 为新帧清空批处理。
     pub fn clear(&mut self) {
-        for batch in self.batches.values_mut() {
-            batch.clear();
-        }
+        self.batches.clear();
         self.sprite_count = 0;
+        self.last_batch_key = None;
     }
 
     /// Add sprites from batch data.
@@ -335,10 +340,21 @@ impl SpriteBatch {
                 texture_id: texture_ids[i],
             };
 
-            // Get or create batch for this material+texture combination | 获取或创建此材质+纹理组合的批次
-            let batch = self.batches
-                .entry(batch_key)
-                .or_insert_with(Vec::new);
+            // Only batch consecutive sprites with the same key to preserve render order
+            // 只对连续相同 key 的 sprites 合批以保持渲染顺序
+            let should_create_new_batch = match self.last_batch_key {
+                Some(last_key) => batch_key != last_key,
+                None => true,
+            };
+
+            if should_create_new_batch {
+                // Create a new batch | 创建新批次
+                self.batches.push((batch_key, Vec::new()));
+                self.last_batch_key = Some(batch_key);
+            }
+
+            // Add to the last batch | 添加到最后一个批次
+            let batch = &mut self.batches.last_mut().unwrap().1;
 
             // Calculate transformed vertices and add to batch | 计算变换后的顶点并添加到批次
             Self::add_sprite_vertices_to_batch(
@@ -468,16 +484,16 @@ impl SpriteBatch {
         gl.bind_vertex_array(None);
     }
 
-    /// Get all batches for rendering (in insertion order).
-    /// 获取所有批次用于渲染（按插入顺序）。
-    pub fn batches(&self) -> &IndexMap<BatchKey, Vec<f32>> {
+    /// Get all batches for rendering (in submission order).
+    /// 获取所有批次用于渲染（按提交顺序）。
+    pub fn batches(&self) -> &[(BatchKey, Vec<f32>)] {
         &self.batches
     }
 
-    /// Flush a specific batch by key.
-    /// 按键刷新特定批次。
-    pub fn flush_for_batch(&self, gl: &WebGl2RenderingContext, key: &BatchKey) {
-        if let Some(vertices) = self.batches.get(key) {
+    /// Flush a specific batch by index.
+    /// 按索引刷新特定批次。
+    pub fn flush_batch_at(&self, gl: &WebGl2RenderingContext, index: usize) {
+        if let Some((_, vertices)) = self.batches.get(index) {
             self.flush_batch(gl, vertices);
         }
     }

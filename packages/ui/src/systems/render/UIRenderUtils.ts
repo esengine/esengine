@@ -72,6 +72,10 @@ export interface UIRenderTransform {
  * @returns Computed render transform, or null if not visible
  */
 export function getUIRenderTransform(transform: UITransformComponent, _entity?: Entity): UIRenderTransform | null {
+    // 如果布局还没计算，跳过渲染（等待 UILayoutSystem 计算 worldOrderInLayer）
+    // Skip if layout not computed yet (wait for UILayoutSystem to calculate worldOrderInLayer)
+    if (!transform.layoutComputed) return null;
+
     if (!transform.worldVisible) return null;
 
     // 使用 layoutComputed 判断是否使用世界坐标

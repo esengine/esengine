@@ -293,3 +293,12 @@ export {
     getDirtyComponentCount,
     clearFrameDirty
 } from './utils';
+
+// Text Measure Utilities | 文本测量工具
+export {
+    getTextMeasureService,
+    disposeTextMeasureService,
+    type TextMeasureFont,
+    type CharacterPosition,
+    type LineInfo
+} from './utils';

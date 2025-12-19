@@ -116,18 +116,9 @@ impl Renderer2D {
     /// Render the current frame.
     /// 渲染当前帧。
     pub fn render(&mut self, gl: &WebGl2RenderingContext, texture_manager: &TextureManager) -> Result<()> {
-        use super::batch::BatchKey;
-
         if self.sprite_batch.sprite_count() == 0 {
             return Ok(());
         }
-
-        // Collect non-empty batch keys | 收集非空批次键
-        let batch_keys: Vec<BatchKey> = self.sprite_batch.batches()
-            .iter()
-            .filter(|(_, vertices)| !vertices.is_empty())
-            .map(|(key, _)| *key)
-            .collect();
 
         // Track current state to minimize state changes | 跟踪当前状态以最小化状态切换
         let mut current_material_id: u32 = u32::MAX;
@@ -136,7 +127,16 @@ impl Renderer2D {
         // Get projection matrix once | 一次性获取投影矩阵
         let projection = self.camera.projection_matrix();
 
-        for batch_key in batch_keys {
+        // Iterate through batches in submission order (preserves render order)
+        // 按提交顺序遍历批次（保持渲染顺序）
+        for batch_idx in 0..self.sprite_batch.batches().len() {
+            let (batch_key, vertices) = &self.sprite_batch.batches()[batch_idx];
+
+            // Skip empty batches | 跳过空批次
+            if vertices.is_empty() {
+                continue;
+            }
+
             // Switch material if needed | 如需切换材质
             if batch_key.material_id != current_material_id {
                 current_material_id = batch_key.material_id;
@@ -169,8 +169,8 @@ impl Renderer2D {
                 texture_manager.bind_texture(batch_key.texture_id, 0);
             }
 
-            // Flush this batch | 刷新此批次
-            self.sprite_batch.flush_for_batch(gl, &batch_key);
+            // Flush this batch by index | 按索引刷新此批次
+            self.sprite_batch.flush_batch_at(gl, batch_idx);
         }
 
         // Clear batch for next frame | 清空批处理以供下一帧使用

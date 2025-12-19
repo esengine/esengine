@@ -89,6 +89,10 @@ export class UIInputSystem extends EntitySystem {
     // ===== 打开的 Dropdown Open Dropdown =====
     private openDropdown: Entity | null = null;
 
+    // ===== InputField 拖选状态 InputField Selection Drag State =====
+    private inputFieldDragTarget: Entity | null = null;
+    private inputFieldDragStartIndex: number = 0;
+
     // ===== UI 布局系统引用 UI Layout System Reference =====
     // 用于获取 UI 画布尺寸以进行坐标转换
     // Used to get UI canvas size for coordinate conversion
@@ -794,6 +798,15 @@ export class UIInputSystem extends EntitySystem {
             const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
             if (inputField && !inputField.readOnly) {
                 this.handleInputFieldKeyDown(inputField, e);
+
+                // 确保光标可见
+                // Ensure caret is visible after keyboard operation
+                const transform = this.focusedEntity.getComponent(UITransformComponent);
+                if (transform) {
+                    const width = transform.computedWidth ?? transform.width;
+                    const textAreaWidth = width - inputField.padding * 2;
+                    inputField.ensureCaretVisible(textAreaWidth);
+                }
                 return;
             }
         }
@@ -823,6 +836,15 @@ export class UIInputSystem extends EntitySystem {
                 // keypress is for printable characters
                 if (e.key.length === 1) {
                     this.handleInputFieldCharacter(inputField, e.key, e);
+
+                    // 确保光标可见
+                    // Ensure caret is visible after character input
+                    const transform = this.focusedEntity.getComponent(UITransformComponent);
+                    if (transform) {
+                        const width = transform.computedWidth ?? transform.width;
+                        const textAreaWidth = width - inputField.padding * 2;
+                        inputField.ensureCaretVisible(textAreaWidth);
+                    }
                 }
             }
         }
@@ -889,6 +911,55 @@ export class UIInputSystem extends EntitySystem {
                 } else {
                     inputField.moveCaret(1, ctrlOrCmd);
                     inputField.clearSelection();
+                }
+                break;
+
+            case 'ArrowUp':
+                // 多行模式：移动到上一行
+                // Multi-line mode: move to previous line
+                if (inputField.lineType !== 'singleLine') {
+                    e.preventDefault();
+                    const currentLine = inputField.getCaretLineIndex();
+                    if (currentLine > 0) {
+                        const column = inputField.getCaretColumn();
+                        const targetLine = currentLine - 1;
+
+                        if (e.shiftKey) {
+                            if (!inputField.hasSelection()) {
+                                inputField.selectionStart = inputField.caretPosition;
+                            }
+                            inputField.moveCaretToLineColumn(targetLine, column);
+                            inputField.selectionEnd = inputField.caretPosition;
+                        } else {
+                            inputField.moveCaretToLineColumn(targetLine, column);
+                            inputField.clearSelection();
+                        }
+                    }
+                }
+                break;
+
+            case 'ArrowDown':
+                // 多行模式：移动到下一行
+                // Multi-line mode: move to next line
+                if (inputField.lineType !== 'singleLine') {
+                    e.preventDefault();
+                    const lines = inputField.text.split('\n');
+                    const currentLine = inputField.getCaretLineIndex();
+                    if (currentLine < lines.length - 1) {
+                        const column = inputField.getCaretColumn();
+                        const targetLine = currentLine + 1;
+
+                        if (e.shiftKey) {
+                            if (!inputField.hasSelection()) {
+                                inputField.selectionStart = inputField.caretPosition;
+                            }
+                            inputField.moveCaretToLineColumn(targetLine, column);
+                            inputField.selectionEnd = inputField.caretPosition;
+                        } else {
+                            inputField.moveCaretToLineColumn(targetLine, column);
+                            inputField.clearSelection();
+                        }
+                    }
                 }
                 break;
 
@@ -1043,26 +1114,65 @@ export class UIInputSystem extends EntitySystem {
         const inputField = entity.getComponent(UIInputFieldComponent);
         if (!inputField) return;
 
+        const transform = entity.getComponent(UITransformComponent);
+        if (!transform) return;
+
         // 更新悬停和聚焦状态
         // Update hover and focused state
         inputField.hovered = interactable.hovered;
         inputField.focused = this.focusedEntity === entity;
 
-        // 处理点击聚焦
-        // Handle click to focus
+        // 处理点击聚焦和光标定位
+        // Handle click to focus and caret positioning
         const wasPressed = this.prevMouseButtons[MouseButton.Left];
         const isPressed = this.mouseButtons[MouseButton.Left];
 
+        // 计算文本区域的起始 X 坐标
+        // Calculate text area start X coordinate
+        const worldX = transform.worldX ?? transform.x;
+        const worldY = transform.worldY ?? transform.y;
+        const width = transform.computedWidth ?? transform.width;
+        const height = transform.computedHeight ?? transform.height;
+        const pivotX = transform.pivotX;
+        const pivotY = transform.pivotY;
+        const textAreaStartX = worldX - width * pivotX + inputField.padding;
+        const textAreaWidth = width - inputField.padding * 2;
+
+        // 鼠标按下：聚焦并定位光标 | Mouse down: focus and position caret
         if (!wasPressed && isPressed && interactable.hovered) {
             this.setFocus(entity);
             inputField.focused = true;
 
-            // TODO: 可以根据点击位置设置光标位置
-            // TODO: Could set caret position based on click position
+            const clickX = this.mouseX - textAreaStartX;
+            const charIndex = inputField.getCharIndexAtX(clickX);
+
+            inputField.caretPosition = charIndex;
+            inputField.selectionStart = charIndex;
+            inputField.selectionEnd = charIndex;
+            inputField.resetCaretBlink();
+
+            this.inputFieldDragTarget = entity;
+            this.inputFieldDragStartIndex = charIndex;
         }
 
-        // 更新光标闪烁
-        // Update caret blink
+        // 拖选 | Drag selection
+        if (isPressed && this.inputFieldDragTarget === entity && inputField.focused) {
+            const currentX = this.mouseX - textAreaStartX;
+            const currentIndex = inputField.getCharIndexAtX(currentX);
+
+            inputField.selectionStart = this.inputFieldDragStartIndex;
+            inputField.selectionEnd = currentIndex;
+            inputField.caretPosition = currentIndex;
+            inputField.resetCaretBlink();
+            inputField.ensureCaretVisible(textAreaWidth);
+        }
+
+        // 结束拖选 | End drag
+        if (!isPressed && this.inputFieldDragTarget === entity) {
+            this.inputFieldDragTarget = null;
+        }
+
+        // 光标闪烁 | Caret blink
         if (inputField.focused) {
             inputField.caretBlinkTimer += Time.deltaTime;
             if (inputField.caretBlinkTimer >= inputField.caretBlinkRate) {
