@@ -45,8 +45,69 @@ export {
     type IRenderConfigService
 };
 
-// 重新导出 IEditorModuleBase（供编辑器插件使用）| Re-export for editor plugins
-export type { IEditorModuleBase } from '@esengine/plugin-types';
+// ============================================================================
+// 编辑器模块基础接口 | Editor Module Base Interface
+// ============================================================================
+
+/**
+ * 编辑器模块基础接口
+ * Base editor module interface
+ *
+ * 定义编辑器模块的核心生命周期方法。
+ * 完整的 IEditorModuleLoader 接口在 editor-core 中扩展此接口。
+ *
+ * Defines core lifecycle methods for editor modules.
+ * Full IEditorModuleLoader interface extends this in editor-core.
+ */
+export interface IEditorModuleBase {
+    /**
+     * 安装编辑器模块
+     * Install editor module
+     */
+    install(services: ServiceContainer): Promise<void>;
+
+    /**
+     * 卸载编辑器模块
+     * Uninstall editor module
+     */
+    uninstall?(): Promise<void>;
+
+    /**
+     * 编辑器就绪回调
+     * Editor ready callback
+     */
+    onEditorReady?(): void | Promise<void>;
+
+    /**
+     * 项目打开回调
+     * Project open callback
+     */
+    onProjectOpen?(projectPath: string): void | Promise<void>;
+
+    /**
+     * 项目关闭回调
+     * Project close callback
+     */
+    onProjectClose?(): void | Promise<void>;
+
+    /**
+     * 场景加载回调
+     * Scene loaded callback
+     */
+    onSceneLoaded?(scenePath: string): void;
+
+    /**
+     * 场景保存前回调
+     * Before scene save callback
+     */
+    onSceneSaving?(scenePath: string): boolean | void;
+
+    /**
+     * 设置语言
+     * Set locale
+     */
+    setLocale?(locale: string): void;
+}
 
 // ============================================================================
 // 加载阶段 | Loading Phase
