@@ -3,7 +3,7 @@
  * TypeScript ECS与Rust引擎之间的主桥接层。
  */
 
-import type { SpriteRenderData, TextureLoadRequest, EngineStats, CameraConfig } from '../types';
+import type { EngineStats, CameraConfig } from '../types';
 import type { ITextureEngineBridge } from '@esengine/asset-system';
 import type { GameEngine } from '../wasm/es_engine';
 import type {
@@ -58,14 +58,6 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
     // 用于将文件路径转换为URL的路径解析器
     private pathResolver: ((path: string) => string) | null = null;
 
-    // Pre-allocated typed arrays for batch submission
-    // 预分配的类型数组用于批量提交
-    private transformBuffer: Float32Array;
-    private textureIdBuffer: Uint32Array;
-    private uvBuffer: Float32Array;
-    private colorBuffer: Uint32Array;
-    private materialIdBuffer: Uint32Array;
-
     // Statistics | 统计信息
     private stats: EngineStats = {
         fps: 0,
@@ -92,14 +84,6 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
             maxSprites: config.maxSprites ?? 10000,
             debug: config.debug ?? false
         };
-
-        // Pre-allocate buffers | 预分配缓冲区
-        const maxSprites = this.config.maxSprites;
-        this.transformBuffer = new Float32Array(maxSprites * 7); // x, y, rot, sx, sy, ox, oy
-        this.textureIdBuffer = new Uint32Array(maxSprites);
-        this.uvBuffer = new Float32Array(maxSprites * 4); // u0, v0, u1, v1
-        this.colorBuffer = new Uint32Array(maxSprites);
-        this.materialIdBuffer = new Uint32Array(maxSprites);
     }
 
     /**
@@ -210,53 +194,24 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
      * Submit sprite data for rendering.
      * 提交精灵数据进行渲染。
      *
-     * @param sprites - Array of sprite render data | 精灵渲染数据数组
+     * @param transforms - Transform data [x,y,rot,sx,sy,ox,oy] * count
+     * @param textureIds - Texture IDs
+     * @param uvs - UV coordinates [u0,v0,u1,v1] * count
+     * @param colors - Packed RGBA colors
+     * @param materialIds - Material IDs
+     * @param count - Number of sprites
      */
-    submitSprites(sprites: SpriteRenderData[]): void {
-        if (!this.initialized || sprites.length === 0) return;
+    submitSprites(
+        transforms: Float32Array,
+        textureIds: Uint32Array,
+        uvs: Float32Array,
+        colors: Uint32Array,
+        materialIds: Uint32Array,
+        count: number
+    ): void {
+        if (!this.initialized || count === 0) return;
 
-        const count = Math.min(sprites.length, this.config.maxSprites);
-
-        // Fill typed arrays | 填充类型数组
-        for (let i = 0; i < count; i++) {
-            const sprite = sprites[i];
-            const tOffset = i * 7;
-            const uvOffset = i * 4;
-
-            // Transform data | 变换数据
-            this.transformBuffer[tOffset] = sprite.x;
-            this.transformBuffer[tOffset + 1] = sprite.y;
-            this.transformBuffer[tOffset + 2] = sprite.rotation;
-            this.transformBuffer[tOffset + 3] = sprite.scaleX;
-            this.transformBuffer[tOffset + 4] = sprite.scaleY;
-            this.transformBuffer[tOffset + 5] = sprite.originX;
-            this.transformBuffer[tOffset + 6] = sprite.originY;
-
-            // Texture ID | 纹理ID
-            this.textureIdBuffer[i] = sprite.textureId;
-
-            // UV coordinates | UV坐标
-            this.uvBuffer[uvOffset] = sprite.uv[0];
-            this.uvBuffer[uvOffset + 1] = sprite.uv[1];
-            this.uvBuffer[uvOffset + 2] = sprite.uv[2];
-            this.uvBuffer[uvOffset + 3] = sprite.uv[3];
-
-            // Color | 颜色
-            this.colorBuffer[i] = sprite.color;
-
-            // Material ID (0 = default) | 材质ID（0 = 默认）
-            this.materialIdBuffer[i] = sprite.materialId ?? 0;
-        }
-
-        // Submit to engine (single WASM call) | 提交到引擎（单次WASM调用）
-        this.getEngine().submitSpriteBatch(
-            this.transformBuffer.subarray(0, count * 7),
-            this.textureIdBuffer.subarray(0, count),
-            this.uvBuffer.subarray(0, count * 4),
-            this.colorBuffer.subarray(0, count),
-            this.materialIdBuffer.subarray(0, count)
-        );
-
+        this.getEngine().submitSpriteBatch(transforms, textureIds, uvs, colors, materialIds);
         this.stats.spriteCount = count;
     }
 

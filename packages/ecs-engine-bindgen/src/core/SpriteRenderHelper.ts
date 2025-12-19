@@ -143,7 +143,11 @@ export class SpriteRenderHelper {
      */
     render(): void {
         if (!this.batcher.isEmpty) {
-            this.bridge.submitSprites(this.batcher.getSprites());
+            const buffers = this.batcher.getBuffers();
+            this.bridge.submitSprites(
+                buffers.transforms, buffers.textureIds, buffers.uvs,
+                buffers.colors, buffers.materialIds, buffers.count
+            );
         }
         this.bridge.render();
     }
