@@ -90,3 +90,6 @@ docs/.vitepress/dist/
 # Tauri 捆绑输出
 **/src-tauri/target/release/bundle/
 **/src-tauri/target/debug/bundle/
+
+# Rust 构建产物
+**/engine-shared/target/

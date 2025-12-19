@@ -1,149 +1,65 @@
 //! Sprite batch renderer for efficient 2D rendering.
-//! 用于高效2D渲染的精灵批处理渲染器。
 
-use web_sys::{
-    WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject,
+use es_engine_shared::{
+    traits::backend::{GraphicsBackend, BufferUsage},
+    types::{
+        handle::{BufferHandle, VertexArrayHandle},
+        vertex::{VertexLayout, VertexAttribute, VertexAttributeType},
+    },
 };
-
-use crate::core::error::{EngineError, Result};
 use crate::math::Color;
-use crate::resource::TextureManager;
-use super::vertex::FLOATS_PER_VERTEX;
 
-/// Number of vertices per sprite (quad).
-/// 每个精灵的顶点数（四边形）。
 const VERTICES_PER_SPRITE: usize = 4;
-
-/// Number of indices per sprite (2 triangles).
-/// 每个精灵的索引数（2个三角形）。
 const INDICES_PER_SPRITE: usize = 6;
-
-/// Transform data stride (x, y, rotation, scaleX, scaleY, originX, originY).
-/// 变换数据步长。
+const FLOATS_PER_VERTEX: usize = 9;
 const TRANSFORM_STRIDE: usize = 7;
-
-/// UV data stride (u0, v0, u1, v1).
-/// UV数据步长。
 const UV_STRIDE: usize = 4;
 
-/// Batch key combining material and texture IDs.
-/// 组合材质ID和纹理ID的批次键。
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct BatchKey {
-    /// Material ID (0 = default material).
-    /// 材质ID（0 = 默认材质）。
     pub material_id: u32,
-    /// Texture ID.
-    /// 纹理ID。
     pub texture_id: u32,
 }
 
-/// Sprite batch renderer.
-/// 精灵批处理渲染器。
-///
-/// Batches multiple sprites into a single draw call for optimal performance.
-/// 将多个精灵合并为单次绘制调用以获得最佳性能。
-///
-/// # Performance | 性能
-/// - Uses dynamic vertex buffer for efficient updates | 使用动态顶点缓冲区以高效更新
-/// - Groups sprites by material and texture to minimize state changes | 按材质和纹理分组精灵以最小化状态更改
-/// - Supports up to 10000+ sprites per batch | 每批次支持10000+精灵
 pub struct SpriteBatch {
-    /// Vertex array object.
-    /// 顶点数组对象。
-    vao: WebGlVertexArrayObject,
-
-    /// Vertex buffer object.
-    /// 顶点缓冲区对象。
-    vbo: WebGlBuffer,
-
-    /// Index buffer object.
-    /// 索引缓冲区对象。
-    ibo: WebGlBuffer,
-
-    /// Maximum number of sprites.
-    /// 最大精灵数。
+    vbo: BufferHandle,
+    ibo: BufferHandle,
+    vao: VertexArrayHandle,
     max_sprites: usize,
-
-    /// Batches stored as (key, vertices) pairs in submission order.
-    /// 按提交顺序存储的批次（键，顶点）对。
-    ///
-    /// Only consecutive sprites with the same BatchKey are batched together.
-    /// Sprites with the same key but separated by different keys are kept in separate batches
-    /// to preserve correct render order.
-    /// 只有连续的相同 BatchKey 的 sprites 才会合批。
-    /// 相同 key 但被其他 key 分隔的 sprites 保持在独立批次中以保证正确的渲染顺序。
     batches: Vec<(BatchKey, Vec<f32>)>,
-
-    /// Total sprite count across all batches.
-    /// 所有批次的总精灵数。
     sprite_count: usize,
-
-    /// Last batch key used, for determining if we can merge into the last batch.
-    /// 上一个使用的批次键，用于判断是否可以合并到最后一个批次。
     last_batch_key: Option<BatchKey>,
 }
 
 impl SpriteBatch {
-    /// Create a new sprite batch.
-    /// 创建新的精灵批处理器。
-    ///
-    /// # Arguments | 参数
-    /// * `gl` - WebGL2 context | WebGL2上下文
-    /// * `max_sprites` - Maximum sprites per batch | 每批次最大精灵数
-    pub fn new(gl: &WebGl2RenderingContext, max_sprites: usize) -> Result<Self> {
-        // Create VAO | 创建VAO
-        let vao = gl
-            .create_vertex_array()
-            .ok_or(EngineError::BufferCreationFailed)?;
-        gl.bind_vertex_array(Some(&vao));
-
-        // Create vertex buffer | 创建顶点缓冲区
-        let vbo = gl
-            .create_buffer()
-            .ok_or(EngineError::BufferCreationFailed)?;
-        gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&vbo));
-
-        // Allocate vertex buffer memory | 分配顶点缓冲区内存
+    pub fn new(backend: &mut impl GraphicsBackend, max_sprites: usize) -> Result<Self, String> {
         let vertex_buffer_size = max_sprites * VERTICES_PER_SPRITE * FLOATS_PER_VERTEX * 4;
-        gl.buffer_data_with_i32(
-            WebGl2RenderingContext::ARRAY_BUFFER,
-            vertex_buffer_size as i32,
-            WebGl2RenderingContext::DYNAMIC_DRAW,
-        );
-
-        // Create and populate index buffer | 创建并填充索引缓冲区
-        let ibo = gl
-            .create_buffer()
-            .ok_or(EngineError::BufferCreationFailed)?;
-        gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, Some(&ibo));
+        let vbo = backend.create_vertex_buffer(
+            &vec![0u8; vertex_buffer_size],
+            BufferUsage::Dynamic,
+        ).map_err(|e| format!("VBO: {:?}", e))?;
 
         let indices = Self::generate_indices(max_sprites);
-        unsafe {
-            let index_array = js_sys::Uint16Array::view(&indices);
-            gl.buffer_data_with_array_buffer_view(
-                WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-                &index_array,
-                WebGl2RenderingContext::STATIC_DRAW,
-            );
-        }
+        let ibo = backend.create_index_buffer(
+            bytemuck::cast_slice(&indices),
+            BufferUsage::Static,
+        ).map_err(|e| format!("IBO: {:?}", e))?;
 
-        // Set up vertex attributes | 设置顶点属性
-        Self::setup_vertex_attributes(gl);
+        let layout = VertexLayout {
+            attributes: vec![
+                VertexAttribute { name: "a_position".into(), attr_type: VertexAttributeType::Float2, offset: 0, normalized: false },
+                VertexAttribute { name: "a_texcoord".into(), attr_type: VertexAttributeType::Float2, offset: 8, normalized: false },
+                VertexAttribute { name: "a_color".into(), attr_type: VertexAttributeType::Float4, offset: 16, normalized: false },
+                VertexAttribute { name: "a_aspect".into(), attr_type: VertexAttributeType::Float, offset: 32, normalized: false },
+            ],
+            stride: FLOATS_PER_VERTEX * 4,
+        };
 
-        // Unbind VAO | 解绑VAO
-        gl.bind_vertex_array(None);
-
-        log::debug!(
-            "SpriteBatch created with capacity: {} sprites | SpriteBatch创建完成，容量: {}个精灵",
-            max_sprites,
-            max_sprites
-        );
+        let vao = backend.create_vertex_array(vbo, Some(ibo), &layout)
+            .map_err(|e| format!("VAO: {:?}", e))?;
 
         Ok(Self {
-            vao,
-            vbo,
-            ibo,
+            vbo, ibo, vao,
             max_sprites,
             batches: Vec::new(),
             sprite_count: 0,
@@ -151,104 +67,19 @@ impl SpriteBatch {
         })
     }
 
-    /// Generate index buffer data.
-    /// 生成索引缓冲区数据。
     fn generate_indices(max_sprites: usize) -> Vec<u16> {
-        let mut indices = Vec::with_capacity(max_sprites * INDICES_PER_SPRITE);
-
-        for i in 0..max_sprites {
+        (0..max_sprites).flat_map(|i| {
             let base = (i * VERTICES_PER_SPRITE) as u16;
-            // Two triangles per sprite | 每个精灵两个三角形
-            // Triangle 1: 0, 1, 2 | 三角形1
-            // Triangle 2: 2, 3, 0 | 三角形2
-            indices.push(base);
-            indices.push(base + 1);
-            indices.push(base + 2);
-            indices.push(base + 2);
-            indices.push(base + 3);
-            indices.push(base);
-        }
-
-        indices
+            [base, base + 1, base + 2, base + 2, base + 3, base]
+        }).collect()
     }
 
-    /// Set up vertex attribute pointers.
-    /// 设置顶点属性指针。
-    ///
-    /// Vertex layout (9 floats per vertex):
-    /// 顶点布局（每顶点 9 个浮点数）:
-    /// - location 0: position (2 floats) - offset 0
-    /// - location 1: tex_coord (2 floats) - offset 8
-    /// - location 2: color (4 floats) - offset 16
-    /// - location 3: aspect_ratio (1 float) - offset 32
-    fn setup_vertex_attributes(gl: &WebGl2RenderingContext) {
-        let stride = (FLOATS_PER_VERTEX * 4) as i32; // 9 * 4 = 36 bytes
-
-        // Position attribute (location = 0) | 位置属性
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_with_i32(
-            0,
-            2,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            stride,
-            0,
-        );
-
-        // Texture coordinate attribute (location = 1) | 纹理坐标属性
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_with_i32(
-            1,
-            2,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            stride,
-            8, // 2 floats * 4 bytes
-        );
-
-        // Color attribute (location = 2) | 颜色属性
-        gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_with_i32(
-            2,
-            4,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            stride,
-            16, // 4 floats * 4 bytes
-        );
-
-        // Aspect ratio attribute (location = 3) | 宽高比属性
-        // Used by shaders for aspect-ratio-aware transformations
-        // 用于着色器中的宽高比感知变换
-        gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_with_i32(
-            3,
-            1,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            stride,
-            32, // (2 + 2 + 4) floats * 4 bytes
-        );
-    }
-
-    /// Clear the batch for a new frame.
-    /// 为新帧清空批处理。
     pub fn clear(&mut self) {
         self.batches.clear();
         self.sprite_count = 0;
         self.last_batch_key = None;
     }
 
-    /// Add sprites from batch data.
-    /// 从批处理数据添加精灵。
-    ///
-    /// # Arguments | 参数
-    /// * `transforms` - [x, y, rotation, scaleX, scaleY, originX, originY] per sprite
-    /// * `texture_ids` - Texture ID for each sprite | 每个精灵的纹理ID
-    /// * `uvs` - [u0, v0, u1, v1] per sprite | 每个精灵的UV坐标
-    /// * `colors` - Packed RGBA color per sprite | 每个精灵的打包RGBA颜色
-    /// * `material_ids` - Material ID for each sprite (0 = default) | 每个精灵的材质ID（0 = 默认）
-    /// * `_texture_manager` - Texture manager for getting texture sizes | 纹理管理器
     pub fn add_sprites(
         &mut self,
         transforms: &[f32],
@@ -256,252 +87,106 @@ impl SpriteBatch {
         uvs: &[f32],
         colors: &[u32],
         material_ids: &[u32],
-        _texture_manager: &TextureManager,
-    ) -> Result<()> {
-        let sprite_count = texture_ids.len();
+    ) -> Result<(), String> {
+        let count = texture_ids.len();
 
-        // Validate input data | 验证输入数据
-        if transforms.len() != sprite_count * TRANSFORM_STRIDE {
-            return Err(EngineError::InvalidBatchData(format!(
-                "Transform data length mismatch: expected {}, got {}",
-                sprite_count * TRANSFORM_STRIDE,
-                transforms.len()
-            )));
+        if transforms.len() != count * TRANSFORM_STRIDE {
+            return Err(format!("Transform mismatch: {} vs {}", transforms.len(), count * TRANSFORM_STRIDE));
+        }
+        if uvs.len() != count * UV_STRIDE {
+            return Err(format!("UV mismatch: {} vs {}", uvs.len(), count * UV_STRIDE));
+        }
+        if colors.len() != count || material_ids.len() != count {
+            return Err("Color/material count mismatch".into());
+        }
+        if self.sprite_count + count > self.max_sprites {
+            return Err(format!("Batch overflow: {} + {} > {}", self.sprite_count, count, self.max_sprites));
         }
 
-        if uvs.len() != sprite_count * UV_STRIDE {
-            return Err(EngineError::InvalidBatchData(format!(
-                "UV data length mismatch: expected {}, got {}",
-                sprite_count * UV_STRIDE,
-                uvs.len()
-            )));
-        }
+        for i in 0..count {
+            let t = i * TRANSFORM_STRIDE;
+            let uv = i * UV_STRIDE;
 
-        if colors.len() != sprite_count {
-            return Err(EngineError::InvalidBatchData(format!(
-                "Color data length mismatch: expected {}, got {}",
-                sprite_count,
-                colors.len()
-            )));
-        }
+            let (x, y) = (transforms[t], transforms[t + 1]);
+            let rotation = transforms[t + 2];
+            let (width, height) = (transforms[t + 3], transforms[t + 4]);
+            let (origin_x, origin_y) = (transforms[t + 5], transforms[t + 6]);
 
-        if material_ids.len() != sprite_count {
-            return Err(EngineError::InvalidBatchData(format!(
-                "Material ID data length mismatch: expected {}, got {}",
-                sprite_count,
-                material_ids.len()
-            )));
-        }
-
-        // Check capacity | 检查容量
-        if self.sprite_count + sprite_count > self.max_sprites {
-            return Err(EngineError::InvalidBatchData(format!(
-                "Batch capacity exceeded: {} + {} > {}",
-                self.sprite_count, sprite_count, self.max_sprites
-            )));
-        }
-
-        // Add each sprite grouped by material and texture | 按材质和纹理分组添加每个精灵
-        for i in 0..sprite_count {
-            let t_offset = i * TRANSFORM_STRIDE;
-            let uv_offset = i * UV_STRIDE;
-
-            let x = transforms[t_offset];
-            let y = transforms[t_offset + 1];
-            let rotation = transforms[t_offset + 2];
-            let scale_x = transforms[t_offset + 3];
-            let scale_y = transforms[t_offset + 4];
-            let origin_x = transforms[t_offset + 5];
-            let origin_y = transforms[t_offset + 6];
-
-            let u0 = uvs[uv_offset];
-            let v0 = uvs[uv_offset + 1];
-            let u1 = uvs[uv_offset + 2];
-            let v1 = uvs[uv_offset + 3];
-
+            let (u0, v0, u1, v1) = (uvs[uv], uvs[uv + 1], uvs[uv + 2], uvs[uv + 3]);
             let color = Color::from_packed(colors[i]);
             let color_arr = [color.r, color.g, color.b, color.a];
+            let aspect = if height.abs() > 0.001 { width / height } else { 1.0 };
 
-            // scale_x and scale_y are the actual display dimensions
-            // scale_x 和 scale_y 是实际显示尺寸
-            let width = scale_x;
-            let height = scale_y;
+            let key = BatchKey { material_id: material_ids[i], texture_id: texture_ids[i] };
 
-            // Calculate aspect ratio (width / height), default 1.0 for degenerate cases
-            // 计算宽高比（宽度/高度），退化情况下默认为 1.0
-            let aspect_ratio = if height.abs() > 0.001 {
-                width / height
-            } else {
-                1.0
-            };
-
-            let batch_key = BatchKey {
-                material_id: material_ids[i],
-                texture_id: texture_ids[i],
-            };
-
-            // Only batch consecutive sprites with the same key to preserve render order
-            // 只对连续相同 key 的 sprites 合批以保持渲染顺序
-            let should_create_new_batch = match self.last_batch_key {
-                Some(last_key) => batch_key != last_key,
-                None => true,
-            };
-
-            if should_create_new_batch {
-                // Create a new batch | 创建新批次
-                self.batches.push((batch_key, Vec::new()));
-                self.last_batch_key = Some(batch_key);
+            if self.last_batch_key != Some(key) {
+                self.batches.push((key, Vec::new()));
+                self.last_batch_key = Some(key);
             }
 
-            // Add to the last batch | 添加到最后一个批次
             let batch = &mut self.batches.last_mut().unwrap().1;
-
-            // Calculate transformed vertices and add to batch | 计算变换后的顶点并添加到批次
-            Self::add_sprite_vertices_to_batch(
-                batch,
-                x, y, width, height, rotation, origin_x, origin_y,
-                u0, v0, u1, v1, color_arr, aspect_ratio,
-            );
+            Self::add_sprite_vertices(batch, x, y, width, height, rotation, origin_x, origin_y,
+                                      u0, v0, u1, v1, color_arr, aspect);
         }
 
-        self.sprite_count += sprite_count;
+        self.sprite_count += count;
         Ok(())
     }
 
-    /// Add vertices for a single sprite to a batch.
-    /// 为单个精灵添加顶点到批次。
-    ///
-    /// Each vertex contains: position(2) + tex_coord(2) + color(4) + aspect_ratio(1) = 9 floats
-    /// 每个顶点包含: 位置(2) + 纹理坐标(2) + 颜色(4) + 宽高比(1) = 9 个浮点数
     #[inline]
-    fn add_sprite_vertices_to_batch(
+    fn add_sprite_vertices(
         batch: &mut Vec<f32>,
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        rotation: f32,
-        origin_x: f32,
-        origin_y: f32,
-        u0: f32,
-        v0: f32,
-        u1: f32,
-        v1: f32,
-        color: [f32; 4],
-        aspect_ratio: f32,
+        x: f32, y: f32, width: f32, height: f32, rotation: f32,
+        origin_x: f32, origin_y: f32,
+        u0: f32, v0: f32, u1: f32, v1: f32,
+        color: [f32; 4], aspect: f32,
     ) {
-        let cos = rotation.cos();
-        let sin = rotation.sin();
+        let (cos, sin) = (rotation.cos(), rotation.sin());
+        let (ox, oy) = (origin_x * width, origin_y * height);
 
-        // Origin offset | 原点偏移
-        // origin (0,0) = bottom-left, (1,1) = top-right
-        // 原点 (0,0) = 左下角, (1,1) = 右上角
-        let ox = origin_x * width;
-        let oy = origin_y * height;
+        let corners = [(-ox, height - oy), (width - ox, height - oy), (width - ox, -oy), (-ox, -oy)];
+        let tex_coords = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
 
-        // Local corner positions (relative to origin) | 局部角点位置（相对于原点）
-        // Y-up coordinate system | Y向上坐标系
-        let corners = [
-            (-ox, height - oy),   // Top-left | 左上
-            (width - ox, height - oy), // Top-right | 右上
-            (width - ox, -oy),    // Bottom-right | 右下
-            (-ox, -oy),           // Bottom-left | 左下
-        ];
-
-        // UV coordinates use image coordinate system (top-left origin, Y-down)
-        // UV坐标使用图像坐标系（左上角为原点，Y轴向下）
-        // Incoming UV: [u0, v0, u1, v1] where v0 < v1
-        // 传入的 UV：[u0, v0, u1, v1] 其中 v0 < v1
-        let tex_coords = [
-            [u0, v0], // Top-left
-            [u1, v0], // Top-right
-            [u1, v1], // Bottom-right
-            [u0, v1], // Bottom-left
-        ];
-
-        // Transform and add each vertex | 变换并添加每个顶点
         for i in 0..4 {
             let (lx, ly) = corners[i];
-
-            // Apply rotation | 应用旋转
-            let rx = lx * cos - ly * sin;
-            let ry = lx * sin + ly * cos;
-
-            // Apply translation | 应用平移
-            let px = rx + x;
-            let py = ry + y;
-
-            // Position | 位置
-            batch.push(px);
-            batch.push(py);
-
-            // Texture coordinates | 纹理坐标
-            batch.push(tex_coords[i][0]);
-            batch.push(tex_coords[i][1]);
-
-            // Color | 颜色
+            let (rx, ry) = (lx * cos - ly * sin, lx * sin + ly * cos);
+            batch.extend_from_slice(&[rx + x, ry + y]);
+            batch.extend_from_slice(&tex_coords[i]);
             batch.extend_from_slice(&color);
-
-            // Aspect ratio (same for all 4 vertices of a quad)
-            // 宽高比（四边形的 4 个顶点相同）
-            batch.push(aspect_ratio);
+            batch.push(aspect);
         }
     }
 
-    /// Flush a batch to GPU and render.
-    /// 将批次刷新到GPU并渲染。
-    fn flush_batch(&self, gl: &WebGl2RenderingContext, vertices: &[f32]) {
-        if vertices.is_empty() {
-            return;
-        }
-
-        let sprite_count = vertices.len() / (VERTICES_PER_SPRITE * FLOATS_PER_VERTEX);
-
-        // Bind VAO | 绑定VAO
-        gl.bind_vertex_array(Some(&self.vao));
-
-        // Upload vertex data | 上传顶点数据
-        gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.vbo));
-        unsafe {
-            let vertex_array = js_sys::Float32Array::view(vertices);
-            gl.buffer_sub_data_with_i32_and_array_buffer_view(
-                WebGl2RenderingContext::ARRAY_BUFFER,
-                0,
-                &vertex_array,
-            );
-        }
-
-        // Draw | 绘制
-        let index_count = (sprite_count * INDICES_PER_SPRITE) as i32;
-        gl.draw_elements_with_i32(
-            WebGl2RenderingContext::TRIANGLES,
-            index_count,
-            WebGl2RenderingContext::UNSIGNED_SHORT,
-            0,
-        );
-
-        // Unbind VAO | 解绑VAO
-        gl.bind_vertex_array(None);
-    }
-
-    /// Get all batches for rendering (in submission order).
-    /// 获取所有批次用于渲染（按提交顺序）。
     pub fn batches(&self) -> &[(BatchKey, Vec<f32>)] {
         &self.batches
     }
 
-    /// Flush a specific batch by index.
-    /// 按索引刷新特定批次。
-    pub fn flush_batch_at(&self, gl: &WebGl2RenderingContext, index: usize) {
+    pub fn flush_batch(&self, backend: &mut impl GraphicsBackend, vertices: &[f32]) {
+        if vertices.is_empty() { return; }
+
+        let sprite_count = vertices.len() / (VERTICES_PER_SPRITE * FLOATS_PER_VERTEX);
+        backend.update_buffer(self.vbo, 0, bytemuck::cast_slice(vertices)).ok();
+        backend.draw_indexed(self.vao, (sprite_count * INDICES_PER_SPRITE) as u32, 0).ok();
+    }
+
+    pub fn flush_batch_at(&self, backend: &mut impl GraphicsBackend, index: usize) {
         if let Some((_, vertices)) = self.batches.get(index) {
-            self.flush_batch(gl, vertices);
+            self.flush_batch(backend, vertices);
         }
     }
 
-    /// Get current sprite count.
-    /// 获取当前精灵数量。
     #[inline]
     pub fn sprite_count(&self) -> usize {
         self.sprite_count
+    }
+
+    pub fn vao(&self) -> VertexArrayHandle {
+        self.vao
+    }
+
+    pub fn destroy(self, backend: &mut impl GraphicsBackend) {
+        backend.destroy_vertex_array(self.vao);
+        backend.destroy_buffer(self.vbo);
+        backend.destroy_buffer(self.ibo);
     }
 }
