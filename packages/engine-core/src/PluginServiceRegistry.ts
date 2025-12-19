@@ -34,115 +34,46 @@ export const TransformTypeToken = createServiceToken<new (...args: any[]) => any
 export const CanvasElementToken = createServiceToken<HTMLCanvasElement>('canvasElement');
 
 // ============================================================================
-// 引擎桥接接口 | Engine Bridge Interface
+// 渲染服务接口 | Render Service Interfaces
 // ============================================================================
 
 /**
- * 引擎桥接接口
- * Engine bridge interface
+ * 纹理服务接口
+ * Texture service interface
  *
- * 定义 WASM 引擎桥接的核心契约，供各模块使用。
- * Defines the core contract of WASM engine bridge for modules to use.
+ * 负责纹理的加载、状态查询和管理。
+ * Responsible for texture loading, state querying, and management.
  */
-export interface IEngineBridge {
+export interface ITextureService {
     /** 加载纹理 | Load texture */
     loadTexture(id: number, url: string): Promise<void>;
 
-    /**
-     * 屏幕坐标转世界坐标
-     * Screen to world coordinate conversion
-     */
-    screenToWorld(screenX: number, screenY: number): { x: number; y: number };
+    /** 获取纹理加载状态 | Get texture loading state */
+    getTextureState(id: number): string;
 
-    /**
-     * 世界坐标转屏幕坐标
-     * World to screen coordinate conversion
-     */
-    worldToScreen(worldX: number, worldY: number): { x: number; y: number };
+    /** 检查纹理是否就绪 | Check if texture is ready */
+    isTextureReady(id: number): boolean;
 
-    /**
-     * 设置清除颜色
-     * Set clear color
-     */
-    setClearColor(r: number, g: number, b: number, a: number): void;
+    /** 获取正在加载的纹理数量 | Get loading texture count */
+    getTextureLoadingCount(): number;
 
-    // ===== Texture State API (Optional) =====
-    // ===== 纹理状态 API（可选）=====
+    /** 异步加载纹理（等待完成）| Load texture async (wait for completion) */
+    loadTextureAsync(id: number, url: string): Promise<void>;
 
-    /**
-     * 获取纹理加载状态
-     * Get texture loading state
-     *
-     * @param id 纹理 ID | Texture ID
-     * @returns 状态字符串: 'loading', 'ready', 或 'failed:reason'
-     *          State string: 'loading', 'ready', or 'failed:reason'
-     */
-    getTextureState?(id: number): string;
+    /** 等待所有加载中的纹理完成 | Wait for all textures to load */
+    waitForAllTextures(timeout?: number): Promise<void>;
+}
 
-    /**
-     * 检查纹理是否就绪
-     * Check if texture is ready for rendering
-     *
-     * @param id 纹理 ID | Texture ID
-     * @returns 纹理数据已加载则返回 true | true if texture data is loaded
-     */
-    isTextureReady?(id: number): boolean;
+/**
+ * 动态图集服务接口
+ * Dynamic atlas service interface
+ */
+export interface IDynamicAtlasService {
+    /** 创建空白纹理 | Create blank texture */
+    createBlankTexture(width: number, height: number): number;
 
-    /**
-     * 获取正在加载的纹理数量
-     * Get count of textures currently loading
-     *
-     * @returns 处于加载状态的纹理数量 | Number of textures in loading state
-     */
-    getTextureLoadingCount?(): number;
-
-    /**
-     * 异步加载纹理（等待完成）
-     * Load texture asynchronously (wait for completion)
-     *
-     * 与 loadTexture 不同，此方法会等待纹理实际加载完成。
-     * Unlike loadTexture, this method waits until texture is actually loaded.
-     *
-     * @param id 纹理 ID | Texture ID
-     * @param url 图片 URL | Image URL
-     * @returns 纹理就绪时解析的 Promise | Promise that resolves when texture is ready
-     */
-    loadTextureAsync?(id: number, url: string): Promise<void>;
-
-    /**
-     * 等待所有加载中的纹理完成
-     * Wait for all loading textures to complete
-     *
-     * @param timeout 最大等待时间（毫秒，默认30000）| Max wait time in ms (default 30000)
-     * @returns 所有纹理加载完成时解析 | Resolves when all textures are loaded
-     */
-    waitForAllTextures?(timeout?: number): Promise<void>;
-
-    // ===== Dynamic Atlas API (Optional) =====
-    // ===== 动态图集 API（可选）=====
-
-    /**
-     * 创建空白纹理（用于动态图集）
-     * Create blank texture (for dynamic atlas)
-     *
-     * @param width 宽度 | Width
-     * @param height 高度 | Height
-     * @returns 纹理 ID | Texture ID
-     */
-    createBlankTexture?(width: number, height: number): number;
-
-    /**
-     * 更新纹理区域
-     * Update texture region
-     *
-     * @param id 纹理 ID | Texture ID
-     * @param x X 坐标 | X coordinate
-     * @param y Y 坐标 | Y coordinate
-     * @param width 宽度 | Width
-     * @param height 高度 | Height
-     * @param pixels RGBA 像素数据 | RGBA pixel data
-     */
-    updateTextureRegion?(
+    /** 更新纹理区域 | Update texture region */
+    updateTextureRegion(
         id: number,
         x: number,
         y: number,
@@ -153,7 +84,38 @@ export interface IEngineBridge {
 }
 
 /**
- * 引擎桥接服务令牌
- * Engine bridge service token
+ * 坐标转换服务接口
+ * Coordinate transform service interface
  */
-export const EngineBridgeToken = createServiceToken<IEngineBridge>('engineBridge');
+export interface ICoordinateService {
+    /** 屏幕坐标转世界坐标 | Screen to world */
+    screenToWorld(screenX: number, screenY: number): { x: number; y: number };
+
+    /** 世界坐标转屏幕坐标 | World to screen */
+    worldToScreen(worldX: number, worldY: number): { x: number; y: number };
+}
+
+/**
+ * 渲染配置服务接口
+ * Render config service interface
+ */
+export interface IRenderConfigService {
+    /** 设置清除颜色 | Set clear color */
+    setClearColor(r: number, g: number, b: number, a: number): void;
+}
+
+// ============================================================================
+// 服务令牌 | Service Tokens
+// ============================================================================
+
+/** 纹理服务令牌 | Texture service token */
+export const TextureServiceToken = createServiceToken<ITextureService>('textureService');
+
+/** 动态图集服务令牌 | Dynamic atlas service token */
+export const DynamicAtlasServiceToken = createServiceToken<IDynamicAtlasService>('dynamicAtlasService');
+
+/** 坐标转换服务令牌 | Coordinate service token */
+export const CoordinateServiceToken = createServiceToken<ICoordinateService>('coordinateService');
+
+/** 渲染配置服务令牌 | Render config service token */
+export const RenderConfigServiceToken = createServiceToken<IRenderConfigService>('renderConfigService');

@@ -13,10 +13,16 @@ export {
     // Engine-specific service tokens
     TransformTypeToken,
     CanvasElementToken,
-    EngineBridgeToken,
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
     // Types
     type IEditorModuleBase,
-    type IEngineBridge
+    type ITextureService,
+    type IDynamicAtlasService,
+    type ICoordinateService,
+    type IRenderConfigService
 } from './EnginePlugin';
 
 // Module Manifest types (unified module/plugin configuration)

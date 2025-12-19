@@ -1,6 +1,11 @@
 import type { IScene, IComponentRegistry } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
-import { EngineBridgeToken } from '@esengine/ecs-engine-bindgen';
+import {
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    type ITextureService,
+    type IDynamicAtlasService
+} from '@esengine/ecs-engine-bindgen';
 import { EngineIntegration } from '@esengine/asset-system';
 
 import { initializeDynamicAtlasService, registerTexturePathMapping, AtlasExpansionStrategy, type IAtlasEngineBridge } from './atlas';
@@ -77,7 +82,8 @@ class UIRuntimeModule implements IRuntimeModule {
 
     createSystems(scene: IScene, context: SystemContext): void {
         // 从服务注册表获取依赖 | Get dependencies from service registry
-        const engineBridge = context.services.get(EngineBridgeToken);
+        const textureService = context.services.get(TextureServiceToken);
+        const dynamicAtlasService = context.services.get(DynamicAtlasServiceToken);
 
         // Slider fill control system (runs before layout to modify anchors)
         // 滑块填充控制系统（在布局之前运行以修改锚点）
@@ -133,34 +139,30 @@ class UIRuntimeModule implements IRuntimeModule {
         const textRenderSystem = new UITextRenderSystem();
         scene.addSystem(textRenderSystem);
 
-        if (engineBridge) {
+        if (textureService) {
             // 设置文本渲染系统的纹理回调
             // Set texture callback for text render system
             textRenderSystem.setTextureCallback((id: number, dataUrl: string) => {
-                engineBridge.loadTexture(id, dataUrl);
+                textureService.loadTexture(id, dataUrl);
             });
 
             // 设置纹理就绪检查回调，用于检测异步加载的纹理是否已就绪
             // Set texture ready checker callback to detect if async-loaded texture is ready
-            if (engineBridge.isTextureReady) {
-                textRenderSystem.setTextureReadyChecker((id: number) => {
-                    return engineBridge.isTextureReady!(id);
-                });
-            }
+            textRenderSystem.setTextureReadyChecker((id: number) => {
+                return textureService.isTextureReady(id);
+            });
 
             // 设置输入框渲染系统的纹理回调
             // Set texture callback for input field render system
             inputFieldRenderSystem.setTextureCallback((id: number, dataUrl: string) => {
-                engineBridge.loadTexture(id, dataUrl);
+                textureService.loadTexture(id, dataUrl);
             });
 
             // 设置输入框渲染系统的纹理就绪检查回调
             // Set texture ready checker callback for input field render system
-            if (engineBridge.isTextureReady) {
-                inputFieldRenderSystem.setTextureReadyChecker((id: number) => {
-                    return engineBridge.isTextureReady!(id);
-                });
-            }
+            inputFieldRenderSystem.setTextureReadyChecker((id: number) => {
+                return textureService.isTextureReady(id);
+            });
         }
 
         const uiRenderProvider = new UIRenderDataProvider();
@@ -175,17 +177,15 @@ class UIRuntimeModule implements IRuntimeModule {
         context.services.register(UITextRenderSystemToken, textRenderSystem);
 
         // 初始化动态图集服务 | Initialize dynamic atlas service
-        // 需要 engineBridge 支持 createBlankTexture 和 updateTextureRegion
-        // Requires engineBridge to support createBlankTexture and updateTextureRegion
-        console.log('[UIRuntimeModule] engineBridge available:', !!engineBridge);
-        console.log('[UIRuntimeModule] createBlankTexture:', !!engineBridge?.createBlankTexture);
-        console.log('[UIRuntimeModule] updateTextureRegion:', !!engineBridge?.updateTextureRegion);
-        if (engineBridge?.createBlankTexture && engineBridge?.updateTextureRegion) {
-            // 创建适配器将 EngineBridge 适配为 IAtlasEngineBridge
-            // Create adapter to adapt EngineBridge to IAtlasEngineBridge
+        // 需要 dynamicAtlasService 支持 createBlankTexture 和 updateTextureRegion
+        // Requires dynamicAtlasService to support createBlankTexture and updateTextureRegion
+        console.log('[UIRuntimeModule] dynamicAtlasService available:', !!dynamicAtlasService);
+        if (dynamicAtlasService) {
+            // 创建适配器将 IDynamicAtlasService 适配为 IAtlasEngineBridge
+            // Create adapter to adapt IDynamicAtlasService to IAtlasEngineBridge
             const atlasBridge: IAtlasEngineBridge = {
                 createBlankTexture: (width: number, height: number) => {
-                    return engineBridge.createBlankTexture!(width, height);
+                    return dynamicAtlasService.createBlankTexture(width, height);
                 },
                 updateTextureRegion: (
                     id: number,
@@ -195,7 +195,7 @@ class UIRuntimeModule implements IRuntimeModule {
                     height: number,
                     pixels: Uint8Array
                 ) => {
-                    engineBridge.updateTextureRegion!(id, x, y, width, height, pixels);
+                    dynamicAtlasService.updateTextureRegion(id, x, y, width, height, pixels);
                 }
             };
 
@@ -218,7 +218,7 @@ class UIRuntimeModule implements IRuntimeModule {
                 registerTexturePathMapping(guid, path);
             });
         } else {
-            console.warn('[UIRuntimeModule] Cannot initialize dynamic atlas service: engineBridge missing createBlankTexture or updateTextureRegion');
+            console.warn('[UIRuntimeModule] Cannot initialize dynamic atlas service: dynamicAtlasService not available');
         }
     }
 }

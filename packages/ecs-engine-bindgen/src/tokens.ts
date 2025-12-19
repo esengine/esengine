@@ -4,12 +4,31 @@
  */
 
 import { createServiceToken } from '@esengine/ecs-framework';
-import { EngineBridgeToken as CoreEngineBridgeToken, type IEngineBridge as CoreIEngineBridge } from '@esengine/engine-core';
+import {
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
+    type ITextureService,
+    type IDynamicAtlasService,
+    type ICoordinateService,
+    type IRenderConfigService
+} from '@esengine/engine-core';
 import type { IRenderDataProvider as InternalIRenderDataProvider } from './systems/EngineRenderSystem';
 
 // 从 engine-core 重新导出 | Re-export from engine-core
-export { CoreEngineBridgeToken as EngineBridgeToken };
-export type { CoreIEngineBridge as IEngineBridge };
+export {
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken
+};
+export type {
+    ITextureService,
+    IDynamicAtlasService,
+    ICoordinateService,
+    IRenderConfigService
+};
 
 export type IRenderDataProvider = InternalIRenderDataProvider;
 

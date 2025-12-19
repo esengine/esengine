@@ -11,23 +11,11 @@ import { Input, MouseButton, TransformComponent, SortingLayers } from '@esengine
 import { ClickFxComponent, ClickFxTriggerMode } from '../ClickFxComponent';
 import { ParticleSystemComponent, RenderSpace } from '../ParticleSystemComponent';
 
+import { CoordinateServiceToken, type ICoordinateService } from '@esengine/ecs-engine-bindgen';
+
 // ============================================================================
 // 本地服务令牌定义 | Local Service Token Definitions
 // ============================================================================
-// 使用 createServiceToken() 本地定义（与 runtime-core 相同策略）
-// createServiceToken() 使用 Symbol.for()，确保运行时与源模块令牌匹配
-//
-// Local token definitions using createServiceToken() (same strategy as runtime-core)
-// createServiceToken() uses Symbol.for(), ensuring runtime match with source module tokens
-// ============================================================================
-
-/**
- * EngineBridge 接口（最小定义，用于坐标转换）
- * EngineBridge interface (minimal definition for coordinate conversion)
- */
-interface IEngineBridge {
-    screenToWorld(screenX: number, screenY: number): { x: number; y: number };
-}
 
 /**
  * EngineRenderSystem 接口（最小定义，用于获取 UI Canvas 尺寸）
@@ -36,10 +24,6 @@ interface IEngineBridge {
 interface IEngineRenderSystem {
     getUICanvasSize(): { width: number; height: number };
 }
-
-// EngineBridge 令牌（与 engine-core 中的一致）
-// EngineBridge token (consistent with engine-core)
-const EngineBridgeToken = createServiceToken<IEngineBridge>('engineBridge');
 
 // RenderSystem 令牌（与 ecs-engine-bindgen 中的一致）
 // RenderSystem token (consistent with ecs-engine-bindgen)
@@ -62,7 +46,7 @@ const RenderSystemToken = createServiceToken<IEngineRenderSystem>('renderSystem'
  */
 @ECSSystem('ClickFx', { updateOrder: 100 })
 export class ClickFxSystem extends EntitySystem {
-    private _engineBridge: IEngineBridge | null = null;
+    private _coordinateService: ICoordinateService | null = null;
     private _renderSystem: IEngineRenderSystem | null = null;
     private _entitiesToDestroy: Entity[] = [];
     private _canvas: HTMLCanvasElement | null = null;
@@ -72,20 +56,20 @@ export class ClickFxSystem extends EntitySystem {
     }
 
     /**
-     * 设置服务注册表（用于获取 EngineBridge 和 RenderSystem）
-     * Set service registry (for getting EngineBridge and RenderSystem)
+     * 设置服务注册表（用于获取 CoordinateService 和 RenderSystem）
+     * Set service registry (for getting CoordinateService and RenderSystem)
      */
     setServiceRegistry(services: PluginServiceRegistry): void {
-        this._engineBridge = services.get(EngineBridgeToken) ?? null;
+        this._coordinateService = services.get(CoordinateServiceToken) ?? null;
         this._renderSystem = services.get(RenderSystemToken) ?? null;
     }
 
     /**
-     * 设置 EngineBridge（直接注入）
-     * Set EngineBridge (direct injection)
+     * 设置坐标服务（直接注入）
+     * Set coordinate service (direct injection)
      */
-    setEngineBridge(bridge: IEngineBridge): void {
-        this._engineBridge = bridge;
+    setCoordinateService(coordinateService: ICoordinateService): void {
+        this._coordinateService = coordinateService;
     }
 
     /**

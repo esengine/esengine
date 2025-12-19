@@ -8,7 +8,15 @@
 
 import { GizmoRegistry, EntityStoreService, MessageHub, SceneManagerService, ProjectService, PluginManager, IPluginManager, AssetRegistryService, GizmoInteractionService, GizmoInteractionServiceToken, type SystemContext } from '@esengine/editor-core';
 import { Core, Scene, Entity, SceneSerializer, ProfilerSDK, createLogger, PluginServiceRegistry } from '@esengine/ecs-framework';
-import { CameraConfig, EngineBridgeToken, RenderSystemToken, EngineIntegrationToken } from '@esengine/ecs-engine-bindgen';
+import {
+    CameraConfig,
+    RenderSystemToken,
+    EngineIntegrationToken,
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken
+} from '@esengine/ecs-engine-bindgen';
 import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { SpriteComponent, SpriteAnimatorComponent, SpriteAnimatorSystemToken } from '@esengine/sprite';
 import { ParticleSystemComponent } from '@esengine/particle';
@@ -252,7 +260,11 @@ export class EngineService {
         // 创建服务注册表并注册核心服务
         // Create service registry and register core services
         const services = new PluginServiceRegistry();
-        services.register(EngineBridgeToken, this._runtime.bridge);
+        // 使用单一职责接口注册 EngineBridge | Register EngineBridge with single-responsibility interfaces
+        services.register(TextureServiceToken, this._runtime.bridge);
+        services.register(DynamicAtlasServiceToken, this._runtime.bridge);
+        services.register(CoordinateServiceToken, this._runtime.bridge);
+        services.register(RenderConfigServiceToken, this._runtime.bridge);
         services.register(RenderSystemToken, this._runtime.renderSystem);
         services.register(AssetManagerToken, this._assetManager);
         services.register(EngineIntegrationToken, this._engineIntegration);

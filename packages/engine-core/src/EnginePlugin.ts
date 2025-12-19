@@ -21,16 +21,28 @@ import type { ModuleManifest } from './ModuleManifest';
 import {
     TransformTypeToken,
     CanvasElementToken,
-    EngineBridgeToken,
-    type IEngineBridge
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
+    type ITextureService,
+    type IDynamicAtlasService,
+    type ICoordinateService,
+    type IRenderConfigService
 } from './PluginServiceRegistry';
 
 // 导出 engine-core 特有的服务令牌 | Export engine-core specific service tokens
 export {
     TransformTypeToken,
     CanvasElementToken,
-    EngineBridgeToken,
-    type IEngineBridge
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
+    type ITextureService,
+    type IDynamicAtlasService,
+    type ICoordinateService,
+    type IRenderConfigService
 };
 
 // 重新导出 IEditorModuleBase（供编辑器插件使用）| Re-export for editor plugins
