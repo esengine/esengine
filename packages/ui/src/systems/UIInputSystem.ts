@@ -8,6 +8,7 @@ import { UIScrollViewComponent } from '../components/widgets/UIScrollViewCompone
 import { UIToggleComponent } from '../components/widgets/UIToggleComponent';
 import { UIInputFieldComponent } from '../components/widgets/UIInputFieldComponent';
 import { UIDropdownComponent } from '../components/widgets/UIDropdownComponent';
+import { IMEHelper } from '../utils/IMEHelper';
 import type { UILayoutSystem } from './UILayoutSystem';
 
 // Re-export MouseButton for backward compatibility
@@ -98,6 +99,9 @@ export class UIInputSystem extends EntitySystem {
     // Used to get UI canvas size for coordinate conversion
     private layoutSystem: UILayoutSystem | null = null;
 
+    // ===== IME 输入法支持 IME Support =====
+    private imeHelper: IMEHelper | null = null;
+
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UIInteractableComponent));
 
@@ -142,6 +146,15 @@ export class UIInputSystem extends EntitySystem {
 
         // 阻止右键菜单
         canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // 初始化 IME 辅助服务
+        // Initialize IME helper service
+        this.imeHelper = new IMEHelper();
+        this.imeHelper.setCanvas(canvas);
+        this.imeHelper.onCompositionStart = () => this.handleCompositionStart();
+        this.imeHelper.onCompositionUpdate = (text) => this.handleCompositionUpdate(text);
+        this.imeHelper.onCompositionEnd = (text) => this.handleCompositionEnd(text);
+        this.imeHelper.onInput = (text) => this.handleIMEInput(text);
     }
 
     /**
@@ -162,6 +175,13 @@ export class UIInputSystem extends EntitySystem {
         document.removeEventListener('keydown', this.boundKeyDown);
         document.removeEventListener('keyup', this.boundKeyUp);
         document.removeEventListener('keypress', this.boundKeyPress);
+
+        // 销毁 IME 辅助服务
+        // Dispose IME helper service
+        if (this.imeHelper) {
+            this.imeHelper.dispose();
+            this.imeHelper = null;
+        }
     }
 
     /**
@@ -751,6 +771,14 @@ export class UIInputSystem extends EntitySystem {
                 oldInteractable.focused = false;
                 oldInteractable.onBlur?.();
             }
+
+            // 清除旧 InputField 的 IME 组合状态
+            // Clear IME composition state for old InputField
+            const oldInputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+            if (oldInputField) {
+                oldInputField.isComposing = false;
+                oldInputField.compositionText = '';
+            }
         }
 
         this.focusedEntity = entity;
@@ -762,6 +790,18 @@ export class UIInputSystem extends EntitySystem {
                 interactable.focused = true;
                 interactable.onFocus?.();
             }
+
+            // 如果是 InputField，激活 IME
+            // If it's an InputField, activate IME
+            const inputField = entity.getComponent(UIInputFieldComponent);
+            if (inputField && this.imeHelper) {
+                this.imeHelper.focus();
+                this.updateIMEPosition(entity);
+            }
+        } else {
+            // 失去焦点时关闭 IME
+            // Blur IME when focus is lost
+            this.imeHelper?.blur();
         }
     }
 
@@ -1264,6 +1304,153 @@ export class UIInputSystem extends EntitySystem {
         }
 
         return -1;
+    }
+
+    // ===== IME 事件处理 IME Event Handlers =====
+
+    /**
+     * 更新 IME 隐藏 input 的位置
+     * Update IME hidden input position
+     *
+     * 将 IME 候选窗口定位到光标附近
+     * Position IME candidate window near the caret
+     */
+    private updateIMEPosition(entity: Entity): void {
+        if (!this.imeHelper || !this.canvas) return;
+
+        const transform = entity.getComponent(UITransformComponent);
+        const inputField = entity.getComponent(UIInputFieldComponent);
+        if (!transform || !inputField) return;
+
+        // 获取 UI 世界坐标
+        const worldX = transform.worldX ?? transform.x;
+        const worldY = transform.worldY ?? transform.y;
+        const width = transform.computedWidth ?? transform.width;
+        const height = transform.computedHeight ?? transform.height;
+        const pivotX = transform.pivotX;
+        const pivotY = transform.pivotY;
+
+        // 计算光标在 UI 世界坐标中的位置
+        const textAreaStartX = worldX - width * pivotX + inputField.padding;
+        const caretX = textAreaStartX + inputField.getCaretX() - inputField.scrollOffset;
+        const caretY = worldY - height * pivotY + height / 2;
+
+        // 转换为屏幕坐标
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const uiCanvasSize = this.layoutSystem?.getCanvasSize() ?? { width: 1920, height: 1080 };
+
+        // UI 坐标 -> 归一化坐标 -> 屏幕坐标
+        const normalizedX = (caretX / uiCanvasSize.width) + 0.5;
+        const normalizedY = 0.5 - (caretY / uiCanvasSize.height);
+
+        const screenX = canvasRect.left + normalizedX * canvasRect.width;
+        const screenY = canvasRect.top + normalizedY * canvasRect.height;
+
+        this.imeHelper.updatePosition(screenX, screenY);
+    }
+
+    /**
+     * 处理 IME 组合开始
+     * Handle IME composition start
+     */
+    private handleCompositionStart(): void {
+        if (!this.focusedEntity) return;
+
+        const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+        if (!inputField || inputField.readOnly || inputField.disabled) return;
+
+        // 如果有选中文本，先删除
+        // Delete selection if any
+        if (inputField.hasSelection()) {
+            inputField.deleteSelection();
+        }
+
+        inputField.isComposing = true;
+        inputField.compositionStart = inputField.caretPosition;
+        inputField.compositionText = '';
+    }
+
+    /**
+     * 处理 IME 组合更新
+     * Handle IME composition update
+     */
+    private handleCompositionUpdate(text: string): void {
+        if (!this.focusedEntity) return;
+
+        const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+        if (!inputField || !inputField.isComposing) return;
+
+        inputField.compositionText = text;
+
+        // 更新 IME 位置（组合文本可能改变光标位置）
+        // Update IME position (composition text may change caret position)
+        this.updateIMEPosition(this.focusedEntity);
+    }
+
+    /**
+     * 处理 IME 组合结束
+     * Handle IME composition end
+     */
+    private handleCompositionEnd(text: string): void {
+        if (!this.focusedEntity) return;
+
+        const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+        if (!inputField) return;
+
+        inputField.isComposing = false;
+        inputField.compositionText = '';
+
+        // 插入最终文本
+        // Insert final text
+        if (text && !inputField.readOnly && !inputField.disabled) {
+            inputField.insertText(text);
+
+            // 确保光标可见
+            // Ensure caret is visible
+            const transform = this.focusedEntity.getComponent(UITransformComponent);
+            if (transform) {
+                const width = transform.computedWidth ?? transform.width;
+                const textAreaWidth = width - inputField.padding * 2;
+                inputField.ensureCaretVisible(textAreaWidth);
+            }
+        }
+    }
+
+    /**
+     * 处理 IME 直接输入（非组合输入）
+     * Handle IME direct input (non-composition input)
+     */
+    private handleIMEInput(text: string): void {
+        if (!this.focusedEntity) return;
+
+        const inputField = this.focusedEntity.getComponent(UIInputFieldComponent);
+        if (!inputField || inputField.readOnly || inputField.disabled) return;
+
+        // 组合过程中不处理直接输入
+        // Don't handle direct input during composition
+        if (inputField.isComposing) return;
+
+        // 验证并插入文本
+        // Validate and insert text
+        let validText = '';
+        for (const char of text) {
+            if (inputField.validateInput(char)) {
+                validText += char;
+            }
+        }
+
+        if (validText) {
+            inputField.insertText(validText);
+
+            // 确保光标可见
+            // Ensure caret is visible
+            const transform = this.focusedEntity.getComponent(UITransformComponent);
+            if (transform) {
+                const width = transform.computedWidth ?? transform.width;
+                const textAreaWidth = width - inputField.padding * 2;
+                inputField.ensureCaretVisible(textAreaWidth);
+            }
+        }
     }
 
     protected onDestroy(): void {

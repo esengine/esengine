@@ -21,7 +21,7 @@ import {
     type IPlugin,
     type IRuntimeSceneManager
 } from '@esengine/runtime-core';
-import { isValidGUID, type IAssetManager } from '@esengine/asset-system';
+import { isValidGUID, setGlobalAssetFileLoader, type IAssetManager, type IAssetFileLoader } from '@esengine/asset-system';
 import { BrowserAssetReader } from './BrowserAssetReader';
 import { WebInputSubsystem } from './subsystems/WebInputSubsystem';
 
@@ -158,6 +158,16 @@ export class BrowserRuntime {
                 const catalog = this._fileSystem.catalog;
                 this._runtime.assetManager.initializeFromCatalog(catalog);
             }
+
+            // Set global asset file loader for UI atlas and other subsystems
+            // 设置全局资产文件加载器供 UI 图集和其他子系统使用
+            const assetFileLoader: IAssetFileLoader = {
+                loadImage: (assetPath: string) => this._assetReader!.loadImage(assetPath),
+                loadText: (assetPath: string) => this._assetReader!.readText(assetPath),
+                loadBinary: (assetPath: string) => this._assetReader!.readBinary(assetPath),
+                exists: (assetPath: string) => this._assetReader!.exists(assetPath)
+            };
+            setGlobalAssetFileLoader(assetFileLoader);
         }
 
         // Disable editor mode (hides grid, gizmos, axis indicator)

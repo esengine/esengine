@@ -51,6 +51,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { ExternalModificationDialog } from './components/ExternalModificationDialog';
 import { PluginGeneratorWindow } from './components/PluginGeneratorWindow';
 import { BuildSettingsWindow } from './components/BuildSettingsWindow';
+import { AssetPickerDialog } from './components/dialogs/AssetPickerDialog';
 import { ForumPanel } from './components/forum';
 import { ToastProvider, useToast } from './components/Toast';
 import { TitleBar } from './components/TitleBar';
@@ -209,6 +210,13 @@ function App() {
         confirmDialog, setConfirmDialog,
         externalModificationDialog, setExternalModificationDialog
     } = useDialogStore();
+
+    // 资产选择器对话框状态 | Asset picker dialog state
+    const [assetPickerState, setAssetPickerState] = useState<{
+        isOpen: boolean;
+        extensions?: string[];
+        onSelect?: (path: string) => void;
+    }>({ isOpen: false });
 
     // 全局监听独立调试窗口的数据请求 | Global listener for standalone debug window requests
     useEffect(() => {
@@ -489,6 +497,26 @@ function App() {
 
         return () => unsubscribe?.();
     }, [initialized, addDynamicPanel, setActivePanelId]);
+
+    // 资产选择器消息订阅 | Asset picker message subscription
+    useEffect(() => {
+        if (!initialized || !messageHubRef.current) return;
+        const hub = messageHubRef.current;
+
+        const unsubscribe = hub.subscribe('asset:pick', (data: {
+            extensions?: string[];
+            onSelect?: (path: string) => void;
+        }) => {
+            logger.info('Opening asset picker dialog with extensions:', data.extensions);
+            setAssetPickerState({
+                isOpen: true,
+                extensions: data.extensions,
+                onSelect: data.onSelect
+            });
+        });
+
+        return () => unsubscribe?.();
+    }, [initialized]);
 
     useEffect(() => {
         if (!initialized || !messageHubRef.current) return;
@@ -1426,6 +1454,20 @@ function App() {
                     availableScenes={availableScenes}
                 />
             )}
+
+            {/* 资产选择器对话框 | Asset Picker Dialog */}
+            <AssetPickerDialog
+                isOpen={assetPickerState.isOpen}
+                onClose={() => setAssetPickerState({ isOpen: false })}
+                onSelect={(path) => {
+                    if (assetPickerState.onSelect) {
+                        assetPickerState.onSelect(path);
+                    }
+                    setAssetPickerState({ isOpen: false });
+                }}
+                title={t('asset.selectAsset')}
+                fileExtensions={assetPickerState.extensions}
+            />
 
             {/* 渲染调试面板 | Render Debug Panel */}
             <RenderDebugPanel

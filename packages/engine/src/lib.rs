@@ -177,6 +177,29 @@ impl GameEngine {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// Set scissor rect for clipping (screen coordinates, Y-down).
+    /// 设置裁剪矩形（屏幕坐标，Y 轴向下）。
+    ///
+    /// Content outside this rect will be clipped.
+    /// 此矩形外的内容将被裁剪。
+    ///
+    /// # Arguments | 参数
+    /// * `x` - Left edge in screen coordinates | 屏幕坐标中的左边缘
+    /// * `y` - Top edge in screen coordinates (Y-down) | 屏幕坐标中的上边缘（Y 向下）
+    /// * `width` - Rect width | 矩形宽度
+    /// * `height` - Rect height | 矩形高度
+    #[wasm_bindgen(js_name = setScissorRect)]
+    pub fn set_scissor_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.engine.set_scissor_rect(x, y, width, height);
+    }
+
+    /// Clear scissor rect (disable clipping).
+    /// 清除裁剪矩形（禁用裁剪）。
+    #[wasm_bindgen(js_name = clearScissorRect)]
+    pub fn clear_scissor_rect(&mut self) {
+        self.engine.clear_scissor_rect();
+    }
+
     /// Load a texture from URL.
     /// 从URL加载纹理。
     ///

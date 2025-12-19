@@ -293,6 +293,19 @@ export const en: Translations = {
     },
 
     // ========================================
+    // Asset
+    // ========================================
+    asset: {
+        selectAsset: 'Select Asset',
+        none: 'None',
+        browse: 'Browse...',
+        clear: 'Clear',
+        copy: 'Copy Path',
+        locate: 'Locate in Content Browser',
+        noGuid: 'Asset has no GUID'
+    },
+
+    // ========================================
     // Scene
     // ========================================
     scene: {

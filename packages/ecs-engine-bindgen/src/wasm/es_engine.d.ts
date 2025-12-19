@@ -218,6 +218,20 @@ export class GameEngine {
    */
   isTextureReady(id: number): boolean;
   /**
+   * Set scissor rect for clipping (screen coordinates, Y-down).
+   * 设置裁剪矩形（屏幕坐标，Y 轴向下）。
+   *
+   * Content outside this rect will be clipped.
+   * 此矩形外的内容将被裁剪。
+   *
+   * # Arguments | 参数
+   * * `x` - Left edge in screen coordinates | 屏幕坐标中的左边缘
+   * * `y` - Top edge in screen coordinates (Y-down) | 屏幕坐标中的上边缘（Y 向下）
+   * * `width` - Rect width | 矩形宽度
+   * * `height` - Rect height | 矩形高度
+   */
+  setScissorRect(x: number, y: number, width: number, height: number): void;
+  /**
    * Add a capsule gizmo outline.
    * 添加胶囊Gizmo边框。
    */
@@ -269,6 +283,11 @@ export class GameEngine {
    * 请谨慎使用，因为所有纹理引用都将变得无效。
    */
   clearAllTextures(): void;
+  /**
+   * Clear scissor rect (disable clipping).
+   * 清除裁剪矩形（禁用裁剪）。
+   */
+  clearScissorRect(): void;
   /**
    * Render to a specific viewport.
    * 渲染到特定视口。
@@ -489,6 +508,7 @@ export interface InitOutput {
   readonly gameengine_addGizmoRect: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
   readonly gameengine_clear: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_clearAllTextures: (a: number) => void;
+  readonly gameengine_clearScissorRect: (a: number) => void;
   readonly gameengine_clearTexturePathCache: (a: number) => void;
   readonly gameengine_compileShader: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
   readonly gameengine_compileShaderWithId: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
@@ -532,6 +552,7 @@ export interface InitOutput {
   readonly gameengine_setMaterialVec2: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
   readonly gameengine_setMaterialVec3: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
   readonly gameengine_setMaterialVec4: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => number;
+  readonly gameengine_setScissorRect: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_setShowGizmos: (a: number, b: number) => void;
   readonly gameengine_setShowGrid: (a: number, b: number) => void;
   readonly gameengine_setTransformMode: (a: number, b: number) => void;

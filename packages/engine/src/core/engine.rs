@@ -253,6 +253,18 @@ impl Engine {
         Ok(())
     }
 
+    /// Set scissor rect for clipping (screen coordinates, Y-down).
+    /// 设置裁剪矩形（屏幕坐标，Y 轴向下）。
+    pub fn set_scissor_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.renderer.set_scissor_rect(x, y, width, height);
+    }
+
+    /// Clear scissor rect (disable clipping).
+    /// 清除裁剪矩形（禁用裁剪）。
+    pub fn clear_scissor_rect(&mut self) {
+        self.renderer.clear_scissor_rect();
+    }
+
     /// Add a rectangle gizmo.
     /// 添加矩形Gizmo。
     pub fn add_gizmo_rect(
