@@ -1,91 +1,110 @@
-/* ==================== Container ==================== */
+/**
+ * FlexLayout Dock Styles
+ * FlexLayout 停靠布局样式
+ *
+ * 结构层次 | Structure hierarchy:
+ * - .flexlayout-dock-container    主容器 | Main container
+ *   - .flexlayout__layout         布局根节点 | Layout root
+ *     - .flexlayout__tabset       面板组容器 | Panel group container
+ *       - .flexlayout__tabset_header / _tabbar_outer  标签栏 | Tab bar
+ *         - .flexlayout__tab_button  标签按钮 | Tab button
+ *       - .flexlayout__tabset_content  内容区域 | Content area
+ *         - .flexlayout__tab_moveable  可移动内容容器 | Moveable content
+ *     - .flexlayout__splitter     分割线 | Splitter
+ */
+
+/* ==================== CSS Variables | CSS 变量 ==================== */
+:root {
+    /* 背景色 | Background colors */
+    --flexlayout-bg-base: #1a1a1a;
+    --flexlayout-bg-panel: #242424;
+    --flexlayout-bg-header: #2a2a2a;
+    --flexlayout-bg-hover: rgba(255, 255, 255, 0.08);
+
+    /* 文字色 | Text colors */
+    --flexlayout-text-muted: #888888;
+    --flexlayout-text-normal: #cccccc;
+    --flexlayout-text-active: #ffffff;
+
+    /* 边框色 | Border colors */
+    --flexlayout-border: #1a1a1a;
+    --flexlayout-border-light: #3a3a3a;
+
+    /* 强调色 | Accent color */
+    --flexlayout-accent: #4a9eff;
+
+    /* 尺寸 | Dimensions */
+    --flexlayout-tab-height: 26px;
+    --flexlayout-font-size: 11px;
+
+    /* 滚动条 | Scrollbar */
+    --flexlayout-scrollbar-width: 8px;
+    --flexlayout-scrollbar-thumb: rgba(255, 255, 255, 0.15);
+    --flexlayout-scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+}
+
+/* ==================== Main Container | 主容器 ==================== */
 .flexlayout-dock-container {
+    position: relative;
     width: 100%;
     height: 100%;
-    background: #1a1a1a;
-    position: relative;
+    background: var(--flexlayout-bg-base);
 }
 
 .flexlayout__layout {
-    background: #1a1a1a;
-    position: absolute !important;
+    position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
+    background: var(--flexlayout-bg-base);
 }
 
-/* ==================== Tabset (Panel Container) ==================== */
-.flexlayout__tabset {
-    background: #242424;
+/* ==================== Tabset (Panel Group) | 面板组 ==================== */
+.flexlayout__tabset,
+.flexlayout__tabset-selected {
+    background: var(--flexlayout-bg-panel);
     border-radius: 0;
 }
 
-.flexlayout__tabset-selected {
-    background: #242424;
-}
-
-.flexlayout__tabset_header {
-    background: #2a2a2a;
-    border-bottom: 1px solid #1a1a1a;
-    height: 26px;
-    min-height: 26px;
-}
-
+.flexlayout__tabset_header,
 .flexlayout__tabset_tabbar_outer {
-    background: #2a2a2a;
+    position: relative;
+    z-index: 10;
+    height: var(--flexlayout-tab-height);
+    min-height: var(--flexlayout-tab-height);
+    background: var(--flexlayout-bg-header);
+    border-bottom: 1px solid var(--flexlayout-border);
 }
 
-/* ==================== Tab Buttons ==================== */
-.flexlayout__tab {
+/* ==================== Tab Buttons | 标签按钮 ==================== */
+.flexlayout__tab,
+.flexlayout__tab_button {
     background: transparent;
-    color: #888888;
+    color: var(--flexlayout-text-muted);
     border: none;
     padding: 0 12px;
-    height: 26px;
-    line-height: 26px;
-    cursor: default;
-    transition: color 0.1s ease;
+    height: var(--flexlayout-tab-height);
+    line-height: var(--flexlayout-tab-height);
     font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    font-size: 11px;
-    position: relative;
-}
-
-.flexlayout__tab:hover {
-    color: #cccccc;
-    background: transparent;
-}
-
-.flexlayout__tab::after {
-    display: none;
-}
-
-.flexlayout__tab_button {
-    background: transparent !important;
-    color: #888888;
-    border: none !important;
-    border-right: none !important;
-    padding: 0 12px;
-    height: 26px;
+    font-size: var(--flexlayout-font-size);
     cursor: pointer;
     transition: color 0.1s ease;
-    position: relative;
-    font-size: 11px;
 }
 
+.flexlayout__tab::after,
 .flexlayout__tab_button::after {
     display: none;
 }
 
+.flexlayout__tab:hover,
 .flexlayout__tab_button:hover {
-    background: transparent !important;
-    color: #cccccc;
+    color: var(--flexlayout-text-normal);
+    background: transparent;
 }
 
 .flexlayout__tab_button--selected {
-    background: transparent !important;
-    color: #ffffff !important;
-    border-bottom: none !important;
+    color: var(--flexlayout-text-active);
 }
 
 .flexlayout__tab_button_leading {
@@ -95,28 +114,24 @@
 }
 
 .flexlayout__tab_button_content {
+    max-width: 140px;
+    font-size: var(--flexlayout-font-size);
+    font-weight: 400;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 140px;
-    font-size: 11px;
-    font-weight: 400;
 }
 
-.flexlayout__tab_button--selected .flexlayout__tab_button_content {
-    font-weight: 400;
-}
-
-/* Tab close button */
+/* Tab close button | 标签关闭按钮 */
 .flexlayout__tab_button_trailing {
-    margin-left: 6px;
-    opacity: 0;
-    transition: opacity 0.1s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-left: 6px;
     padding: 2px;
     border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.1s ease;
 }
 
 .flexlayout__tab_button:hover .flexlayout__tab_button_trailing {
@@ -124,8 +139,8 @@
 }
 
 .flexlayout__tab_button_trailing:hover {
-    opacity: 1 !important;
-    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+    background: var(--flexlayout-bg-hover);
 }
 
 .flexlayout__tab_button_trailing svg {
@@ -135,98 +150,83 @@
 }
 
 .flexlayout__tab_button_trailing:hover svg {
-    color: #ffffff;
+    color: var(--flexlayout-text-active);
 }
 
-/* ==================== Splitter (Divider between panels) ==================== */
-.flexlayout__splitter {
-    background: #1a1a1a !important;
-    transition: background 0.15s ease;
-}
-
-.flexlayout__splitter:hover {
-    background: #4a9eff !important;
-}
-
-.flexlayout__splitter_horz {
-    cursor: row-resize !important;
-}
-
-.flexlayout__splitter_vert {
-    cursor: col-resize !important;
-}
-
-.flexlayout__splitter_border {
-    background: #1a1a1a !important;
-}
-
-/* ==================== Panel Content ==================== */
+/* ==================== Panel Content | 面板内容 ==================== */
+/*
+ * 重要：面板内容容器不设置滚动，由各面板自己管理滚动
+ * Important: Content containers don't scroll, each panel manages its own scroll
+ */
 .flexlayout__tabset_content {
-    background: #242424;
-    overflow: auto;
+    background: var(--flexlayout-bg-panel);
+    overflow: hidden;
 }
 
+.flexlayout__tab_moveable {
+    overflow: hidden;
+}
+
+/* 默认光标 | Default cursor */
 .flexlayout__tabset_content * {
-    cursor: default !important;
+    cursor: default;
 }
 
+/* 可交互元素恢复指针光标 | Restore pointer cursor for interactive elements */
 .flexlayout__tabset_content button,
 .flexlayout__tabset_content a,
 .flexlayout__tabset_content [role="button"],
 .flexlayout__tabset_content input,
 .flexlayout__tabset_content select,
 .flexlayout__tabset_content textarea {
-    cursor: pointer !important;
+    cursor: pointer;
 }
 
-/* ==================== Drag & Drop ==================== */
-.flexlayout__outline_rect {
-    border: 1px solid #4a9eff;
-    box-shadow: 0 0 12px rgba(74, 158, 255, 0.3);
-    background: rgba(74, 158, 255, 0.08);
-    border-radius: 2px;
+/* ==================== Splitter | 分割线 ==================== */
+.flexlayout__splitter,
+.flexlayout__splitter_border {
+    background: var(--flexlayout-border);
+    transition: background 0.15s ease;
 }
 
-.flexlayout__edge_rect {
-    background: rgba(74, 158, 255, 0.15);
-    border: 1px solid #4a9eff;
+.flexlayout__splitter:hover {
+    background: var(--flexlayout-accent);
 }
 
-.flexlayout__drag_rect {
-    border: 1px solid #4a9eff;
-    background: rgba(74, 158, 255, 0.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    border-radius: 2px;
+.flexlayout__splitter_horz {
+    cursor: row-resize;
 }
 
-/* ==================== Tab Toolbar ==================== */
+.flexlayout__splitter_vert {
+    cursor: col-resize;
+}
+
+/* ==================== Tab Toolbar | 标签工具栏 ==================== */
 .flexlayout__tab_toolbar {
-    display: flex !important;
+    display: flex;
     align-items: center;
     gap: 2px;
     padding: 0 4px;
-    visibility: visible !important;
-    opacity: 1 !important;
 }
 
 .flexlayout__tab_toolbar_button {
-    background: transparent;
-    border: none;
-    color: #666666;
-    cursor: pointer;
-    padding: 3px;
-    border-radius: 2px;
-    transition: all 0.1s ease;
-    display: flex !important;
+    display: flex;
     align-items: center;
     justify-content: center;
     width: 20px;
     height: 20px;
+    padding: 3px;
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    color: #666666;
+    cursor: pointer;
+    transition: all 0.1s ease;
 }
 
 .flexlayout__tab_toolbar_button:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #cccccc;
+    background: var(--flexlayout-bg-hover);
+    color: var(--flexlayout-text-normal);
 }
 
 .flexlayout__tab_toolbar_button svg {
@@ -234,51 +234,70 @@
     height: 12px;
 }
 
-.flexlayout__tab_toolbar_button-min,
-.flexlayout__tab_toolbar_button-max {
-    display: flex !important;
-    visibility: visible !important;
-}
-
-/* Maximized tabset styling */
+/* Maximize button active state | 最大化按钮激活状态 */
 .flexlayout__tabset_maximized .flexlayout__tab_toolbar_button-max {
-    color: #4a9eff;
+    color: var(--flexlayout-accent);
 }
 
 .flexlayout__tabset_maximized .flexlayout__tab_toolbar_button-max:hover {
     background: rgba(74, 158, 255, 0.2);
-    color: #ffffff;
+    color: var(--flexlayout-text-active);
 }
 
-/* ==================== Popup Menu ==================== */
+.flexlayout__tabset_maximized .flexlayout__tabset_header,
+.flexlayout__tabset_maximized .flexlayout__tabset_tabbar_outer {
+    z-index: 100;
+}
+
+/* ==================== Drag & Drop | 拖放 ==================== */
+.flexlayout__outline_rect {
+    border: 1px solid var(--flexlayout-accent);
+    border-radius: 2px;
+    background: rgba(74, 158, 255, 0.08);
+    box-shadow: 0 0 12px rgba(74, 158, 255, 0.3);
+}
+
+.flexlayout__edge_rect {
+    border: 1px solid var(--flexlayout-accent);
+    background: rgba(74, 158, 255, 0.15);
+}
+
+.flexlayout__drag_rect {
+    border: 1px solid var(--flexlayout-accent);
+    border-radius: 2px;
+    background: rgba(74, 158, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ==================== Popup Menu | 弹出菜单 ==================== */
 .flexlayout__popup_menu {
-    background: #2d2d2d;
-    border: 1px solid #3a3a3a;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    border-radius: 4px;
     padding: 4px 0;
+    background: #2d2d2d;
+    border: 1px solid var(--flexlayout-border-light);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .flexlayout__popup_menu_item {
-    color: #cccccc;
     padding: 6px 12px;
+    color: var(--flexlayout-text-normal);
+    font-size: var(--flexlayout-font-size);
     cursor: pointer;
     transition: background 0.1s ease;
-    font-size: 11px;
 }
 
 .flexlayout__popup_menu_item:hover {
-    background: #3a3a3a;
-    color: #ffffff;
+    background: var(--flexlayout-border-light);
+    color: var(--flexlayout-text-active);
 }
 
 .flexlayout__popup_menu_item:active {
-    background: #4a9eff;
+    background: var(--flexlayout-accent);
 }
 
-/* ==================== Border Panels ==================== */
+/* ==================== Border Panels | 边框面板 ==================== */
 .flexlayout__border {
-    background: #242424;
+    background: var(--flexlayout-bg-panel);
     border: none;
 }
 
@@ -295,15 +314,13 @@
 }
 
 .flexlayout__border_button {
-    background: transparent;
-    color: #888888;
-    border: none;
-    border-bottom: none;
     padding: 6px 10px;
+    background: transparent;
+    border: none;
+    color: var(--flexlayout-text-muted);
+    font-size: var(--flexlayout-font-size);
     cursor: pointer;
     transition: color 0.1s ease;
-    position: relative;
-    font-size: 11px;
 }
 
 .flexlayout__border_button::after {
@@ -312,19 +329,19 @@
 
 .flexlayout__border_button:hover {
     background: transparent;
-    color: #cccccc;
+    color: var(--flexlayout-text-normal);
 }
 
 .flexlayout__border_button--selected {
     background: transparent;
-    color: #ffffff;
+    color: var(--flexlayout-text-active);
 }
 
-/* ==================== Error Boundary ==================== */
+/* ==================== Error Boundary | 错误边界 ==================== */
 .flexlayout__error_boundary_container {
-    background: #242424;
-    color: #f48771;
     padding: 16px;
+    background: var(--flexlayout-bg-panel);
+    color: #f48771;
     font-family: monospace;
 }
 
@@ -333,11 +350,11 @@
     font-weight: 600;
 }
 
-/* ==================== Scrollbar ==================== */
+/* ==================== Scrollbar | 滚动条 ==================== */
 .flexlayout__tabset_content::-webkit-scrollbar,
 .flexlayout__tab_moveable::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: var(--flexlayout-scrollbar-width);
+    height: var(--flexlayout-scrollbar-width);
 }
 
 .flexlayout__tabset_content::-webkit-scrollbar-track,
@@ -347,13 +364,13 @@
 
 .flexlayout__tabset_content::-webkit-scrollbar-thumb,
 .flexlayout__tab_moveable::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--flexlayout-scrollbar-thumb);
     border-radius: 4px;
 }
 
 .flexlayout__tabset_content::-webkit-scrollbar-thumb:hover,
 .flexlayout__tab_moveable::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--flexlayout-scrollbar-thumb-hover);
 }
 
 .flexlayout__tabset_content::-webkit-scrollbar-corner,
@@ -361,7 +378,7 @@
     background: transparent;
 }
 
-/* ==================== Persistent Panels ==================== */
+/* ==================== Persistent Panels | 持久化面板 ==================== */
 .persistent-panel-placeholder {
     width: 100%;
     height: 100%;
@@ -369,18 +386,5 @@
 }
 
 .persistent-panel-container {
-    background: #242424;
-}
-
-/* 确保 tabset header 在 persistent panel 之上 */
-.flexlayout__tabset_header,
-.flexlayout__tabset_tabbar_outer {
-    position: relative;
-    z-index: 10;
-}
-
-/* 最大化时确保 tab bar 可见 */
-.flexlayout__tabset_maximized .flexlayout__tabset_header,
-.flexlayout__tabset_maximized .flexlayout__tabset_tabbar_outer {
-    z-index: 100;
+    background: var(--flexlayout-bg-panel);
 }

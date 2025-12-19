@@ -51,6 +51,13 @@ export interface ProviderRenderData {
     materialIds?: Uint32Array;
     /** Material overrides (per-group). | 材质覆盖（按组）。 */
     materialOverrides?: MaterialOverrides;
+    /**
+     * Clip rectangle for scissor test (screen coordinates).
+     * All primitives in this batch will be clipped to this rect.
+     * 裁剪矩形用于 scissor test（屏幕坐标）。
+     * 此批次中的所有原语将被裁剪到此矩形。
+     */
+    clipRect?: { x: number; y: number; width: number; height: number };
 }
 
 /**
@@ -615,30 +622,96 @@ export class EngineRenderSystem extends EntitySystem {
 
         this.bridge.pushScreenSpaceMode(canvasWidth, canvasHeight);
 
-        // Clear batcher for screen space content
-        // 清空批处理器用于屏幕空间内容
-        this.batcher.clear();
+        // Group sprites by clipRect (in render order)
+        // 按 clipRect 分组 sprites（按渲染顺序）
+        type ClipGroup = {
+            clipRect: { x: number; y: number; width: number; height: number } | undefined;
+            sprites: SpriteRenderData[];
+        };
 
-        // Submit screen space sprites
-        // 提交屏幕空间 sprites
+        const clipGroups: ClipGroup[] = [];
+        let currentClipRect: { x: number; y: number; width: number; height: number } | undefined = undefined;
+        let currentGroup: SpriteRenderData[] = [];
+
+        // Helper to check if two clip rects are equal
+        // 辅助函数检查两个裁剪矩形是否相等
+        const clipRectsEqual = (
+            a: { x: number; y: number; width: number; height: number } | undefined,
+            b: { x: number; y: number; width: number; height: number } | undefined
+        ): boolean => {
+            if (a === b) return true;
+            if (!a || !b) return false;
+            return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+        };
+
+        // Group sprites by consecutive clipRect
+        // 按连续的 clipRect 分组 sprites
         for (const item of screenSpaceItems) {
             for (const sprite of item.sprites) {
-                this.batcher.addSprite(sprite);
+                const spriteClipRect = sprite.clipRect;
+
+                if (!clipRectsEqual(spriteClipRect, currentClipRect)) {
+                    // Save current group if not empty
+                    // 如果当前组不为空则保存
+                    if (currentGroup.length > 0) {
+                        clipGroups.push({ clipRect: currentClipRect, sprites: currentGroup });
+                    }
+                    // Start new group
+                    // 开始新组
+                    currentClipRect = spriteClipRect;
+                    currentGroup = [sprite];
+                } else {
+                    currentGroup.push(sprite);
+                }
             }
         }
 
-        if (!this.batcher.isEmpty) {
-            const sprites = this.batcher.getSprites();
-
-            // Apply material overrides before rendering
-            // 在渲染前应用材质覆盖
-            this.applySpriteMaterialOverrides(sprites);
-
-            this.bridge.submitSprites(sprites);
-            // Render overlay (without clearing screen)
-            // 渲染叠加层（不清屏）
-            this.bridge.renderOverlay();
+        // Don't forget the last group
+        // 别忘了最后一组
+        if (currentGroup.length > 0) {
+            clipGroups.push({ clipRect: currentClipRect, sprites: currentGroup });
         }
+
+        // Render each clip group
+        // 渲染每个裁剪组
+        for (const group of clipGroups) {
+            // Set or clear scissor rect
+            // 设置或清除裁剪矩形
+            if (group.clipRect) {
+                this.bridge.setScissorRect(
+                    group.clipRect.x,
+                    group.clipRect.y,
+                    group.clipRect.width,
+                    group.clipRect.height
+                );
+            } else {
+                this.bridge.clearScissorRect();
+            }
+
+            // Clear batcher and add sprites
+            // 清空批处理器并添加 sprites
+            this.batcher.clear();
+            for (const sprite of group.sprites) {
+                this.batcher.addSprite(sprite);
+            }
+
+            if (!this.batcher.isEmpty) {
+                const sprites = this.batcher.getSprites();
+
+                // Apply material overrides before rendering
+                // 在渲染前应用材质覆盖
+                this.applySpriteMaterialOverrides(sprites);
+
+                this.bridge.submitSprites(sprites);
+                // Render overlay (without clearing screen)
+                // 渲染叠加层（不清屏）
+                this.bridge.renderOverlay();
+            }
+        }
+
+        // Clear scissor rect after all groups
+        // 所有组渲染完后清除裁剪矩形
+        this.bridge.clearScissorRect();
 
         // Restore world space camera
         // 恢复世界空间相机
@@ -802,6 +875,7 @@ export class EngineRenderSystem extends EntitySystem {
         // 检查材质数据
         const hasMaterialIds = data.materialIds && data.materialIds.length > 0;
         const hasMaterialOverrides = data.materialOverrides && Object.keys(data.materialOverrides).length > 0;
+        const hasClipRect = !!data.clipRect;
 
         const sprites: SpriteRenderData[] = [];
         for (let i = 0; i < data.tileCount; i++) {
@@ -835,6 +909,11 @@ export class EngineRenderSystem extends EntitySystem {
             }
             if (hasMaterialOverrides) {
                 renderData.materialOverrides = data.materialOverrides;
+            }
+            // Add clipRect if present (all sprites in batch share same clipRect)
+            // 如果存在 clipRect，添加它（批次中所有精灵共享相同 clipRect）
+            if (hasClipRect) {
+                renderData.clipRect = data.clipRect;
             }
 
             sprites.push(renderData);

@@ -52,6 +52,13 @@ export interface SpriteRenderData {
      * 材质属性覆盖（实例级别）。
      */
     materialOverrides?: MaterialOverrides;
+    /**
+     * Clip rectangle for scissor test (screen coordinates).
+     * Content outside this rect will be clipped.
+     * 裁剪矩形用于 scissor test（屏幕坐标）。
+     * 此矩形外的内容将被裁剪。
+     */
+    clipRect?: { x: number; y: number; width: number; height: number };
 }
 
 /**

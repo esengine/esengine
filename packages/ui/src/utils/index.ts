@@ -38,3 +38,10 @@ export {
     type CharacterPosition,
     type LineInfo
 } from './TextMeasureService';
+
+export {
+    // IME utilities | IME 输入法工具
+    IMEHelper,
+    getIMEHelper,
+    disposeIMEHelper
+} from './IMEHelper';

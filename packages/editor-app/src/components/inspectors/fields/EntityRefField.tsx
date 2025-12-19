@@ -6,8 +6,9 @@
  * 支持从场景层级面板拖拽实体。
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Core } from '@esengine/ecs-framework';
+import { Box, X } from 'lucide-react';
 import { useHierarchyStore } from '../../../stores';
 import './EntityRefField.css';
 
@@ -28,7 +29,7 @@ export const EntityRefField: React.FC<EntityRefFieldProps> = ({
     label,
     value,
     onChange,
-    placeholder = '拖拽实体到此处 / Drop entity here',
+    placeholder = '拖拽实体到此处',
     readonly = false
 }) => {
     const [isDragOver, setIsDragOver] = useState(false);
@@ -44,39 +45,77 @@ export const EntityRefField: React.FC<EntityRefFieldProps> = ({
     }, [value]);
 
     const entityName = getEntityName();
+    const hasValue = !!entityName;
+
+    const handleDragEnter = useCallback((e: React.DragEvent) => {
+        if (readonly) return;
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[EntityRefField] DragEnter, types:', Array.from(e.dataTransfer.types));
+        setIsDragOver(true);
+    }, [readonly]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         if (readonly) return;
-
-        // Check if dragging an entity
-        // 检查是否拖拽实体
-        if (e.dataTransfer.types.includes('entity-id')) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'link';
+        // Always accept drag over - validate on drop
+        // 始终接受拖拽悬停 - 在放置时验证
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'link';
+        if (!isDragOver) {
             setIsDragOver(true);
         }
-    }, [readonly]);
+    }, [readonly, isDragOver]);
 
-    const handleDragLeave = useCallback(() => {
-        setIsDragOver(false);
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Only set drag over false if leaving the element entirely
+        // 只有完全离开元素时才取消拖拽状态
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+
+        if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+            setIsDragOver(false);
+        }
     }, []);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         if (readonly) return;
 
         e.preventDefault();
+        e.stopPropagation();
         setIsDragOver(false);
 
-        const entityIdStr = e.dataTransfer.getData('entity-id');
+        // Debug: log all available types and data
+        // 调试：记录所有可用的类型和数据
+        const types = Array.from(e.dataTransfer.types);
+        console.log('[EntityRefField] Drop - types:', types);
+        types.forEach(type => {
+            console.log(`[EntityRefField] Drop - ${type}:`, e.dataTransfer.getData(type));
+        });
+
+        // Try entity-id first, then fall back to text/plain
+        // 优先尝试 entity-id，然后回退到 text/plain
+        let entityIdStr = e.dataTransfer.getData('entity-id');
+        if (!entityIdStr) {
+            entityIdStr = e.dataTransfer.getData('text/plain');
+        }
+
+        console.log('[EntityRefField] Drop received, entityIdStr:', entityIdStr);
+
         if (entityIdStr) {
             const entityId = parseInt(entityIdStr, 10);
             if (!isNaN(entityId) && entityId > 0) {
+                console.log('[EntityRefField] Calling onChange with entityId:', entityId);
                 onChange(entityId);
             }
         }
     }, [readonly, onChange]);
 
-    const handleClear = useCallback(() => {
+    const handleClear = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
         if (readonly) return;
         onChange(0);
     }, [readonly, onChange]);
@@ -90,15 +129,29 @@ export const EntityRefField: React.FC<EntityRefFieldProps> = ({
         setSelectedIds(new Set([value]));
     }, [value]);
 
+    const inputClassName = [
+        'entity-ref-field__input',
+        isDragOver && 'drag-over',
+        readonly && 'readonly',
+        hasValue && 'has-value'
+    ].filter(Boolean).join(' ');
+
     return (
         <div className="property-field entity-ref-field">
             <label className="property-label">{label}</label>
             <div
-                className={`entity-ref-field__input ${isDragOver ? 'drag-over' : ''} ${readonly ? 'readonly' : ''}`}
+                className={inputClassName}
+                onDragEnter={handleDragEnter}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
+                onDropCapture={handleDrop}
             >
+                {/* Drop icon */}
+                <span className="entity-ref-field__drop-icon">
+                    <Box size={14} />
+                </span>
+
                 {entityName ? (
                     <>
                         <span
@@ -114,7 +167,7 @@ export const EntityRefField: React.FC<EntityRefFieldProps> = ({
                                 onClick={handleClear}
                                 title="清除引用 / Clear reference"
                             >
-                                ×
+                                <X size={12} />
                             </button>
                         )}
                     </>

@@ -47,7 +47,8 @@ export type BatchBreakReason =
     | 'first'           // 第一个批次 | First batch
     | 'sortingLayer'    // 排序层不同 | Different sorting layer
     | 'texture'         // 纹理不同 | Different texture
-    | 'material';       // 材质不同 | Different material
+    | 'material'        // 材质不同 | Different material
+    | 'clipRect';       // 裁剪区域不同 | Different clip rect
 
 /**
  * 合批调试信息
@@ -150,6 +151,13 @@ export interface UIRenderPrimitive {
     materialOverrides?: UIMaterialOverrides;
     /** Source entity ID (for debugging). | 来源实体 ID（用于调试）。 */
     entityId?: number;
+    /**
+     * Clip rectangle for scissor test (screen coordinates).
+     * Content outside this rect will be clipped.
+     * 裁剪矩形用于 scissor test（屏幕坐标）。
+     * 此矩形外的内容将被裁剪。
+     */
+    clipRect?: { x: number; y: number; width: number; height: number };
 }
 
 /**
@@ -172,6 +180,13 @@ export interface ProviderRenderData {
     materialIds?: Uint32Array;
     /** Material overrides (per-group). | 材质覆盖（按组）。 */
     materialOverrides?: UIMaterialOverrides;
+    /**
+     * Clip rectangle for scissor test (screen coordinates).
+     * All primitives in this batch will be clipped to this rect.
+     * 裁剪矩形用于 scissor test（屏幕坐标）。
+     * 此批次中的所有原语将被裁剪到此矩形。
+     */
+    clipRect?: { x: number; y: number; width: number; height: number };
 }
 
 /**
@@ -234,6 +249,8 @@ export class UIRenderCollector {
             materialOverrides?: UIMaterialOverrides;
             /** 来源实体 ID（用于调试）| Source entity ID (for debugging) */
             entityId?: number;
+            /** 裁剪矩形（屏幕坐标）| Clip rectangle (screen coordinates) */
+            clipRect?: { x: number; y: number; width: number; height: number };
         }
     ): void {
         // Pack color with alpha: 0xAABBGGRR
@@ -261,7 +278,8 @@ export class UIRenderCollector {
             uv: options?.uv,
             materialId: options?.materialId,
             materialOverrides: options?.materialOverrides,
-            entityId: options?.entityId
+            entityId: options?.entityId,
+            clipRect: options?.clipRect
         };
 
         this.primitives.push(primitive);
@@ -537,14 +555,16 @@ export class UIRenderCollector {
         // 每个批次的 entityId 集合 | Entity ID set per batch
         const batchEntityIds = new Map<string, Set<number>>();
 
-        // 追踪上一个原语的属性以检测打断原因 | Track previous primitive's properties to detect break reason
-        // 合批条件：连续的原语如果有相同的 sortingLayer + texture + material 就可以合批
-        // orderInLayer 只决定渲染顺序，不影响能否合批
-        // Batching condition: consecutive primitives with same sortingLayer + texture + material can be batched
+        // Track previous primitive's properties to detect break reason
+        // Batching condition: consecutive primitives with same sortingLayer + texture + material + clipRect can be batched
         // orderInLayer only determines render order, doesn't affect batching
+        // 追踪上一个原语的属性以检测打断原因
+        // 合批条件：连续的原语如果有相同的 sortingLayer + texture + material + clipRect 就可以合批
+        // orderInLayer 只决定渲染顺序，不影响能否合批
         let prevSortingLayer: string | null = null;
         let prevTextureKey: string | null = null;
         let prevMaterialKey: number | null = null;
+        let prevClipRectKey: string | null = null;
         let batchIndex = 0;
         let currentGroup: UIRenderPrimitive[] | null = null;
         let currentBatchKey: string | null = null;
@@ -572,9 +592,14 @@ export class UIRenderCollector {
             }
 
             const materialKey = prim.materialId ?? 0;
-            // 合批 key 必须包含 orderInLayer，否则不同深度的元素会被错误合并
-            // Batch key must include orderInLayer, otherwise elements at different depths will be incorrectly merged
-            const batchKey = `${prim.sortingLayer}:${prim.orderInLayer}:${textureKey}:${materialKey}`;
+            // Generate clipRect key (null/undefined = no clipping)
+            // 生成 clipRect key（null/undefined = 无裁剪）
+            const clipRectKey = prim.clipRect
+                ? `${prim.clipRect.x},${prim.clipRect.y},${prim.clipRect.width},${prim.clipRect.height}`
+                : 'none';
+            // Batch key must include orderInLayer and clipRect
+            // 合批 key 必须包含 orderInLayer 和 clipRect
+            const batchKey = `${prim.sortingLayer}:${prim.orderInLayer}:${textureKey}:${materialKey}:${clipRectKey}`;
 
             // 检查是否需要新批次：sortingLayer、orderInLayer、texture 或 material 变化
             // Check if new batch needed: sortingLayer, orderInLayer, texture or material changed
@@ -595,6 +620,9 @@ export class UIRenderCollector {
                     } else if (materialKey !== prevMaterialKey) {
                         reason = 'material';
                         detail = `Material changed: ${prevMaterialKey} → ${materialKey}`;
+                    } else if (clipRectKey !== prevClipRectKey) {
+                        reason = 'clipRect';
+                        detail = `ClipRect changed: ${prevClipRectKey} → ${clipRectKey}`;
                     }
                 }
 
@@ -634,6 +662,7 @@ export class UIRenderCollector {
             prevSortingLayer = prim.sortingLayer;
             prevTextureKey = textureKey;
             prevMaterialKey = materialKey;
+            prevClipRectKey = clipRectKey;
         }
 
         // 更新每个批次的原语数量和 entityIds | Update primitive count and entityIds for each batch
@@ -768,6 +797,11 @@ export class UIRenderCollector {
             // 使用第一个原语的材质覆盖（组内所有原语共享相同材质）
             if (firstPrim.materialOverrides && Object.keys(firstPrim.materialOverrides).length > 0) {
                 renderData.materialOverrides = firstPrim.materialOverrides;
+            }
+            // Use the first primitive's clipRect (all in group share same clipRect)
+            // 使用第一个原语的 clipRect（组内所有原语共享相同 clipRect）
+            if (firstPrim.clipRect) {
+                renderData.clipRect = firstPrim.clipRect;
             }
 
             result.push({ data: renderData, addIndex: firstPrim.addIndex });

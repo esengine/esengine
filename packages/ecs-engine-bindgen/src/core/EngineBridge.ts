@@ -294,6 +294,32 @@ export class EngineBridge implements ITextureEngineBridge {
     }
 
     /**
+     * Set scissor rect for clipping (screen coordinates, Y-down).
+     * 设置裁剪矩形（屏幕坐标，Y 轴向下）。
+     *
+     * Content outside this rect will be clipped.
+     * 此矩形外的内容将被裁剪。
+     *
+     * @param x - Left edge in screen coordinates | 屏幕坐标中的左边缘
+     * @param y - Top edge in screen coordinates (Y-down) | 屏幕坐标中的上边缘（Y 向下）
+     * @param width - Rect width | 矩形宽度
+     * @param height - Rect height | 矩形高度
+     */
+    setScissorRect(x: number, y: number, width: number, height: number): void {
+        if (!this.initialized) return;
+        this.getEngine().setScissorRect(x, y, width, height);
+    }
+
+    /**
+     * Clear scissor rect (disable clipping).
+     * 清除裁剪矩形（禁用裁剪）。
+     */
+    clearScissorRect(): void {
+        if (!this.initialized) return;
+        this.getEngine().clearScissorRect();
+    }
+
+    /**
      * Load a texture.
      * 加载纹理。
      *

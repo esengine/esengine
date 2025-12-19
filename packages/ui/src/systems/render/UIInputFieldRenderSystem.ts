@@ -12,6 +12,7 @@ import { UITransformComponent } from '../../components/UITransformComponent';
 import { UIInputFieldComponent } from '../../components/widgets/UIInputFieldComponent';
 import { getUIRenderCollector, registerCacheInvalidationCallback, unregisterCacheInvalidationCallback } from './UIRenderCollector';
 import { getUIRenderTransform } from './UIRenderUtils';
+import { getTextMeasureService } from '../../utils/TextMeasureService';
 
 /**
  * Text texture cache entry
@@ -152,16 +153,16 @@ export class UIInputFieldRenderSystem extends EntitySystem {
             // 2. Render text or placeholder (above background)
             this.renderText(collector, input, rt, textX, textY, textWidth, textHeight, entityId);
 
-            // 3. 渲染选中高亮
             // 3. Render selection highlight
+            // 3. 渲染选中高亮
             if (input.focused && input.hasSelection()) {
-                this.renderSelection(collector, input, rt, textX, textY, textHeight, entityId);
+                this.renderSelection(collector, input, rt, textX, textY, textWidth, textHeight, entityId);
             }
 
-            // 4. 渲染光标
             // 4. Render caret
+            // 4. 渲染光标
             if (input.focused && input.caretVisible && !input.hasSelection()) {
-                this.renderCaret(collector, input, rt, textX, textY, textHeight, entityId);
+                this.renderCaret(collector, input, rt, textX, textY, textWidth, textHeight, entityId);
             }
         }
     }
@@ -184,8 +185,13 @@ export class UIInputFieldRenderSystem extends EntitySystem {
 
         // 确定要显示的文本和颜色
         // Determine text to display and color
-        const isPlaceholder = input.text.length === 0;
-        const displayText = isPlaceholder ? input.placeholder : input.getDisplayText();
+        const isPlaceholder = input.text.length === 0 && !input.isComposing;
+
+        // 使用带 IME 组合文本的显示文本
+        // Use display text with IME composition
+        const displayText = isPlaceholder
+            ? input.placeholder
+            : input.getDisplayTextWithComposition();
 
         // 如果没有文本可显示，跳过渲染
         // Skip rendering if no text to display
@@ -207,22 +213,99 @@ export class UIInputFieldRenderSystem extends EntitySystem {
 
         if (textureId === null) return;
 
-        // 提交文本渲染原语（在背景之上）
+        // Calculate clip rect for text viewport
+        // 计算文本视窗的裁剪矩形
+        const clipRect = {
+            x: textX,
+            y: textY,
+            width: textWidth,
+            height: textHeight
+        };
+
         // Submit text render primitive (above background)
+        // 提交文本渲染原语（在背景之上）
         collector.addRect(
-            textX + textWidth / 2,  // 中心点 | Center point
+            textX + textWidth / 2,  // Center point | 中心点
             textY + textHeight / 2,
             textWidth,
             textHeight,
-            0xFFFFFF,  // 白色着色（颜色已烘焙到纹理中） | White tint (color is baked into texture)
+            0xFFFFFF,  // White tint (color is baked into texture) | 白色着色（颜色已烘焙到纹理中）
             rt.alpha,
             rt.sortingLayer,
-            rt.orderInLayer + 1,  // 在背景之上 | Above background
+            rt.orderInLayer + 1,  // Above background | 在背景之上
             {
                 pivotX: 0.5,
                 pivotY: 0.5,
                 textureId,
-                entityId
+                entityId,
+                clipRect
+            }
+        );
+
+        // Render IME composition text underline
+        // 渲染 IME 组合文本下划线
+        if (input.isComposing && input.compositionText) {
+            this.renderCompositionUnderline(collector, input, rt, textX, textY, textWidth, textHeight, entityId);
+        }
+    }
+
+    /**
+     * Render IME composition text underline
+     * 渲染 IME 组合文本下划线
+     */
+    private renderCompositionUnderline(
+        collector: ReturnType<typeof getUIRenderCollector>,
+        input: UIInputFieldComponent,
+        rt: ReturnType<typeof getUIRenderTransform>,
+        textX: number,
+        textY: number,
+        textWidth: number,
+        textHeight: number,
+        entityId: number
+    ): void {
+        if (!rt) return;
+
+        const font = input.getFontConfig();
+        const displayText = input.getDisplayTextWithComposition();
+
+        // Calculate composition text start and end X position
+        // 计算组合文本的起始和结束 X 位置
+        const service = getTextMeasureService();
+        const compositionStartX = service.getXForCharIndex(displayText, font, input.compositionStart);
+        const compositionEndX = service.getXForCharIndex(displayText, font, input.compositionStart + input.compositionText.length);
+
+        const underlineWidth = compositionEndX - compositionStartX;
+        if (underlineWidth <= 0) return;
+
+        const underlineX = textX + compositionStartX - input.scrollOffset;
+        const underlineY = textY + textHeight - 2; // Bottom position | 底部位置
+        const underlineHeight = 1;
+
+        // Clip rect for text viewport
+        // 文本视窗的裁剪矩形
+        const clipRect = {
+            x: textX,
+            y: textY,
+            width: textWidth,
+            height: textHeight
+        };
+
+        // Render underline
+        // 渲染下划线
+        collector.addRect(
+            underlineX + underlineWidth / 2,
+            underlineY + underlineHeight / 2,
+            underlineWidth,
+            underlineHeight,
+            input.textColor,
+            rt.alpha,
+            rt.sortingLayer,
+            rt.orderInLayer + 2, // Above text | 在文本之上
+            {
+                pivotX: 0.5,
+                pivotY: 0.5,
+                entityId,
+                clipRect
             }
         );
     }
@@ -350,8 +433,8 @@ export class UIInputFieldRenderSystem extends EntitySystem {
     }
 
     /**
-     * 渲染选中高亮
      * Render selection highlight
+     * 渲染选中高亮
      */
     private renderSelection(
         collector: ReturnType<typeof getUIRenderCollector>,
@@ -359,6 +442,7 @@ export class UIInputFieldRenderSystem extends EntitySystem {
         rt: ReturnType<typeof getUIRenderTransform>,
         textX: number,
         textY: number,
+        textWidth: number,
         textHeight: number,
         entityId: number
     ): void {
@@ -370,8 +454,17 @@ export class UIInputFieldRenderSystem extends EntitySystem {
 
         if (selWidth <= 0) return;
 
+        // Clip rect for text viewport
+        // 文本视窗的裁剪矩形
+        const clipRect = {
+            x: textX,
+            y: textY,
+            width: textWidth,
+            height: textHeight
+        };
+
         collector.addRect(
-            selX + selWidth / 2, // 中心点 | Center point
+            selX + selWidth / 2, // Center point | 中心点
             textY + textHeight / 2,
             selWidth,
             textHeight,
@@ -382,14 +475,15 @@ export class UIInputFieldRenderSystem extends EntitySystem {
             {
                 pivotX: 0.5,
                 pivotY: 0.5,
-                entityId
+                entityId,
+                clipRect
             }
         );
     }
 
     /**
-     * 渲染光标
      * Render caret
+     * 渲染光标
      */
     private renderCaret(
         collector: ReturnType<typeof getUIRenderCollector>,
@@ -397,6 +491,7 @@ export class UIInputFieldRenderSystem extends EntitySystem {
         rt: ReturnType<typeof getUIRenderTransform>,
         textX: number,
         textY: number,
+        textWidth: number,
         textHeight: number,
         entityId: number
     ): void {
@@ -404,6 +499,15 @@ export class UIInputFieldRenderSystem extends EntitySystem {
 
         const caretXOffset = input.getCaretX();
         const caretX = textX + caretXOffset - input.scrollOffset;
+
+        // Clip rect for text viewport
+        // 文本视窗的裁剪矩形
+        const clipRect = {
+            x: textX,
+            y: textY,
+            width: textWidth,
+            height: textHeight
+        };
 
         collector.addRect(
             caretX + input.caretWidth / 2,
@@ -417,7 +521,8 @@ export class UIInputFieldRenderSystem extends EntitySystem {
             {
                 pivotX: 0.5,
                 pivotY: 0.5,
-                entityId
+                entityId,
+                clipRect
             }
         );
     }

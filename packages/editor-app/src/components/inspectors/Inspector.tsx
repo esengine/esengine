@@ -15,9 +15,9 @@ import {
     ExtensionInspector,
     AssetFileInspector,
     RemoteEntityInspector,
-    EntityInspector,
     PrefabInspector
 } from './views';
+import { EntityInspectorPanel } from '../inspector';
 
 export function Inspector({ entityStore: _entityStore, messageHub, inspectorRegistry, projectPath, commandManager }: InspectorProps) {
     // ===== 从 InspectorStore 获取状态 | Get state from InspectorStore =====
@@ -101,7 +101,7 @@ export function Inspector({ entityStore: _entityStore, messageHub, inspectorRegi
 
     if (target.type === 'entity') {
         return (
-            <EntityInspector
+            <EntityInspectorPanel
                 entity={target.data}
                 messageHub={messageHub}
                 commandManager={commandManager}

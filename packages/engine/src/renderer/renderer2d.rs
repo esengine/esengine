@@ -46,6 +46,15 @@ pub struct Renderer2D {
     /// 当前激活的材质ID。
     #[allow(dead_code)]
     current_material_id: u32,
+
+    /// Current scissor rect (x, y, width, height) in screen coordinates.
+    /// None means scissor test is disabled.
+    /// 当前裁剪矩形（屏幕坐标）。None 表示禁用裁剪测试。
+    scissor_rect: Option<[f32; 4]>,
+
+    /// Viewport height for scissor coordinate conversion.
+    /// 视口高度，用于裁剪坐标转换。
+    viewport_height: f32,
 }
 
 impl Renderer2D {
@@ -81,6 +90,8 @@ impl Renderer2D {
             clear_color: [0.1, 0.1, 0.12, 1.0],
             current_shader_id: 0,
             current_material_id: 0,
+            scissor_rect: None,
+            viewport_height: canvas.1,
         })
     }
 
@@ -119,6 +130,10 @@ impl Renderer2D {
         if self.sprite_batch.sprite_count() == 0 {
             return Ok(());
         }
+
+        // Apply scissor test if enabled
+        // 如果启用，应用裁剪测试
+        self.apply_scissor(gl);
 
         // Track current state to minimize state changes | 跟踪当前状态以最小化状态切换
         let mut current_material_id: u32 = u32::MAX;
@@ -209,6 +224,47 @@ impl Renderer2D {
     /// 更新相机视口大小。
     pub fn resize(&mut self, width: f32, height: f32) {
         self.camera.set_viewport(width, height);
+        self.viewport_height = height;
+    }
+
+    // ============= Scissor Test =============
+    // ============= 裁剪测试 =============
+
+    /// Set scissor rect for clipping (screen coordinates, Y-down).
+    /// 设置裁剪矩形（屏幕坐标，Y 轴向下）。
+    ///
+    /// Content outside this rect will be clipped.
+    /// 此矩形外的内容将被裁剪。
+    ///
+    /// # Arguments | 参数
+    /// * `x` - Left edge in screen coordinates | 屏幕坐标中的左边缘
+    /// * `y` - Top edge in screen coordinates (Y-down) | 屏幕坐标中的上边缘（Y 向下）
+    /// * `width` - Rect width | 矩形宽度
+    /// * `height` - Rect height | 矩形高度
+    pub fn set_scissor_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.scissor_rect = Some([x, y, width, height]);
+    }
+
+    /// Clear scissor rect (disable clipping).
+    /// 清除裁剪矩形（禁用裁剪）。
+    pub fn clear_scissor_rect(&mut self) {
+        self.scissor_rect = None;
+    }
+
+    /// Apply current scissor state to GL context.
+    /// 应用当前裁剪状态到 GL 上下文。
+    fn apply_scissor(&self, gl: &WebGl2RenderingContext) {
+        if let Some([x, y, width, height]) = self.scissor_rect {
+            gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+            // WebGL scissor uses bottom-left origin with Y-up
+            // Convert from screen coordinates (top-left origin, Y-down)
+            // WebGL scissor 使用左下角原点，Y 轴向上
+            // 从屏幕坐标转换（左上角原点，Y 轴向下）
+            let gl_y = self.viewport_height - y - height;
+            gl.scissor(x as i32, gl_y as i32, width as i32, height as i32);
+        } else {
+            gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+        }
     }
 
     // ============= Shader Management =============

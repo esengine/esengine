@@ -262,6 +262,26 @@ export class UIInputFieldComponent extends Component {
      */
     public scrollOffset: number = 0;
 
+    // ===== IME 组合状态 IME Composition State =====
+
+    /**
+     * 是否正在进行 IME 组合输入
+     * Whether IME composition is in progress
+     */
+    public isComposing: boolean = false;
+
+    /**
+     * IME 组合中的文本（如拼音 "zhong"）
+     * Text being composed in IME (e.g., pinyin "zhong")
+     */
+    public compositionText: string = '';
+
+    /**
+     * 组合开始时的光标位置
+     * Caret position when composition started
+     */
+    public compositionStart: number = 0;
+
     // ===== 回调 Callbacks =====
 
     /**
@@ -494,6 +514,37 @@ export class UIInputFieldComponent extends Component {
             return '•'.repeat(this.text.length);
         }
         return this.text;
+    }
+
+    /**
+     * 获取带 IME 组合文本的显示文本
+     * Get display text with IME composition text
+     *
+     * 组合文本会插入到光标位置，用于实时预览输入法输入。
+     * Composition text is inserted at caret position for real-time IME input preview.
+     */
+    public getDisplayTextWithComposition(): string {
+        if (!this.isComposing || !this.compositionText) {
+            return this.getDisplayText();
+        }
+
+        const displayText = this.getDisplayText();
+        // 在组合开始位置插入组合文本
+        // Insert composition text at composition start position
+        const before = displayText.substring(0, this.compositionStart);
+        const after = displayText.substring(this.compositionStart);
+        return before + this.compositionText + after;
+    }
+
+    /**
+     * 获取组合文本的结束位置（用于光标定位）
+     * Get composition text end position (for caret positioning)
+     */
+    public getCompositionEndPosition(): number {
+        if (!this.isComposing || !this.compositionText) {
+            return this.caretPosition;
+        }
+        return this.compositionStart + this.compositionText.length;
     }
 
     /**
