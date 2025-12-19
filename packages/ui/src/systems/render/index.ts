@@ -18,16 +18,42 @@ export {
     registerCacheInvalidationCallback,
     unregisterCacheInvalidationCallback,
     invalidateUIRenderCaches,
+    requestTextureForAtlas,
+    clearTextureRequestCache,
     type UIRenderPrimitive,
-    type ProviderRenderData
+    type ProviderRenderData,
+    type UIMaterialPropertyOverride,
+    type UIMaterialOverrides,
+    type BatchBreakReason,
+    type BatchDebugInfo
 } from './UIRenderCollector';
 
 // Render systems
 // 渲染系统
 export { UIRenderBeginSystem } from './UIRenderBeginSystem';
+export { UIGraphicRenderSystem } from './UIGraphicRenderSystem';
 export { UIRectRenderSystem } from './UIRectRenderSystem';
 export { UITextRenderSystem } from './UITextRenderSystem';
 export { UIButtonRenderSystem } from './UIButtonRenderSystem';
 export { UIProgressBarRenderSystem } from './UIProgressBarRenderSystem';
 export { UISliderRenderSystem } from './UISliderRenderSystem';
 export { UIScrollViewRenderSystem } from './UIScrollViewRenderSystem';
+export { UIToggleRenderSystem } from './UIToggleRenderSystem';
+export { UIInputFieldRenderSystem } from './UIInputFieldRenderSystem';
+export { UIDropdownRenderSystem } from './UIDropdownRenderSystem';
+export { UIShinyEffectSystem } from './UIShinyEffectSystem';
+
+// Render utilities
+// 渲染工具
+export {
+    ensureUIWidgetMarker,
+    getUIRenderTransform,
+    renderBorder,
+    renderShadow,
+    lerpColor,
+    packColorWithAlpha,
+    getNinePatchPosition,
+    type UIRenderTransform,
+    type BorderRenderOptions,
+    type ShadowRenderOptions
+} from './UIRenderUtils';

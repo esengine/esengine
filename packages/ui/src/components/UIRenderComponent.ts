@@ -1,4 +1,9 @@
 import { Component, ECSComponent, Property, Serializable, Serialize } from '@esengine/ecs-framework';
+import type {
+    IMaterialOverridable,
+    MaterialPropertyOverride,
+    MaterialOverrides
+} from '@esengine/material-system';
 
 /**
  * 渲染类型
@@ -48,7 +53,7 @@ export interface UIShadowStyle {
  */
 @ECSComponent('UIRender')
 @Serializable({ version: 1, typeId: 'UIRender' })
-export class UIRenderComponent extends Component {
+export class UIRenderComponent extends Component implements IMaterialOverridable {
     /**
      * 渲染类型
      * Type of rendering
@@ -114,41 +119,6 @@ export class UIRenderComponent extends Component {
      * Texture tint color
      */
     public textureTint: number = 0xFFFFFF;
-
-    // ===== 九宫格 Nine-Patch =====
-
-    /**
-     * 九宫格边距 [top, right, bottom, left]
-     * Nine-patch margins
-     *
-     * Defines the non-stretchable borders for nine-patch rendering.
-     * 定义九宫格渲染时不可拉伸的边框区域。
-     */
-    @Serialize()
-    @Property({ type: 'vector4', label: 'Nine-Patch Margins' })
-    public ninePatchMargins: [number, number, number, number] = [0, 0, 0, 0];
-
-    /**
-     * 源纹理宽度（像素）
-     * Source texture width in pixels
-     *
-     * Required for nine-patch UV calculations.
-     * 九宫格 UV 计算所需。
-     */
-    @Serialize()
-    @Property({ type: 'number', label: 'Texture Width', min: 1 })
-    public textureWidth: number = 0;
-
-    /**
-     * 源纹理高度（像素）
-     * Source texture height in pixels
-     *
-     * Required for nine-patch UV calculations.
-     * 九宫格 UV 计算所需。
-     */
-    @Serialize()
-    @Property({ type: 'number', label: 'Texture Height', min: 1 })
-    public textureHeight: number = 0;
 
     // ===== 边框 Border =====
 
@@ -267,20 +237,6 @@ export class UIRenderComponent extends Component {
     }
 
     /**
-     * 设置九宫格
-     * Set nine-patch image
-     *
-     * @param textureGuid - 纹理资产 GUID | Texture asset GUID
-     * @param margins - 九宫格边距 | Nine-patch margins
-     */
-    public setNinePatch(textureGuid: string | number, margins: [number, number, number, number]): this {
-        this.type = UIRenderType.NinePatch;
-        this.textureGuid = textureGuid;
-        this.ninePatchMargins = margins;
-        return this;
-    }
-
-    /**
      * 设置边框
      * Set border style
      */
@@ -331,5 +287,145 @@ export class UIRenderComponent extends Component {
         this.gradientAngle = angle;
         this.gradientStops = stops;
         return this;
+    }
+
+    // ===== 材质 Material =====
+
+    /**
+     * 材质资产 GUID（共享材质）
+     * Material asset GUID (shared material)
+     *
+     * Note: This field is hidden from default PropertyInspector.
+     * Material editing is handled by UIRenderInspector.
+     * 注意：此字段在默认 PropertyInspector 中隐藏。
+     * 材质编辑由 UIRenderInspector 处理。
+     */
+    @Serialize()
+    @Property({ type: 'asset', label: 'Material', extensions: ['.mat'], hidden: true })
+    public materialGuid: string = '';
+
+    /**
+     * 材质属性覆盖（实例级别）
+     * Material property overrides (instance level)
+     */
+    @Serialize()
+    public materialOverrides: MaterialOverrides = {};
+
+    /**
+     * 运行时材质ID（缓存）
+     * Runtime material ID (cached)
+     */
+    private _materialId: number = 0;
+
+    // ============= Material Override Methods =============
+    // ============= 材质覆盖方法 =============
+
+    /**
+     * 获取材质ID
+     * Get material ID
+     */
+    getMaterialId(): number {
+        return this._materialId;
+    }
+
+    /**
+     * 设置材质ID
+     * Set material ID
+     *
+     * @param id - Material ID from MaterialManager. | 来自 MaterialManager 的材质ID。
+     */
+    setMaterialId(id: number): void {
+        this._materialId = id;
+    }
+
+    /**
+     * 设置浮点覆盖值
+     * Set float override value
+     *
+     * @param name - Uniform name. | Uniform 名称。
+     * @param value - Float value. | 浮点值。
+     */
+    setOverrideFloat(name: string, value: number): this {
+        this.materialOverrides[name] = { type: 'float', value };
+        return this;
+    }
+
+    /**
+     * 设置 vec2 覆盖值
+     * Set vec2 override value
+     */
+    setOverrideVec2(name: string, x: number, y: number): this {
+        this.materialOverrides[name] = { type: 'vec2', value: [x, y] };
+        return this;
+    }
+
+    /**
+     * 设置 vec3 覆盖值
+     * Set vec3 override value
+     */
+    setOverrideVec3(name: string, x: number, y: number, z: number): this {
+        this.materialOverrides[name] = { type: 'vec3', value: [x, y, z] };
+        return this;
+    }
+
+    /**
+     * 设置 vec4 覆盖值
+     * Set vec4 override value
+     */
+    setOverrideVec4(name: string, x: number, y: number, z: number, w: number): this {
+        this.materialOverrides[name] = { type: 'vec4', value: [x, y, z, w] };
+        return this;
+    }
+
+    /**
+     * 设置颜色覆盖值
+     * Set color override value
+     */
+    setOverrideColor(name: string, r: number, g: number, b: number, a: number = 1.0): this {
+        this.materialOverrides[name] = { type: 'color', value: [r, g, b, a] };
+        return this;
+    }
+
+    /**
+     * 设置整数覆盖值
+     * Set integer override value
+     */
+    setOverrideInt(name: string, value: number): this {
+        this.materialOverrides[name] = { type: 'int', value: Math.floor(value) };
+        return this;
+    }
+
+    /**
+     * 获取覆盖值
+     * Get override value
+     */
+    getOverride(name: string): MaterialPropertyOverride | undefined {
+        return this.materialOverrides[name];
+    }
+
+    /**
+     * 移除覆盖值
+     * Remove override value
+     */
+    removeOverride(name: string): this {
+        delete this.materialOverrides[name];
+        return this;
+    }
+
+    /**
+     * 清除所有覆盖值
+     * Clear all override values
+     */
+    clearOverrides(): this {
+        this.materialOverrides = {};
+        return this;
+    }
+
+    /**
+     * 检查是否有覆盖值
+     * Check if there are any overrides
+     */
+    hasOverrides(): boolean {
+        return Object.keys(this.materialOverrides).length > 0;
     }
 }

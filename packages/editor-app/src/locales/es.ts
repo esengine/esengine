@@ -1139,6 +1139,32 @@ export const es: Translations = {
                     label: 'Lista de Módulos',
                     description: 'Desmarcar módulos que no necesitas. Los módulos principales no se pueden deshabilitar. Los nuevos módulos se habilitan por defecto.'
                 }
+            },
+            dynamicAtlas: {
+                title: 'Atlas Dinámico',
+                description: 'Configuración de atlas en tiempo de ejecución para optimización de batching de UI',
+                enabled: {
+                    label: 'Habilitar Atlas Dinámico',
+                    description: 'Habilitar atlas dinámico en tiempo de ejecución para reducir Draw Calls'
+                },
+                expansionStrategy: {
+                    label: 'Estrategia de Expansión',
+                    description: 'Elegir cómo se expande el atlas',
+                    fixed: 'Tamaño Fijo (Sin costo de reconstrucción)',
+                    dynamic: 'Expansión Dinámica (Mejor eficiencia de memoria)'
+                },
+                fixedPageSize: {
+                    label: 'Tamaño de Página',
+                    description: 'Tamaño de cada página del atlas en modo fijo'
+                },
+                maxPages: {
+                    label: 'Páginas Máximas',
+                    description: 'Número máximo de páginas de atlas permitidas'
+                },
+                maxTextureSize: {
+                    label: 'Tamaño Máximo de Textura',
+                    description: 'Tamaño máximo de texturas individuales que pueden añadirse al atlas'
+                }
             }
         }
     }

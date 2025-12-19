@@ -24,6 +24,7 @@ import type { LocaleService, Locale, TranslationParams, PluginTranslations } fro
 import type { MessageHub, MessageHandler, RequestHandler } from './Services/MessageHub';
 import type { EntityStoreService, EntityTreeNode } from './Services/EntityStoreService';
 import type { PrefabService, PrefabPropertyOverride, IPrefabFileAPI } from './Services/PrefabService';
+import type { IGizmoInteractionService } from './Services/GizmoInteractionService';
 
 // ============================================================================
 // LocaleService Token
@@ -203,9 +204,28 @@ export const PrefabServiceToken = createServiceToken<IPrefabService>('prefabServ
 // 重新导出类型方便使用
 export type { PrefabPropertyOverride, IPrefabFileAPI } from './Services/PrefabService';
 
+// ============================================================================
+// GizmoInteractionService Token
+// Gizmo 交互服务令牌
+// ============================================================================
+
+/**
+ * Gizmo 交互服务令牌
+ * Gizmo interaction service token
+ *
+ * 用于注册和获取 Gizmo 交互服务。
+ * For registering and getting gizmo interaction service.
+ */
+export const GizmoInteractionServiceToken = createServiceToken<IGizmoInteractionService>('gizmoInteractionService');
+
+// Re-export interface for convenience
+// 重新导出接口方便使用
+export type { IGizmoInteractionService } from './Services/GizmoInteractionService';
+
 // Re-export classes for direct use (backwards compatibility)
 // 重新导出类以供直接使用（向后兼容）
 export { LocaleService } from './Services/LocaleService';
 export { MessageHub } from './Services/MessageHub';
 export { EntityStoreService } from './Services/EntityStoreService';
 export { PrefabService } from './Services/PrefabService';
+export { GizmoInteractionService } from './Services/GizmoInteractionService';

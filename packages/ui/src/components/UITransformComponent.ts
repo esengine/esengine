@@ -4,8 +4,15 @@ import { SortingLayers, type ISortable } from '@esengine/engine-core';
 /**
  * 锚点预设
  * Anchor presets for common positioning scenarios
+ *
+ * Available presets:
+ * - Point anchors (9): TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight
+ * - Horizontal stretch (3): StretchTop, StretchMiddle, StretchBottom
+ * - Vertical stretch (3): StretchLeft, StretchCenter, StretchRight
+ * - Full stretch (1): StretchAll
  */
 export enum AnchorPreset {
+    // Point anchors | 点锚点
     TopLeft = 'top-left',
     TopCenter = 'top-center',
     TopRight = 'top-right',
@@ -15,6 +22,18 @@ export enum AnchorPreset {
     BottomLeft = 'bottom-left',
     BottomCenter = 'bottom-center',
     BottomRight = 'bottom-right',
+
+    // Horizontal stretch | 水平拉伸
+    StretchTop = 'stretch-top',
+    StretchMiddle = 'stretch-middle',
+    StretchBottom = 'stretch-bottom',
+
+    // Vertical stretch | 垂直拉伸
+    StretchLeft = 'stretch-left',
+    StretchCenter = 'stretch-center',
+    StretchRight = 'stretch-right',
+
+    // Full stretch | 全拉伸
     StretchAll = 'stretch-all'
 }
 
@@ -151,11 +170,11 @@ export class UITransformComponent extends Component implements ISortable {
     // ===== 变换 Transform =====
 
     /**
-     * 旋转角度（弧度）
-     * Rotation angle in radians
+     * 旋转角度（度，顺时针为正）
+     * Rotation angle in degrees (clockwise positive)
      */
     @Serialize()
-    @Property({ type: 'number', label: 'Rotation', step: 0.01 })
+    @Property({ type: 'number', label: 'Rotation', step: 1 })
     public rotation: number = 0;
 
     /**
@@ -258,22 +277,31 @@ export class UITransformComponent extends Component implements ISortable {
     public worldVisible: boolean = true;
 
     /**
-     * 计算后的世界旋转（弧度，考虑父元素旋转）
-     * Computed world rotation in radians (considering parent rotation)
+     * 计算后的世界旋转（度，顺时针为正，考虑父元素旋转）
+     * Computed world rotation in degrees (clockwise positive, considering parent rotation)
+     *
+     * undefined 表示尚未由 UILayoutSystem 计算，此时应使用本地 rotation。
+     * undefined means not yet computed by UILayoutSystem, should use local rotation in that case.
      */
-    public worldRotation: number = 0;
+    public worldRotation: number | undefined = undefined;
 
     /**
      * 计算后的世界 X 缩放（考虑父元素缩放）
      * Computed world X scale (considering parent scale)
+     *
+     * undefined 表示尚未由 UILayoutSystem 计算，此时应使用本地 scaleX。
+     * undefined means not yet computed by UILayoutSystem, should use local scaleX in that case.
      */
-    public worldScaleX: number = 1;
+    public worldScaleX: number | undefined = undefined;
 
     /**
      * 计算后的世界 Y 缩放（考虑父元素缩放）
      * Computed world Y scale (considering parent scale)
+     *
+     * undefined 表示尚未由 UILayoutSystem 计算，此时应使用本地 scaleY。
+     * undefined means not yet computed by UILayoutSystem, should use local scaleY in that case.
      */
-    public worldScaleY: number = 1;
+    public worldScaleY: number | undefined = undefined;
 
     /**
      * 计算后的世界层内顺序（考虑父元素和层级深度）
@@ -283,6 +311,27 @@ export class UITransformComponent extends Component implements ISortable {
      * Children always render on top of parents: worldOrderInLayer = parentWorldOrder + depth * 1000 + localOrder
      */
     public worldOrderInLayer: number = 0;
+
+    /**
+     * 所属 Canvas 实体 ID（由 UILayoutSystem 计算）
+     * Owning Canvas entity ID (computed by UILayoutSystem)
+     *
+     * 如果为 null，表示没有父 Canvas（使用默认设置）。
+     * If null, indicates no parent Canvas (use default settings).
+     */
+    public canvasEntityId: number | null = null;
+
+    /**
+     * 计算后的世界排序层（从 Canvas 继承）
+     * Computed world sorting layer (inherited from Canvas)
+     */
+    public worldSortingLayer: string = SortingLayers.UI;
+
+    /**
+     * 是否启用像素完美渲染（从 Canvas 继承）
+     * Whether pixel-perfect rendering is enabled (inherited from Canvas)
+     */
+    public pixelPerfect: boolean = false;
 
     /**
      * 本地到世界的 2D 变换矩阵（只读，由 UILayoutSystem 计算）
@@ -299,22 +348,33 @@ export class UITransformComponent extends Component implements ISortable {
     public layoutDirty: boolean = true;
 
     /**
+     * 布局是否已由 UILayoutSystem 计算
+     * Flag indicating layout has been computed by UILayoutSystem
+     *
+     * 当 UILayoutSystem 运行后设为 true，此时 worldX/worldY 等值有效。
+     * Set to true after UILayoutSystem runs, at which point worldX/worldY etc. are valid.
+     */
+    public layoutComputed: boolean = false;
+
+    /**
      * 设置锚点预设
      * Set anchor preset for quick positioning
      */
     public setAnchorPreset(preset: AnchorPreset): this {
+        // anchorMinY=0 是底部，anchorMinY=1 是顶部
+        // anchorMinY=0 is bottom, anchorMinY=1 is top
         switch (preset) {
             case AnchorPreset.TopLeft:
-                this.anchorMinX = 0; this.anchorMinY = 0;
-                this.anchorMaxX = 0; this.anchorMaxY = 0;
+                this.anchorMinX = 0; this.anchorMinY = 1;
+                this.anchorMaxX = 0; this.anchorMaxY = 1;
                 break;
             case AnchorPreset.TopCenter:
-                this.anchorMinX = 0.5; this.anchorMinY = 0;
-                this.anchorMaxX = 0.5; this.anchorMaxY = 0;
+                this.anchorMinX = 0.5; this.anchorMinY = 1;
+                this.anchorMaxX = 0.5; this.anchorMaxY = 1;
                 break;
             case AnchorPreset.TopRight:
-                this.anchorMinX = 1; this.anchorMinY = 0;
-                this.anchorMaxX = 1; this.anchorMaxY = 0;
+                this.anchorMinX = 1; this.anchorMinY = 1;
+                this.anchorMaxX = 1; this.anchorMaxY = 1;
                 break;
             case AnchorPreset.MiddleLeft:
                 this.anchorMinX = 0; this.anchorMinY = 0.5;
@@ -329,17 +389,47 @@ export class UITransformComponent extends Component implements ISortable {
                 this.anchorMaxX = 1; this.anchorMaxY = 0.5;
                 break;
             case AnchorPreset.BottomLeft:
-                this.anchorMinX = 0; this.anchorMinY = 1;
-                this.anchorMaxX = 0; this.anchorMaxY = 1;
+                this.anchorMinX = 0; this.anchorMinY = 0;
+                this.anchorMaxX = 0; this.anchorMaxY = 0;
                 break;
             case AnchorPreset.BottomCenter:
-                this.anchorMinX = 0.5; this.anchorMinY = 1;
-                this.anchorMaxX = 0.5; this.anchorMaxY = 1;
+                this.anchorMinX = 0.5; this.anchorMinY = 0;
+                this.anchorMaxX = 0.5; this.anchorMaxY = 0;
                 break;
             case AnchorPreset.BottomRight:
-                this.anchorMinX = 1; this.anchorMinY = 1;
+                this.anchorMinX = 1; this.anchorMinY = 0;
+                this.anchorMaxX = 1; this.anchorMaxY = 0;
+                break;
+
+            // Horizontal stretch | 水平拉伸
+            case AnchorPreset.StretchTop:
+                this.anchorMinX = 0; this.anchorMinY = 1;
                 this.anchorMaxX = 1; this.anchorMaxY = 1;
                 break;
+            case AnchorPreset.StretchMiddle:
+                this.anchorMinX = 0; this.anchorMinY = 0.5;
+                this.anchorMaxX = 1; this.anchorMaxY = 0.5;
+                break;
+            case AnchorPreset.StretchBottom:
+                this.anchorMinX = 0; this.anchorMinY = 0;
+                this.anchorMaxX = 1; this.anchorMaxY = 0;
+                break;
+
+            // Vertical stretch | 垂直拉伸
+            case AnchorPreset.StretchLeft:
+                this.anchorMinX = 0; this.anchorMinY = 0;
+                this.anchorMaxX = 0; this.anchorMaxY = 1;
+                break;
+            case AnchorPreset.StretchCenter:
+                this.anchorMinX = 0.5; this.anchorMinY = 0;
+                this.anchorMaxX = 0.5; this.anchorMaxY = 1;
+                break;
+            case AnchorPreset.StretchRight:
+                this.anchorMinX = 1; this.anchorMinY = 0;
+                this.anchorMaxX = 1; this.anchorMaxY = 1;
+                break;
+
+            // Full stretch | 全拉伸
             case AnchorPreset.StretchAll:
                 this.anchorMinX = 0; this.anchorMinY = 0;
                 this.anchorMaxX = 1; this.anchorMaxY = 1;
@@ -387,9 +477,13 @@ export class UITransformComponent extends Component implements ISortable {
      * Test if a point is inside this element
      */
     public containsPoint(worldX: number, worldY: number): boolean {
-        return worldX >= this.worldX &&
-               worldX <= this.worldX + this.computedWidth &&
-               worldY >= this.worldY &&
-               worldY <= this.worldY + this.computedHeight;
+        const x = this.worldX ?? this.x;
+        const y = this.worldY ?? this.y;
+        const width = this.computedWidth ?? this.width;
+        const height = this.computedHeight ?? this.height;
+        return worldX >= x &&
+               worldX <= x + width &&
+               worldY >= y &&
+               worldY <= y + height;
     }
 }

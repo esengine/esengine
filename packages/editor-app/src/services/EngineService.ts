@@ -6,13 +6,24 @@
  * Uses the unified GameRuntime architecture
  */
 
-import { GizmoRegistry, EntityStoreService, MessageHub, SceneManagerService, ProjectService, PluginManager, IPluginManager, AssetRegistryService, type SystemContext } from '@esengine/editor-core';
+import { GizmoRegistry, EntityStoreService, MessageHub, SceneManagerService, ProjectService, PluginManager, IPluginManager, AssetRegistryService, GizmoInteractionService, GizmoInteractionServiceToken, type SystemContext } from '@esengine/editor-core';
 import { Core, Scene, Entity, SceneSerializer, ProfilerSDK, createLogger, PluginServiceRegistry } from '@esengine/ecs-framework';
 import { CameraConfig, EngineBridgeToken, RenderSystemToken, EngineIntegrationToken } from '@esengine/ecs-engine-bindgen';
 import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { SpriteComponent, SpriteAnimatorComponent, SpriteAnimatorSystemToken } from '@esengine/sprite';
 import { ParticleSystemComponent } from '@esengine/particle';
-import { invalidateUIRenderCaches, UIRenderProviderToken, UIInputSystemToken } from '@esengine/ui';
+import {
+    invalidateUIRenderCaches,
+    UIRenderProviderToken,
+    UIInputSystemToken,
+    initializeDynamicAtlasService,
+    reinitializeDynamicAtlasService,
+    registerTexturePathMapping,
+    AtlasExpansionStrategy,
+    type IAtlasEngineBridge,
+    type DynamicAtlasConfig
+} from '@esengine/ui';
+import { SettingsService } from './SettingsService';
 import * as esEngine from '@esengine/engine';
 import {
     AssetManager,
@@ -22,8 +33,12 @@ import {
     SceneResourceManager,
     AssetType,
     AssetManagerToken,
-    isValidGUID
+    isValidGUID,
+    setGlobalAssetDatabase,
+    setGlobalEngineBridge,
+    setGlobalAssetFileLoader
 } from '@esengine/asset-system';
+import { EditorAssetFileLoader } from './EditorAssetFileLoader';
 import {
     GameRuntime,
     createGameRuntime,
@@ -56,6 +71,7 @@ export class EngineService {
     private _modulesInitialized = false;
     private _running = false;
     private _canvasId: string | null = null;
+    private _gizmoInteractionService: GizmoInteractionService | null = null;
 
     // 资产系统相关
     private _assetManager: AssetManager | null = null;
@@ -67,6 +83,9 @@ export class EngineService {
 
     // 编辑器相机状态（用于恢复）
     private _editorCameraState = { x: 0, y: 0, zoom: 1 };
+
+    // 当前选中的实体 IDs（用于高亮）| Currently selected entity IDs (for highlighting)
+    private _selectedEntityIds: number[] = [];
 
     private constructor() {}
 
@@ -146,6 +165,13 @@ export class EngineService {
 
             await this._runtime.initialize();
 
+            // 设置 MaterialManager 的引擎桥接（上传内置 shader 到 GPU）
+            // Set engine bridge for MaterialManager (upload built-in shaders to GPU)
+            const materialManager = getMaterialManager();
+            if (materialManager && this._runtime.bridge) {
+                materialManager.setEngineBridge(this._runtime.bridge);
+            }
+
             // 启用性能分析器（编辑器模式默认启用）
             ProfilerSDK.setEnabled(true);
 
@@ -156,6 +182,21 @@ export class EngineService {
                 (component) =>
                     GizmoRegistry.hasProvider(component.constructor as any)
             );
+
+            // 初始化 Gizmo 交互服务
+            // Initialize Gizmo Interaction Service
+            this._gizmoInteractionService = new GizmoInteractionService();
+            Core.pluginServices.register(GizmoInteractionServiceToken, this._gizmoInteractionService);
+
+            // 设置 Gizmo 交互函数到渲染系统
+            // Set gizmo interaction functions to render system
+            if (this._runtime.renderSystem) {
+                this._runtime.renderSystem.setGizmoInteraction(
+                    (entityId: number, baseColor: { r: number; g: number; b: number; a: number }, isSelected: boolean) =>
+                        this._gizmoInteractionService!.getHighlightColor(entityId, baseColor, isSelected),
+                    () => this._gizmoInteractionService!.getHoveredEntityId()
+                );
+            }
 
             // 初始化资产系统
             await this._initializeAssetSystem();
@@ -437,6 +478,22 @@ export class EngineService {
             // 将 AssetRegistryService 的数据同步到 assetManager 的数据库
             await this._syncAssetRegistryToManager();
 
+            // 设置全局资产数据库（供渲染系统查询 sprite 元数据）
+            // Set global asset database (for render systems to query sprite metadata)
+            setGlobalAssetDatabase(this._assetManager.getDatabase());
+
+            // 设置全局资产文件加载器（供动态图集服务等使用）
+            // Set global asset file loader (for DynamicAtlasService etc.)
+            const editorAssetFileLoader = new EditorAssetFileLoader(assetReader, {
+                getProjectPath: () => {
+                    if (projectService && projectService.isProjectOpen()) {
+                        return projectService.getCurrentProject()?.path ?? null;
+                    }
+                    return null;
+                }
+            });
+            setGlobalAssetFileLoader(editorAssetFileLoader);
+
             const pathTransformerFn = (path: string) => {
                 if (!path.startsWith('http://') && !path.startsWith('https://') &&
                     !path.startsWith('data:') && !path.startsWith('asset://')) {
@@ -461,6 +518,33 @@ export class EngineService {
             });
 
             if (this._runtime?.bridge) {
+                // 为 EngineBridge 设置路径解析器（用于 getTextureInfoByPath 等方法）
+                // Set path resolver for EngineBridge (for getTextureInfoByPath etc.)
+                this._runtime.bridge.setPathResolver((assetPath: string) => {
+                    // 空路径直接返回
+                    if (!assetPath) return assetPath;
+
+                    // 已经是 URL 则直接返回
+                    if (assetPath.startsWith('http://') ||
+                        assetPath.startsWith('https://') ||
+                        assetPath.startsWith('data:') ||
+                        assetPath.startsWith('asset://')) {
+                        return assetPath;
+                    }
+
+                    // 使用 pathTransformerFn 转换路径为 Tauri URL
+                    let fullPath = assetPath;
+                    // 如果路径不以 'assets/' 开头，添加前缀
+                    if (!assetPath.startsWith('assets/') && !assetPath.startsWith('assets\\')) {
+                        fullPath = `assets/${assetPath}`;
+                    }
+                    return pathTransformerFn(fullPath);
+                });
+
+                // 设置全局引擎桥（供渲染系统查询纹理尺寸 - 唯一事实来源）
+                // Set global engine bridge (for render systems to query texture dimensions - single source of truth)
+                setGlobalEngineBridge(this._runtime.bridge);
+
                 this._engineIntegration = new EngineIntegration(this._assetManager, this._runtime.bridge);
 
                 // 为 EngineIntegration 设置使用 Tauri URL 转换的 PathResolver
@@ -502,6 +586,58 @@ export class EngineService {
 
                 this._sceneResourceManager = new SceneResourceManager();
                 this._sceneResourceManager.setResourceLoader(this._engineIntegration);
+
+                // 初始化动态图集服务（用于 UI 合批）
+                // Initialize dynamic atlas service (for UI batching)
+                const bridge = this._runtime.bridge;
+                if (bridge.createBlankTexture && bridge.updateTextureRegion) {
+                    const atlasBridge: IAtlasEngineBridge = {
+                        createBlankTexture: (width: number, height: number) => {
+                            return bridge.createBlankTexture(width, height);
+                        },
+                        updateTextureRegion: (
+                            id: number,
+                            x: number,
+                            y: number,
+                            width: number,
+                            height: number,
+                            pixels: Uint8Array
+                        ) => {
+                            bridge.updateTextureRegion(id, x, y, width, height, pixels);
+                        }
+                    };
+
+                    // 从设置中获取动态图集配置
+                    // Get dynamic atlas config from settings
+                    const settingsService = SettingsService.getInstance();
+                    const atlasEnabled = settingsService.get('project.dynamicAtlas.enabled', true);
+
+                    if (atlasEnabled) {
+                        const strategyValue = settingsService.get<string>('project.dynamicAtlas.expansionStrategy', 'fixed');
+                        const expansionStrategy = strategyValue === 'dynamic'
+                            ? AtlasExpansionStrategy.Dynamic
+                            : AtlasExpansionStrategy.Fixed;
+                        const fixedPageSize = settingsService.get('project.dynamicAtlas.fixedPageSize', 1024);
+                        const maxPages = settingsService.get('project.dynamicAtlas.maxPages', 4);
+                        const maxTextureSize = settingsService.get('project.dynamicAtlas.maxTextureSize', 512);
+
+                        initializeDynamicAtlasService(atlasBridge, {
+                            expansionStrategy,
+                            initialPageSize: 256,    // 动态模式起始大小 | Dynamic mode initial size
+                            fixedPageSize,           // 固定模式页面大小 | Fixed mode page size
+                            maxPageSize: 2048,       // 最大页面大小 | Max page size
+                            maxPages,
+                            maxTextureSize,
+                            padding: 1
+                        });
+                    }
+
+                    // 注册纹理加载回调，当纹理加载时自动注册路径映射
+                    // Register texture load callback to register path mapping when textures load
+                    EngineIntegration.onTextureLoad((guid: string, path: string, _textureId: number) => {
+                        registerTexturePathMapping(guid, path);
+                    });
+                }
 
                 const sceneManagerService = Core.services.tryResolve<SceneManagerService>(SceneManagerService);
                 if (sceneManagerService) {
@@ -570,6 +706,13 @@ export class EngineService {
             // 1. Check for explicit loaderType in .meta file (user override)
             // 1. 检查 .meta 文件中的显式 loaderType（用户覆盖）
             const meta = metaManager.getMetaByGUID(asset.guid);
+
+            // Debug: log meta for textures with importSettings
+            // 调试：记录有 importSettings 的纹理 meta
+            if (meta?.importSettings?.spriteSettings) {
+                console.log(`[EngineService] Syncing asset with spriteSettings: ${asset.path}`, meta.importSettings.spriteSettings);
+            }
+
             if (meta?.loaderType) {
                 assetType = meta.loaderType;
             }
@@ -607,10 +750,13 @@ export class EngineService {
                 size: asset.size,
                 hash: asset.hash || '',
                 dependencies: [],
-                labels: [],
+                labels: meta?.labels || [],
                 tags: new Map(),
                 lastModified: asset.lastModified,
-                version: 1
+                version: 1,
+                // 包含 importSettings（包含 spriteSettings 等）用于渲染系统查询
+                // Include importSettings (contains spriteSettings etc.) for render systems to query
+                importSettings: meta?.importSettings as Record<string, unknown> | undefined
             });
         }
 
@@ -684,10 +830,13 @@ export class EngineService {
                         size: asset.size,
                         hash: asset.hash || '',
                         dependencies: [],
-                        labels: [],
+                        labels: meta?.labels || [],
                         tags: new Map(),
                         lastModified: asset.lastModified,
-                        version: 1
+                        version: 1,
+                        // 包含 importSettings（包含 spriteSettings 等）用于渲染系统查询
+                        // Include importSettings (contains spriteSettings etc.) for render systems to query
+                        importSettings: meta?.importSettings as Record<string, unknown> | undefined
                     });
 
                     logger.debug(`Asset synced to runtime: ${asset.path} (${data.guid})`);
@@ -1137,9 +1286,27 @@ export class EngineService {
 
     /**
      * Set selected entity IDs for gizmo display.
+     * 设置选中的实体 ID 用于 Gizmo 显示。
      */
     setSelectedEntityIds(ids: number[]): void {
+        this._selectedEntityIds = [...ids];
         this._runtime?.setSelectedEntityIds(ids);
+    }
+
+    /**
+     * Get currently selected entity IDs.
+     * 获取当前选中的实体 IDs。
+     */
+    getSelectedEntityIds(): number[] {
+        return [...this._selectedEntityIds];
+    }
+
+    /**
+     * Get gizmo interaction service.
+     * 获取 Gizmo 交互服务。
+     */
+    getGizmoInteractionService(): GizmoInteractionService | null {
+        return this._gizmoInteractionService;
     }
 
     /**
@@ -1230,6 +1397,76 @@ export class EngineService {
     }
 
     /**
+     * Reinitialize dynamic atlas with current settings.
+     * 使用当前设置重新初始化动态图集。
+     *
+     * Call this when dynamic atlas settings change to apply them.
+     * 当动态图集设置更改时调用此方法以应用更改。
+     */
+    reinitializeDynamicAtlas(): void {
+        const bridge = this._runtime?.bridge;
+        if (!bridge?.createBlankTexture || !bridge?.updateTextureRegion) {
+            logger.warn('Dynamic atlas requires createBlankTexture and updateTextureRegion');
+            return;
+        }
+
+        const atlasBridge: IAtlasEngineBridge = {
+            createBlankTexture: (width: number, height: number) => {
+                return bridge.createBlankTexture!(width, height);
+            },
+            updateTextureRegion: (
+                id: number,
+                x: number,
+                y: number,
+                width: number,
+                height: number,
+                pixels: Uint8Array
+            ) => {
+                bridge.updateTextureRegion!(id, x, y, width, height, pixels);
+            }
+        };
+
+        // 从设置中获取动态图集配置
+        // Get dynamic atlas config from settings
+        const settingsService = SettingsService.getInstance();
+        const atlasEnabled = settingsService.get('project.dynamicAtlas.enabled', true);
+
+        if (!atlasEnabled) {
+            logger.info('Dynamic atlas is disabled');
+            return;
+        }
+
+        const strategyValue = settingsService.get<string>('project.dynamicAtlas.expansionStrategy', 'fixed');
+        const expansionStrategy = strategyValue === 'dynamic'
+            ? AtlasExpansionStrategy.Dynamic
+            : AtlasExpansionStrategy.Fixed;
+        const fixedPageSize = settingsService.get('project.dynamicAtlas.fixedPageSize', 1024);
+        const maxPages = settingsService.get('project.dynamicAtlas.maxPages', 4);
+        const maxTextureSize = settingsService.get('project.dynamicAtlas.maxTextureSize', 512);
+
+        logger.info('Dynamic atlas settings read from SettingsService:', {
+            strategyValue,
+            expansionStrategy: expansionStrategy === AtlasExpansionStrategy.Dynamic ? 'dynamic' : 'fixed',
+            fixedPageSize,
+            maxPages,
+            maxTextureSize
+        });
+
+        const config: DynamicAtlasConfig = {
+            expansionStrategy,
+            initialPageSize: 256,
+            fixedPageSize,
+            maxPageSize: 2048,
+            maxPages,
+            maxTextureSize,
+            padding: 1
+        };
+
+        reinitializeDynamicAtlasService(atlasBridge, config);
+        logger.info('Dynamic atlas reinitialized with config:', config);
+    }
+
+    /**
      * Dispose engine resources.
      */
     dispose(): void {
@@ -1242,7 +1479,12 @@ export class EngineService {
             // 切换项目时清空数据库以释放内存
             this._assetManager.getDatabase().clear();
             this._assetManager = null;
+            // 清除全局资产数据库引用 | Clear global asset database reference
+            setGlobalAssetDatabase(null);
         }
+
+        // 清除全局引擎桥引用 | Clear global engine bridge reference
+        setGlobalEngineBridge(null);
 
         this._engineIntegration = null;
 

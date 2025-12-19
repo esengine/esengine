@@ -35,17 +35,16 @@ import type { SpriteRenderData } from '../types';
  */
 export class RenderBatcher {
     private sprites: SpriteRenderData[] = [];
-    private sortByZ = false;
 
     /**
      * Create a new render batcher.
      * 创建新的渲染批处理器。
      *
-     * @param sortByZ - Whether to sort sprites by Z order | 是否按Z顺序排序精灵
+     * Sprites are stored in insertion order. The caller is responsible
+     * for adding sprites in the correct render order (back-to-front for 2D).
+     * 精灵按插入顺序存储。调用者负责以正确的渲染顺序添加精灵（2D 中从后到前）。
      */
-    constructor(sortByZ = false) {
-        this.sortByZ = sortByZ;
-    }
+    constructor() {}
 
     /**
      * Add a sprite to the batch.
@@ -71,18 +70,20 @@ export class RenderBatcher {
      * Get all sprites in the batch.
      * 获取批处理中的所有精灵。
      *
-     * @returns Sorted array of sprites | 排序后的精灵数组
+     * Sprites are returned in insertion order to preserve z-ordering.
+     * The rendering system is responsible for sorting sprites before adding them.
+     * 精灵按插入顺序返回以保持 z 顺序。
+     * 渲染系统负责在添加精灵前对其进行排序。
+     *
+     * @returns Array of sprites in insertion order | 按插入顺序排列的精灵数组
      */
     getSprites(): SpriteRenderData[] {
-        // Sort by material ID first, then texture ID for better batching
-        // 先按材质ID排序，再按纹理ID排序以获得更好的批处理效果
-        if (!this.sortByZ) {
-            this.sprites.sort((a, b) => {
-                const materialDiff = (a.materialId || 0) - (b.materialId || 0);
-                if (materialDiff !== 0) return materialDiff;
-                return a.textureId - b.textureId;
-            });
-        }
+        // NOTE: Previously sorted by materialId/textureId for batching optimization,
+        // but this broke z-ordering for UI elements where render order is critical.
+        // Sprites should be added in the correct render order by the caller.
+        // 注意：之前按 materialId/textureId 排序以优化批处理，
+        // 但这破坏了 UI 元素的 z 排序，而 UI 的渲染顺序至关重要。
+        // 调用者应该以正确的渲染顺序添加精灵。
         return this.sprites;
     }
 

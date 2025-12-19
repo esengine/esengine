@@ -3,10 +3,35 @@
  * 2D 物理世界封装
  *
  * 封装 Rapier2D 物理世界，提供确定性物理模拟
+ *
+ * 坐标转换说明：
+ * - ESEngine: 左手坐标系，顺时针正旋转，角度单位为度
+ * - Rapier2D: 数学坐标系，逆时针正旋转，角度单位为弧度
  */
 
 import type RAPIER from '@esengine/rapier2d';
 import type { IVector2 } from '@esengine/ecs-framework-math';
+
+// 角度单位转换常量 | Angle unit conversion constants
+const DEG_TO_RAD = Math.PI / 180;
+const RAD_TO_DEG = 180 / Math.PI;
+
+/**
+ * 将引擎旋转（度，顺时针）转换为 Rapier 旋转（弧度，逆时针）
+ * Convert engine rotation (degrees, clockwise) to Rapier rotation (radians, counter-clockwise)
+ */
+function toRapierRotation(degrees: number): number {
+    return -degrees * DEG_TO_RAD;
+}
+
+/**
+ * 将 Rapier 旋转（弧度，逆时针）转换为引擎旋转（度，顺时针）
+ * Convert Rapier rotation (radians, counter-clockwise) to engine rotation (degrees, clockwise)
+ */
+function fromRapierRotation(radians: number): number {
+    return -radians * RAD_TO_DEG;
+}
+
 import type {
     Physics2DConfig,
     RaycastHit2D,
@@ -223,9 +248,10 @@ export class Physics2DWorld {
         }
 
         // 设置刚体属性
+        // 转换旋转：引擎（度，顺时针）→ Rapier（弧度，逆时针）
         bodyDesc
             .setTranslation(position.x, position.y)
-            .setRotation(rotation)
+            .setRotation(toRapierRotation(rotation))
             .setLinearDamping(rigidbody.linearDamping)
             .setAngularDamping(rigidbody.angularDamping)
             .setGravityScale(rigidbody.gravityScale)
@@ -306,7 +332,8 @@ export class Physics2DWorld {
         if (!body) return;
 
         body.setTranslation(new this._rapier.Vector2(position.x, position.y), true);
-        body.setRotation(rotation, true);
+        // 转换旋转：引擎（度，顺时针）→ Rapier（弧度，逆时针）
+        body.setRotation(toRapierRotation(rotation), true);
     }
 
     /**
@@ -333,7 +360,8 @@ export class Physics2DWorld {
         const body = this._world.getRigidBody(handle);
         if (!body) return null;
 
-        return body.rotation();
+        // 转换旋转：Rapier（弧度，逆时针）→ 引擎（度，顺时针）
+        return fromRapierRotation(body.rotation());
     }
 
     /**
@@ -803,7 +831,7 @@ export class Physics2DWorld {
         const shape = new this._rapier.Cuboid(halfExtents.x, halfExtents.y);
         const shapePos = new this._rapier.Vector2(center.x, center.y);
 
-        this._world.intersectionsWithShape(shapePos, rotation, shape, (collider) => {
+        this._world.intersectionsWithShape(shapePos, toRapierRotation(rotation), shape, (collider) => {
             const mapping = this._colliderMap.get(collider.handle);
             if (mapping && (collider.collisionGroups() & collisionMask) !== 0) {
                 entityIds.push(mapping.entityId);
@@ -1016,7 +1044,7 @@ export class Physics2DWorld {
         // 配置碰撞体属性
         colliderDesc
             .setTranslation(collider.offset.x * sx, collider.offset.y * sy)
-            .setRotation(collider.rotationOffset)
+            .setRotation(toRapierRotation(collider.rotationOffset))
             .setFriction(collider.friction)
             .setRestitution(collider.restitution)
             .setDensity(collider.density)

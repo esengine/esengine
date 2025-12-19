@@ -136,6 +136,74 @@ class ProjectSettingsEditorModule implements IEditorModuleLoader {
                             }
                         } as any  // Cast to any to allow custom props
                     ]
+                },
+                {
+                    id: 'dynamic-atlas',
+                    title: '$pluginSettings.project.dynamicAtlas.title',
+                    description: '$pluginSettings.project.dynamicAtlas.description',
+                    settings: [
+                        {
+                            key: 'project.dynamicAtlas.enabled',
+                            label: '$pluginSettings.project.dynamicAtlas.enabled.label',
+                            type: 'boolean',
+                            defaultValue: true,
+                            description: '$pluginSettings.project.dynamicAtlas.enabled.description'
+                        },
+                        {
+                            key: 'project.dynamicAtlas.expansionStrategy',
+                            label: '$pluginSettings.project.dynamicAtlas.expansionStrategy.label',
+                            type: 'select',
+                            defaultValue: 'fixed',
+                            description: '$pluginSettings.project.dynamicAtlas.expansionStrategy.description',
+                            options: [
+                                {
+                                    label: '$pluginSettings.project.dynamicAtlas.expansionStrategy.fixed',
+                                    value: 'fixed'
+                                },
+                                {
+                                    label: '$pluginSettings.project.dynamicAtlas.expansionStrategy.dynamic',
+                                    value: 'dynamic'
+                                }
+                            ]
+                        },
+                        {
+                            key: 'project.dynamicAtlas.fixedPageSize',
+                            label: '$pluginSettings.project.dynamicAtlas.fixedPageSize.label',
+                            type: 'select',
+                            defaultValue: 1024,
+                            description: '$pluginSettings.project.dynamicAtlas.fixedPageSize.description',
+                            options: [
+                                { label: '512 x 512', value: 512 },
+                                { label: '1024 x 1024', value: 1024 },
+                                { label: '2048 x 2048', value: 2048 }
+                            ]
+                        },
+                        {
+                            key: 'project.dynamicAtlas.maxPages',
+                            label: '$pluginSettings.project.dynamicAtlas.maxPages.label',
+                            type: 'select',
+                            defaultValue: 4,
+                            description: '$pluginSettings.project.dynamicAtlas.maxPages.description',
+                            options: [
+                                { label: '1', value: 1 },
+                                { label: '2', value: 2 },
+                                { label: '4', value: 4 },
+                                { label: '8', value: 8 }
+                            ]
+                        },
+                        {
+                            key: 'project.dynamicAtlas.maxTextureSize',
+                            label: '$pluginSettings.project.dynamicAtlas.maxTextureSize.label',
+                            type: 'select',
+                            defaultValue: 512,
+                            description: '$pluginSettings.project.dynamicAtlas.maxTextureSize.description',
+                            options: [
+                                { label: '256 x 256', value: 256 },
+                                { label: '512 x 512', value: 512 },
+                                { label: '1024 x 1024', value: 1024 }
+                            ]
+                        }
+                    ]
                 }
             ]
         });
@@ -172,9 +240,33 @@ class ProjectSettingsEditorModule implements IEditorModuleLoader {
                 logger.info('UI design resolution changed, applying...');
                 this.applyUIDesignResolution();
             }
+
+            // Check if dynamic atlas settings changed
+            // 检查动态图集设置是否更改
+            if ('project.dynamicAtlas.enabled' in changedSettings ||
+                'project.dynamicAtlas.expansionStrategy' in changedSettings ||
+                'project.dynamicAtlas.fixedPageSize' in changedSettings ||
+                'project.dynamicAtlas.maxPages' in changedSettings ||
+                'project.dynamicAtlas.maxTextureSize' in changedSettings) {
+
+                logger.info('Dynamic atlas settings changed, reinitializing...');
+                this.applyDynamicAtlasSettings();
+            }
         }) as EventListener;
 
         window.addEventListener('settings:changed', this.settingsListener);
+    }
+
+    /**
+     * Apply dynamic atlas settings
+     * 应用动态图集设置
+     */
+    private applyDynamicAtlasSettings(): void {
+        const engineService = EngineService.getInstance();
+        if (engineService.isInitialized()) {
+            engineService.reinitializeDynamicAtlas();
+            logger.info('Dynamic atlas settings applied');
+        }
     }
 
     /**

@@ -2,12 +2,15 @@ import { Vector2 } from './Vector2';
 
 /**
  * 3x3变换矩阵类
+ * 3x3 Transform Matrix Class
  *
  * 用于2D变换（平移、旋转、缩放）的3x3矩阵
- * 矩阵布局：
- * [m00, m01, m02]   [scaleX * cos, -scaleY * sin, translateX]
- * [m10, m11, m12] = [scaleX * sin,  scaleY * cos, translateY]
- * [m20, m21, m22]   [0,            0,            1]
+ * 使用左手坐标系（顺时针正旋转）
+ *
+ * 矩阵布局（顺时针旋转）：
+ * [m00, m01, m02]   [scaleX * cos,  scaleY * sin, translateX]
+ * [m10, m11, m12] = [-scaleX * sin, scaleY * cos, translateY]
+ * [m20, m21, m22]   [0,             0,            1]
  */
 export class Matrix3 {
     /** 矩阵元素，按行优先存储 */
@@ -243,17 +246,24 @@ export class Matrix3 {
     }
 
     /**
-   * 设置为旋转矩阵
-   * @param angle 旋转角度（弧度）
-   * @returns 当前矩阵实例（链式调用）
-   */
+     * 设置为旋转矩阵（顺时针为正）
+     * Set as rotation matrix (clockwise positive)
+     *
+     * 使用左手坐标系约定：正角度 = 顺时针旋转
+     * Uses left-hand coordinate system: positive angle = clockwise
+     *
+     * @param angle 旋转角度（弧度）
+     * @returns 当前矩阵实例（链式调用）
+     */
     makeRotation(angle: number): this {
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
 
+        // Clockwise rotation matrix
+        // 顺时针旋转矩阵
         this.elements.set([
-            cos, -sin, 0,
-            sin,  cos, 0,
+            cos,  sin, 0,
+            -sin, cos, 0,
             0,    0,   1
         ]);
         return this;
@@ -287,18 +297,25 @@ export class Matrix3 {
     }
 
     /**
-   * 复合旋转
-   * @param angle 旋转角度（弧度）
-   * @returns 当前矩阵实例（链式调用）
-   */
+     * 复合旋转（顺时针为正）
+     * Composite rotation (clockwise positive)
+     *
+     * 使用左手坐标系约定：正角度 = 顺时针旋转
+     * Uses left-hand coordinate system: positive angle = clockwise
+     *
+     * @param angle 旋转角度（弧度）
+     * @returns 当前矩阵实例（链式调用）
+     */
     rotate(angle: number): this {
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
 
-        const m00 = this.m00 * cos + this.m01 * sin;
-        const m01 = this.m00 * -sin + this.m01 * cos;
-        const m10 = this.m10 * cos + this.m11 * sin;
-        const m11 = this.m10 * -sin + this.m11 * cos;
+        // Clockwise rotation: multiply by [cos, sin; -sin, cos]
+        // 顺时针旋转
+        const m00 = this.m00 * cos - this.m01 * sin;
+        const m01 = this.m00 * sin + this.m01 * cos;
+        const m10 = this.m10 * cos - this.m11 * sin;
+        const m11 = this.m10 * sin + this.m11 * cos;
 
         this.m00 = m00;
         this.m01 = m01;
@@ -433,11 +450,15 @@ export class Matrix3 {
     }
 
     /**
-   * 获取旋转角度
-   * @returns 旋转角度（弧度）
-   */
+     * 获取旋转角度（顺时针为正）
+     * Get rotation angle (clockwise positive)
+     * @returns 旋转角度（弧度）
+     */
     getRotation(): number {
-        return Math.atan2(this.m10, this.m00);
+        // For clockwise rotation matrix [cos, sin; -sin, cos]
+        // m00 = cos, m01 = sin, so atan2(m01, m00) = θ
+        // 顺时针旋转矩阵：从 m01 和 m00 提取角度
+        return Math.atan2(this.m01, this.m00);
     }
 
     /**
@@ -551,19 +572,26 @@ export class Matrix3 {
     }
 
     /**
-   * 创建TRS（平移-旋转-缩放）变换矩阵
-   * @param translation 平移向量
-   * @param rotation 旋转角度（弧度）
-   * @param scale 缩放向量
-   * @returns 新的TRS矩阵
-   */
+     * 创建TRS（平移-旋转-缩放）变换矩阵（顺时针为正）
+     * Create TRS (Translate-Rotate-Scale) matrix (clockwise positive)
+     *
+     * 使用左手坐标系约定：正角度 = 顺时针旋转
+     * Uses left-hand coordinate system: positive angle = clockwise
+     *
+     * @param translation 平移向量
+     * @param rotation 旋转角度（弧度）
+     * @param scale 缩放向量
+     * @returns 新的TRS矩阵
+     */
     static TRS(translation: Vector2, rotation: number, scale: Vector2): Matrix3 {
         const cos = Math.cos(rotation);
         const sin = Math.sin(rotation);
 
+        // Clockwise rotation matrix with scale
+        // 带缩放的顺时针旋转矩阵
         return new Matrix3([
-            scale.x * cos, -scale.y * sin, translation.x,
-            scale.x * sin,  scale.y * cos, translation.y,
+            scale.x * cos,  scale.y * sin, translation.x,
+            -scale.x * sin, scale.y * cos, translation.y,
             0,              0,              1
         ]);
     }

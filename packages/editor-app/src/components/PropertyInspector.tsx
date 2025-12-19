@@ -6,6 +6,7 @@ import * as LucideIcons from 'lucide-react';
 import { AnimationClipsFieldEditor } from '../infrastructure/field-editors/AnimationClipsFieldEditor';
 import { AssetField } from './inspectors/fields/AssetField';
 import { CollisionLayerField } from './inspectors/fields/CollisionLayerField';
+import { EntityRefField } from './inspectors/fields/EntityRefField';
 import { useLocale } from '../hooks/useLocale';
 import '../styles/PropertyInspector.css';
 
@@ -335,6 +336,17 @@ export function PropertyInspector({ component, entity, version, onChange, onActi
                         value={value ?? 0xFFFF}
                         multiple={true}
                         readOnly={metadata.readOnly}
+                        onChange={(newValue) => handleChange(propertyName, newValue)}
+                    />
+                );
+
+            case 'entityRef':
+                return (
+                    <EntityRefField
+                        key={propertyName}
+                        label={label}
+                        value={value ?? 0}
+                        readonly={metadata.readOnly}
                         onChange={(newValue) => handleChange(propertyName, newValue)}
                     />
                 );

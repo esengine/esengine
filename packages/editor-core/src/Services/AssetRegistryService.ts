@@ -394,12 +394,28 @@ export class AssetRegistryService implements IService {
                 // 处理文件创建 - 注册新资产并生成 .meta
                 if (changeType === 'create' || changeType === 'modify') {
                     for (const absolutePath of paths) {
-                        // Handle .meta file changes - invalidate cache
-                        // 处理 .meta 文件变化 - 使缓存失效
+                        // Handle .meta file changes - invalidate cache and notify listeners
+                        // 处理 .meta 文件变化 - 使缓存失效并通知监听者
                         if (absolutePath.endsWith('.meta')) {
                             const assetPath = absolutePath.slice(0, -5); // Remove '.meta' suffix
                             this._metaManager.invalidateCache(assetPath);
                             logger.debug(`Meta file changed, invalidated cache for: ${assetPath}`);
+
+                            // Notify listeners that the asset's metadata has changed
+                            // 通知监听者资产的元数据已变化
+                            const relativePath = this.absoluteToRelative(assetPath);
+                            if (relativePath) {
+                                const metadata = this._database.getMetadataByPath(relativePath);
+                                if (metadata) {
+                                    this._messageHub?.publish('assets:changed', {
+                                        type: 'modify',
+                                        path: assetPath,
+                                        relativePath,
+                                        guid: metadata.guid
+                                    });
+                                    logger.debug(`Published assets:changed for meta file: ${relativePath}`);
+                                }
+                            }
                             continue;
                         }
 

@@ -113,13 +113,20 @@ impl Vec2 {
 
     /// Rotate the vector by an angle (in radians).
     /// 按角度旋转向量（弧度）。
+    ///
+    /// Uses left-hand coordinate system convention:
+    /// 使用左手坐标系约定：
+    /// - Positive angle = clockwise rotation (when viewed from +Z)
+    /// - 正角度 = 顺时针旋转（从 +Z 方向观察时）
     #[inline]
     pub fn rotate(&self, angle: f32) -> Self {
         let cos = angle.cos();
         let sin = angle.sin();
+        // Clockwise rotation matrix: [cos, sin; -sin, cos]
+        // 顺时针旋转矩阵
         Self {
-            x: self.x * cos - self.y * sin,
-            y: self.x * sin + self.y * cos,
+            x: self.x * cos + self.y * sin,
+            y: -self.x * sin + self.y * cos,
         }
     }
 

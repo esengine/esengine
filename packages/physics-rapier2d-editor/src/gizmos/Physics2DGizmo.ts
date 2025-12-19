@@ -27,6 +27,9 @@ import {
     RigidbodyType2D
 } from '@esengine/physics-rapier2d';
 
+/** 度转弧度常量 | Degrees to radians constant */
+const DEG_TO_RAD = Math.PI / 180;
+
 /**
  * 物理 Gizmo 颜色配置
  */
@@ -185,17 +188,21 @@ function circleCollider2DGizmoProvider(
         gizmos.push(...createCenterMarkGizmo(worldX, worldY, centerMarkSize, PhysicsGizmoColors.centerMark));
 
         // 半径指示线 (从中心到右边缘)
-        const rotation = typeof transform.rotation === 'number'
+        // Radius indicator line (from center to right edge)
+        const rotationDeg = typeof transform.rotation === 'number'
             ? transform.rotation
             : transform.rotation.z;
-        const cos = Math.cos(rotation);
-        const sin = Math.sin(rotation);
+        const rotationRad = rotationDeg * DEG_TO_RAD;
+        const cos = Math.cos(rotationRad);
+        const sin = Math.sin(rotationRad);
 
+        // Clockwise rotation: use (cos, -sin) for direction
+        // 顺时针旋转：使用 (cos, -sin) 表示方向
         gizmos.push({
             type: 'line',
             points: [
                 { x: worldX, y: worldY },
-                { x: worldX + scaledRadius * cos, y: worldY + scaledRadius * sin }
+                { x: worldX + scaledRadius * cos, y: worldY - scaledRadius * sin }
             ],
             color: PhysicsGizmoColors.selected,
             closed: false
@@ -205,7 +212,7 @@ function circleCollider2DGizmoProvider(
         gizmos.push({
             type: 'circle',
             x: worldX + scaledRadius * cos,
-            y: worldY + scaledRadius * sin,
+            y: worldY - scaledRadius * sin,
             radius: scaledRadius * 0.08,
             color: PhysicsGizmoColors.selected
         } as ICircleGizmoData);
@@ -276,21 +283,24 @@ function polygonCollider2DGizmoProvider(
     const gizmos: IGizmoRenderData[] = [];
     const color = getColliderColor(isSelected, collider.isTrigger);
 
-    const rotation = typeof transform.rotation === 'number'
+    const rotationDeg = typeof transform.rotation === 'number'
         ? transform.rotation
         : transform.rotation.z;
-    const totalRotation = rotation + collider.rotationOffset;
-    const cos = Math.cos(totalRotation);
-    const sin = Math.sin(totalRotation);
+    // 转换为弧度 | Convert to radians
+    const totalRotationRad = (rotationDeg + collider.rotationOffset) * DEG_TO_RAD;
+    const cos = Math.cos(totalRotationRad);
+    const sin = Math.sin(totalRotationRad);
 
     const worldX = transform.position.x + collider.offset.x * transform.scale.x;
     const worldY = transform.position.y + collider.offset.y * transform.scale.y;
 
+    // Clockwise rotation for polygon vertices
+    // 多边形顶点的顺时针旋转
     const worldPoints = collider.vertices.map(v => {
         const scaledX = v.x * transform.scale.x;
         const scaledY = v.y * transform.scale.y;
-        const rotatedX = scaledX * cos - scaledY * sin;
-        const rotatedY = scaledX * sin + scaledY * cos;
+        const rotatedX = scaledX * cos + scaledY * sin;
+        const rotatedY = -scaledX * sin + scaledY * cos;
         return {
             x: worldX + rotatedX,
             y: worldY + rotatedY

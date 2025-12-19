@@ -117,6 +117,39 @@ export interface IEngineBridge {
      * @returns 所有纹理加载完成时解析 | Resolves when all textures are loaded
      */
     waitForAllTextures?(timeout?: number): Promise<void>;
+
+    // ===== Dynamic Atlas API (Optional) =====
+    // ===== 动态图集 API（可选）=====
+
+    /**
+     * 创建空白纹理（用于动态图集）
+     * Create blank texture (for dynamic atlas)
+     *
+     * @param width 宽度 | Width
+     * @param height 高度 | Height
+     * @returns 纹理 ID | Texture ID
+     */
+    createBlankTexture?(width: number, height: number): number;
+
+    /**
+     * 更新纹理区域
+     * Update texture region
+     *
+     * @param id 纹理 ID | Texture ID
+     * @param x X 坐标 | X coordinate
+     * @param y Y 坐标 | Y coordinate
+     * @param width 宽度 | Width
+     * @param height 高度 | Height
+     * @param pixels RGBA 像素数据 | RGBA pixel data
+     */
+    updateTextureRegion?(
+        id: number,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        pixels: Uint8Array
+    ): void;
 }
 
 /**

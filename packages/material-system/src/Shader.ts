@@ -120,6 +120,13 @@ export class Shader {
 /**
  * Default sprite vertex shader source.
  * 默认精灵顶点着色器源代码。
+ *
+ * Vertex layout (9 floats per vertex):
+ * 顶点布局（每顶点 9 个浮点数）:
+ * - location 0: position (2 floats)
+ * - location 1: tex_coord (2 floats)
+ * - location 2: color (4 floats)
+ * - location 3: aspect_ratio (1 float)
  */
 export const DEFAULT_VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -128,6 +135,7 @@ precision highp float;
 layout(location = 0) in vec2 a_position;
 layout(location = 1) in vec2 a_texCoord;
 layout(location = 2) in vec4 a_color;
+layout(location = 3) in float a_aspectRatio;
 
 // Uniforms | 统一变量
 uniform mat3 u_projection;
@@ -135,6 +143,7 @@ uniform mat3 u_projection;
 // Outputs to fragment shader | 输出到片段着色器
 out vec2 v_texCoord;
 out vec4 v_color;
+out float v_aspectRatio;
 
 void main() {
     // Apply projection matrix | 应用投影矩阵
@@ -144,6 +153,7 @@ void main() {
     // Pass through to fragment shader | 传递到片段着色器
     v_texCoord = a_texCoord;
     v_color = a_color;
+    v_aspectRatio = a_aspectRatio;
 }
 `;
 
@@ -157,6 +167,7 @@ precision highp float;
 // Inputs from vertex shader | 来自顶点着色器的输入
 in vec2 v_texCoord;
 in vec4 v_color;
+in float v_aspectRatio;
 
 // Texture sampler | 纹理采样器
 uniform sampler2D u_texture;
@@ -185,6 +196,7 @@ precision highp float;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+in float v_aspectRatio;
 
 uniform sampler2D u_texture;
 uniform float u_grayscale; // 0.0 = full color, 1.0 = full grayscale
@@ -215,6 +227,7 @@ precision highp float;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+in float v_aspectRatio;
 
 uniform sampler2D u_texture;
 uniform vec4 u_tintColor; // Tint color to apply
@@ -243,6 +256,7 @@ precision highp float;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+in float v_aspectRatio;
 
 uniform sampler2D u_texture;
 uniform vec4 u_flashColor; // Flash color
@@ -273,6 +287,7 @@ precision highp float;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+in float v_aspectRatio;
 
 uniform sampler2D u_texture;
 uniform vec4 u_outlineColor;
@@ -307,5 +322,100 @@ void main() {
     if (fragColor.a < 0.01) {
         discard;
     }
+}
+`;
+
+/**
+ * Shiny/Shimmer effect fragment shader.
+ * 闪光效果片段着色器。
+ *
+ * Uses v_aspectRatio from vertex attribute for aspect-ratio-aware rotation.
+ * 使用顶点属性中的 v_aspectRatio 进行宽高比感知的旋转。
+ */
+export const SHINY_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+in vec4 v_color;
+in float v_aspectRatio;
+
+uniform sampler2D u_texture;
+
+// Shiny effect uniforms | 闪光效果 uniform 变量
+uniform float u_shinyProgress;   // Animation progress (0-1) | 动画进度
+uniform float u_shinyWidth;      // Width of shine band (0-1) | 闪光带宽度
+uniform float u_shinyRotation;   // Rotation in radians | 旋转角度（弧度）
+uniform float u_shinySoftness;   // Edge softness (0-1) | 边缘柔和度
+uniform float u_shinyBrightness; // Brightness multiplier | 亮度倍数
+uniform float u_shinyGloss;      // Gloss intensity (0=white, 1=color-tinted) | 光泽度
+
+out vec4 fragColor;
+
+void main() {
+    vec4 texColor = texture(u_texture, v_texCoord);
+    float originAlpha = texColor.a;
+    vec4 color = texColor * v_color;
+
+    // Early discard for transparent pixels
+    if (color.a < 0.01) {
+        discard;
+    }
+
+    // Calculate rotated position for the sweep (0 to 1 range)
+    // 计算旋转后的扫描位置（0 到 1 范围）
+    //
+    // 1. 计算基础方向向量 dir = (cos(θ), sin(θ))
+    // 2. 宽高比校正：dir.x *= height/width = 1/aspectRatio
+    // 3. 归一化方向向量
+    // 4. 计算扫描位置（考虑纹理坐标 Y 轴方向）
+    //
+    // 1. Calculate base direction vector dir = (cos(θ), sin(θ))
+    // 2. Aspect ratio correction: dir.x *= height/width = 1/aspectRatio
+    // 3. Normalize direction vector
+    // 4. Calculate sweep position (accounting for texture Y-axis direction)
+    //
+    vec2 center = v_texCoord - vec2(0.5);
+    float cosR = cos(u_shinyRotation);
+    float sinR = sin(u_shinyRotation);
+
+    // Aspect ratio correction: scale X by 1/aspectRatio (height/width)
+    // v_aspectRatio is passed from vertex attribute, calculated at render time
+    // 宽高比校正：X 分量乘以 1/aspectRatio（即 height/width）
+    // v_aspectRatio 从顶点属性传入，在渲染时计算
+    float adjCosR = cosR / max(v_aspectRatio, 0.001);
+
+    // Normalize the direction vector
+    // 归一化方向向量
+    float len = sqrt(adjCosR * adjCosR + sinR * sinR);
+    float dirX = adjCosR / len;
+    float dirY = sinR / len;
+
+    // Sweep position: project onto perpendicular direction
+    // Y-axis flip: texture coords have Y pointing up, but we want top-to-bottom sweep
+    // 扫描位置：投影到垂直方向
+    // Y 轴翻转：纹理坐标 Y 向上，但我们需要从上到下扫描
+    float rotatedPos = (center.x * dirY - center.y * dirX) + 0.5;
+
+    // Map progress to location (-0.5 to 1.5 range for smooth entry/exit)
+    float location = u_shinyProgress * 2.0 - 0.5;
+
+    // Calculate normalized distance (1 at center, 0 at edges)
+    // 计算归一化距离（中心为1，边缘为0）
+    float normalized = 1.0 - clamp(abs((rotatedPos - location) / max(u_shinyWidth, 0.001)), 0.0, 1.0);
+
+    // Apply softness with smoothstep
+    // 使用 smoothstep 应用柔和度
+    float shinePower = smoothstep(0.0, u_shinySoftness * 2.0, normalized);
+
+    // Calculate reflect color: lerp between white and bright original color
+    // 计算反射颜色：在白色和明亮的原色之间插值
+    vec3 reflectColor = mix(vec3(1.0), color.rgb * 10.0, u_shinyGloss);
+
+    // Apply shine: additive blend with halved intensity
+    // 应用高光：半强度加性混合
+    vec3 shineAdd = originAlpha * (shinePower * 0.5) * u_shinyBrightness * reflectColor;
+    vec3 finalColor = color.rgb + shineAdd;
+
+    fragColor = vec4(finalColor, color.a);
 }
 `;

@@ -12,7 +12,7 @@ import { SpriteComponent } from '@esengine/sprite';
 import type { EngineBridge } from '../core/EngineBridge';
 import { RenderBatcher } from '../core/RenderBatcher';
 import type { ITransformComponent } from '../core/SpriteRenderHelper';
-import type { SpriteRenderData } from '../types';
+import type { SpriteRenderData, MaterialOverrides } from '../types';
 
 /**
  * Render data from a provider
@@ -47,6 +47,10 @@ export interface ProviderRenderData {
      * Overrides sortingLayer's bScreenSpace setting, for particles that need dynamic render space.
      */
     bScreenSpace?: boolean;
+    /** Material IDs for each primitive. | 每个原语的材质 ID。 */
+    materialIds?: Uint32Array;
+    /** Material overrides (per-group). | 材质覆盖（按组）。 */
+    materialOverrides?: MaterialOverrides;
 }
 
 /**
@@ -133,6 +137,24 @@ export type GizmoDataProviderFn = (
 export type HasGizmoProviderFn = (component: Component) => boolean;
 
 /**
+ * Function type for getting highlight color for gizmo.
+ * Used to inject GizmoInteractionService functionality from editor layer.
+ * 获取 gizmo 高亮颜色的函数类型。
+ * 用于从编辑器层注入 GizmoInteractionService 功能。
+ */
+export type GizmoHighlightColorFn = (
+    entityId: number,
+    baseColor: GizmoColorInternal,
+    isSelected: boolean
+) => GizmoColorInternal;
+
+/**
+ * Function type for getting hovered entity ID.
+ * 获取悬停实体 ID 的函数类型。
+ */
+export type GetHoveredEntityIdFn = () => number | null;
+
+/**
  * Type for transform component constructor.
  * 变换组件构造函数类型。
  */
@@ -198,6 +220,11 @@ export class EngineRenderSystem extends EntitySystem {
     private gizmoDataProvider: GizmoDataProviderFn | null = null;
     private hasGizmoProvider: HasGizmoProviderFn | null = null;
 
+    // Gizmo interaction functions (injected from editor layer)
+    // Gizmo 交互函数（从编辑器层注入）
+    private gizmoHighlightColorFn: GizmoHighlightColorFn | null = null;
+    private getHoveredEntityIdFn: GetHoveredEntityIdFn | null = null;
+
     // UI Canvas boundary settings
     // UI 画布边界设置
     private uiCanvasWidth: number = 0;
@@ -217,6 +244,18 @@ export class EngineRenderSystem extends EntitySystem {
     // 预览模式标志：为 true 时，UI 使用屏幕空间叠加投影
     // 为 false（编辑器模式）时，UI 在世界空间渲染，跟随编辑器相机
     private previewMode: boolean = false;
+
+    // ===== Material Instance Management =====
+    // ===== 材质实例管理 =====
+    // Maps (baseMaterialId, overridesHash) → instanceMaterialId
+    // 映射 (基础材质ID, 覆盖哈希) → 实例材质ID
+    private materialInstanceMap: Map<string, number> = new Map();
+    // Next instance ID (starts at 10000 to avoid collision with built-in materials)
+    // 下一个实例 ID（从 10000 开始以避免与内置材质冲突）
+    private nextMaterialInstanceId: number = 10000;
+    // Track instances used this frame for cleanup
+    // 跟踪本帧使用的实例以便清理
+    private usedInstancesThisFrame: Set<number> = new Set();
 
     /**
      * Create a new engine render system.
@@ -281,8 +320,10 @@ export class EngineRenderSystem extends EntitySystem {
 
         // Collect all render items separated by render space
         // 按渲染空间分离收集所有渲染项
-        const worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }> = [];
-        const screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }> = [];
+        // addIndex is used for stable sorting when sortKeys are equal
+        // addIndex 用于当 sortKey 相等时实现稳定排序
+        const worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }> = [];
+        const screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }> = [];
 
         // Collect sprites from entities (all in world space)
         // 收集实体的 sprites（都在世界空间）
@@ -296,6 +337,24 @@ export class EngineRenderSystem extends EntitySystem {
         // 收集 UI 渲染数据
         if (this.uiRenderDataProvider) {
             const uiRenderData = this.uiRenderDataProvider.getRenderData();
+            // Use addIndex to preserve original order for stable sorting
+            // 使用 addIndex 保持原始顺序以实现稳定排序
+            let uiAddIndex = 0;
+
+            // DEBUG: 输出 UI 渲染数据
+            // DEBUG: Output UI render data
+            if ((globalThis as any).__UI_RENDER_DEBUG__) {
+                console.log('[EngineRenderSystem] UI render batches:', uiRenderData.map((data, i) => ({
+                    index: i,
+                    orderInLayer: data.orderInLayer,
+                    sortingLayer: data.sortingLayer,
+                    tileCount: data.tileCount,
+                    sortKey: sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer),
+                    textureIds: Array.from(data.textureIds).slice(0, 3), // 只显示前3个 | Show first 3 only
+                    textureGuid: data.textureGuid
+                })));
+            }
+
             for (const data of uiRenderData) {
                 const uiSprites = this.convertProviderDataToSprites(data);
                 if (uiSprites.length > 0) {
@@ -303,9 +362,9 @@ export class EngineRenderSystem extends EntitySystem {
                     // UI always goes to screen space in preview mode, world space in editor mode
                     // UI 在预览模式下始终在屏幕空间，编辑器模式下在世界空间
                     if (this.previewMode) {
-                        screenSpaceItems.push({ sortKey, sprites: uiSprites });
+                        screenSpaceItems.push({ sortKey, sprites: uiSprites, addIndex: uiAddIndex++ });
                     } else {
-                        worldSpaceItems.push({ sortKey, sprites: uiSprites });
+                        worldSpaceItems.push({ sortKey, sprites: uiSprites, addIndex: uiAddIndex++ });
                     }
                 }
             }
@@ -320,6 +379,10 @@ export class EngineRenderSystem extends EntitySystem {
         if (this.previewMode && screenSpaceItems.length > 0) {
             this.renderScreenSpacePass(screenSpaceItems);
         }
+
+        // ===== Cleanup unused material instances =====
+        // ===== 清理未使用的材质实例 =====
+        this.cleanupUnusedMaterialInstances();
     }
 
     /**
@@ -465,11 +528,29 @@ export class EngineRenderSystem extends EntitySystem {
      * 渲染世界空间内容。
      */
     private renderWorldSpacePass(
-        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>
+        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }>
     ): void {
         // Sort by sortKey (lower values render first, appear behind)
+        // Use addIndex as secondary key for stable sorting when sortKeys are equal
         // 按 sortKey 排序（值越小越先渲染，显示在后面）
-        worldSpaceItems.sort((a, b) => a.sortKey - b.sortKey);
+        // 当 sortKey 相等时使用 addIndex 作为次要排序键以实现稳定排序
+        worldSpaceItems.sort((a, b) => {
+            const diff = a.sortKey - b.sortKey;
+            if (diff !== 0) return diff;
+            return (a.addIndex ?? 0) - (b.addIndex ?? 0);
+        });
+
+        // DEBUG: 输出排序后的世界空间渲染项
+        // DEBUG: Output sorted world space items
+        if ((globalThis as any).__UI_RENDER_DEBUG__) {
+            console.log('[EngineRenderSystem] World items after sort:', worldSpaceItems.map((item, i) => ({
+                index: i,
+                sortKey: item.sortKey,
+                addIndex: item.addIndex,
+                spriteCount: item.sprites.length,
+                firstTextureId: item.sprites[0]?.textureId
+            })));
+        }
 
         // Submit all sprites in sorted order
         // 按排序顺序提交所有 sprites
@@ -481,6 +562,11 @@ export class EngineRenderSystem extends EntitySystem {
 
         if (!this.batcher.isEmpty) {
             const sprites = this.batcher.getSprites();
+
+            // Apply material overrides before rendering
+            // 在渲染前应用材质覆盖
+            this.applySpriteMaterialOverrides(sprites);
+
             this.bridge.submitSprites(sprites);
         }
 
@@ -512,11 +598,15 @@ export class EngineRenderSystem extends EntitySystem {
      * 渲染屏幕空间内容（UI、屏幕覆盖层、模态层）。
      */
     private renderScreenSpacePass(
-        screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>
+        screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }>
     ): void {
-        // Sort by sortKey
-        // 按 sortKey 排序
-        screenSpaceItems.sort((a, b) => a.sortKey - b.sortKey);
+        // Sort by sortKey, use addIndex for stable sorting when equal
+        // 按 sortKey 排序，当相等时使用 addIndex 实现稳定排序
+        screenSpaceItems.sort((a, b) => {
+            const diff = a.sortKey - b.sortKey;
+            if (diff !== 0) return diff;
+            return (a.addIndex ?? 0) - (b.addIndex ?? 0);
+        });
 
         // Switch to screen space projection
         // 切换到屏幕空间投影
@@ -539,6 +629,11 @@ export class EngineRenderSystem extends EntitySystem {
 
         if (!this.batcher.isEmpty) {
             const sprites = this.batcher.getSprites();
+
+            // Apply material overrides before rendering
+            // 在渲染前应用材质覆盖
+            this.applySpriteMaterialOverrides(sprites);
+
             this.bridge.submitSprites(sprites);
             // Render overlay (without clearing screen)
             // 渲染叠加层（不清屏）
@@ -548,6 +643,147 @@ export class EngineRenderSystem extends EntitySystem {
         // Restore world space camera
         // 恢复世界空间相机
         this.bridge.popScreenSpaceMode();
+    }
+
+    /**
+     * Generate a hash key for material overrides.
+     * 为材质覆盖生成哈希键。
+     *
+     * @param overrides - Material overrides | 材质覆盖
+     * @returns Hash string | 哈希字符串
+     */
+    private hashMaterialOverrides(overrides: MaterialOverrides): string {
+        // Sort keys for consistent hashing
+        // 排序键以保持一致的哈希
+        const sortedKeys = Object.keys(overrides).sort();
+        const parts: string[] = [];
+        for (const key of sortedKeys) {
+            const override = overrides[key];
+            if (override) {
+                const valueStr = Array.isArray(override.value)
+                    ? override.value.map(v => v.toFixed(4)).join(',')
+                    : override.value.toFixed(4);
+                parts.push(`${key}:${valueStr}`);
+            }
+        }
+        return parts.join('|');
+    }
+
+    /**
+     * Get or create a material instance for a specific base material + overrides combination.
+     * 为特定的基础材质+覆盖组合获取或创建材质实例。
+     *
+     * This ensures each unique (baseMaterial, overrides) combination gets its own
+     * material instance, preventing shared material state issues.
+     * 这确保每个唯一的（基础材质，覆盖）组合都有自己的材质实例，
+     * 防止共享材质状态问题。
+     *
+     * @param baseMaterialId - Base material ID (e.g., 1 for Grayscale) | 基础材质ID
+     * @param overrides - Material property overrides | 材质属性覆盖
+     * @returns Instance material ID | 实例材质ID
+     */
+    private getOrCreateMaterialInstance(baseMaterialId: number, overrides: MaterialOverrides): number {
+        const overridesHash = this.hashMaterialOverrides(overrides);
+        const instanceKey = `${baseMaterialId}:${overridesHash}`;
+
+        // Check if instance already exists
+        // 检查实例是否已存在
+        let instanceId = this.materialInstanceMap.get(instanceKey);
+        if (instanceId !== undefined) {
+            this.usedInstancesThisFrame.add(instanceId);
+            return instanceId;
+        }
+
+        // Create new instance
+        // 创建新实例
+        instanceId = this.nextMaterialInstanceId++;
+        this.materialInstanceMap.set(instanceKey, instanceId);
+        this.usedInstancesThisFrame.add(instanceId);
+
+        // Clone the base material with the new ID
+        // 使用新ID克隆基础材质
+        // For built-in materials, shaderId = materialId (1:1 mapping)
+        // 对于内置材质，shaderId = materialId（1:1 映射）
+        const shaderId = baseMaterialId;
+        const blendMode = 1; // Alpha blending
+        this.bridge.createMaterialWithId(instanceId, `Instance_${baseMaterialId}_${instanceId}`, shaderId, blendMode);
+
+        // Apply overrides to the new instance
+        // 将覆盖应用到新实例
+        this.bridge.applyMaterialOverrides(instanceId, overrides);
+
+        return instanceId;
+    }
+
+    /**
+     * Clean up unused material instances.
+     * 清理未使用的材质实例。
+     *
+     * Called at the end of each frame to remove instances that were not used.
+     * 在每帧结束时调用，移除未使用的实例。
+     */
+    private cleanupUnusedMaterialInstances(): void {
+        const toRemove: string[] = [];
+
+        for (const [key, instanceId] of this.materialInstanceMap.entries()) {
+            if (!this.usedInstancesThisFrame.has(instanceId)) {
+                this.bridge.removeMaterial(instanceId);
+                toRemove.push(key);
+            }
+        }
+
+        for (const key of toRemove) {
+            this.materialInstanceMap.delete(key);
+        }
+
+        // Clear the used set for next frame
+        // 清除已用集合以便下一帧
+        this.usedInstancesThisFrame.clear();
+    }
+
+    /**
+     * Apply material overrides from sprites to the engine.
+     * 将 sprites 的材质覆盖应用到引擎。
+     *
+     * For sprites with overrides, this creates unique material instances
+     * to ensure each sprite's overrides don't affect other sprites.
+     * 对于有覆盖的精灵，这会创建唯一的材质实例，
+     * 确保每个精灵的覆盖不会影响其他精灵。
+     */
+    private applySpriteMaterialOverrides(sprites: SpriteRenderData[]): void {
+        // Track which instance materials we've already applied overrides to this frame
+        // 跟踪本帧已应用覆盖的实例材质
+        const appliedInstances = new Set<number>();
+
+        for (const sprite of sprites) {
+            const baseMaterialId = sprite.materialId;
+
+            // Skip if no material or no overrides
+            // 如果没有材质或没有覆盖，跳过
+            if (!baseMaterialId || baseMaterialId <= 0 || !sprite.materialOverrides) {
+                continue;
+            }
+
+            const overrideKeys = Object.keys(sprite.materialOverrides);
+            if (overrideKeys.length === 0) {
+                continue;
+            }
+
+            // Get or create a unique material instance for this sprite's overrides
+            // 为此精灵的覆盖获取或创建唯一的材质实例
+            const instanceId = this.getOrCreateMaterialInstance(baseMaterialId, sprite.materialOverrides);
+
+            // Update the sprite to use the instance material
+            // 更新精灵以使用实例材质
+            sprite.materialId = instanceId;
+
+            // Apply overrides if not already done for this instance
+            // 如果尚未为此实例应用覆盖，则应用
+            if (!appliedInstances.has(instanceId)) {
+                this.bridge.applyMaterialOverrides(instanceId, sprite.materialOverrides);
+                appliedInstances.add(instanceId);
+            }
+        }
     }
 
     /**
@@ -561,6 +797,11 @@ export class EngineRenderSystem extends EntitySystem {
         if (textureId === 0 && data.textureGuid) {
             textureId = this.bridge.getOrLoadTextureByPath(this.resolveAssetPath(data.textureGuid));
         }
+
+        // Check for material data
+        // 检查材质数据
+        const hasMaterialIds = data.materialIds && data.materialIds.length > 0;
+        const hasMaterialOverrides = data.materialOverrides && Object.keys(data.materialOverrides).length > 0;
 
         const sprites: SpriteRenderData[] = [];
         for (let i = 0; i < data.tileCount; i++) {
@@ -587,6 +828,15 @@ export class EngineRenderSystem extends EntitySystem {
                 color: data.colors[i]
             };
 
+            // Add material data if present
+            // 如果存在材质数据，添加它
+            if (hasMaterialIds) {
+                renderData.materialId = data.materialIds![i];
+            }
+            if (hasMaterialOverrides) {
+                renderData.materialOverrides = data.materialOverrides;
+            }
+
             sprites.push(renderData);
         }
 
@@ -601,10 +851,15 @@ export class EngineRenderSystem extends EntitySystem {
         const scene = Core.scene;
         if (!scene || !this.gizmoDataProvider || !this.hasGizmoProvider) return;
 
+        // Get hovered entity ID for highlight
+        // 获取悬停的实体 ID 用于高亮
+        const hoveredEntityId = this.getHoveredEntityIdFn?.() ?? null;
+
         // Iterate all entities in the scene
         // 遍历场景中的所有实体
         for (const entity of scene.entities.buffer) {
             const isSelected = this.selectedEntityIds.has(entity.id);
+            const isHovered = entity.id === hoveredEntityId;
 
             // Check each component for gizmo provider
             // 检查每个组件是否有 gizmo 提供者
@@ -613,6 +868,15 @@ export class EngineRenderSystem extends EntitySystem {
                     try {
                         const gizmoDataArray = this.gizmoDataProvider(component, entity, isSelected);
                         for (const gizmoData of gizmoDataArray) {
+                            // Apply hover highlight color if applicable
+                            // 如果适用，应用悬停高亮颜色
+                            if (isHovered && this.gizmoHighlightColorFn) {
+                                gizmoData.color = this.gizmoHighlightColorFn(
+                                    entity.id,
+                                    gizmoData.color,
+                                    isSelected
+                                );
+                            }
                             this.renderGizmoData(gizmoData);
                         }
                     } catch (e) {
@@ -1035,6 +1299,26 @@ export class EngineRenderSystem extends EntitySystem {
     ): void {
         this.gizmoDataProvider = provider;
         this.hasGizmoProvider = hasProvider;
+    }
+
+    /**
+     * Set gizmo interaction functions.
+     * 设置 gizmo 交互函数。
+     *
+     * This allows the editor layer to inject GizmoInteractionService functionality
+     * for hover highlighting and click selection.
+     * 这允许编辑器层注入 GizmoInteractionService 功能，
+     * 用于悬停高亮和点击选择。
+     *
+     * @param highlightColorFn - Function to get highlight color for gizmo
+     * @param getHoveredEntityIdFn - Function to get currently hovered entity ID
+     */
+    setGizmoInteraction(
+        highlightColorFn: GizmoHighlightColorFn,
+        getHoveredEntityIdFn: GetHoveredEntityIdFn
+    ): void {
+        this.gizmoHighlightColorFn = highlightColorFn;
+        this.getHoveredEntityIdFn = getHoveredEntityIdFn;
     }
 
     /**

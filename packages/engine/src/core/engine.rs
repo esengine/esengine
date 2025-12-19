@@ -349,6 +349,16 @@ impl Engine {
         self.texture_manager.get_texture_id_by_path(path)
     }
 
+    /// Get texture size by path.
+    /// 按路径获取纹理尺寸。
+    ///
+    /// Returns None if texture is not loaded or path not found.
+    /// 如果纹理未加载或路径未找到，返回 None。
+    pub fn get_texture_size_by_path(&self, path: &str) -> Option<(f32, f32)> {
+        let id = self.texture_manager.get_texture_id_by_path(path)?;
+        self.texture_manager.get_texture_size(id)
+    }
+
     /// Get or load texture by path.
     /// 按路径获取或加载纹理。
     pub fn get_or_load_by_path(&mut self, path: &str) -> Result<u32> {
@@ -372,6 +382,32 @@ impl Engine {
     /// 这会从GPU内存中移除所有已加载的纹理并重置ID计数器。
     pub fn clear_all_textures(&mut self) {
         self.texture_manager.clear_all();
+    }
+
+    /// Create a blank texture for dynamic atlas.
+    /// 为动态图集创建空白纹理。
+    ///
+    /// This creates a texture that can be filled later using `update_texture_region`.
+    /// 创建一个可以稍后使用 `update_texture_region` 填充的纹理。
+    pub fn create_blank_texture(&mut self, width: u32, height: u32) -> Result<u32> {
+        self.texture_manager.create_blank_texture(width, height)
+    }
+
+    /// Update a region of an existing texture.
+    /// 更新现有纹理的区域。
+    ///
+    /// Used for dynamic atlas to copy textures into the atlas.
+    /// 用于动态图集将纹理复制到图集中。
+    pub fn update_texture_region(
+        &self,
+        id: u32,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Result<()> {
+        self.texture_manager.update_texture_region(id, x, y, width, height, pixels)
     }
 
     /// 获取纹理加载状态

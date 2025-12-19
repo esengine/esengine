@@ -13,6 +13,12 @@ import type { IParticleAsset } from '../loaders/ParticleLoader';
 const DEFAULT_PARTICLE_TEXTURE_ID = 99999;
 
 /**
+ * 角度转换常量
+ * Angle conversion constants
+ */
+const DEG_TO_RAD = Math.PI / 180;
+
+/**
  * 生成默认粒子纹理的 Data URL（渐变圆形）
  * Generate default particle texture Data URL (gradient circle)
  */
@@ -171,9 +177,10 @@ export class ParticleUpdateSystem extends EntitySystem {
                     worldY = pos.y;
 
                     // 获取旋转（2D 使用 z 分量）| Get rotation (2D uses z component)
+                    // 转换：度(顺时针) → 弧度(逆时针) | Convert: degrees(clockwise) → radians(counter-clockwise)
                     const rot = transform.worldRotation ?? transform.rotation;
                     if (rot) {
-                        worldRotation = rot.z;
+                        worldRotation = -rot.z * DEG_TO_RAD;
                     }
 
                     // 获取缩放 | Get scale

@@ -162,6 +162,22 @@ function App() {
     const [commandManager] = useState(() => new CommandManager());
     const { t, locale, changeLocale } = useLocale();
 
+    // Play 模式状态（用于层级面板实时同步）
+    // Play mode state (for hierarchy panel real-time sync)
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    // 监听 Play 状态变化
+    // Listen for play state changes
+    useEffect(() => {
+        if (!messageHubRef.current || !initialized) return;
+
+        const unsubscribe = messageHubRef.current.subscribe('viewport:playState:changed', (data: { isPlaying: boolean }) => {
+            setIsPlaying(data.isPlaying);
+        });
+
+        return () => unsubscribe();
+    }, [initialized]);
+
     // 初始化 Store 订阅（集中管理 MessageHub 订阅）
     // Initialize store subscriptions (centrally manage MessageHub subscriptions)
     useStoreSubscriptions({
@@ -169,6 +185,7 @@ function App() {
         entityStore: entityStoreRef.current,
         sceneManager: sceneManagerRef.current,
         enabled: initialized,
+        isPlaying,
     });
 
     // 同步 locale 到 TauriDialogService

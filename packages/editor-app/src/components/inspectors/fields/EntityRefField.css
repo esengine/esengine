@@ -1,0 +1,87 @@
+/**
+ * Entity Reference Field Styles
+ * 实体引用字段样式
+ *
+ * Uses property-field and property-label from PropertyInspector.css for consistency.
+ * 使用 PropertyInspector.css 中的 property-field 和 property-label 以保持一致性。
+ */
+
+/* Input container - matches property-input styling */
+.entity-ref-field__input {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    background: #1a1a1a;
+    border: 1px solid #3a3a3a;
+    border-radius: 2px;
+    gap: 4px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.entity-ref-field__input:hover:not(.readonly) {
+    border-color: #4a4a4a;
+}
+
+.entity-ref-field__input.drag-over {
+    border-color: var(--accent-color, #4a9eff);
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.entity-ref-field__input.readonly {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Entity name - clickable to navigate */
+.entity-ref-field__name {
+    flex: 1;
+    font-size: 11px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    color: #ddd;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 2px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.entity-ref-field__name:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--accent-color, #4a9eff);
+}
+
+/* Clear button */
+.entity-ref-field__clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    color: #999;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.entity-ref-field__clear:hover {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+/* Placeholder text */
+.entity-ref-field__placeholder {
+    font-size: 11px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    color: #666;
+    font-style: italic;
+}

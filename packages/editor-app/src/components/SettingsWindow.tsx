@@ -162,28 +162,25 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
         const initialValues = new Map<string, any>();
 
         for (const [key, descriptor] of allSettings.entries()) {
-            if (key.startsWith('project.') && projectService) {
-                if (key === 'project.uiDesignResolution.width') {
-                    const resolution = projectService.getUIDesignResolution();
-                    initialValues.set(key, resolution.width);
-                } else if (key === 'project.uiDesignResolution.height') {
-                    const resolution = projectService.getUIDesignResolution();
-                    initialValues.set(key, resolution.height);
-                } else if (key === 'project.uiDesignResolution.preset') {
-                    const resolution = projectService.getUIDesignResolution();
-                    initialValues.set(key, `${resolution.width}x${resolution.height}`);
-                } else if (key === 'project.disabledModules') {
-                    // Load disabled modules from ProjectService
-                    initialValues.set(key, projectService.getDisabledModules());
-                } else {
-                    initialValues.set(key, descriptor.defaultValue);
-                }
+            // 特定的 project 设置需要从 ProjectService 加载
+            // Specific project settings need to load from ProjectService
+            if (key === 'project.uiDesignResolution.width' && projectService) {
+                const resolution = projectService.getUIDesignResolution();
+                initialValues.set(key, resolution.width);
+            } else if (key === 'project.uiDesignResolution.height' && projectService) {
+                const resolution = projectService.getUIDesignResolution();
+                initialValues.set(key, resolution.height);
+            } else if (key === 'project.uiDesignResolution.preset' && projectService) {
+                const resolution = projectService.getUIDesignResolution();
+                initialValues.set(key, `${resolution.width}x${resolution.height}`);
+            } else if (key === 'project.disabledModules' && projectService) {
+                // Load disabled modules from ProjectService
+                initialValues.set(key, projectService.getDisabledModules());
             } else {
+                // 其他设置（包括 project.dynamicAtlas.*）从 SettingsService 加载
+                // Other settings (including project.dynamicAtlas.*) load from SettingsService
                 const value = settings.get(key, descriptor.defaultValue);
                 initialValues.set(key, value);
-                if (key.startsWith('profiler.')) {
-                    console.log(`[SettingsWindow] Loading ${key}: stored=${settings.get(key, undefined)}, default=${descriptor.defaultValue}, using=${value}`);
-                }
             }
         }
 
@@ -208,12 +205,23 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
         setErrors(newErrors);
 
         // 实时保存设置
+        // Real-time save settings
         const settings = SettingsService.getInstance();
-        if (!key.startsWith('project.')) {
+
+        // 除了特定的 project 设置需要延迟保存外，其他都实时保存
+        // Save in real-time except for specific project settings that need deferred save
+        const deferredProjectSettings = [
+            'project.uiDesignResolution.',
+            'project.disabledModules'
+        ];
+        const shouldDeferSave = deferredProjectSettings.some(prefix => key.startsWith(prefix));
+
+        if (!shouldDeferSave) {
             settings.set(key, value);
             console.log(`[SettingsWindow] Saved ${key}:`, value);
 
             // 触发设置变更事件
+            // Trigger settings changed event
             window.dispatchEvent(new CustomEvent('settings:changed', {
                 detail: { [key]: value }
             }));

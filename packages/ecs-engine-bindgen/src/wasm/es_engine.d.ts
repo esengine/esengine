@@ -339,6 +339,23 @@ export class GameEngine {
    */
   unregisterViewport(id: string): void;
   /**
+   * Create a blank texture for dynamic atlas.
+   * 为动态图集创建空白纹理。
+   *
+   * This creates a texture that can be filled later using `updateTextureRegion`.
+   * Used for runtime atlas generation to batch UI elements with different textures.
+   * 创建一个可以稍后使用 `updateTextureRegion` 填充的纹理。
+   * 用于运行时图集生成，以批处理使用不同纹理的 UI 元素。
+   *
+   * # Arguments | 参数
+   * * `width` - Texture width in pixels (recommended: 2048) | 纹理宽度（推荐：2048）
+   * * `height` - Texture height in pixels (recommended: 2048) | 纹理高度（推荐：2048）
+   *
+   * # Returns | 返回
+   * The texture ID for the created blank texture | 创建的空白纹理ID
+   */
+  createBlankTexture(width: number, height: number): number;
+  /**
    * Load texture by path, returning texture ID.
    * 按路径加载纹理，返回纹理ID。
    *
@@ -346,6 +363,22 @@ export class GameEngine {
    * * `path` - Image path/URL to load | 要加载的图片路径/URL
    */
   loadTextureByPath(path: string): number;
+  /**
+   * Update a region of an existing texture with pixel data.
+   * 使用像素数据更新现有纹理的区域。
+   *
+   * This is used for dynamic atlas to copy individual textures into the atlas.
+   * 用于动态图集将单个纹理复制到图集纹理中。
+   *
+   * # Arguments | 参数
+   * * `id` - The texture ID to update | 要更新的纹理ID
+   * * `x` - X offset in the texture | 纹理中的X偏移
+   * * `y` - Y offset in the texture | 纹理中的Y偏移
+   * * `width` - Width of the region to update | 要更新的区域宽度
+   * * `height` - Height of the region to update | 要更新的区域高度
+   * * `pixels` - RGBA pixel data (Uint8Array, 4 bytes per pixel) | RGBA像素数据（每像素4字节）
+   */
+  updateTextureRegion(id: number, x: number, y: number, width: number, height: number, pixels: Uint8Array): void;
   /**
    * Compile a shader with a specific ID.
    * 使用特定ID编译着色器。
@@ -381,6 +414,17 @@ export class GameEngine {
    * 在恢复场景快照时应调用此方法，以确保纹理使用正确的ID重新加载。
    */
   clearTexturePathCache(): void;
+  /**
+   * Get texture size by path.
+   * 按路径获取纹理尺寸。
+   *
+   * Returns an array [width, height] or null if not found.
+   * 返回数组 [width, height]，如果未找到则返回 null。
+   *
+   * # Arguments | 参数
+   * * `path` - Image path to lookup | 要查找的图片路径
+   */
+  getTextureSizeByPath(path: string): Float32Array | undefined;
   /**
    * 获取正在加载中的纹理数量
    * Get the number of textures currently loading
@@ -448,6 +492,7 @@ export interface InitOutput {
   readonly gameengine_clearTexturePathCache: (a: number) => void;
   readonly gameengine_compileShader: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
   readonly gameengine_compileShaderWithId: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+  readonly gameengine_createBlankTexture: (a: number, b: number, c: number) => [number, number, number];
   readonly gameengine_createMaterial: (a: number, b: number, c: number, d: number, e: number) => number;
   readonly gameengine_createMaterialWithId: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
   readonly gameengine_fromExternal: (a: any, b: number, c: number) => [number, number, number];
@@ -455,6 +500,7 @@ export interface InitOutput {
   readonly gameengine_getOrLoadTextureByPath: (a: number, b: number, c: number) => [number, number, number];
   readonly gameengine_getTextureIdByPath: (a: number, b: number, c: number) => number;
   readonly gameengine_getTextureLoadingCount: (a: number) => number;
+  readonly gameengine_getTextureSizeByPath: (a: number, b: number, c: number) => any;
   readonly gameengine_getTextureState: (a: number, b: number) => [number, number];
   readonly gameengine_getViewportCamera: (a: number, b: number, c: number) => [number, number];
   readonly gameengine_getViewportIds: (a: number) => [number, number];
@@ -494,6 +540,7 @@ export interface InitOutput {
   readonly gameengine_submitSpriteBatch: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number];
   readonly gameengine_unregisterViewport: (a: number, b: number, c: number) => void;
   readonly gameengine_updateInput: (a: number) => void;
+  readonly gameengine_updateTextureRegion: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
   readonly gameengine_width: (a: number) => number;
   readonly gameengine_worldToScreen: (a: number, b: number, c: number) => [number, number];
   readonly init: () => void;

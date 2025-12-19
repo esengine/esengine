@@ -321,6 +321,15 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         scaleSnapRef.current = scaleSnapValue;
     }, [playState, camera2DZoom, camera2DOffset, transformMode, snapEnabled, gridSnapValue, rotationSnapValue, scaleSnapValue]);
 
+    // 发布 Play 状态变化事件，用于层级面板实时同步
+    // Publish play state change event for hierarchy panel real-time sync
+    useEffect(() => {
+        messageHub?.publish('viewport:playState:changed', {
+            playState,
+            isPlaying: playState === 'playing'
+        });
+    }, [playState, messageHub]);
+
     // Snap helper functions
     const snapToGrid = useCallback((value: number): number => {
         if (!snapEnabledRef.current || gridSnapRef.current <= 0) return value;
@@ -375,6 +384,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             return () => unsub();
         }
     }, []);
+
 
     // Sync commandManager prop to ref | 同步 commandManager prop 到 ref
     useEffect(() => {
@@ -438,7 +448,33 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             // Left button (0) for transform or camera pan (if no transform mode active)
             else if (e.button === 0) {
                 if (transformModeRef.current === 'select') {
-                    // In select mode, left click pans camera
+                    // In select mode, first check if clicking on a gizmo
+                    // 在选择模式下，首先检查是否点击了 gizmo
+                    const gizmoService = EngineService.getInstance().getGizmoInteractionService();
+                    if (gizmoService) {
+                        const worldPos = screenToWorld(e.clientX, e.clientY);
+                        const zoom = camera2DZoomRef.current;
+                        const hitEntityId = gizmoService.handleClick(worldPos.x, worldPos.y, zoom);
+
+                        if (hitEntityId !== null) {
+                            // Find and select the hit entity
+                            // 找到并选中命中的实体
+                            const scene = Core.scene;
+                            if (scene) {
+                                const hitEntity = scene.entities.findEntityById(hitEntityId);
+                                if (hitEntity && messageHubRef.current) {
+                                    const entityStore = Core.services.tryResolve(EntityStoreService);
+                                    entityStore?.selectEntity(hitEntity);
+                                    messageHubRef.current.publish('entity:selected', { entity: hitEntity });
+                                    e.preventDefault();
+                                    return; // Don't start camera pan
+                                }
+                            }
+                        }
+                    }
+
+                    // No gizmo hit, left click pans camera
+                    // 没有点击到 gizmo，左键拖动相机
                     isDraggingCameraRef.current = true;
                     canvas.style.cursor = 'grabbing';
                 } else {
@@ -478,6 +514,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     x: prev.x - (deltaX * dpr) / zoom,
                     y: prev.y + (deltaY * dpr) / zoom
                 }));
+                lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             } else if (isDraggingTransformRef.current) {
                 // Transform selected entity based on mode
                 const entity = selectedEntityRef.current;
@@ -592,11 +629,30 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                         });
                     }
                 }
+
+                lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             } else {
+                // Not dragging - update gizmo hover state
+                // 没有拖拽时 - 更新 gizmo 悬停状态
+                if (playStateRef.current !== 'playing') {
+                    const gizmoService = EngineService.getInstance().getGizmoInteractionService();
+                    if (gizmoService) {
+                        const worldPos = screenToWorld(e.clientX, e.clientY);
+                        const zoom = camera2DZoomRef.current;
+                        gizmoService.updateMousePosition(worldPos.x, worldPos.y, zoom);
+
+                        // Update cursor based on hover state
+                        // 根据悬停状态更新光标
+                        const hoveredId = gizmoService.getHoveredEntityId();
+                        if (hoveredId !== null) {
+                            canvas.style.cursor = 'pointer';
+                        } else {
+                            canvas.style.cursor = 'grab';
+                        }
+                    }
+                }
                 return;
             }
-
-            lastMousePosRef.current = { x: e.clientX, y: e.clientY };
         };
 
         const handleMouseUp = () => {
@@ -904,8 +960,19 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
                             await EngineService.getInstance().loadSceneResources();
 
+                            // 同步 EntityStore 并通知层级面板更新
+                            // Sync EntityStore and notify hierarchy panel to update
                             const entityStore = Core.services.tryResolve(EntityStoreService);
                             entityStore?.syncFromScene();
+
+                            // 发布运行时场景切换事件，通知层级面板更新
+                            // Publish runtime scene change event to notify hierarchy panel
+                            const sceneName = fullPath.split(/[/\\]/).pop()?.replace('.ecs', '') || 'Unknown';
+                            messageHub?.publish('runtime:scene:changed', {
+                                path: fullPath,
+                                sceneName,
+                                isPlayMode: true
+                            });
                         }
 
                         console.log(`[Viewport] Scene loaded in play mode: ${scenePath}`);
@@ -1167,7 +1234,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
             // Build asset catalog and copy files
             // 构建资产目录并复制文件
-            const catalogEntries: Record<string, { guid: string; path: string; type: string; size: number; hash: string }> = {};
+            const catalogEntries: Record<string, { guid: string; path: string; type: string; size: number; hash: string; importSettings?: Record<string, unknown> }> = {};
 
             for (const assetPath of assetPaths) {
                 if (!assetPath || (!assetPath.includes(':\\') && !assetPath.startsWith('/'))) continue;
@@ -1180,11 +1247,11 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     }
 
                     // Get filename and determine relative path
-                    // 路径格式：相对于 assets 目录，不包含 'assets/' 前缀
-                    // Path format: relative to assets directory, without 'assets/' prefix
+                    // 路径格式：包含 'assets/' 前缀，与运行时资产加载器格式一致
+                    // Path format: includes 'assets/' prefix, consistent with runtime asset loader
                     const filename = assetPath.split(/[/\\]/).pop() || '';
                     const destPath = `${assetsDir}\\${filename}`;
-                    const relativePath = filename;
+                    const relativePath = `assets/${filename}`;
 
                     // Copy file
                     await TauriAPI.copyFile(assetPath, destPath);
@@ -1206,6 +1273,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     // 检查此资产是否通过 GUID 引用（如粒子资产）
                     // 如果是，使用原始 GUID；否则根据路径生成
                     let guid: string | undefined;
+                    let importSettings: Record<string, unknown> | undefined;
                     for (const [originalGuid, mappedPath] of guidToPath.entries()) {
                         if (mappedPath === assetPath) {
                             guid = originalGuid;
@@ -1216,12 +1284,61 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                         guid = assetPath.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 36);
                     }
 
+                    // Get importSettings from meta file for nine-patch and other settings
+                    // 从 meta 文件获取 importSettings，用于九宫格和其他设置
+                    if (assetRegistry) {
+                        try {
+                            const meta = await assetRegistry.metaManager.getOrCreateMeta(assetPath);
+                            if (meta.importSettings) {
+                                importSettings = meta.importSettings as Record<string, unknown>;
+                            }
+                        } catch {
+                            // Meta file may not exist, that's ok
+                        }
+                    }
+
+                    // For texture assets, read image dimensions and store in importSettings
+                    // 对于纹理资产，读取图片尺寸并存储到 importSettings
+                    if (assetType === 'texture') {
+                        try {
+                            // Read image as base64 and get dimensions
+                            // 读取图片为 base64 并获取尺寸
+                            const base64Data = await TauriAPI.readFileAsBase64(assetPath);
+                            const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+                                const img = new Image();
+                                img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                                img.onerror = () => reject(new Error('Failed to load image'));
+                                img.src = `data:image/${ext.slice(1)};base64,${base64Data}`;
+                            });
+
+                            // Ensure importSettings and spriteSettings exist
+                            // 确保 importSettings 和 spriteSettings 存在
+                            if (!importSettings) {
+                                importSettings = {};
+                            }
+                            if (!importSettings.spriteSettings) {
+                                importSettings.spriteSettings = {};
+                            }
+
+                            // Add dimensions to spriteSettings
+                            // 将尺寸添加到 spriteSettings
+                            const spriteSettings = importSettings.spriteSettings as Record<string, unknown>;
+                            spriteSettings.width = dimensions.width;
+                            spriteSettings.height = dimensions.height;
+
+                            console.log(`[Viewport] Texture ${filename}: ${dimensions.width}x${dimensions.height}`);
+                        } catch (dimError) {
+                            console.warn(`[Viewport] Failed to get dimensions for ${filename}:`, dimError);
+                        }
+                    }
+
                     catalogEntries[guid] = {
                         guid,
                         path: relativePath,
                         type: assetType,
                         size: 0,
-                        hash: ''
+                        hash: '',
+                        importSettings
                     };
                 } catch (error) {
                     console.error(`[Viewport] Failed to copy asset ${assetPath}:`, error);

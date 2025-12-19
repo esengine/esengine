@@ -33,6 +33,7 @@
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/engine-core": "workspace:*",
         "@esengine/ecs-engine-bindgen": "workspace:*",
+        "@esengine/material-system": "workspace:*",
         "@esengine/build-config": "workspace:*",
         "rimraf": "^5.0.5",
         "tsup": "^8.0.0",

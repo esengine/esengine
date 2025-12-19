@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, File as FileIcon, Image as ImageIcon, Clock, HardDrive, Settings2, Grid3X3 } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { Core } from '@esengine/ecs-framework';
-import { AssetRegistryService } from '@esengine/editor-core';
+import { AssetRegistryService, MessageHub } from '@esengine/editor-core';
 import type { ISpriteSettings } from '@esengine/asset-system-editor';
 import { EngineService } from '../../../services/EngineService';
 import { AssetFileInfo } from '../types';
@@ -315,6 +315,18 @@ export function AssetFileInspector({ fileInfo, content, isImage }: AssetFileInsp
 
             setSpriteSettings(newSettings);
             console.log(`[AssetFileInspector] Updated sprite settings for ${fileInfo.name}:`, newSettings);
+
+            // 通知 EngineService 同步资产数据库（以便渲染系统获取最新的九宫格设置）
+            // Notify EngineService to sync asset database (so render systems get latest sprite settings)
+            const messageHub = Core.services.tryResolve(MessageHub);
+            if (messageHub) {
+                messageHub.publish('assets:changed', {
+                    type: 'modify',
+                    path: fileInfo.path,
+                    relativePath: assetRegistry.absoluteToRelative(fileInfo.path) || fileInfo.path,
+                    guid: meta.guid
+                });
+            }
         } catch (error) {
             console.error('Failed to update sprite settings:', error);
         } finally {

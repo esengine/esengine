@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask';
+export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask' | 'entityRef';
 
 /**
  * 属性资源类型
@@ -52,6 +52,16 @@ interface PropertyOptionsBase {
     label?: string;
     /** 是否只读 | Read-only flag */
     readOnly?: boolean;
+    /**
+     * 是否在 Inspector 中隐藏
+     * Whether to hide this property in Inspector
+     *
+     * Hidden properties are still serialized but not shown in the default PropertyInspector.
+     * Useful when a custom Inspector handles the property.
+     * 隐藏的属性仍然会被序列化，但不会在默认的 PropertyInspector 中显示。
+     * 适用于自定义 Inspector 处理该属性的情况。
+     */
+    hidden?: boolean;
     /** Action buttons | 操作按钮 */
     actions?: PropertyAction[];
     /** 此属性控制的其他组件属性 | Properties this field controls */
@@ -194,6 +204,17 @@ interface CollisionMaskPropertyOptions extends PropertyOptionsBase {
 }
 
 /**
+ * 实体引用属性选项
+ * Entity reference property options
+ *
+ * Used for properties that store entity IDs and support drag-and-drop from SceneHierarchy.
+ * 用于存储实体 ID 的属性，支持从场景层级面板拖放。
+ */
+interface EntityRefPropertyOptions extends PropertyOptionsBase {
+    type: 'entityRef';
+}
+
+/**
  * 属性选项联合类型
  * Property options union type
  */
@@ -208,7 +229,8 @@ export type PropertyOptions =
     | ArrayPropertyOptions
     | AnimationClipsPropertyOptions
     | CollisionLayerPropertyOptions
-    | CollisionMaskPropertyOptions;
+    | CollisionMaskPropertyOptions
+    | EntityRefPropertyOptions;
 
 // 使用 Symbol.for 创建全局 Symbol，确保跨包共享元数据
 // Use Symbol.for to create a global Symbol to ensure metadata sharing across packages

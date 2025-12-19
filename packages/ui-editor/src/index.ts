@@ -33,11 +33,11 @@ import {
     UISliderComponent,
     UIScrollViewComponent
 } from '@esengine/ui';
-import { UITransformInspector } from './inspectors';
+import { UITransformInspector, UIRenderInspector } from './inspectors';
 import { registerUITransformGizmo, unregisterUITransformGizmo } from './gizmos';
 
 // Re-exports
-export { UITransformInspector } from './inspectors';
+export { UITransformInspector, UIRenderInspector } from './inspectors';
 export { registerUITransformGizmo, unregisterUITransformGizmo } from './gizmos';
 
 /**
@@ -76,6 +76,7 @@ export class UIEditorModule implements IEditorModuleLoader {
         const componentInspectorRegistry = services.tryResolve(ComponentInspectorRegistry);
         if (componentInspectorRegistry) {
             componentInspectorRegistry.register(new UITransformInspector());
+            componentInspectorRegistry.register(new UIRenderInspector());
         }
 
         // 注册 Gizmo | Register gizmo

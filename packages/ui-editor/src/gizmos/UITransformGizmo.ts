@@ -15,21 +15,23 @@ function uiTransformGizmoProvider(
         return [];
     }
 
-    // Use world coordinates (computed by UILayoutSystem) if available
-    // Otherwise fallback to local coordinates
-    // 使用世界坐标（由 UILayoutSystem 计算），如果可用
-    // 否则回退到本地坐标
-    const x = transform.worldX ?? transform.x;
-    const y = transform.worldY ?? transform.y;
-    // Use world scale for proper hierarchical transform inheritance
-    // 使用世界缩放以正确继承层级变换
+    // 使用 UILayoutSystem 计算的世界坐标
+    // Use world coordinates computed by UILayoutSystem
+    // 如果 layoutComputed = false，说明 UILayoutSystem 还没运行，回退到本地坐标
+    // If layoutComputed = false, UILayoutSystem hasn't run yet, fallback to local coordinates
+    const x = transform.layoutComputed ? transform.worldX : transform.x;
+    const y = transform.layoutComputed ? transform.worldY : transform.y;
     const scaleX = transform.worldScaleX ?? transform.scaleX;
     const scaleY = transform.worldScaleY ?? transform.scaleY;
-    const width = (transform.computedWidth ?? transform.width) * scaleX;
-    const height = (transform.computedHeight ?? transform.height) * scaleY;
-    // Use world rotation for proper hierarchical transform inheritance
-    // 使用世界旋转以正确继承层级变换
-    const rotation = transform.worldRotation ?? transform.rotation;
+    const width = (transform.layoutComputed && transform.computedWidth > 0
+        ? transform.computedWidth
+        : transform.width) * scaleX;
+    const height = (transform.layoutComputed && transform.computedHeight > 0
+        ? transform.computedHeight
+        : transform.height) * scaleY;
+    // 角度转弧度 | Convert degrees to radians
+    const rotationDegrees = transform.worldRotation ?? transform.rotation;
+    const rotation = (rotationDegrees * Math.PI) / 180;
     // 使用 transform 的 pivot 作为旋转/缩放中心
     const pivotX = transform.pivotX;
     const pivotY = transform.pivotY;

@@ -76,6 +76,13 @@ export {
 } from './components/UIRenderComponent';
 
 export {
+    type UIMaterialPropertyOverride,
+    type UIMaterialOverrides
+} from './systems/render/UIRenderCollector';
+
+export { UIShinyEffectComponent } from './components/UIShinyEffectComponent';
+
+export {
     UIInteractableComponent,
     type UICursorType
 } from './components/UIInteractableComponent';
@@ -90,6 +97,8 @@ export {
 
 export { TextBlinkComponent } from './components/TextBlinkComponent';
 export { SceneLoadTriggerComponent } from './components/SceneLoadTriggerComponent';
+export { UIWidgetMarker } from './components/UIWidgetMarker';
+export { UICanvasComponent, UICanvasRenderMode } from './components/UICanvasComponent';
 
 export {
     UILayoutComponent,
@@ -98,6 +107,22 @@ export {
     UIAlignItems,
     type UIPadding
 } from './components/UILayoutComponent';
+
+// Components - Base (new architecture)
+// 基础组件（新架构）
+export {
+    UIGraphicComponent,
+    UIImageComponent,
+    UISelectableComponent,
+    DEFAULT_COLOR_BLOCK,
+    type UIImageType,
+    type UIFillMethod,
+    type UIFillOrigin,
+    type UISelectableState,
+    type UITransitionType,
+    type UIColorBlock,
+    type UISpriteState
+} from './components/base';
 
 // Components - Widgets
 export {
@@ -122,10 +147,28 @@ export {
     UIScrollbarVisibility
 } from './components/widgets/UIScrollViewComponent';
 
+export {
+    UIToggleComponent,
+    type UIToggleStyle
+} from './components/widgets/UIToggleComponent';
+
+export {
+    UIInputFieldComponent,
+    type UIInputContentType,
+    type UIInputLineType
+} from './components/widgets/UIInputFieldComponent';
+
+export {
+    UIDropdownComponent,
+    type UIDropdownOption
+} from './components/widgets/UIDropdownComponent';
+
 // Systems - Core
 export { UILayoutSystem } from './systems/UILayoutSystem';
 export { UIInputSystem, type UIInputEvent } from './systems/UIInputSystem';
 export { UIAnimationSystem, UIEasing, type EasingFunction, type EasingName } from './systems/UIAnimationSystem';
+export { UISelectableStateSystem } from './systems/UISelectableStateSystem';
+export { UISliderFillSystem } from './systems/UISliderFillSystem';
 export { UIRenderDataProvider, type IUIRenderDataProvider } from './systems/UIRenderDataProvider';
 export { TextBlinkSystem } from './systems/TextBlinkSystem';
 export { SceneLoadTriggerSystem } from './systems/SceneLoadTriggerSystem';
@@ -137,16 +180,36 @@ export {
     getUIRenderCollector,
     resetUIRenderCollector,
     invalidateUIRenderCaches,
+    requestTextureForAtlas,
+    clearTextureRequestCache,
     type UIRenderPrimitive,
     type ProviderRenderData,
+    type BatchBreakReason,
+    type BatchDebugInfo,
     // Render systems
     UIRenderBeginSystem,
+    UIGraphicRenderSystem,
     UIRectRenderSystem,
     UITextRenderSystem,
     UIButtonRenderSystem,
     UIProgressBarRenderSystem,
     UISliderRenderSystem,
-    UIScrollViewRenderSystem
+    UIScrollViewRenderSystem,
+    UIToggleRenderSystem,
+    UIInputFieldRenderSystem,
+    UIDropdownRenderSystem,
+    UIShinyEffectSystem,
+    // Render utilities
+    ensureUIWidgetMarker,
+    getUIRenderTransform,
+    renderBorder,
+    renderShadow,
+    lerpColor,
+    packColorWithAlpha,
+    getNinePatchPosition,
+    type UIRenderTransform,
+    type BorderRenderOptions,
+    type ShadowRenderOptions
 } from './systems/render';
 
 // Rendering
@@ -163,7 +226,10 @@ export {
     type UIProgressBarConfig,
     type UISliderConfig,
     type UIPanelConfig,
-    type UIScrollViewConfig
+    type UIScrollViewConfig,
+    type UIToggleConfig,
+    type UIInputFieldConfig,
+    type UIDropdownConfig
 } from './UIBuilder';
 
 // Runtime module and plugin
@@ -174,5 +240,65 @@ export {
     UILayoutSystemToken,
     UIInputSystemToken,
     UIRenderProviderToken,
-    UITextRenderSystemToken
+    UITextRenderSystemToken,
+    UIAnimationSystemToken,
+    UISelectableStateSystemToken
 } from './tokens';
+
+// Dynamic Atlas | 动态图集
+export {
+    BinPacker,
+    DynamicAtlasManager,
+    getDynamicAtlasManager,
+    setDynamicAtlasManager,
+    AtlasExpansionStrategy,
+    DynamicAtlasService,
+    getDynamicAtlasService,
+    setDynamicAtlasService,
+    initializeDynamicAtlasService,
+    reinitializeDynamicAtlasService,
+    registerTexturePathMapping,
+    getTexturePathByGuid,
+    clearTexturePathMappings,
+    type PackedRect,
+    type AtlasEntry,
+    type IAtlasEngineBridge,
+    type DynamicAtlasConfig,
+    type TextureInfo
+} from './atlas';
+
+// Texture Utilities | 纹理工具
+export {
+    type UITextureDescriptor,
+    type UINinePatchDescriptor,
+    isValidTexture,
+    isValidTextureGuid,
+    getTextureKey,
+    defaultUV,
+    normalizeTextureDescriptor,
+    extractTextureGuid,
+    mergeTextureDescriptors,
+    isValidNinePatchMargins,
+    getNinePatchMinSize
+} from './utils';
+
+// Dirty Flag Utilities | 脏标记工具
+export {
+    UIDirtyFlags,
+    type IDirtyTrackable,
+    DirtyOnChange,
+    DirtyTracker,
+    markFrameDirty,
+    isFrameDirty,
+    getDirtyComponentCount,
+    clearFrameDirty
+} from './utils';
+
+// Text Measure Utilities | 文本测量工具
+export {
+    getTextMeasureService,
+    disposeTextMeasureService,
+    type TextMeasureFont,
+    type CharacterPosition,
+    type LineInfo
+} from './utils';

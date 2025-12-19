@@ -6,6 +6,8 @@
 import { createServiceToken } from '@esengine/ecs-framework';
 import type { UILayoutSystem } from './systems/UILayoutSystem';
 import type { UIInputSystem } from './systems/UIInputSystem';
+import type { UIAnimationSystem } from './systems/UIAnimationSystem';
+import type { UISelectableStateSystem } from './systems/UISelectableStateSystem';
 import type { UIRenderDataProvider } from './systems/UIRenderDataProvider';
 import type { UITextRenderSystem } from './systems/render';
 
@@ -36,3 +38,15 @@ export const UIRenderProviderToken = createServiceToken<UIRenderDataProvider>('u
  * UI text render system token
  */
 export const UITextRenderSystemToken = createServiceToken<UITextRenderSystem>('uiTextRenderSystem');
+
+/**
+ * UI 动画系统令牌
+ * UI animation system token
+ */
+export const UIAnimationSystemToken = createServiceToken<UIAnimationSystem>('uiAnimationSystem');
+
+/**
+ * UI 可选择状态系统令牌
+ * UI selectable state system token
+ */
+export const UISelectableStateSystemToken = createServiceToken<UISelectableStateSystem>('uiSelectableStateSystem');

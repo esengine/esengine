@@ -9,13 +9,13 @@
  */
 
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
+import { getTextureSpriteInfo, getGlobalAssetDatabase } from '@esengine/asset-system';
 import { UITransformComponent } from '../../components/UITransformComponent';
-import { UIRenderComponent, UIRenderType } from '../../components/UIRenderComponent';
-import { UIButtonComponent } from '../../components/widgets/UIButtonComponent';
-import { UIProgressBarComponent } from '../../components/widgets/UIProgressBarComponent';
-import { UISliderComponent } from '../../components/widgets/UISliderComponent';
-import { UIScrollViewComponent } from '../../components/widgets/UIScrollViewComponent';
+import { UIRenderComponent } from '../../components/UIRenderComponent';
+import { UIWidgetMarker } from '../../components/UIWidgetMarker';
+import { getDynamicAtlasService } from '../../atlas/DynamicAtlasService';
 import { getUIRenderCollector } from './UIRenderCollector';
+import { getUIRenderTransform, renderBorder, renderShadow, getNinePatchPosition } from './UIRenderUtils';
 
 /**
  * UI Rect Render System
@@ -29,8 +29,11 @@ import { getUIRenderCollector } from './UIRenderCollector';
  * 处理具有 UIRenderComponent 但没有专门 widget 组件（如按钮、进度条等）的基础 UI 元素的渲染。
  * 这是简单矩形、图像和面板的"兜底"渲染器。
  */
-@ECSSystem('UIRectRender', { updateOrder: 100 })
+@ECSSystem('UIRectRender', { updateOrder: 100, runInEditMode: true })
 export class UIRectRenderSystem extends EntitySystem {
+    // Debug: Track logged GUIDs to avoid spam | 调试：跟踪已记录的 GUID 以避免刷屏
+    private _loggedGuids?: Set<string>;
+
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UIRenderComponent));
     }
@@ -39,13 +42,9 @@ export class UIRectRenderSystem extends EntitySystem {
         const collector = getUIRenderCollector();
 
         for (const entity of entities) {
-            // Skip if entity has specialized widget components
-            // (they have their own render systems)
-            // 如果实体有专门的 widget 组件，跳过（它们有自己的渲染系统）
-            if (entity.hasComponent(UIButtonComponent) ||
-                entity.hasComponent(UIProgressBarComponent) ||
-                entity.hasComponent(UISliderComponent) ||
-                entity.hasComponent(UIScrollViewComponent)) {
+            // Skip if entity has UIWidgetMarker (has specialized render system)
+            // 如果实体有 UIWidgetMarker 标记（有专门的渲染系统），跳过
+            if (entity.hasComponent(UIWidgetMarker)) {
                 continue;
             }
 
@@ -56,52 +55,27 @@ export class UIRectRenderSystem extends EntitySystem {
             // Null check - component may not be ready during deserialization or initialization
             if (!transform || !render) continue;
 
-            if (!transform.worldVisible) continue;
+            // 使用工具函数获取渲染变换数据
+            // Use utility function to get render transform data
+            const rt = getUIRenderTransform(transform);
+            if (!rt) continue;
 
-            const x = transform.worldX ?? transform.x;
-            const y = transform.worldY ?? transform.y;
-            // 使用世界缩放（考虑父级缩放）
-            const scaleX = transform.worldScaleX ?? transform.scaleX;
-            const scaleY = transform.worldScaleY ?? transform.scaleY;
-            const width = (transform.computedWidth ?? transform.width) * scaleX;
-            const height = (transform.computedHeight ?? transform.height) * scaleY;
-            const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用世界旋转（考虑父级旋转）
-            const rotation = transform.worldRotation ?? transform.rotation;
-            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
-            const sortingLayer = transform.sortingLayer;
-            // worldOrderInLayer 考虑了父子层级关系，确保子元素渲染在父元素之上
-            // worldOrderInLayer considers parent-child hierarchy, ensuring children render on top of parents
-            const orderInLayer = transform.worldOrderInLayer;
-            // 使用 transform 的 pivot 作为旋转/缩放中心
-            const pivotX = transform.pivotX;
-            const pivotY = transform.pivotY;
-
-            // worldX/worldY 是元素左下角位置，需要转换为以 pivot 为中心的位置
-            // pivot 相对于元素的偏移：(width * pivotX, height * pivotY)
-            // 渲染位置 = 左下角 + pivot 偏移
-            const renderX = x + width * pivotX;
-            const renderY = y + height * pivotY;
-
-            // Render shadow if enabled
-            // 如果启用，渲染阴影
+            // Render shadow if enabled (using utility)
+            // 如果启用，渲染阴影（使用工具函数）
             if (render.shadowEnabled && render.shadowAlpha > 0) {
-                collector.addRect(
-                    renderX + render.shadowOffsetX,
-                    renderY + render.shadowOffsetY,
-                    width + render.shadowBlur * 2,
-                    height + render.shadowBlur * 2,
-                    render.shadowColor,
-                    render.shadowAlpha * alpha,
-                    sortingLayer,
-                    orderInLayer - 1, // Shadow renders below main content
-                    {
-                        rotation,
-                        pivotX,
-                        pivotY
-                    }
-                );
+                renderShadow(collector, rt, {
+                    offsetX: render.shadowOffsetX,
+                    offsetY: render.shadowOffsetY,
+                    blur: render.shadowBlur,
+                    color: render.shadowColor,
+                    alpha: render.shadowAlpha
+                }, entity.id);
             }
+
+            // Get material data from UIRenderComponent
+            // 从 UIRenderComponent 获取材质数据
+            const materialId = render.getMaterialId();
+            const materialOverrides = render.hasOverrides() ? render.materialOverrides : undefined;
 
             // Render texture if present
             // 如果有纹理，渲染纹理
@@ -109,53 +83,124 @@ export class UIRectRenderSystem extends EntitySystem {
                 const textureGuid = typeof render.textureGuid === 'string' ? render.textureGuid : undefined;
                 const textureId = typeof render.textureGuid === 'number' ? render.textureGuid : undefined;
 
+                // Calculate effective alpha (backgroundAlpha affects texture too)
+                // 计算有效透明度（backgroundAlpha 也影响纹理）
+                const effectiveAlpha = render.backgroundAlpha * rt.alpha;
+
+                // Try to get nine-patch info from texture's sprite settings
+                // 尝试从纹理的 sprite 设置获取九宫格信息
+                let ninePatchMargins: [number, number, number, number] | undefined;
+                let textureWidth = 0;
+                let textureHeight = 0;
+                let isNinePatch = false;
+
+                // Get texture path from AssetDatabase for atlas loading
+                // 从 AssetDatabase 获取纹理路径用于图集加载
+                let texturePath: string | undefined;
+                if (textureGuid) {
+                    const assetDb = getGlobalAssetDatabase();
+                    const metadata = assetDb?.getMetadata(textureGuid);
+                    texturePath = metadata?.path;
+
+                    // Get sliceBorder from asset metadata
+                    // 从资产元数据获取九宫格边距
+                    const spriteInfo = getTextureSpriteInfo(textureGuid);
+                    if (spriteInfo?.sliceBorder) {
+                        ninePatchMargins = spriteInfo.sliceBorder;
+                        isNinePatch = true;
+                    }
+
+                    // Get dimensions from DynamicAtlasService (primary source for UI textures)
+                    // 从动态图集服务获取尺寸（UI 纹理的主要来源）
+                    const atlasService = getDynamicAtlasService();
+                    const atlasEntry = atlasService?.getAtlasEntry(textureGuid);
+                    if (atlasEntry) {
+                        textureWidth = atlasEntry.originalWidth;
+                        textureHeight = atlasEntry.originalHeight;
+                    } else if (spriteInfo?.width && spriteInfo?.height) {
+                        // Fallback to dimensions from metadata (from asset catalog)
+                        // 从元数据获取尺寸作为后备（来自资产目录）
+                        textureWidth = spriteInfo.width;
+                        textureHeight = spriteInfo.height;
+                    }
+                }
 
                 // Handle nine-patch rendering
+                // Skip if texture is placeholder (1x1) - means texture not yet loaded
                 // 处理九宫格渲染
-                if (render.type === UIRenderType.NinePatch &&
-                    render.textureWidth > 0 &&
-                    render.textureHeight > 0) {
-                    // addNinePatch expects top-left corner coordinates
-                    // Y-up coordinate system: top = bottom + height
-                    // addNinePatch 期望左上角坐标
-                    // Y轴向上坐标系：顶部 = 底部 + 高度
-                    const topLeftX = x;
-                    const topLeftY = y + height;
+                // 如果纹理是占位符 (1x1) 则跳过 - 表示纹理尚未加载
+
+                // Debug: Log nine-patch info (throttled)
+                // 调试：记录九宫格信息（节流）
+                // When dimensions are 0, don't add to logged set - we want to see when they become available
+                // 当尺寸为0时，不添加到已记录集合 - 我们想看到它们何时可用
+                if (textureGuid) {
+                    const hasValidDimensions = textureWidth > 1 && textureHeight > 1;
+                    const alreadyLogged = this._loggedGuids?.has(textureGuid);
+
+                    // Log when: (1) first time with valid dimensions, or (2) first time with invalid dimensions (but don't mark as logged)
+                    // 记录条件：(1) 首次有有效尺寸，或 (2) 首次无效尺寸（但不标记为已记录）
+                    if (!alreadyLogged) {
+                        console.log(`[UIRect] textureGuid=${textureGuid}, isNinePatch=${isNinePatch}, margins=${JSON.stringify(ninePatchMargins)}, size=${textureWidth}x${textureHeight}, path=${texturePath}`);
+
+                        // Only mark as logged when we have valid dimensions
+                        // 只有当我们有有效尺寸时才标记为已记录
+                        if (hasValidDimensions) {
+                            if (!this._loggedGuids) this._loggedGuids = new Set();
+                            this._loggedGuids.add(textureGuid);
+                        }
+                    }
+                }
+
+                if (isNinePatch && ninePatchMargins && textureWidth > 1 && textureHeight > 1) {
+                    // Use utility to get position and pivot for consistent rendering
+                    // 使用工具函数获取位置和 pivot 以实现一致的渲染
+                    const pos = getNinePatchPosition(rt);
                     collector.addNinePatch(
-                        topLeftX, topLeftY,
-                        width, height,
-                        render.ninePatchMargins,
-                        render.textureWidth,
-                        render.textureHeight,
+                        pos.x, pos.y,
+                        rt.width, rt.height,
+                        ninePatchMargins,
+                        textureWidth,
+                        textureHeight,
                         render.textureTint,
-                        alpha,
-                        sortingLayer,
-                        orderInLayer,
+                        effectiveAlpha,
+                        rt.sortingLayer,
+                        rt.orderInLayer,
                         {
-                            rotation,
+                            rotation: rt.rotation,
+                            pivotX: pos.pivotX,
+                            pivotY: pos.pivotY,
                             textureId,
-                            textureGuid
+                            textureGuid,
+                            texturePath,
+                            materialId,
+                            materialOverrides,
+                            entityId: entity.id
                         }
                     );
                 } else {
                     // Standard image rendering
                     // 标准图像渲染
                     collector.addRect(
-                        renderX, renderY,
-                        width, height,
+                        rt.renderX, rt.renderY,
+                        rt.width, rt.height,
                         render.textureTint,
-                        alpha,
-                        sortingLayer,
-                        orderInLayer,
+                        effectiveAlpha,
+                        rt.sortingLayer,
+                        rt.orderInLayer,
                         {
-                            rotation,
-                            pivotX,
-                            pivotY,
+                            rotation: rt.rotation,
+                            pivotX: rt.pivotX,
+                            pivotY: rt.pivotY,
                             textureId,
                             textureGuid,
+                            texturePath,
                             uv: render.textureUV
                                 ? [render.textureUV.u0, render.textureUV.v0, render.textureUV.u1, render.textureUV.v1]
-                                : undefined
+                                : undefined,
+                            materialId,
+                            materialOverrides,
+                            entityId: entity.id
                         }
                     );
                 }
@@ -164,99 +209,32 @@ export class UIRectRenderSystem extends EntitySystem {
             // 如果启用填充，渲染背景颜色
             else if (render.fillBackground && render.backgroundAlpha > 0) {
                 collector.addRect(
-                    renderX, renderY,
-                    width, height,
+                    rt.renderX, rt.renderY,
+                    rt.width, rt.height,
                     render.backgroundColor,
-                    render.backgroundAlpha * alpha,
-                    sortingLayer,
-                    orderInLayer,
+                    render.backgroundAlpha * rt.alpha,
+                    rt.sortingLayer,
+                    rt.orderInLayer,
                     {
-                        rotation,
-                        pivotX,
-                        pivotY
+                        rotation: rt.rotation,
+                        pivotX: rt.pivotX,
+                        pivotY: rt.pivotY,
+                        materialId,
+                        materialOverrides,
+                        entityId: entity.id
                     }
                 );
             }
 
-            // Render border if present
-            // 如果有边框，渲染边框
+            // Render border if present (using utility)
+            // 如果有边框，渲染边框（使用工具函数）
             if (render.borderWidth > 0 && render.borderAlpha > 0) {
-                this.renderBorder(
-                    collector,
-                    renderX, renderY, width, height,
-                    render.borderWidth,
-                    render.borderColor,
-                    render.borderAlpha * alpha,
-                    sortingLayer,
-                    orderInLayer + 1, // Border renders above main content
-                    rotation,
-                    pivotX,
-                    pivotY
-                );
+                renderBorder(collector, rt, {
+                    borderWidth: render.borderWidth,
+                    borderColor: render.borderColor,
+                    borderAlpha: render.borderAlpha
+                }, entity.id, 1); // Border renders above main content
             }
         }
-    }
-
-    /**
-     * Render border using pivot-based coordinates
-     * 使用基于 pivot 的坐标渲染边框
-     */
-    private renderBorder(
-        collector: ReturnType<typeof getUIRenderCollector>,
-        centerX: number, centerY: number,
-        width: number, height: number,
-        borderWidth: number,
-        borderColor: number,
-        alpha: number,
-        sortingLayer: string,
-        orderInLayer: number,
-        rotation: number,
-        pivotX: number,
-        pivotY: number
-    ): void {
-        // 计算矩形的左下角位置（相对于 pivot 中心）
-        const left = centerX - width * pivotX;
-        const bottom = centerY - height * pivotY;
-        const right = left + width;
-        const top = bottom + height;
-
-        // Top border
-        const topBorderCenterX = (left + right) / 2;
-        const topBorderCenterY = top - borderWidth / 2;
-        collector.addRect(
-            topBorderCenterX, topBorderCenterY,
-            width, borderWidth,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
-        );
-
-        // Bottom border
-        const bottomBorderCenterY = bottom + borderWidth / 2;
-        collector.addRect(
-            topBorderCenterX, bottomBorderCenterY,
-            width, borderWidth,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
-        );
-
-        // Left border (excluding corners)
-        const sideBorderHeight = height - borderWidth * 2;
-        const leftBorderCenterX = left + borderWidth / 2;
-        const sideBorderCenterY = (top + bottom) / 2;
-        collector.addRect(
-            leftBorderCenterX, sideBorderCenterY,
-            borderWidth, sideBorderHeight,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
-        );
-
-        // Right border (excluding corners)
-        const rightBorderCenterX = right - borderWidth / 2;
-        collector.addRect(
-            rightBorderCenterX, sideBorderCenterY,
-            borderWidth, sideBorderHeight,
-            borderColor, alpha, sortingLayer, orderInLayer,
-            { rotation, pivotX: 0.5, pivotY: 0.5 }
-        );
     }
 }

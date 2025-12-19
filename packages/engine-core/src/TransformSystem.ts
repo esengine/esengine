@@ -81,14 +81,15 @@ export class TransformSystem extends EntitySystem {
         const sin = Math.sin(rad);
 
         // 构建仿射变换矩阵: Scale -> Rotate -> Translate
-        // [a c tx]   [sx  0 0]   [cos -sin 0]   [1 0 tx]
-        // [b d ty] = [0  sy 0] * [sin  cos 0] * [0 1 ty]
+        // 顺时针旋转 | Clockwise rotation
+        // [a c tx]   [sx  0 0]   [cos  sin 0]   [1 0 tx]
+        // [b d ty] = [0  sy 0] * [-sin cos 0] * [0 1 ty]
         // [0 0  1]   [0   0 1]   [0    0   1]   [0 0  1]
 
         return {
             a: scale.x * cos,
-            b: scale.x * sin,
-            c: scale.y * -sin,
+            b: -scale.x * sin,
+            c: scale.y * sin,
             d: scale.y * cos,
             tx: position.x,
             ty: position.y

@@ -62,6 +62,12 @@ export class UISliderComponent extends Component {
      */
     public displayValue: number = 0;
 
+    /**
+     * 值是否已初始化（用于编辑器预览）
+     * Whether value has been initialized (for editor preview)
+     */
+    public _valueInitialized: boolean = false;
+
     // ===== 方向 Orientation =====
 
     /**
@@ -114,6 +120,14 @@ export class UISliderComponent extends Component {
     public trackRadius: number = 2;
 
     // ===== 填充样式 Fill Style =====
+
+    /**
+     * 外部 Fill 实体 ID（如果设置，将控制该实体的宽度而不是内置渲染）
+     * External Fill entity ID (if set, controls that entity's width instead of built-in rendering)
+     */
+    @Serialize()
+    @Property({ type: 'entityRef', label: 'Fill Rect' })
+    public fillRectEntityId: number = 0;
 
     /**
      * 填充颜色（已滑过的部分）
@@ -386,5 +400,79 @@ export class UISliderComponent extends Component {
         if (this.dragging) return this.handlePressedColor;
         if (this.handleHovered) return this.handleHoverColor;
         return this.handleColor;
+    }
+
+    /**
+     * 计算手柄边界（世界坐标）
+     * Calculate handle bounds in world coordinates
+     *
+     * @param worldX - Slider world X position | 滑块世界 X 坐标
+     * @param worldY - Slider world Y position | 滑块世界 Y 坐标
+     * @param sliderWidth - Slider computed width | 滑块计算宽度
+     * @param sliderHeight - Slider computed height | 滑块计算高度
+     * @returns Handle bounds { x, y, width, height } | 手柄边界
+     */
+    public getHandleBounds(
+        worldX: number,
+        worldY: number,
+        sliderWidth: number,
+        sliderHeight: number
+    ): { x: number; y: number; width: number; height: number } {
+        const progress = this.getProgress();
+
+        if (this.orientation === UISliderOrientation.Horizontal) {
+            // 水平滑块：手柄沿 X 轴移动
+            // Horizontal slider: handle moves along X axis
+            const trackWidth = sliderWidth - this.handleWidth;
+            const handleX = worldX + trackWidth * progress;
+            const handleY = worldY + (sliderHeight - this.handleHeight) / 2;
+
+            return {
+                x: handleX,
+                y: handleY,
+                width: this.handleWidth,
+                height: this.handleHeight
+            };
+        } else {
+            // 垂直滑块：手柄沿 Y 轴移动
+            // Vertical slider: handle moves along Y axis
+            const trackHeight = sliderHeight - this.handleHeight;
+            const handleX = worldX + (sliderWidth - this.handleWidth) / 2;
+            const handleY = worldY + trackHeight * progress;
+
+            return {
+                x: handleX,
+                y: handleY,
+                width: this.handleWidth,
+                height: this.handleHeight
+            };
+        }
+    }
+
+    /**
+     * 检测点是否在手柄内
+     * Test if a point is inside the handle
+     *
+     * @param pointX - Point X in world coordinates | 世界坐标点 X
+     * @param pointY - Point Y in world coordinates | 世界坐标点 Y
+     * @param worldX - Slider world X position | 滑块世界 X 坐标
+     * @param worldY - Slider world Y position | 滑块世界 Y 坐标
+     * @param sliderWidth - Slider computed width | 滑块计算宽度
+     * @param sliderHeight - Slider computed height | 滑块计算高度
+     * @returns Whether point is inside handle | 点是否在手柄内
+     */
+    public isPointInHandle(
+        pointX: number,
+        pointY: number,
+        worldX: number,
+        worldY: number,
+        sliderWidth: number,
+        sliderHeight: number
+    ): boolean {
+        const bounds = this.getHandleBounds(worldX, worldY, sliderWidth, sliderHeight);
+        return pointX >= bounds.x &&
+               pointX <= bounds.x + bounds.width &&
+               pointY >= bounds.y &&
+               pointY <= bounds.y + bounds.height;
     }
 }

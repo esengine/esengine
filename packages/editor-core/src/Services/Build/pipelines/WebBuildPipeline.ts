@@ -868,6 +868,7 @@ ${userScriptImports}
                 type: string;
                 size: number;
                 hash: string;
+                importSettings?: Record<string, unknown>;
             }>
         };
 
@@ -952,7 +953,10 @@ ${userScriptImports}
                         path: relativePath,
                         type: assetType,
                         size,
-                        hash: hashFileInfo(relativePath, size)
+                        hash: hashFileInfo(relativePath, size),
+                        // Include importSettings for sprite slicing info (nine-patch, etc.)
+                        // 包含 importSettings 以支持精灵切片信息（九宫格等）
+                        importSettings: meta.importSettings
                     };
                     addedEntries++;
                 } catch (error) {

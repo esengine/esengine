@@ -227,6 +227,12 @@ export class ClickFxSystem extends EntitySystem {
     private _checkTrigger(clickFx: ClickFxComponent): boolean {
         const mode = clickFx.triggerMode;
 
+        // 首先检查鼠标是否在 Canvas 内
+        // First check if mouse is within canvas bounds
+        if (!this._isMouseInCanvas()) {
+            return false;
+        }
+
         switch (mode) {
             case ClickFxTriggerMode.LeftClick:
                 return Input.isMouseButtonJustPressed(MouseButton.Left);
@@ -251,6 +257,27 @@ export class ClickFxSystem extends EntitySystem {
             default:
                 return false;
         }
+    }
+
+    /**
+     * 检查鼠标是否在 Canvas 内
+     * Check if mouse is within canvas bounds
+     */
+    private _isMouseInCanvas(): boolean {
+        if (!this._canvas) {
+            return true; // 没有 canvas 引用时，默认允许（兼容旧行为）
+        }
+
+        const rect = this._canvas.getBoundingClientRect();
+        const mouseX = Input.mousePosition.x;
+        const mouseY = Input.mousePosition.y;
+
+        // 检查鼠标是否在 canvas 边界内
+        // Check if mouse is within canvas bounds
+        return mouseX >= rect.left &&
+               mouseX <= rect.right &&
+               mouseY >= rect.top &&
+               mouseY <= rect.bottom;
     }
 
     /**

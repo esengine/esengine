@@ -36,6 +36,7 @@ export { RuntimeCatalog, runtimeCatalog } from './runtime/RuntimeCatalog';
 export * from './interfaces/IAssetLoader';
 export * from './interfaces/IAssetManager';
 export * from './interfaces/IAssetReader';
+export * from './interfaces/IAssetFileLoader';
 export * from './interfaces/IResourceComponent';
 
 // Core
@@ -58,12 +59,23 @@ export { PrefabLoader } from './loaders/PrefabLoader';
 
 // Integration
 export { EngineIntegration } from './integration/EngineIntegration';
-export type { ITextureEngineBridge } from './integration/EngineIntegration';
+export type { ITextureEngineBridge, TextureLoadCallback } from './integration/EngineIntegration';
 
 // Services
 export { SceneResourceManager } from './services/SceneResourceManager';
 export type { IResourceLoader } from './services/SceneResourceManager';
 export { PathResolutionService } from './services/PathResolutionService';
+
+// Asset Metadata Service (primary API for sprite info)
+// 资产元数据服务（sprite 信息的主要 API）
+export {
+    setGlobalAssetDatabase,
+    getGlobalAssetDatabase,
+    setGlobalEngineBridge,
+    getGlobalEngineBridge,
+    getTextureSpriteInfo
+} from './services/AssetMetadataService';
+export type { ITextureSpriteInfo } from './core/AssetDatabase';
 
 // Utils
 export { UVHelper } from './utils/UVHelper';
