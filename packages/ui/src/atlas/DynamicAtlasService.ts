@@ -162,10 +162,12 @@ export class DynamicAtlasService {
      */
     private async loadAndAddTexture(textureGuid: string, url: string): Promise<AtlasEntry | null> {
         this.loadStates.set(textureGuid, 'loading');
+        console.log(`[DynamicAtlasService] Loading texture: guid=${textureGuid}, url=${url}`);
 
         try {
             // Load image | 加载图像
             const image = await this.loadImage(url);
+            console.log(`[DynamicAtlasService] Loaded image: ${url}, size=${image.width}x${image.height}`);
 
             // Check if too large | 检查是否太大
             if (image.width > this.maxTextureSize || image.height > this.maxTextureSize) {
@@ -206,17 +208,22 @@ export class DynamicAtlasService {
         // Use global asset file loader if available (recommended)
         // 如果可用则使用全局资产文件加载器（推荐）
         const loader = getGlobalAssetFileLoader();
+        console.log(`[DynamicAtlasService] loadImage: path=${assetPath}, hasLoader=${!!loader}`);
         if (loader) {
             return loader.loadImage(assetPath);
         }
 
         // Fallback: direct HTMLImageElement loading (for H5/web runtime)
         // 回退：直接 HTMLImageElement 加载（用于 H5/web 运行时）
+        console.log(`[DynamicAtlasService] Using fallback image loading: ${assetPath}`);
         return new Promise((resolve, reject) => {
             const image = new Image();
             image.crossOrigin = 'anonymous';
             image.onload = () => resolve(image);
-            image.onerror = () => reject(new Error(`Failed to load image: ${assetPath}`));
+            image.onerror = (e) => {
+                console.error(`[DynamicAtlasService] Image load error: ${assetPath}`, e);
+                reject(new Error(`Failed to load image: ${assetPath}`));
+            };
             image.src = assetPath;
         });
     }

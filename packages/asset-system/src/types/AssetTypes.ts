@@ -406,6 +406,12 @@ export interface IAssetCatalogEntry {
 
     /** 可用变体 / Available variants (platform/quality specific) */
     variants?: IAssetVariant[];
+
+    /**
+     * Import settings (e.g., sprite slicing for nine-patch)
+     * 导入设置（如九宫格切片信息）
+     */
+    importSettings?: Record<string, unknown>;
 }
 
 /**

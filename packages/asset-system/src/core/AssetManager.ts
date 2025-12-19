@@ -132,7 +132,10 @@ export class AssetManager implements IAssetManager {
                 labels: [],
                 tags: new Map(),
                 lastModified: Date.now(),
-                version: 1
+                version: 1,
+                // Include importSettings for sprite slicing (nine-patch), etc.
+                // 包含 importSettings 以支持精灵切片（九宫格）等功能
+                importSettings: entry.importSettings
             };
 
             this._database.addAsset(metadata);

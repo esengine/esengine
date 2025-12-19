@@ -1234,7 +1234,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
             // Build asset catalog and copy files
             // 构建资产目录并复制文件
-            const catalogEntries: Record<string, { guid: string; path: string; type: string; size: number; hash: string }> = {};
+            const catalogEntries: Record<string, { guid: string; path: string; type: string; size: number; hash: string; importSettings?: Record<string, unknown> }> = {};
 
             for (const assetPath of assetPaths) {
                 if (!assetPath || (!assetPath.includes(':\\') && !assetPath.startsWith('/'))) continue;
@@ -1247,11 +1247,11 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     }
 
                     // Get filename and determine relative path
-                    // 路径格式：相对于 assets 目录，不包含 'assets/' 前缀
-                    // Path format: relative to assets directory, without 'assets/' prefix
+                    // 路径格式：包含 'assets/' 前缀，与运行时资产加载器格式一致
+                    // Path format: includes 'assets/' prefix, consistent with runtime asset loader
                     const filename = assetPath.split(/[/\\]/).pop() || '';
                     const destPath = `${assetsDir}\\${filename}`;
-                    const relativePath = filename;
+                    const relativePath = `assets/${filename}`;
 
                     // Copy file
                     await TauriAPI.copyFile(assetPath, destPath);
@@ -1273,6 +1273,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     // 检查此资产是否通过 GUID 引用（如粒子资产）
                     // 如果是，使用原始 GUID；否则根据路径生成
                     let guid: string | undefined;
+                    let importSettings: Record<string, unknown> | undefined;
                     for (const [originalGuid, mappedPath] of guidToPath.entries()) {
                         if (mappedPath === assetPath) {
                             guid = originalGuid;
@@ -1283,12 +1284,61 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                         guid = assetPath.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 36);
                     }
 
+                    // Get importSettings from meta file for nine-patch and other settings
+                    // 从 meta 文件获取 importSettings，用于九宫格和其他设置
+                    if (assetRegistry) {
+                        try {
+                            const meta = await assetRegistry.metaManager.getOrCreateMeta(assetPath);
+                            if (meta.importSettings) {
+                                importSettings = meta.importSettings as Record<string, unknown>;
+                            }
+                        } catch {
+                            // Meta file may not exist, that's ok
+                        }
+                    }
+
+                    // For texture assets, read image dimensions and store in importSettings
+                    // 对于纹理资产，读取图片尺寸并存储到 importSettings
+                    if (assetType === 'texture') {
+                        try {
+                            // Read image as base64 and get dimensions
+                            // 读取图片为 base64 并获取尺寸
+                            const base64Data = await TauriAPI.readFileAsBase64(assetPath);
+                            const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+                                const img = new Image();
+                                img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                                img.onerror = () => reject(new Error('Failed to load image'));
+                                img.src = `data:image/${ext.slice(1)};base64,${base64Data}`;
+                            });
+
+                            // Ensure importSettings and spriteSettings exist
+                            // 确保 importSettings 和 spriteSettings 存在
+                            if (!importSettings) {
+                                importSettings = {};
+                            }
+                            if (!importSettings.spriteSettings) {
+                                importSettings.spriteSettings = {};
+                            }
+
+                            // Add dimensions to spriteSettings
+                            // 将尺寸添加到 spriteSettings
+                            const spriteSettings = importSettings.spriteSettings as Record<string, unknown>;
+                            spriteSettings.width = dimensions.width;
+                            spriteSettings.height = dimensions.height;
+
+                            console.log(`[Viewport] Texture ${filename}: ${dimensions.width}x${dimensions.height}`);
+                        } catch (dimError) {
+                            console.warn(`[Viewport] Failed to get dimensions for ${filename}:`, dimError);
+                        }
+                    }
+
                     catalogEntries[guid] = {
                         guid,
                         path: relativePath,
                         type: assetType,
                         size: 0,
-                        hash: ''
+                        hash: '',
+                        importSettings
                     };
                 } catch (error) {
                     console.error(`[Viewport] Failed to copy asset ${assetPath}:`, error);

@@ -45,6 +45,10 @@ interface ISpriteSettings {
     sliceBorder?: [number, number, number, number];
     pivot?: [number, number];
     pixelsPerUnit?: number;
+    /** Texture width (from import settings) | 纹理宽度（来自导入设置） */
+    width?: number;
+    /** Texture height (from import settings) | 纹理高度（来自导入设置） */
+    height?: number;
 }
 
 /**
@@ -276,7 +280,11 @@ export class AssetDatabase {
 
         return {
             sliceBorder: spriteSettings.sliceBorder,
-            pivot: spriteSettings.pivot
+            pivot: spriteSettings.pivot,
+            // Include dimensions from import settings if available
+            // 如果可用，包含来自导入设置的尺寸
+            width: spriteSettings.width,
+            height: spriteSettings.height
         };
     }
 

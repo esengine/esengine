@@ -177,6 +177,9 @@ class UIRuntimeModule implements IRuntimeModule {
         // 初始化动态图集服务 | Initialize dynamic atlas service
         // 需要 engineBridge 支持 createBlankTexture 和 updateTextureRegion
         // Requires engineBridge to support createBlankTexture and updateTextureRegion
+        console.log('[UIRuntimeModule] engineBridge available:', !!engineBridge);
+        console.log('[UIRuntimeModule] createBlankTexture:', !!engineBridge?.createBlankTexture);
+        console.log('[UIRuntimeModule] updateTextureRegion:', !!engineBridge?.updateTextureRegion);
         if (engineBridge?.createBlankTexture && engineBridge?.updateTextureRegion) {
             // 创建适配器将 EngineBridge 适配为 IAtlasEngineBridge
             // Create adapter to adapt EngineBridge to IAtlasEngineBridge
@@ -196,6 +199,7 @@ class UIRuntimeModule implements IRuntimeModule {
                 }
             };
 
+            console.log('[UIRuntimeModule] Initializing dynamic atlas service...');
             initializeDynamicAtlasService(atlasBridge, {
                 expansionStrategy: AtlasExpansionStrategy.Fixed,  // 运行时默认使用固定模式 | Runtime defaults to fixed mode
                 initialPageSize: 256,    // 动态模式起始大小 | Dynamic mode initial size
@@ -205,6 +209,7 @@ class UIRuntimeModule implements IRuntimeModule {
                 maxTextureSize: 512,
                 padding: 1
             });
+            console.log('[UIRuntimeModule] Dynamic atlas service initialized');
 
             // 注册纹理加载回调，当纹理通过 EngineIntegration 加载时自动注册路径映射
             // Register texture load callback to automatically register path mapping
@@ -212,6 +217,8 @@ class UIRuntimeModule implements IRuntimeModule {
             EngineIntegration.onTextureLoad((guid: string, path: string, _textureId: number) => {
                 registerTexturePathMapping(guid, path);
             });
+        } else {
+            console.warn('[UIRuntimeModule] Cannot initialize dynamic atlas service: engineBridge missing createBlankTexture or updateTextureRegion');
         }
     }
 }
@@ -230,7 +237,9 @@ const manifest: ModuleManifest = {
     canContainContent: true,
     dependencies: ['core', 'math'],
     exports: { components: ['UICanvasComponent'] },
-    editorPackage: '@esengine/ui-editor'
+    editorPackage: '@esengine/ui-editor',
+    // Plugin export for runtime loading | 运行时加载的插件导出
+    pluginExport: 'UIPlugin'
 };
 
 export const UIPlugin: IRuntimePlugin = {

@@ -124,11 +124,13 @@ export function getTextureSpriteInfo(guid: AssetGUID): ITextureSpriteInfo | unde
 
     // Merge the two sources
     // 合并两个数据源
+    // Prefer engine dimensions (runtime loaded), fallback to metadata dimensions (catalog stored)
+    // 优先使用引擎尺寸（运行时加载），后备使用元数据尺寸（目录存储）
     return {
         sliceBorder: metadataInfo?.sliceBorder,
         pivot: metadataInfo?.pivot,
-        width: dimensions?.width,
-        height: dimensions?.height
+        width: dimensions?.width ?? metadataInfo?.width,
+        height: dimensions?.height ?? metadataInfo?.height
     };
 }
 

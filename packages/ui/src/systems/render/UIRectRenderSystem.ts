@@ -31,6 +31,9 @@ import { getUIRenderTransform, renderBorder, renderShadow, getNinePatchPosition 
  */
 @ECSSystem('UIRectRender', { updateOrder: 100, runInEditMode: true })
 export class UIRectRenderSystem extends EntitySystem {
+    // Debug: Track logged GUIDs to avoid spam | 调试：跟踪已记录的 GUID 以避免刷屏
+    private _loggedGuids?: Set<string>;
+
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UIRenderComponent));
     }
@@ -114,6 +117,11 @@ export class UIRectRenderSystem extends EntitySystem {
                     if (atlasEntry) {
                         textureWidth = atlasEntry.originalWidth;
                         textureHeight = atlasEntry.originalHeight;
+                    } else if (spriteInfo?.width && spriteInfo?.height) {
+                        // Fallback to dimensions from metadata (from asset catalog)
+                        // 从元数据获取尺寸作为后备（来自资产目录）
+                        textureWidth = spriteInfo.width;
+                        textureHeight = spriteInfo.height;
                     }
                 }
 
@@ -121,6 +129,29 @@ export class UIRectRenderSystem extends EntitySystem {
                 // Skip if texture is placeholder (1x1) - means texture not yet loaded
                 // 处理九宫格渲染
                 // 如果纹理是占位符 (1x1) 则跳过 - 表示纹理尚未加载
+
+                // Debug: Log nine-patch info (throttled)
+                // 调试：记录九宫格信息（节流）
+                // When dimensions are 0, don't add to logged set - we want to see when they become available
+                // 当尺寸为0时，不添加到已记录集合 - 我们想看到它们何时可用
+                if (textureGuid) {
+                    const hasValidDimensions = textureWidth > 1 && textureHeight > 1;
+                    const alreadyLogged = this._loggedGuids?.has(textureGuid);
+
+                    // Log when: (1) first time with valid dimensions, or (2) first time with invalid dimensions (but don't mark as logged)
+                    // 记录条件：(1) 首次有有效尺寸，或 (2) 首次无效尺寸（但不标记为已记录）
+                    if (!alreadyLogged) {
+                        console.log(`[UIRect] textureGuid=${textureGuid}, isNinePatch=${isNinePatch}, margins=${JSON.stringify(ninePatchMargins)}, size=${textureWidth}x${textureHeight}, path=${texturePath}`);
+
+                        // Only mark as logged when we have valid dimensions
+                        // 只有当我们有有效尺寸时才标记为已记录
+                        if (hasValidDimensions) {
+                            if (!this._loggedGuids) this._loggedGuids = new Set();
+                            this._loggedGuids.add(textureGuid);
+                        }
+                    }
+                }
+
                 if (isNinePatch && ninePatchMargins && textureWidth > 1 && textureHeight > 1) {
                     // Use utility to get position and pivot for consistent rendering
                     // 使用工具函数获取位置和 pivot 以实现一致的渲染
