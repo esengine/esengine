@@ -202,6 +202,15 @@ const AnchorPresetGrid: React.FC<{
             [AnchorPreset.BottomLeft]: { x: 3, y: 17 },
             [AnchorPreset.BottomCenter]: { x: 10, y: 17 },
             [AnchorPreset.BottomRight]: { x: 17, y: 17 },
+            // Stretch presets (horizontal) | 拉伸预设（水平）
+            [AnchorPreset.StretchTop]: { x: 10, y: 3 },
+            [AnchorPreset.StretchMiddle]: { x: 10, y: 10 },
+            [AnchorPreset.StretchBottom]: { x: 10, y: 17 },
+            // Stretch presets (vertical) | 拉伸预设（垂直）
+            [AnchorPreset.StretchLeft]: { x: 3, y: 10 },
+            [AnchorPreset.StretchCenter]: { x: 10, y: 10 },
+            [AnchorPreset.StretchRight]: { x: 17, y: 10 },
+            // Full stretch | 完全拉伸
             [AnchorPreset.StretchAll]: { x: 10, y: 10 },
         };
         return positions[preset];
@@ -349,6 +358,15 @@ export class UITransformInspector implements IComponentInspector<UITransformComp
                 [AnchorPreset.BottomLeft]: [0, 0, 0, 0],
                 [AnchorPreset.BottomCenter]: [0.5, 0, 0.5, 0],
                 [AnchorPreset.BottomRight]: [1, 0, 1, 0],
+                // Horizontal stretch | 水平拉伸
+                [AnchorPreset.StretchTop]: [0, 1, 1, 1],
+                [AnchorPreset.StretchMiddle]: [0, 0.5, 1, 0.5],
+                [AnchorPreset.StretchBottom]: [0, 0, 1, 0],
+                // Vertical stretch | 垂直拉伸
+                [AnchorPreset.StretchLeft]: [0, 0, 0, 1],
+                [AnchorPreset.StretchCenter]: [0.5, 0, 0.5, 1],
+                [AnchorPreset.StretchRight]: [1, 0, 1, 1],
+                // Full stretch | 完全拉伸
                 [AnchorPreset.StretchAll]: [0, 0, 1, 1],
             };
 
