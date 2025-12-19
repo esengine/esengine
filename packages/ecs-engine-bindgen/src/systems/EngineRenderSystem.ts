@@ -180,27 +180,27 @@ export type TransformComponentType = ComponentType & (new (...args: any[]) => Co
 export type AssetPathResolverFn = (guidOrPath: string) => string;
 
 /**
+ * Render item for sorting.
+ * 用于排序的渲染项。
+ * @internal
+ */
+interface RenderItem {
+    sortKey: number;
+    addIndex: number;
+    /** Start index in batcher | 在批处理器中的起始索引 */
+    startIndex: number;
+    /** Number of sprites | 精灵数量 */
+    count: number;
+}
+
+/**
  * ECS System for rendering sprites using the Rust engine.
  * 使用Rust引擎渲染精灵的ECS系统。
  *
- * This system extends EntitySystem and integrates with the ECS lifecycle.
- * 此系统扩展EntitySystem并与ECS生命周期集成。
- *
  * @example
  * ```typescript
- * // Create transform component | 创建变换组件
- * @ECSComponent('Transform')
- * class Transform extends Component implements ITransformComponent {
- *     position = { x: 0, y: 0 };
- *     rotation = 0;
- *     scale = { x: 1, y: 1 };
- * }
- *
- * // Initialize bridge | 初始化桥接
  * const bridge = new EngineBridge({ canvasId: 'canvas' });
  * await bridge.initialize();
- *
- * // Add system to scene | 将系统添加到场景
  * const renderSystem = new EngineRenderSystem(bridge, Transform);
  * scene.addSystem(renderSystem);
  * ```
@@ -208,7 +208,8 @@ export type AssetPathResolverFn = (guidOrPath: string) => string;
 @ECSSystem('EngineRender', { updateOrder: 1000 }) // Render system executes last | 渲染系统最后执行
 export class EngineRenderSystem extends EntitySystem {
     private bridge: EngineBridge;
-    private batcher: RenderBatcher;
+    private worldBatcher: RenderBatcher;
+    private screenBatcher: RenderBatcher;
     private transformType: TransformComponentType;
     private showGizmos = true;
     private selectedEntityIds: Set<number> = new Set();
@@ -217,6 +218,17 @@ export class EngineRenderSystem extends EntitySystem {
     // Reusable map to avoid allocation per frame
     // 可重用的映射以避免每帧分配
     private entityRenderMap: Map<number, SpriteRenderData> = new Map();
+
+    // ===== Pre-allocated arrays for render items =====
+    // ===== 渲染项的预分配数组 =====
+    private worldSpaceItems: RenderItem[] = [];
+    private screenSpaceItems: RenderItem[] = [];
+    private worldSpaceItemCount = 0;
+    private screenSpaceItemCount = 0;
+
+    // Frame counter for dirty tracking
+    // 用于脏标记追踪的帧计数器
+    private frameNumber = 0;
 
     // Additional render data providers (e.g., tilemap)
     // 额外的渲染数据提供者（如瓦片地图）
@@ -252,18 +264,6 @@ export class EngineRenderSystem extends EntitySystem {
     // 为 false（编辑器模式）时，UI 在世界空间渲染，跟随编辑器相机
     private previewMode: boolean = false;
 
-    // ===== Material Instance Management =====
-    // ===== 材质实例管理 =====
-    // Maps (baseMaterialId, overridesHash) → instanceMaterialId
-    // 映射 (基础材质ID, 覆盖哈希) → 实例材质ID
-    private materialInstanceMap: Map<string, number> = new Map();
-    // Next instance ID (starts at 10000 to avoid collision with built-in materials)
-    // 下一个实例 ID（从 10000 开始以避免与内置材质冲突）
-    private nextMaterialInstanceId: number = 10000;
-    // Track instances used this frame for cleanup
-    // 跟踪本帧使用的实例以便清理
-    private usedInstancesThisFrame: Set<number> = new Set();
-
     /**
      * Create a new engine render system.
      * 创建新的引擎渲染系统。
@@ -277,7 +277,8 @@ export class EngineRenderSystem extends EntitySystem {
         super(Matcher.empty().all(SpriteComponent, transformType));
 
         this.bridge = bridge;
-        this.batcher = new RenderBatcher();
+        this.worldBatcher = new RenderBatcher();
+        this.screenBatcher = new RenderBatcher();
         this.transformType = transformType;
     }
 
@@ -295,8 +296,16 @@ export class EngineRenderSystem extends EntitySystem {
      * 处理实体之前调用。
      */
     protected override onBegin(): void {
-        // Clear the batch | 清空批处理
-        this.batcher.clear();
+        // Increment frame counter | 递增帧计数器
+        this.frameNumber++;
+
+        // Clear the batches | 清空批处理
+        this.worldBatcher.clear();
+        this.screenBatcher.clear();
+
+        // Reset render item counts (reuse arrays) | 重置渲染项计数（复用数组）
+        this.worldSpaceItemCount = 0;
+        this.screenSpaceItemCount = 0;
 
         // Clear screen with dark background | 用深色背景清屏
         this.bridge.clear(0.1, 0.1, 0.12, 1);
@@ -325,207 +334,208 @@ export class EngineRenderSystem extends EntitySystem {
         // 清空并重用映射用于绘制 gizmo
         this.entityRenderMap.clear();
 
-        // Collect all render items separated by render space
-        // 按渲染空间分离收集所有渲染项
-        // addIndex is used for stable sorting when sortKeys are equal
-        // addIndex 用于当 sortKey 相等时实现稳定排序
-        const worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }> = [];
-        const screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }> = [];
+        this.collectEntitySprites(entities);
+        this.collectProviderRenderData();
+        this.collectUIRenderData();
 
-        // Collect sprites from entities (all in world space)
-        // 收集实体的 sprites（都在世界空间）
-        this.collectEntitySprites(entities, worldSpaceItems);
-
-        // Collect render data from providers (e.g., tilemap, particle)
-        // 收集渲染数据提供者的数据（如瓦片地图、粒子）
-        this.collectProviderRenderData(worldSpaceItems, screenSpaceItems);
-
-        // Collect UI render data
-        // 收集 UI 渲染数据
-        if (this.uiRenderDataProvider) {
-            const uiRenderData = this.uiRenderDataProvider.getRenderData();
-            // Use addIndex to preserve original order for stable sorting
-            // 使用 addIndex 保持原始顺序以实现稳定排序
-            let uiAddIndex = 0;
-
-            // DEBUG: 输出 UI 渲染数据
-            // DEBUG: Output UI render data
-            if ((globalThis as any).__UI_RENDER_DEBUG__) {
-                console.log('[EngineRenderSystem] UI render batches:', uiRenderData.map((data, i) => ({
-                    index: i,
-                    orderInLayer: data.orderInLayer,
-                    sortingLayer: data.sortingLayer,
-                    tileCount: data.tileCount,
-                    sortKey: sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer),
-                    textureIds: Array.from(data.textureIds).slice(0, 3), // 只显示前3个 | Show first 3 only
-                    textureGuid: data.textureGuid
-                })));
-            }
-
-            for (const data of uiRenderData) {
-                const uiSprites = this.convertProviderDataToSprites(data);
-                if (uiSprites.length > 0) {
-                    const sortKey = sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer);
-                    // UI always goes to screen space in preview mode, world space in editor mode
-                    // UI 在预览模式下始终在屏幕空间，编辑器模式下在世界空间
-                    if (this.previewMode) {
-                        screenSpaceItems.push({ sortKey, sprites: uiSprites, addIndex: uiAddIndex++ });
-                    } else {
-                        worldSpaceItems.push({ sortKey, sprites: uiSprites, addIndex: uiAddIndex++ });
-                    }
-                }
-            }
+        this.renderWorldSpace();
+        if (this.previewMode && this.screenSpaceItemCount > 0) {
+            this.renderScreenSpace();
         }
+    }
 
-        // ===== Pass 1: World Space Rendering =====
-        // ===== 阶段 1：世界空间渲染 =====
-        this.renderWorldSpacePass(worldSpaceItems);
-
-        // ===== Pass 2: Screen Space Rendering (Preview Mode Only) =====
-        // ===== 阶段 2：屏幕空间渲染（仅预览模式）=====
-        if (this.previewMode && screenSpaceItems.length > 0) {
-            this.renderScreenSpacePass(screenSpaceItems);
+    /** @internal */
+    private addRenderItem(
+        items: RenderItem[],
+        itemCount: number,
+        sortKey: number,
+        addIndex: number,
+        startIndex: number,
+        count: number
+    ): number {
+        if (itemCount >= items.length) {
+            items.push({ sortKey: 0, addIndex: 0, startIndex: 0, count: 0 });
         }
-
-        // ===== Cleanup unused material instances =====
-        // ===== 清理未使用的材质实例 =====
-        this.cleanupUnusedMaterialInstances();
+        const item = items[itemCount];
+        item.sortKey = sortKey;
+        item.addIndex = addIndex;
+        item.startIndex = startIndex;
+        item.count = count;
+        return itemCount + 1;
     }
 
     /**
      * Collect sprites from matched entities.
      * 收集匹配实体的 sprites。
      */
-    private collectEntitySprites(
-        entities: readonly Entity[],
-        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>
-    ): void {
+    private collectEntitySprites(entities: readonly Entity[]): void {
         for (const entity of entities) {
             const sprite = entity.getComponent(SpriteComponent);
             const transform = entity.getComponent(this.transformType) as unknown as ITransformComponent | null;
+            if (!sprite || !transform) continue;
 
-            if (!sprite || !transform) {
-                continue;
-            }
+            let u0 = sprite.uv[0], v0 = sprite.uv[1], u1 = sprite.uv[2], v1 = sprite.uv[3];
+            if (sprite.flipX) { [u0, u1] = [u1, u0]; }
+            if (sprite.flipY) { [v0, v1] = [v1, v0]; }
 
-            // Calculate UV with flip | 计算带翻转的 UV
-            const uv: [number, number, number, number] = [...sprite.uv];
-            if (sprite.flipX) {
-                [uv[0], uv[2]] = [uv[2], uv[0]];
-            }
-            if (sprite.flipY) {
-                [uv[1], uv[3]] = [uv[3], uv[1]];
-            }
-
-            // 使用世界变换（由 TransformSystem 计算，考虑父级变换），回退到本地变换
             const pos = transform.worldPosition ?? transform.position;
             const scl = transform.worldScale ?? transform.scale;
             const rot = transform.worldRotation
                 ? transform.worldRotation.z
                 : (typeof transform.rotation === 'number' ? transform.rotation : transform.rotation.z);
 
-            // Convert hex color string to packed RGBA | 将十六进制颜色字符串转换为打包的 RGBA
             const color = Color.packHexAlpha(sprite.color, sprite.alpha);
 
-            // Get texture ID from sprite component
-            // 从精灵组件获取纹理 ID
             let textureId = 0;
             const textureSource = sprite.getTextureSource();
             if (textureSource) {
-                const texturePath = this.resolveAssetPath(textureSource);
-                textureId = this.bridge.getOrLoadTextureByPath(texturePath);
+                textureId = this.bridge.getOrLoadTextureByPath(this.resolveAssetPath(textureSource));
             }
 
-            // Get material ID from GUID
-            // 从 GUID 获取材质 ID
             const materialGuidOrPath = sprite.materialGuid;
-            const materialPath = materialGuidOrPath
-                ? this.resolveAssetPath(materialGuidOrPath)
-                : materialGuidOrPath;
-            const materialId = materialPath
-                ? getMaterialManager().getMaterialIdByPath(materialPath)
-                : 0;
+            const materialPath = materialGuidOrPath ? this.resolveAssetPath(materialGuidOrPath) : materialGuidOrPath;
+            const materialId = materialPath ? getMaterialManager().getMaterialIdByPath(materialPath) : 0;
 
-            const hasOverrides = sprite.hasOverrides();
+            // Determine if this sprite should render in screen space
+            // 确定此精灵是否应在屏幕空间渲染
+            const bScreenSpace = this.previewMode && sortingLayerManager.isScreenSpace(sprite.sortingLayer);
+            const batcher = bScreenSpace ? this.screenBatcher : this.worldBatcher;
 
-            const renderData: SpriteRenderData = {
-                x: pos.x,
-                y: pos.y,
-                rotation: rot,
-                scaleX: sprite.width * scl.x,
-                scaleY: sprite.height * scl.y,
-                originX: sprite.anchorX,
-                originY: sprite.anchorY,
-                textureId,
-                uv,
-                color,
-                materialId,
-                ...(hasOverrides ? { materialOverrides: sprite.materialOverrides } : {})
-            };
+            const startIndex = batcher.count;
+            const index = batcher.addSpriteSoA(
+                pos.x, pos.y, rot,
+                sprite.width * scl.x, sprite.height * scl.y,
+                sprite.anchorX, sprite.anchorY,
+                textureId, u0, v0, u1, v1, color, materialId
+            );
+
+            if (index >= 0 && sprite.hasOverrides()) {
+                batcher.setMaterialOverrides(index, sprite.materialOverrides!);
+            }
 
             const sortKey = sortingLayerManager.getSortKey(sprite.sortingLayer, sprite.orderInLayer);
-            worldSpaceItems.push({ sortKey, sprites: [renderData] });
-            this.entityRenderMap.set(entity.id, renderData);
+            if (bScreenSpace) {
+                this.screenSpaceItemCount = this.addRenderItem(
+                    this.screenSpaceItems, this.screenSpaceItemCount,
+                    sortKey, this.screenSpaceItemCount, startIndex, 1
+                );
+            } else {
+                this.worldSpaceItemCount = this.addRenderItem(
+                    this.worldSpaceItems, this.worldSpaceItemCount,
+                    sortKey, this.worldSpaceItemCount, startIndex, 1
+                );
+            }
         }
     }
 
     /**
      * Collect render data from providers (tilemap, particle, etc.).
-     * 收集渲染数据提供者的数据（瓦片地图、粒子等）。
+     * 收集渲染数据提供者的数据。
      */
-    private collectProviderRenderData(
-        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>,
-        screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[] }>
-    ): void {
+    private collectProviderRenderData(): void {
         for (const provider of this.renderDataProviders) {
-            const renderDataList = provider.getRenderData();
-            for (const data of renderDataList) {
-                // Determine render space: explicit flag > layer config
-                // 确定渲染空间：显式标志 > 层配置
-                const bScreenSpace = data.bScreenSpace ?? sortingLayerManager.isScreenSpace(data.sortingLayer);
+            for (const data of provider.getRenderData()) {
+                const bScreenSpace = this.previewMode && (data.bScreenSpace ?? sortingLayerManager.isScreenSpace(data.sortingLayer));
+                const batcher = bScreenSpace ? this.screenBatcher : this.worldBatcher;
 
-                // Get texture ID - load from GUID if needed
-                // 获取纹理 ID - 如果需要从 GUID 加载
                 let textureId = data.textureIds[0] || 0;
                 if (textureId === 0 && data.textureGuid) {
-                    const resolvedPath = this.resolveAssetPath(data.textureGuid);
-                    textureId = this.bridge.getOrLoadTextureByPath(resolvedPath);
+                    textureId = this.bridge.getOrLoadTextureByPath(this.resolveAssetPath(data.textureGuid));
                 }
 
-                // Convert render data to sprites
-                // 转换渲染数据为 sprites
-                const sprites: SpriteRenderData[] = [];
+                const startIndex = batcher.count;
+                const sortKey = sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer);
+
                 for (let i = 0; i < data.tileCount; i++) {
                     const tOffset = i * 7;
                     const uvOffset = i * 4;
-
-                    const renderData: SpriteRenderData = {
-                        x: data.transforms[tOffset],
-                        y: data.transforms[tOffset + 1],
-                        rotation: data.transforms[tOffset + 2],
-                        scaleX: data.transforms[tOffset + 3],
-                        scaleY: data.transforms[tOffset + 4],
-                        originX: data.transforms[tOffset + 5],
-                        originY: data.transforms[tOffset + 6],
+                    batcher.addSpriteSoA(
+                        data.transforms[tOffset], data.transforms[tOffset + 1], data.transforms[tOffset + 2],
+                        data.transforms[tOffset + 3], data.transforms[tOffset + 4],
+                        data.transforms[tOffset + 5], data.transforms[tOffset + 6],
                         textureId,
-                        uv: [data.uvs[uvOffset], data.uvs[uvOffset + 1], data.uvs[uvOffset + 2], data.uvs[uvOffset + 3]],
-                        color: data.colors[i]
-                    };
-
-                    sprites.push(renderData);
+                        data.uvs[uvOffset], data.uvs[uvOffset + 1], data.uvs[uvOffset + 2], data.uvs[uvOffset + 3],
+                        data.colors[i], data.materialIds?.[i] ?? 0
+                    );
                 }
 
-                if (sprites.length > 0) {
-                    const sortKey = sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer);
-
-                    // Route to appropriate render space
-                    // 路由到适当的渲染空间
-                    if (this.previewMode && bScreenSpace) {
-                        screenSpaceItems.push({ sortKey, sprites });
-                    } else {
-                        worldSpaceItems.push({ sortKey, sprites });
-                    }
+                if (bScreenSpace) {
+                    this.screenSpaceItemCount = this.addRenderItem(
+                        this.screenSpaceItems, this.screenSpaceItemCount,
+                        sortKey, this.screenSpaceItemCount, startIndex, data.tileCount
+                    );
+                } else {
+                    this.worldSpaceItemCount = this.addRenderItem(
+                        this.worldSpaceItems, this.worldSpaceItemCount,
+                        sortKey, this.worldSpaceItemCount, startIndex, data.tileCount
+                    );
                 }
+            }
+        }
+    }
+
+    /**
+     * Collect UI render data.
+     * 收集 UI 渲染数据。
+     */
+    private collectUIRenderData(): void {
+        if (!this.uiRenderDataProvider) return;
+
+        const uiRenderData = this.uiRenderDataProvider.getRenderData();
+
+        if ((globalThis as any).__UI_RENDER_DEBUG__) {
+            console.log('[EngineRenderSystem] UI render batches:', uiRenderData.map((data, i) => ({
+                index: i, orderInLayer: data.orderInLayer, sortingLayer: data.sortingLayer,
+                tileCount: data.tileCount,
+                sortKey: sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer),
+                textureIds: Array.from(data.textureIds).slice(0, 3), textureGuid: data.textureGuid
+            })));
+        }
+
+        for (const data of uiRenderData) {
+            if (data.tileCount === 0) continue;
+
+            // UI goes to screen space in preview mode, world space in editor mode
+            // UI 在预览模式下进入屏幕空间，在编辑器模式下进入世界空间
+            const bScreenSpace = this.previewMode;
+            const batcher = bScreenSpace ? this.screenBatcher : this.worldBatcher;
+
+            let textureId = data.textureIds[0] || 0;
+            if (textureId === 0 && data.textureGuid) {
+                textureId = this.bridge.getOrLoadTextureByPath(this.resolveAssetPath(data.textureGuid));
+            }
+
+            const startIndex = batcher.count;
+            const sortKey = sortingLayerManager.getSortKey(data.sortingLayer, data.orderInLayer);
+
+            for (let i = 0; i < data.tileCount; i++) {
+                const tOffset = i * 7;
+                const uvOffset = i * 4;
+                const index = batcher.addSpriteSoA(
+                    data.transforms[tOffset], data.transforms[tOffset + 1], data.transforms[tOffset + 2],
+                    data.transforms[tOffset + 3], data.transforms[tOffset + 4],
+                    data.transforms[tOffset + 5], data.transforms[tOffset + 6],
+                    textureId,
+                    data.uvs[uvOffset], data.uvs[uvOffset + 1], data.uvs[uvOffset + 2], data.uvs[uvOffset + 3],
+                    data.colors[i], data.materialIds?.[i] ?? 0
+                );
+
+                if (index >= 0) {
+                    if (data.clipRect) batcher.setClipRect(index, data.clipRect);
+                    if (data.materialOverrides) batcher.setMaterialOverrides(index, data.materialOverrides);
+                }
+            }
+
+            if (bScreenSpace) {
+                this.screenSpaceItemCount = this.addRenderItem(
+                    this.screenSpaceItems, this.screenSpaceItemCount,
+                    sortKey, this.screenSpaceItemCount, startIndex, data.tileCount
+                );
+            } else {
+                this.worldSpaceItemCount = this.addRenderItem(
+                    this.worldSpaceItems, this.worldSpaceItemCount,
+                    sortKey, this.worldSpaceItemCount, startIndex, data.tileCount
+                );
             }
         }
     }
@@ -534,394 +544,81 @@ export class EngineRenderSystem extends EntitySystem {
      * Render world space content.
      * 渲染世界空间内容。
      */
-    private renderWorldSpacePass(
-        worldSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }>
-    ): void {
-        // Sort by sortKey (lower values render first, appear behind)
-        // Use addIndex as secondary key for stable sorting when sortKeys are equal
-        // 按 sortKey 排序（值越小越先渲染，显示在后面）
-        // 当 sortKey 相等时使用 addIndex 作为次要排序键以实现稳定排序
-        worldSpaceItems.sort((a, b) => {
-            const diff = a.sortKey - b.sortKey;
-            if (diff !== 0) return diff;
-            return (a.addIndex ?? 0) - (b.addIndex ?? 0);
-        });
+    private renderWorldSpace(): void {
+        const items = this.worldSpaceItems;
+        const count = this.worldSpaceItemCount;
 
-        // DEBUG: 输出排序后的世界空间渲染项
-        // DEBUG: Output sorted world space items
-        if ((globalThis as any).__UI_RENDER_DEBUG__) {
-            console.log('[EngineRenderSystem] World items after sort:', worldSpaceItems.map((item, i) => ({
-                index: i,
-                sortKey: item.sortKey,
-                addIndex: item.addIndex,
-                spriteCount: item.sprites.length,
-                firstTextureId: item.sprites[0]?.textureId
-            })));
-        }
-
-        // Submit all sprites in sorted order
-        // 按排序顺序提交所有 sprites
-        for (const item of worldSpaceItems) {
-            for (const sprite of item.sprites) {
-                this.batcher.addSprite(sprite);
-            }
-        }
-
-        if (!this.batcher.isEmpty) {
-            const sprites = this.batcher.getSprites();
-
-            // Apply material overrides before rendering
-            // 在渲染前应用材质覆盖
-            this.applySpriteMaterialOverrides(sprites);
-
-            this.bridge.submitSprites(sprites);
-        }
-
-        // Draw gizmos
-        // 绘制 Gizmo
-        if (this.showGizmos) {
-            this.drawComponentGizmos();
-        }
-
-        if (this.showGizmos && this.selectedEntityIds.size > 0) {
-            this.drawSelectedEntityGizmos();
-        }
-
-        if (this.showGizmos) {
-            this.drawCameraFrustums();
-        }
-
-        if (this.showGizmos && this.showUICanvasBoundary && this.uiCanvasWidth > 0 && this.uiCanvasHeight > 0) {
-            this.drawUICanvasBoundary();
-        }
-
-        // Render world content
-        // 渲染世界内容
-        this.bridge.render();
-    }
-
-    /**
-     * Render screen space content (UI, ScreenOverlay, Modal).
-     * 渲染屏幕空间内容（UI、屏幕覆盖层、模态层）。
-     */
-    private renderScreenSpacePass(
-        screenSpaceItems: Array<{ sortKey: number; sprites: SpriteRenderData[]; addIndex?: number }>
-    ): void {
-        // Sort by sortKey, use addIndex for stable sorting when equal
-        // 按 sortKey 排序，当相等时使用 addIndex 实现稳定排序
-        screenSpaceItems.sort((a, b) => {
-            const diff = a.sortKey - b.sortKey;
-            if (diff !== 0) return diff;
-            return (a.addIndex ?? 0) - (b.addIndex ?? 0);
-        });
-
-        // Switch to screen space projection
-        // 切换到屏幕空间投影
-        const canvasWidth = this.uiCanvasWidth > 0 ? this.uiCanvasWidth : 1920;
-        const canvasHeight = this.uiCanvasHeight > 0 ? this.uiCanvasHeight : 1080;
-
-        this.bridge.pushScreenSpaceMode(canvasWidth, canvasHeight);
-
-        // Group sprites by clipRect (in render order)
-        // 按 clipRect 分组 sprites（按渲染顺序）
-        type ClipGroup = {
-            clipRect: { x: number; y: number; width: number; height: number } | undefined;
-            sprites: SpriteRenderData[];
-        };
-
-        const clipGroups: ClipGroup[] = [];
-        let currentClipRect: { x: number; y: number; width: number; height: number } | undefined = undefined;
-        let currentGroup: SpriteRenderData[] = [];
-
-        // Helper to check if two clip rects are equal
-        // 辅助函数检查两个裁剪矩形是否相等
-        const clipRectsEqual = (
-            a: { x: number; y: number; width: number; height: number } | undefined,
-            b: { x: number; y: number; width: number; height: number } | undefined
-        ): boolean => {
-            if (a === b) return true;
-            if (!a || !b) return false;
-            return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-        };
-
-        // Group sprites by consecutive clipRect
-        // 按连续的 clipRect 分组 sprites
-        for (const item of screenSpaceItems) {
-            for (const sprite of item.sprites) {
-                const spriteClipRect = sprite.clipRect;
-
-                if (!clipRectsEqual(spriteClipRect, currentClipRect)) {
-                    // Save current group if not empty
-                    // 如果当前组不为空则保存
-                    if (currentGroup.length > 0) {
-                        clipGroups.push({ clipRect: currentClipRect, sprites: currentGroup });
+        // Sort by sortKey, use addIndex for stable sorting
+        if (count > 1) {
+            for (let i = 0; i < count - 1; i++) {
+                for (let j = i + 1; j < count; j++) {
+                    const a = items[i], b = items[j];
+                    const diff = a.sortKey - b.sortKey;
+                    if (diff > 0 || (diff === 0 && a.addIndex > b.addIndex)) {
+                        items[i] = b;
+                        items[j] = a;
                     }
-                    // Start new group
-                    // 开始新组
-                    currentClipRect = spriteClipRect;
-                    currentGroup = [sprite];
-                } else {
-                    currentGroup.push(sprite);
                 }
             }
         }
 
-        // Don't forget the last group
-        // 别忘了最后一组
-        if (currentGroup.length > 0) {
-            clipGroups.push({ clipRect: currentClipRect, sprites: currentGroup });
+        if (!this.worldBatcher.isEmpty) {
+            const buffers = this.worldBatcher.getBuffers();
+            this.bridge.submitSprites(
+                buffers.transforms, buffers.textureIds, buffers.uvs,
+                buffers.colors, buffers.materialIds, buffers.count
+            );
         }
 
-        // Render each clip group
-        // 渲染每个裁剪组
-        for (const group of clipGroups) {
-            // Set or clear scissor rect
-            // 设置或清除裁剪矩形
-            if (group.clipRect) {
-                this.bridge.setScissorRect(
-                    group.clipRect.x,
-                    group.clipRect.y,
-                    group.clipRect.width,
-                    group.clipRect.height
-                );
-            } else {
-                this.bridge.clearScissorRect();
-            }
-
-            // Clear batcher and add sprites
-            // 清空批处理器并添加 sprites
-            this.batcher.clear();
-            for (const sprite of group.sprites) {
-                this.batcher.addSprite(sprite);
-            }
-
-            if (!this.batcher.isEmpty) {
-                const sprites = this.batcher.getSprites();
-
-                // Apply material overrides before rendering
-                // 在渲染前应用材质覆盖
-                this.applySpriteMaterialOverrides(sprites);
-
-                this.bridge.submitSprites(sprites);
-                // Render overlay (without clearing screen)
-                // 渲染叠加层（不清屏）
-                this.bridge.renderOverlay();
+        if (this.showGizmos) {
+            this.drawComponentGizmos();
+            if (this.selectedEntityIds.size > 0) this.drawSelectedEntityGizmos();
+            this.drawCameraFrustums();
+            if (this.showUICanvasBoundary && this.uiCanvasWidth > 0 && this.uiCanvasHeight > 0) {
+                this.drawUICanvasBoundary();
             }
         }
 
-        // Clear scissor rect after all groups
-        // 所有组渲染完后清除裁剪矩形
+        this.bridge.render();
+    }
+
+    /**
+     * Render screen space content (UI overlay).
+     * 渲染屏幕空间内容（UI 叠加层）。
+     */
+    private renderScreenSpace(): void {
+        const items = this.screenSpaceItems;
+        const count = this.screenSpaceItemCount;
+
+        if (count > 1) {
+            for (let i = 0; i < count - 1; i++) {
+                for (let j = i + 1; j < count; j++) {
+                    const a = items[i], b = items[j];
+                    const diff = a.sortKey - b.sortKey;
+                    if (diff > 0 || (diff === 0 && a.addIndex > b.addIndex)) {
+                        items[i] = b;
+                        items[j] = a;
+                    }
+                }
+            }
+        }
+
+        const canvasWidth = this.uiCanvasWidth > 0 ? this.uiCanvasWidth : 1920;
+        const canvasHeight = this.uiCanvasHeight > 0 ? this.uiCanvasHeight : 1080;
+        this.bridge.pushScreenSpaceMode(canvasWidth, canvasHeight);
+
+        if (!this.screenBatcher.isEmpty) {
+            const buffers = this.screenBatcher.getBuffers();
+            this.bridge.submitSprites(
+                buffers.transforms, buffers.textureIds, buffers.uvs,
+                buffers.colors, buffers.materialIds, buffers.count
+            );
+            this.bridge.renderOverlay();
+        }
+
         this.bridge.clearScissorRect();
-
-        // Restore world space camera
-        // 恢复世界空间相机
         this.bridge.popScreenSpaceMode();
     }
-
-    /**
-     * Generate a hash key for material overrides.
-     * 为材质覆盖生成哈希键。
-     *
-     * @param overrides - Material overrides | 材质覆盖
-     * @returns Hash string | 哈希字符串
-     */
-    private hashMaterialOverrides(overrides: MaterialOverrides): string {
-        // Sort keys for consistent hashing
-        // 排序键以保持一致的哈希
-        const sortedKeys = Object.keys(overrides).sort();
-        const parts: string[] = [];
-        for (const key of sortedKeys) {
-            const override = overrides[key];
-            if (override) {
-                const valueStr = Array.isArray(override.value)
-                    ? override.value.map(v => v.toFixed(4)).join(',')
-                    : override.value.toFixed(4);
-                parts.push(`${key}:${valueStr}`);
-            }
-        }
-        return parts.join('|');
-    }
-
-    /**
-     * Get or create a material instance for a specific base material + overrides combination.
-     * 为特定的基础材质+覆盖组合获取或创建材质实例。
-     *
-     * This ensures each unique (baseMaterial, overrides) combination gets its own
-     * material instance, preventing shared material state issues.
-     * 这确保每个唯一的（基础材质，覆盖）组合都有自己的材质实例，
-     * 防止共享材质状态问题。
-     *
-     * @param baseMaterialId - Base material ID (e.g., 1 for Grayscale) | 基础材质ID
-     * @param overrides - Material property overrides | 材质属性覆盖
-     * @returns Instance material ID | 实例材质ID
-     */
-    private getOrCreateMaterialInstance(baseMaterialId: number, overrides: MaterialOverrides): number {
-        const overridesHash = this.hashMaterialOverrides(overrides);
-        const instanceKey = `${baseMaterialId}:${overridesHash}`;
-
-        // Check if instance already exists
-        // 检查实例是否已存在
-        let instanceId = this.materialInstanceMap.get(instanceKey);
-        if (instanceId !== undefined) {
-            this.usedInstancesThisFrame.add(instanceId);
-            return instanceId;
-        }
-
-        // Create new instance
-        // 创建新实例
-        instanceId = this.nextMaterialInstanceId++;
-        this.materialInstanceMap.set(instanceKey, instanceId);
-        this.usedInstancesThisFrame.add(instanceId);
-
-        // Clone the base material with the new ID
-        // 使用新ID克隆基础材质
-        // For built-in materials, shaderId = materialId (1:1 mapping)
-        // 对于内置材质，shaderId = materialId（1:1 映射）
-        const shaderId = baseMaterialId;
-        const blendMode = 1; // Alpha blending
-        this.bridge.createMaterialWithId(instanceId, `Instance_${baseMaterialId}_${instanceId}`, shaderId, blendMode);
-
-        // Apply overrides to the new instance
-        // 将覆盖应用到新实例
-        this.bridge.applyMaterialOverrides(instanceId, overrides);
-
-        return instanceId;
-    }
-
-    /**
-     * Clean up unused material instances.
-     * 清理未使用的材质实例。
-     *
-     * Called at the end of each frame to remove instances that were not used.
-     * 在每帧结束时调用，移除未使用的实例。
-     */
-    private cleanupUnusedMaterialInstances(): void {
-        const toRemove: string[] = [];
-
-        for (const [key, instanceId] of this.materialInstanceMap.entries()) {
-            if (!this.usedInstancesThisFrame.has(instanceId)) {
-                this.bridge.removeMaterial(instanceId);
-                toRemove.push(key);
-            }
-        }
-
-        for (const key of toRemove) {
-            this.materialInstanceMap.delete(key);
-        }
-
-        // Clear the used set for next frame
-        // 清除已用集合以便下一帧
-        this.usedInstancesThisFrame.clear();
-    }
-
-    /**
-     * Apply material overrides from sprites to the engine.
-     * 将 sprites 的材质覆盖应用到引擎。
-     *
-     * For sprites with overrides, this creates unique material instances
-     * to ensure each sprite's overrides don't affect other sprites.
-     * 对于有覆盖的精灵，这会创建唯一的材质实例，
-     * 确保每个精灵的覆盖不会影响其他精灵。
-     */
-    private applySpriteMaterialOverrides(sprites: SpriteRenderData[]): void {
-        // Track which instance materials we've already applied overrides to this frame
-        // 跟踪本帧已应用覆盖的实例材质
-        const appliedInstances = new Set<number>();
-
-        for (const sprite of sprites) {
-            const baseMaterialId = sprite.materialId;
-
-            // Skip if no material or no overrides
-            // 如果没有材质或没有覆盖，跳过
-            if (!baseMaterialId || baseMaterialId <= 0 || !sprite.materialOverrides) {
-                continue;
-            }
-
-            const overrideKeys = Object.keys(sprite.materialOverrides);
-            if (overrideKeys.length === 0) {
-                continue;
-            }
-
-            // Get or create a unique material instance for this sprite's overrides
-            // 为此精灵的覆盖获取或创建唯一的材质实例
-            const instanceId = this.getOrCreateMaterialInstance(baseMaterialId, sprite.materialOverrides);
-
-            // Update the sprite to use the instance material
-            // 更新精灵以使用实例材质
-            sprite.materialId = instanceId;
-
-            // Apply overrides if not already done for this instance
-            // 如果尚未为此实例应用覆盖，则应用
-            if (!appliedInstances.has(instanceId)) {
-                this.bridge.applyMaterialOverrides(instanceId, sprite.materialOverrides);
-                appliedInstances.add(instanceId);
-            }
-        }
-    }
-
-    /**
-     * Convert provider render data to sprite render data array.
-     * 将提供者渲染数据转换为 Sprite 渲染数据数组。
-     */
-    private convertProviderDataToSprites(data: ProviderRenderData): SpriteRenderData[] {
-        // Get texture ID - load from GUID if needed
-        // 获取纹理 ID - 如果需要从 GUID 加载
-        let textureId = data.textureIds[0] || 0;
-        if (textureId === 0 && data.textureGuid) {
-            textureId = this.bridge.getOrLoadTextureByPath(this.resolveAssetPath(data.textureGuid));
-        }
-
-        // Check for material data
-        // 检查材质数据
-        const hasMaterialIds = data.materialIds && data.materialIds.length > 0;
-        const hasMaterialOverrides = data.materialOverrides && Object.keys(data.materialOverrides).length > 0;
-        const hasClipRect = !!data.clipRect;
-
-        const sprites: SpriteRenderData[] = [];
-        for (let i = 0; i < data.tileCount; i++) {
-            const tOffset = i * 7;
-            const uvOffset = i * 4;
-
-            const uv: [number, number, number, number] = [
-                data.uvs[uvOffset],
-                data.uvs[uvOffset + 1],
-                data.uvs[uvOffset + 2],
-                data.uvs[uvOffset + 3]
-            ];
-
-            const renderData: SpriteRenderData = {
-                x: data.transforms[tOffset],
-                y: data.transforms[tOffset + 1],
-                rotation: data.transforms[tOffset + 2],
-                scaleX: data.transforms[tOffset + 3],
-                scaleY: data.transforms[tOffset + 4],
-                originX: data.transforms[tOffset + 5],
-                originY: data.transforms[tOffset + 6],
-                textureId,
-                uv,
-                color: data.colors[i]
-            };
-
-            // Add material data if present
-            // 如果存在材质数据，添加它
-            if (hasMaterialIds) {
-                renderData.materialId = data.materialIds![i];
-            }
-            if (hasMaterialOverrides) {
-                renderData.materialOverrides = data.materialOverrides;
-            }
-            // Add clipRect if present (all sprites in batch share same clipRect)
-            // 如果存在 clipRect，添加它（批次中所有精灵共享相同 clipRect）
-            if (hasClipRect) {
-                renderData.clipRect = data.clipRect;
-            }
-
-            sprites.push(renderData);
-        }
-
-        return sprites;
-    }
-
     /**
      * Draw gizmos from components that have registered gizmo providers.
      * 绘制已注册 gizmo 提供者的组件的 gizmo。
@@ -1564,7 +1261,7 @@ export class EngineRenderSystem extends EntitySystem {
      * 获取渲染的精灵数量。
      */
     get spriteCount(): number {
-        return this.batcher.count;
+        return this.worldBatcher.count + this.screenBatcher.count;
     }
 
     /**
