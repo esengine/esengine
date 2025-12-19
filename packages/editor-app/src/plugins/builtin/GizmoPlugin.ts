@@ -4,7 +4,7 @@
  */
 
 import type { ServiceContainer } from '@esengine/ecs-framework';
-import type { IPlugin, IEditorModuleLoader, ModuleManifest, GizmoProviderRegistration } from '@esengine/editor-core';
+import type { IEditorPlugin, IEditorModuleLoader, ModuleManifest, GizmoProviderRegistration } from '@esengine/editor-core';
 import { registerSpriteGizmo } from '../../gizmos';
 
 /**
@@ -42,7 +42,7 @@ const manifest: ModuleManifest = {
     }
 };
 
-export const GizmoPlugin: IPlugin = {
+export const GizmoPlugin: IEditorPlugin = {
     manifest,
     editorModule: new GizmoEditorModule()
 };

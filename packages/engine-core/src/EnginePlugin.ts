@@ -228,7 +228,7 @@ export interface IRuntimeModule {
  * @example
  * ```typescript
  * // 纯运行时插件 | Pure runtime plugin
- * const MyPlugin: IPlugin = {
+ * const MyPlugin: IRuntimePlugin = {
  *     manifest,
  *     runtimeModule: new MyRuntimeModule()
  * };
@@ -256,9 +256,6 @@ export interface IRuntimePlugin<TEditorModule = unknown> {
      */
     readonly editorModule?: TEditorModule;
 }
-
-/** @deprecated Use IRuntimePlugin instead */
-export type IPlugin<TEditorModule = unknown> = IRuntimePlugin<TEditorModule>;
 
 // ============================================================================
 // Engine Core 插件 | Engine Core Plugin
@@ -288,7 +285,7 @@ const manifest: ModuleManifest = {
     }
 };
 
-export const EnginePlugin: IPlugin = {
+export const EnginePlugin: IRuntimePlugin = {
     manifest,
     runtimeModule: new EngineRuntimeModule()
 };

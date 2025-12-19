@@ -15,7 +15,7 @@ export type {
     LoadingPhase,
     SystemContext,
     IRuntimeModule,
-    IPlugin,
+    IRuntimePlugin,
     ModuleManifest,
     ModuleCategory,
     ModulePlatform,
@@ -309,17 +309,17 @@ export interface IEditorModuleLoader extends IEditorModuleBase {
 // 编辑器插件类型 | Editor Plugin Type
 // ============================================================================
 
-import type { IPlugin } from './PluginDescriptor';
+import type { IRuntimePlugin } from './PluginDescriptor';
 
 /**
  * 编辑器插件类型
  * Editor plugin type
  *
  * 这是开发编辑器插件时应使用的类型。
- * 它是 IPlugin 的特化版本，editorModule 类型为 IEditorModuleLoader。
+ * 它是 IRuntimePlugin 的特化版本，editorModule 类型为 IEditorModuleLoader。
  *
  * This is the type to use when developing editor plugins.
- * It's a specialized version of IPlugin with editorModule typed as IEditorModuleLoader.
+ * It's a specialized version of IRuntimePlugin with editorModule typed as IEditorModuleLoader.
  *
  * @example
  * ```typescript
@@ -337,4 +337,4 @@ import type { IPlugin } from './PluginDescriptor';
  * };
  * ```
  */
-export type IEditorPlugin = IPlugin<IEditorModuleLoader>;
+export type IEditorPlugin = IRuntimePlugin<IEditorModuleLoader>;

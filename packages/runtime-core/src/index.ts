@@ -7,9 +7,6 @@ export {
     type IRuntimePlugin
 } from './PluginManager';
 
-/** @deprecated Use IRuntimePlugin instead */
-export type { IRuntimePlugin as IPlugin } from './PluginManager';
-
 export {
     createPlugin,
     registerPlugin,

@@ -6,7 +6,7 @@
 import type { ServiceContainer } from '@esengine/ecs-framework';
 import { Core } from '@esengine/ecs-framework';
 import type {
-    IPlugin,
+    IEditorPlugin,
     IEditorModuleLoader,
     ModuleManifest,
     MenuItemDescriptor
@@ -140,7 +140,7 @@ const manifest: ModuleManifest = {
     exports: {}
 };
 
-export const ProfilerPlugin: IPlugin = {
+export const ProfilerPlugin: IEditorPlugin = {
     manifest,
     editorModule: new ProfilerEditorModule()
 };

@@ -229,7 +229,7 @@ export type {
     ModuleCategory,
     ModulePlatform,
     ModuleExports,
-    IPlugin,
+    IRuntimePlugin,
     IRuntimeModule,
     SystemContext,
     ComponentInspectorProviderDef,

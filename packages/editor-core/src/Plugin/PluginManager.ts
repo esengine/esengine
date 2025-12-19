@@ -7,7 +7,7 @@ import { createLogger, GlobalComponentRegistry } from '@esengine/ecs-framework';
 import type { IScene, ServiceContainer, IService } from '@esengine/ecs-framework';
 import type {
     ModuleManifest,
-    IPlugin,
+    IRuntimePlugin,
     ModuleCategory,
     PluginState
 } from './PluginDescriptor';
@@ -64,7 +64,7 @@ export interface NormalizedManifest {
  */
 export interface NormalizedPlugin {
     manifest: NormalizedManifest;
-    runtimeModule?: IPlugin['runtimeModule'];
+    runtimeModule?: IRuntimePlugin['runtimeModule'];
     editorModule?: IEditorModuleLoader;
 }
 
@@ -196,7 +196,7 @@ export class PluginManager implements IService {
      * 标准化模块清单，填充默认值
      * Normalize module manifest, fill in defaults
      */
-    private normalizePlugin(input: IPlugin): NormalizedPlugin {
+    private normalizePlugin(input: IRuntimePlugin): NormalizedPlugin {
         const m = input.manifest;
         return {
             manifest: {
@@ -229,10 +229,10 @@ export class PluginManager implements IService {
      * 注册插件
      * Register plugin
      *
-     * 接受任何符合 IPlugin 接口的插件，内部会标准化所有字段。
-     * Accepts any plugin conforming to IPlugin interface, normalizes all fields internally.
+     * 接受任何符合 IRuntimePlugin 接口的插件，内部会标准化所有字段。
+     * Accepts any plugin conforming to IRuntimePlugin interface, normalizes all fields internally.
      */
-    register(plugin: IPlugin): void {
+    register(plugin: IRuntimePlugin): void {
         if (!plugin) {
             logger.error('Cannot register plugin: plugin is null or undefined');
             return;

@@ -6,7 +6,7 @@
 import { Core, Entity } from '@esengine/ecs-framework';
 import type { ServiceContainer } from '@esengine/ecs-framework';
 import type {
-    IPlugin,
+    IEditorPlugin,
     IEditorModuleLoader,
     ModuleManifest,
     PanelDescriptor,
@@ -191,7 +191,7 @@ const manifest: ModuleManifest = {
     }
 };
 
-export const SceneInspectorPlugin: IPlugin = {
+export const SceneInspectorPlugin: IEditorPlugin = {
     manifest,
     editorModule: new SceneInspectorEditorModule()
 };
