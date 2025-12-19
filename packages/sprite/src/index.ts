@@ -1,5 +1,7 @@
 export { SpriteComponent } from './SpriteComponent';
-export type { MaterialPropertyOverride, MaterialOverrides } from './SpriteComponent';
+// Re-export material types from material-system for convenience
+// 从 material-system 重新导出材质类型以方便使用
+export type { MaterialPropertyOverride, MaterialOverrides } from '@esengine/material-system';
 export { SpriteAnimatorComponent } from './SpriteAnimatorComponent';
 export type { AnimationFrame, AnimationClip } from './SpriteAnimatorComponent';
 export { ShinyEffectComponent } from './ShinyEffectComponent';
