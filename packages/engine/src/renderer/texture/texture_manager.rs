@@ -9,6 +9,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{HtmlImageElement, WebGl2RenderingContext, WebGlTexture};
 
 use crate::core::error::{EngineError, Result};
+use crate::backend::WebGL2Backend;
 use super::Texture;
 
 /// 纹理加载状态
@@ -279,8 +280,6 @@ impl TextureManager {
         if let Some(texture) = self.textures.get(&id) {
             self.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture.handle));
         } else if let Some(default) = &self.default_texture {
-            // ID 0 is the default texture, no warning needed
-            // ID 0 是默认纹理，不需要警告
             if id != 0 {
                 log::warn!("Texture {} not found, using default | 未找到纹理 {}，使用默认纹理", id, id);
             }
@@ -288,6 +287,20 @@ impl TextureManager {
         } else {
             log::error!("Texture {} not found and no default texture! | 未找到纹理 {} 且没有默认纹理！", id, id);
         }
+    }
+
+    /// Bind texture via backend.
+    /// 通过后端绑定纹理。
+    pub fn bind_texture_via_backend(&self, backend: &WebGL2Backend, id: u32, slot: u32) {
+        let texture = if let Some(tex) = self.textures.get(&id) {
+            Some(&tex.handle)
+        } else {
+            if id != 0 {
+                log::warn!("Texture {} not found, using default | 未找到纹理 {}，使用默认纹理", id, id);
+            }
+            self.default_texture.as_ref()
+        };
+        backend.bind_texture_raw(texture, slot);
     }
 
     /// Check if texture is loaded.

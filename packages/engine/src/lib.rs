@@ -35,6 +35,7 @@
 use wasm_bindgen::prelude::*;
 
 // Module declarations | 模块声明
+pub mod backend;
 pub mod core;
 pub mod math;
 pub mod platform;
@@ -45,6 +46,18 @@ pub mod input;
 // Re-exports | 重新导出
 pub use crate::core::{Engine, EngineConfig};
 pub use crate::core::error::{EngineError, Result};
+pub use crate::backend::WebGL2Backend;
+
+// Re-export shared types for convenience | 重新导出共享类型以方便使用
+pub use es_engine_shared::{
+    traits::backend::{GraphicsBackend, GraphicsError, GraphicsResult, GraphicsFeature, BufferUsage},
+    types::{
+        handle::{Handle, HandleMap, BufferHandle, TextureHandle, ShaderHandle, VertexArrayHandle},
+        vertex::{VertexLayout, VertexAttribute, VertexAttributeType, SpriteVertex},
+        blend::{BlendMode, RenderState, ScissorRect},
+        texture::{TextureDescriptor, TextureFormat, TextureFilter, TextureWrap},
+    },
+};
 
 /// Initialize panic hook for better error messages in console.
 /// 初始化panic hook以在控制台显示更好的错误信息。
@@ -818,5 +831,29 @@ impl GameEngine {
         self.engine
             .update_texture_region(id, x, y, width, height, pixels)
             .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    // ===== Graphics Backend Info API =====
+    // ===== 图形后端信息 API =====
+
+    /// Get the graphics backend name (e.g., "WebGL2").
+    /// 获取图形后端名称（如 "WebGL2"）。
+    #[wasm_bindgen(js_name = getBackendName)]
+    pub fn get_backend_name(&self) -> String {
+        self.engine.backend_name().to_string()
+    }
+
+    /// Get the graphics backend version string.
+    /// 获取图形后端版本字符串。
+    #[wasm_bindgen(js_name = getBackendVersion)]
+    pub fn get_backend_version(&self) -> String {
+        self.engine.backend_version().to_string()
+    }
+
+    /// Get maximum texture size supported by the backend.
+    /// 获取后端支持的最大纹理尺寸。
+    #[wasm_bindgen(js_name = getMaxTextureSize)]
+    pub fn get_max_texture_size(&self) -> u32 {
+        self.engine.max_texture_size()
     }
 }

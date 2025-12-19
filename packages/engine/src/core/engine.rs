@@ -5,9 +5,11 @@ use wasm_bindgen::prelude::*;
 
 use super::context::WebGLContext;
 use super::error::Result;
+use crate::backend::WebGL2Backend;
 use crate::input::InputManager;
 use crate::renderer::{Renderer2D, GridRenderer, GizmoRenderer, TransformMode, ViewportManager};
 use crate::resource::TextureManager;
+use es_engine_shared::traits::backend::GraphicsBackend;
 
 /// Engine configuration options.
 /// 引擎配置选项。
@@ -40,6 +42,15 @@ pub struct Engine {
     /// WebGL context.
     /// WebGL上下文。
     context: WebGLContext,
+
+    /// Graphics backend abstraction layer.
+    /// 图形后端抽象层。
+    ///
+    /// Provides cross-platform graphics API abstraction.
+    /// Currently WebGL2, future support for wgpu/native.
+    /// 提供跨平台图形 API 抽象。
+    /// 当前为 WebGL2，未来支持 wgpu/原生平台。
+    backend: WebGL2Backend,
 
     /// 2D renderer.
     /// 2D渲染器。
@@ -104,17 +115,34 @@ impl Engine {
         context.set_viewport();
         context.enable_blend();
 
-        // Create subsystems | 创建子系统
-        let renderer = Renderer2D::new(context.gl(), config.max_sprites)?;
-        let grid_renderer = GridRenderer::new(context.gl())?;
-        let gizmo_renderer = GizmoRenderer::new(context.gl())?;
+        // Create graphics backend abstraction | 创建图形后端抽象
+        let backend = WebGL2Backend::from_canvas(canvas_id)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(
+                format!("Failed to create graphics backend: {:?}", e)
+            ))?;
+
+        log::info!(
+            "Graphics backend initialized: {} ({})",
+            backend.name(),
+            backend.version()
+        );
+
         let texture_manager = TextureManager::new(context.gl().clone());
         let input_manager = InputManager::new();
+
+        let mut backend = backend;
+        let renderer = Renderer2D::new(&mut backend, config.max_sprites)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let grid_renderer = GridRenderer::new(&mut backend)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let gizmo_renderer = GizmoRenderer::new(&mut backend)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
 
         log::info!("Engine created successfully | 引擎创建成功");
 
         Ok(Self {
             context,
+            backend,
             renderer,
             grid_renderer,
             gizmo_renderer,
@@ -124,7 +152,7 @@ impl Engine {
             show_grid: true,
             viewport_manager: ViewportManager::new(),
             show_gizmos: true,
-            is_editor: true, // 默认为编辑器模式 | Default to editor mode
+            is_editor: true,
         })
     }
 
@@ -139,21 +167,39 @@ impl Engine {
         height: u32,
         config: EngineConfig,
     ) -> Result<Self> {
-        let context = WebGLContext::from_external(gl_context, width, height)?;
+        let context = WebGLContext::from_external(gl_context.clone(), width, height)?;
 
         context.set_viewport();
         context.enable_blend();
 
-        let renderer = Renderer2D::new(context.gl(), config.max_sprites)?;
-        let grid_renderer = GridRenderer::new(context.gl())?;
-        let gizmo_renderer = GizmoRenderer::new(context.gl())?;
+        // Create graphics backend from external context | 从外部上下文创建图形后端
+        let backend = WebGL2Backend::from_external(gl_context, width, height)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(
+                format!("Failed to create graphics backend: {:?}", e)
+            ))?;
+
+        log::info!(
+            "Graphics backend initialized: {} ({})",
+            backend.name(),
+            backend.version()
+        );
+
         let texture_manager = TextureManager::new(context.gl().clone());
         let input_manager = InputManager::new();
+
+        let mut backend = backend;
+        let renderer = Renderer2D::new(&mut backend, config.max_sprites)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let grid_renderer = GridRenderer::new(&mut backend)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let gizmo_renderer = GizmoRenderer::new(&mut backend)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
 
         log::info!("Engine created from external context | 从外部上下文创建引擎");
 
         Ok(Self {
             context,
+            backend,
             renderer,
             grid_renderer,
             gizmo_renderer,
@@ -163,7 +209,7 @@ impl Engine {
             show_grid: true,
             viewport_manager: ViewportManager::new(),
             show_gizmos: true,
-            is_editor: true, // 默认为编辑器模式 | Default to editor mode
+            is_editor: true,
         })
     }
 
@@ -187,6 +233,50 @@ impl Engine {
         self.context.height()
     }
 
+    // ===== Graphics Backend API =====
+    // ===== 图形后端 API =====
+
+    /// Get reference to the graphics backend.
+    /// 获取图形后端的引用。
+    ///
+    /// Use this for low-level graphics operations through the abstraction layer.
+    /// 使用此方法通过抽象层进行低级图形操作。
+    #[inline]
+    pub fn backend(&self) -> &WebGL2Backend {
+        &self.backend
+    }
+
+    /// Get mutable reference to the graphics backend.
+    /// 获取图形后端的可变引用。
+    ///
+    /// Use this for low-level graphics operations through the abstraction layer.
+    /// 使用此方法通过抽象层进行低级图形操作。
+    #[inline]
+    pub fn backend_mut(&mut self) -> &mut WebGL2Backend {
+        &mut self.backend
+    }
+
+    /// Get backend name (e.g., "WebGL2").
+    /// 获取后端名称（如 "WebGL2"）。
+    #[inline]
+    pub fn backend_name(&self) -> &'static str {
+        self.backend.name()
+    }
+
+    /// Get backend version string.
+    /// 获取后端版本字符串。
+    #[inline]
+    pub fn backend_version(&self) -> &str {
+        self.backend.version()
+    }
+
+    /// Get maximum texture size supported by the backend.
+    /// 获取后端支持的最大纹理尺寸。
+    #[inline]
+    pub fn max_texture_size(&self) -> u32 {
+        self.backend.max_texture_size()
+    }
+
     /// Submit sprite batch data for rendering.
     /// 提交精灵批次数据进行渲染。
     pub fn submit_sprite_batch(
@@ -197,41 +287,28 @@ impl Engine {
         colors: &[u32],
         material_ids: &[u32],
     ) -> Result<()> {
-        self.renderer.submit_batch(
-            transforms,
-            texture_ids,
-            uvs,
-            colors,
-            material_ids,
-            &self.texture_manager,
-        )
+        self.renderer.submit_batch(transforms, texture_ids, uvs, colors, material_ids)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))
     }
 
-    /// Render the current frame.
-    /// 渲染当前帧。
     pub fn render(&mut self) -> Result<()> {
-        // Clear background with clear color
         let [r, g, b, a] = self.renderer.get_clear_color();
         self.context.clear(r, g, b, a);
 
-        // Render grid first (background) - only in editor mode
-        // 首先渲染网格（背景）- 仅在编辑器模式下
+        let camera = self.renderer.camera().clone();
+
         if self.is_editor && self.show_grid {
-            self.grid_renderer.render(self.context.gl(), self.renderer.camera());
-            self.grid_renderer.render_axes(self.context.gl(), self.renderer.camera());
+            self.grid_renderer.render(&mut self.backend, &camera);
+            self.grid_renderer.render_axes(&mut self.backend, &camera);
         }
 
-        // Render sprites
-        self.renderer.render(self.context.gl(), &self.texture_manager)?;
+        self.renderer.render(&mut self.backend, &self.texture_manager)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
 
-        // Render gizmos on top - only in editor mode
-        // 在顶部渲染 gizmos - 仅在编辑器模式下
         if self.is_editor && self.show_gizmos {
-            self.gizmo_renderer.render(self.context.gl(), self.renderer.camera());
-            // Render axis indicator in corner
-            // 在角落渲染坐标轴指示器
+            self.gizmo_renderer.render(&mut self.backend, &camera);
             self.gizmo_renderer.render_axis_indicator(
-                self.context.gl(),
+                &mut self.backend,
                 self.context.width() as f32,
                 self.context.height() as f32,
             );
@@ -247,10 +324,8 @@ impl Engine {
     /// This is used for overlay rendering (e.g., UI layer on top of world).
     /// 用于叠加渲染（例如，UI 层叠加在世界上）。
     pub fn render_overlay(&mut self) -> Result<()> {
-        // Render sprites without clearing
-        // 渲染精灵但不清屏
-        self.renderer.render(self.context.gl(), &self.texture_manager)?;
-        Ok(())
+        self.renderer.render(&mut self.backend, &self.texture_manager)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))
     }
 
     /// Set scissor rect for clipping (screen coordinates, Y-down).
@@ -616,52 +691,37 @@ impl Engine {
         }
     }
 
-    /// Render to a specific viewport.
-    /// 渲染到特定视口。
     pub fn render_to_viewport(&mut self, viewport_id: &str) -> Result<()> {
         let viewport = match self.viewport_manager.get(viewport_id) {
             Some(v) => v,
             None => return Ok(()),
         };
 
-        // Get viewport settings
         let show_grid = viewport.config.show_grid;
         let show_gizmos = viewport.config.show_gizmos;
         let camera = viewport.camera.clone();
+        let (vp_width, vp_height) = viewport.dimensions();
 
-        // Bind viewport and clear
         viewport.bind();
         viewport.clear();
 
-        // Update renderer camera to match viewport camera
         let renderer_camera = self.renderer.camera_mut();
         renderer_camera.position = camera.position;
         renderer_camera.set_zoom(camera.zoom);
         renderer_camera.rotation = camera.rotation;
         renderer_camera.set_viewport(camera.viewport_width(), camera.viewport_height());
 
-        // Render grid if enabled - only in editor mode
-        // 渲染网格（如果启用）- 仅在编辑器模式下
         if self.is_editor && show_grid {
-            self.grid_renderer.render(viewport.gl(), &camera);
-            self.grid_renderer.render_axes(viewport.gl(), &camera);
+            self.grid_renderer.render(&mut self.backend, &camera);
+            self.grid_renderer.render_axes(&mut self.backend, &camera);
         }
 
-        // Render sprites
-        self.renderer.render(viewport.gl(), &self.texture_manager)?;
+        self.renderer.render(&mut self.backend, &self.texture_manager)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
 
-        // Render gizmos if enabled - only in editor mode
-        // 渲染 gizmos（如果启用）- 仅在编辑器模式下
         if self.is_editor && show_gizmos {
-            self.gizmo_renderer.render(viewport.gl(), &camera);
-            // Render axis indicator in corner
-            // 在角落渲染坐标轴指示器
-            let (vp_width, vp_height) = viewport.dimensions();
-            self.gizmo_renderer.render_axis_indicator(
-                viewport.gl(),
-                vp_width as f32,
-                vp_height as f32,
-            );
+            self.gizmo_renderer.render(&mut self.backend, &camera);
+            self.gizmo_renderer.render_axis_indicator(&mut self.backend, vp_width as f32, vp_height as f32);
         }
         self.gizmo_renderer.clear();
 
@@ -684,7 +744,8 @@ impl Engine {
         vertex_source: &str,
         fragment_source: &str,
     ) -> Result<u32> {
-        self.renderer.compile_shader(self.context.gl(), vertex_source, fragment_source)
+        self.renderer.compile_shader(&mut self.backend, vertex_source, fragment_source)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))
     }
 
     /// Compile a shader with a specific ID.
@@ -695,7 +756,8 @@ impl Engine {
         vertex_source: &str,
         fragment_source: &str,
     ) -> Result<()> {
-        self.renderer.compile_shader_with_id(self.context.gl(), shader_id, vertex_source, fragment_source)
+        self.renderer.compile_shader_with_id(&mut self.backend, shader_id, vertex_source, fragment_source)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))
     }
 
     /// Check if a shader exists.

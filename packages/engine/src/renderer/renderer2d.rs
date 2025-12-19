@@ -1,110 +1,96 @@
 //! Main 2D renderer implementation.
-//! 主2D渲染器实现。
 
-use wasm_bindgen::JsCast;
-use web_sys::WebGl2RenderingContext;
-
-use crate::core::error::Result;
-use crate::resource::TextureManager;
+use es_engine_shared::{
+    traits::backend::GraphicsBackend,
+    types::{
+        handle::ShaderHandle,
+        blend::ScissorRect,
+    },
+};
+use std::collections::HashMap;
+use crate::backend::WebGL2Backend;
 use super::batch::SpriteBatch;
 use super::camera::Camera2D;
-use super::shader::ShaderManager;
-use super::material::MaterialManager;
+use super::texture::TextureManager;
+use super::material::{Material, BlendMode, UniformValue};
 
-/// 2D renderer with batched sprite rendering.
-/// 带批处理精灵渲染的2D渲染器。
-///
-/// Coordinates sprite batching, shader management, and camera transforms.
-/// 协调精灵批处理、Shader管理和相机变换。
+fn to_shared_blend_mode(mode: BlendMode) -> es_engine_shared::types::blend::BlendMode {
+    match mode {
+        BlendMode::None => es_engine_shared::types::blend::BlendMode::None,
+        BlendMode::Alpha => es_engine_shared::types::blend::BlendMode::Alpha,
+        BlendMode::Additive => es_engine_shared::types::blend::BlendMode::Additive,
+        BlendMode::Multiply => es_engine_shared::types::blend::BlendMode::Multiply,
+        BlendMode::Screen => es_engine_shared::types::blend::BlendMode::Screen,
+        BlendMode::PremultipliedAlpha => es_engine_shared::types::blend::BlendMode::PremultipliedAlpha,
+    }
+}
+
+const SPRITE_VERTEX_SHADER: &str = r#"#version 300 es
+precision highp float;
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec2 a_texCoord;
+layout(location = 2) in vec4 a_color;
+uniform mat3 u_projection;
+out vec2 v_texCoord;
+out vec4 v_color;
+void main() {
+    vec3 pos = u_projection * vec3(a_position, 1.0);
+    gl_Position = vec4(pos.xy, 0.0, 1.0);
+    v_texCoord = a_texCoord;
+    v_color = a_color;
+}
+"#;
+
+const SPRITE_FRAGMENT_SHADER: &str = r#"#version 300 es
+precision highp float;
+in vec2 v_texCoord;
+in vec4 v_color;
+uniform sampler2D u_texture;
+out vec4 fragColor;
+void main() {
+    vec4 texColor = texture(u_texture, v_texCoord);
+    fragColor = texColor * v_color;
+    if (fragColor.a < 0.01) discard;
+}
+"#;
+
 pub struct Renderer2D {
-    /// Sprite batch renderer.
-    /// 精灵批处理渲染器。
     sprite_batch: SpriteBatch,
-
-    /// Shader manager.
-    /// 着色器管理器。
-    shader_manager: ShaderManager,
-
-    /// Material manager.
-    /// 材质管理器。
-    material_manager: MaterialManager,
-
-    /// 2D camera.
-    /// 2D相机。
+    default_shader: ShaderHandle,
+    custom_shaders: HashMap<u32, ShaderHandle>,
+    next_shader_id: u32,
+    materials: HashMap<u32, Material>,
     camera: Camera2D,
-
-    /// Clear color (RGBA).
-    /// 清除颜色 (RGBA)。
     clear_color: [f32; 4],
-
-    /// Current active shader ID.
-    /// 当前激活的着色器ID。
-    #[allow(dead_code)]
-    current_shader_id: u32,
-
-    /// Current active material ID.
-    /// 当前激活的材质ID。
-    #[allow(dead_code)]
-    current_material_id: u32,
-
-    /// Current scissor rect (x, y, width, height) in screen coordinates.
-    /// None means scissor test is disabled.
-    /// 当前裁剪矩形（屏幕坐标）。None 表示禁用裁剪测试。
-    scissor_rect: Option<[f32; 4]>,
-
-    /// Viewport height for scissor coordinate conversion.
-    /// 视口高度，用于裁剪坐标转换。
+    scissor_rect: Option<ScissorRect>,
     viewport_height: f32,
 }
 
 impl Renderer2D {
-    /// Create a new 2D renderer.
-    /// 创建新的2D渲染器。
-    ///
-    /// # Arguments | 参数
-    /// * `gl` - WebGL2 context | WebGL2上下文
-    /// * `max_sprites` - Maximum sprites per batch | 每批次最大精灵数
-    pub fn new(gl: &WebGl2RenderingContext, max_sprites: usize) -> Result<Self> {
-        let sprite_batch = SpriteBatch::new(gl, max_sprites)?;
-        let shader_manager = ShaderManager::new(gl)?;
-        let material_manager = MaterialManager::new();
+    pub fn new(backend: &mut WebGL2Backend, max_sprites: usize) -> Result<Self, String> {
+        let sprite_batch = SpriteBatch::new(backend, max_sprites)?;
+        let default_shader = backend.compile_shader(SPRITE_VERTEX_SHADER, SPRITE_FRAGMENT_SHADER)
+            .map_err(|e| format!("Default shader: {:?}", e))?;
 
-        // Get canvas size for camera | 获取canvas尺寸用于相机
-        let canvas = gl.canvas()
-            .and_then(|c| c.dyn_into::<web_sys::HtmlCanvasElement>().ok())
-            .map(|c| (c.width() as f32, c.height() as f32))
-            .unwrap_or((800.0, 600.0));
+        let (width, height) = (backend.width() as f32, backend.height() as f32);
+        let camera = Camera2D::new(width, height);
 
-        let camera = Camera2D::new(canvas.0, canvas.1);
-
-        log::info!(
-            "Renderer2D initialized | Renderer2D初始化完成: {}x{}, max sprites: {}",
-            canvas.0, canvas.1, max_sprites
-        );
+        let mut materials = HashMap::new();
+        materials.insert(0, Material::default());
 
         Ok(Self {
             sprite_batch,
-            shader_manager,
-            material_manager,
+            default_shader,
+            custom_shaders: HashMap::new(),
+            next_shader_id: 100,
+            materials,
             camera,
             clear_color: [0.1, 0.1, 0.12, 1.0],
-            current_shader_id: 0,
-            current_material_id: 0,
             scissor_rect: None,
-            viewport_height: canvas.1,
+            viewport_height: height,
         })
     }
 
-    /// Submit sprite batch data for rendering.
-    /// 提交精灵批次数据进行渲染。
-    ///
-    /// # Arguments | 参数
-    /// * `transforms` - Transform data for each sprite | 每个精灵的变换数据
-    /// * `texture_ids` - Texture ID for each sprite | 每个精灵的纹理ID
-    /// * `uvs` - UV coordinates for each sprite | 每个精灵的UV坐标
-    /// * `colors` - Packed color for each sprite | 每个精灵的打包颜色
-    /// * `material_ids` - Material ID for each sprite (0 = default) | 每个精灵的材质ID（0 = 默认）
-    /// * `texture_manager` - Texture manager | 纹理管理器
     pub fn submit_batch(
         &mut self,
         transforms: &[f32],
@@ -112,277 +98,171 @@ impl Renderer2D {
         uvs: &[f32],
         colors: &[u32],
         material_ids: &[u32],
-        texture_manager: &TextureManager,
-    ) -> Result<()> {
-        self.sprite_batch.add_sprites(
-            transforms,
-            texture_ids,
-            uvs,
-            colors,
-            material_ids,
-            texture_manager,
-        )
+    ) -> Result<(), String> {
+        self.sprite_batch.add_sprites(transforms, texture_ids, uvs, colors, material_ids)
     }
 
-    /// Render the current frame.
-    /// 渲染当前帧。
-    pub fn render(&mut self, gl: &WebGl2RenderingContext, texture_manager: &TextureManager) -> Result<()> {
+    pub fn render(&mut self, backend: &mut WebGL2Backend, texture_manager: &TextureManager) -> Result<(), String> {
         if self.sprite_batch.sprite_count() == 0 {
             return Ok(());
         }
 
-        // Apply scissor test if enabled
-        // 如果启用，应用裁剪测试
-        self.apply_scissor(gl);
+        self.apply_scissor(backend);
 
-        // Track current state to minimize state changes | 跟踪当前状态以最小化状态切换
-        let mut current_material_id: u32 = u32::MAX;
-        let mut current_texture_id: u32 = u32::MAX;
-
-        // Get projection matrix once | 一次性获取投影矩阵
         let projection = self.camera.projection_matrix();
+        let mut current_material_id = u32::MAX;
+        let mut current_texture_id = u32::MAX;
 
-        // Iterate through batches in submission order (preserves render order)
-        // 按提交顺序遍历批次（保持渲染顺序）
         for batch_idx in 0..self.sprite_batch.batches().len() {
             let (batch_key, vertices) = &self.sprite_batch.batches()[batch_idx];
+            if vertices.is_empty() { continue; }
 
-            // Skip empty batches | 跳过空批次
-            if vertices.is_empty() {
-                continue;
-            }
-
-            // Switch material if needed | 如需切换材质
             if batch_key.material_id != current_material_id {
                 current_material_id = batch_key.material_id;
 
-                // Get material (fallback to default if not found) | 获取材质（未找到则回退到默认）
-                let material = self.material_manager.get_material(batch_key.material_id)
-                    .unwrap_or_else(|| self.material_manager.get_default_material());
+                let material = self.materials.get(&batch_key.material_id)
+                    .cloned()
+                    .unwrap_or_default();
 
-                // Bind shader | 绑定Shader
-                let shader = self.shader_manager.get_shader(material.shader_id)
-                    .unwrap_or_else(|| self.shader_manager.get_default_shader());
-                shader.bind(gl);
+                let shader = if material.shader_id == 0 {
+                    self.default_shader
+                } else {
+                    self.custom_shaders.get(&material.shader_id)
+                        .copied()
+                        .unwrap_or(self.default_shader)
+                };
 
-                // Apply blend mode | 应用混合模式
-                MaterialManager::apply_blend_mode(gl, material.blend_mode);
+                backend.bind_shader(shader).ok();
+                backend.set_blend_mode(to_shared_blend_mode(material.blend_mode));
+                backend.set_uniform_mat3("u_projection", &projection).ok();
+                backend.set_uniform_i32("u_texture", 0).ok();
 
-                // Set projection matrix | 设置投影矩阵
-                shader.set_uniform_mat3(gl, "u_projection", &projection.to_cols_array());
-
-                // Set texture sampler | 设置纹理采样器
-                shader.set_uniform_i32(gl, "u_texture", 0);
-
-                // Apply material uniforms | 应用材质uniform
-                material.uniforms.apply_to_shader(gl, shader);
+                for name in material.uniforms.names() {
+                    if let Some(value) = material.uniforms.get(name) {
+                        match value {
+                            UniformValue::Float(v) => { backend.set_uniform_f32(name, *v).ok(); }
+                            UniformValue::Vec2(v) => { backend.set_uniform_vec2(name, es_engine_shared::Vec2::new(v[0], v[1])).ok(); }
+                            UniformValue::Vec3(v) => { backend.set_uniform_vec3(name, es_engine_shared::Vec3::new(v[0], v[1], v[2])).ok(); }
+                            UniformValue::Vec4(v) => { backend.set_uniform_vec4(name, es_engine_shared::Vec4::new(v[0], v[1], v[2], v[3])).ok(); }
+                            UniformValue::Int(v) => { backend.set_uniform_i32(name, *v).ok(); }
+                            UniformValue::Mat3(v) => { backend.set_uniform_mat3(name, &es_engine_shared::Mat3::from_cols_array(v)).ok(); }
+                            UniformValue::Mat4(v) => { backend.set_uniform_mat4(name, &es_engine_shared::Mat4::from_cols_array(v)).ok(); }
+                            UniformValue::Sampler(v) => { backend.set_uniform_i32(name, *v).ok(); }
+                        }
+                    }
+                }
             }
 
-            // Switch texture if needed | 如需切换纹理
             if batch_key.texture_id != current_texture_id {
                 current_texture_id = batch_key.texture_id;
-                texture_manager.bind_texture(batch_key.texture_id, 0);
+                texture_manager.bind_texture_via_backend(backend, batch_key.texture_id, 0);
             }
 
-            // Flush this batch by index | 按索引刷新此批次
-            self.sprite_batch.flush_batch_at(gl, batch_idx);
+            self.sprite_batch.flush_batch_at(backend, batch_idx);
         }
 
-        // Clear batch for next frame | 清空批处理以供下一帧使用
         self.sprite_batch.clear();
-
         Ok(())
     }
 
-    /// Get mutable reference to camera.
-    /// 获取相机的可变引用。
-    #[inline]
-    pub fn camera_mut(&mut self) -> &mut Camera2D {
-        &mut self.camera
+    fn apply_scissor(&self, backend: &mut WebGL2Backend) {
+        if let Some(rect) = &self.scissor_rect {
+            backend.set_scissor(Some(ScissorRect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+            }));
+        } else {
+            backend.set_scissor(None);
+        }
     }
 
-    /// Get reference to camera.
-    /// 获取相机的引用。
     #[inline]
-    pub fn camera(&self) -> &Camera2D {
-        &self.camera
-    }
+    pub fn camera_mut(&mut self) -> &mut Camera2D { &mut self.camera }
 
-    /// Set clear color (RGBA, each component 0.0-1.0).
-    /// 设置清除颜色。
+    #[inline]
+    pub fn camera(&self) -> &Camera2D { &self.camera }
+
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.clear_color = [r, g, b, a];
     }
 
-    /// Get clear color.
-    /// 获取清除颜色。
-    pub fn get_clear_color(&self) -> [f32; 4] {
-        self.clear_color
-    }
+    pub fn get_clear_color(&self) -> [f32; 4] { self.clear_color }
 
-    /// Update camera viewport size.
-    /// 更新相机视口大小。
     pub fn resize(&mut self, width: f32, height: f32) {
         self.camera.set_viewport(width, height);
         self.viewport_height = height;
     }
 
-    // ============= Scissor Test =============
-    // ============= 裁剪测试 =============
-
-    /// Set scissor rect for clipping (screen coordinates, Y-down).
-    /// 设置裁剪矩形（屏幕坐标，Y 轴向下）。
-    ///
-    /// Content outside this rect will be clipped.
-    /// 此矩形外的内容将被裁剪。
-    ///
-    /// # Arguments | 参数
-    /// * `x` - Left edge in screen coordinates | 屏幕坐标中的左边缘
-    /// * `y` - Top edge in screen coordinates (Y-down) | 屏幕坐标中的上边缘（Y 向下）
-    /// * `width` - Rect width | 矩形宽度
-    /// * `height` - Rect height | 矩形高度
     pub fn set_scissor_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
-        self.scissor_rect = Some([x, y, width, height]);
+        self.scissor_rect = Some(ScissorRect {
+            x: x as i32, y: y as i32,
+            width: width as u32, height: height as u32,
+        });
     }
 
-    /// Clear scissor rect (disable clipping).
-    /// 清除裁剪矩形（禁用裁剪）。
-    pub fn clear_scissor_rect(&mut self) {
-        self.scissor_rect = None;
+    pub fn clear_scissor_rect(&mut self) { self.scissor_rect = None; }
+
+    pub fn compile_shader(&mut self, backend: &mut WebGL2Backend, vertex: &str, fragment: &str) -> Result<u32, String> {
+        let handle = backend.compile_shader(vertex, fragment)
+            .map_err(|e| format!("{:?}", e))?;
+        let id = self.next_shader_id;
+        self.next_shader_id += 1;
+        self.custom_shaders.insert(id, handle);
+        Ok(id)
     }
 
-    /// Apply current scissor state to GL context.
-    /// 应用当前裁剪状态到 GL 上下文。
-    fn apply_scissor(&self, gl: &WebGl2RenderingContext) {
-        if let Some([x, y, width, height]) = self.scissor_rect {
-            gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
-            // WebGL scissor uses bottom-left origin with Y-up
-            // Convert from screen coordinates (top-left origin, Y-down)
-            // WebGL scissor 使用左下角原点，Y 轴向上
-            // 从屏幕坐标转换（左上角原点，Y 轴向下）
-            let gl_y = self.viewport_height - y - height;
-            gl.scissor(x as i32, gl_y as i32, width as i32, height as i32);
-        } else {
-            gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+    pub fn compile_shader_with_id(&mut self, backend: &mut WebGL2Backend, id: u32, vertex: &str, fragment: &str) -> Result<(), String> {
+        let handle = backend.compile_shader(vertex, fragment)
+            .map_err(|e| format!("{:?}", e))?;
+        self.custom_shaders.insert(id, handle);
+        Ok(())
+    }
+
+    pub fn has_shader(&self, id: u32) -> bool {
+        id == 0 || self.custom_shaders.contains_key(&id)
+    }
+
+    pub fn remove_shader(&mut self, id: u32) -> bool {
+        if id < 100 { return false; }
+        self.custom_shaders.remove(&id).is_some()
+    }
+
+    pub fn register_material(&mut self, material: Material) -> u32 {
+        let id = self.materials.keys().max().unwrap_or(&0) + 1;
+        self.materials.insert(id, material);
+        id
+    }
+
+    pub fn register_material_with_id(&mut self, id: u32, material: Material) {
+        self.materials.insert(id, material);
+    }
+
+    pub fn get_material(&self, id: u32) -> Option<&Material> { self.materials.get(&id) }
+    pub fn get_material_mut(&mut self, id: u32) -> Option<&mut Material> { self.materials.get_mut(&id) }
+    pub fn has_material(&self, id: u32) -> bool { self.materials.contains_key(&id) }
+    pub fn remove_material(&mut self, id: u32) -> bool { self.materials.remove(&id).is_some() }
+
+    pub fn set_material_float(&mut self, id: u32, name: &str, value: f32) -> bool {
+        if let Some(mat) = self.materials.get_mut(&id) {
+            mat.uniforms.set_float(name, value);
+            true
+        } else { false }
+    }
+
+    pub fn set_material_vec4(&mut self, id: u32, name: &str, x: f32, y: f32, z: f32, w: f32) -> bool {
+        if let Some(mat) = self.materials.get_mut(&id) {
+            mat.uniforms.set_vec4(name, x, y, z, w);
+            true
+        } else { false }
+    }
+
+    pub fn destroy(self, backend: &mut WebGL2Backend) {
+        self.sprite_batch.destroy(backend);
+        backend.destroy_shader(self.default_shader);
+        for (_, handle) in self.custom_shaders {
+            backend.destroy_shader(handle);
         }
-    }
-
-    // ============= Shader Management =============
-    // ============= 着色器管理 =============
-
-    /// Compile and register a custom shader.
-    /// 编译并注册自定义着色器。
-    ///
-    /// # Returns | 返回
-    /// The shader ID for referencing this shader | 用于引用此着色器的ID
-    pub fn compile_shader(
-        &mut self,
-        gl: &WebGl2RenderingContext,
-        vertex_source: &str,
-        fragment_source: &str,
-    ) -> Result<u32> {
-        self.shader_manager.compile_shader(gl, vertex_source, fragment_source)
-    }
-
-    /// Compile a shader with a specific ID.
-    /// 使用特定ID编译着色器。
-    pub fn compile_shader_with_id(
-        &mut self,
-        gl: &WebGl2RenderingContext,
-        shader_id: u32,
-        vertex_source: &str,
-        fragment_source: &str,
-    ) -> Result<()> {
-        self.shader_manager.compile_shader_with_id(gl, shader_id, vertex_source, fragment_source)
-    }
-
-    /// Check if a shader exists.
-    /// 检查着色器是否存在。
-    pub fn has_shader(&self, shader_id: u32) -> bool {
-        self.shader_manager.has_shader(shader_id)
-    }
-
-    /// Remove a shader.
-    /// 移除着色器。
-    pub fn remove_shader(&mut self, shader_id: u32) -> bool {
-        self.shader_manager.remove_shader(shader_id)
-    }
-
-    /// Get shader manager reference.
-    /// 获取着色器管理器引用。
-    pub fn shader_manager(&self) -> &ShaderManager {
-        &self.shader_manager
-    }
-
-    /// Get mutable shader manager reference.
-    /// 获取可变着色器管理器引用。
-    pub fn shader_manager_mut(&mut self) -> &mut ShaderManager {
-        &mut self.shader_manager
-    }
-
-    // ============= Material Management =============
-    // ============= 材质管理 =============
-
-    /// Register a custom material.
-    /// 注册自定义材质。
-    ///
-    /// # Returns | 返回
-    /// The material ID for referencing this material | 用于引用此材质的ID
-    pub fn register_material(&mut self, material: super::material::Material) -> u32 {
-        self.material_manager.register_material(material)
-    }
-
-    /// Register a material with a specific ID.
-    /// 使用特定ID注册材质。
-    pub fn register_material_with_id(&mut self, material_id: u32, material: super::material::Material) {
-        self.material_manager.register_material_with_id(material_id, material);
-    }
-
-    /// Get a material by ID.
-    /// 按ID获取材质。
-    pub fn get_material(&self, material_id: u32) -> Option<&super::material::Material> {
-        self.material_manager.get_material(material_id)
-    }
-
-    /// Get a mutable material by ID.
-    /// 按ID获取可变材质。
-    pub fn get_material_mut(&mut self, material_id: u32) -> Option<&mut super::material::Material> {
-        self.material_manager.get_material_mut(material_id)
-    }
-
-    /// Check if a material exists.
-    /// 检查材质是否存在。
-    pub fn has_material(&self, material_id: u32) -> bool {
-        self.material_manager.has_material(material_id)
-    }
-
-    /// Remove a material.
-    /// 移除材质。
-    pub fn remove_material(&mut self, material_id: u32) -> bool {
-        self.material_manager.remove_material(material_id)
-    }
-
-    /// Set a material's float uniform.
-    /// 设置材质的浮点uniform。
-    pub fn set_material_float(&mut self, material_id: u32, name: &str, value: f32) -> bool {
-        self.material_manager.set_material_float(material_id, name, value)
-    }
-
-    /// Set a material's vec4 uniform.
-    /// 设置材质的vec4 uniform。
-    pub fn set_material_vec4(&mut self, material_id: u32, name: &str, x: f32, y: f32, z: f32, w: f32) -> bool {
-        self.material_manager.set_material_vec4(material_id, name, x, y, z, w)
-    }
-
-    /// Get material manager reference.
-    /// 获取材质管理器引用。
-    pub fn material_manager(&self) -> &MaterialManager {
-        &self.material_manager
-    }
-
-    /// Get mutable material manager reference.
-    /// 获取可变材质管理器引用。
-    pub fn material_manager_mut(&mut self) -> &mut MaterialManager {
-        &mut self.material_manager
     }
 }
