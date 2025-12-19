@@ -13,7 +13,7 @@ import type {
 import {
     EntityStoreService,
     MessageHub,
-    ComponentRegistry,
+    EditorComponentRegistry,
     SettingsRegistry
 } from '@esengine/editor-core';
 import { TransformComponent } from '@esengine/engine-core';
@@ -48,7 +48,7 @@ export class Physics2DEditorModule implements IEditorModuleLoader {
         this.setupSettingsListener();
 
         // 注册组件到编辑器组件注册表
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             componentRegistry.register({
                 name: 'Rigidbody2D',

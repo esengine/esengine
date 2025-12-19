@@ -6,6 +6,12 @@
 import type { SpriteRenderData, TextureLoadRequest, EngineStats, CameraConfig } from '../types';
 import type { ITextureEngineBridge } from '@esengine/asset-system';
 import type { GameEngine } from '../wasm/es_engine';
+import type {
+    ITextureService,
+    IDynamicAtlasService,
+    ICoordinateService,
+    IRenderConfigService
+} from '@esengine/engine-core';
 
 /**
  * Engine bridge configuration.
@@ -43,7 +49,7 @@ export interface EngineBridgeConfig {
  * bridge.render();
  * ```
  */
-export class EngineBridge implements ITextureEngineBridge {
+export class EngineBridge implements ITextureEngineBridge, ITextureService, IDynamicAtlasService, ICoordinateService, IRenderConfigService {
     private engine: GameEngine | null = null;
     private config: Required<EngineBridgeConfig>;
     private initialized = false;

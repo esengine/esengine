@@ -4,7 +4,7 @@
  */
 
 import { PluginManager, LocaleService, MessageHub, EditorConfig, getPluginsPath } from '@esengine/editor-core';
-import type { IPlugin, ModuleManifest } from '@esengine/editor-core';
+import type { IRuntimePlugin, ModuleManifest } from '@esengine/editor-core';
 import { Core } from '@esengine/ecs-framework';
 import { TauriAPI } from '../api/tauri';
 import { PluginSDKRegistry } from './PluginSDKRegistry';
@@ -164,7 +164,7 @@ export class PluginLoader {
         code: string,
         pluginName: string,
         _pluginDirName: string
-    ): Promise<IPlugin | null> {
+    ): Promise<IRuntimePlugin | null> {
         const pluginKey = this.sanitizePluginKey(pluginName);
 
         const pluginsContainer = (window as any)[PLUGINS_GLOBAL_NAME] as Record<string, any>;
@@ -267,7 +267,7 @@ export class PluginLoader {
     /**
      * 查找模块中的插件
      */
-    private findPluginLoader(module: any): IPlugin | null {
+    private findPluginLoader(module: any): IRuntimePlugin | null {
         // 优先检查 default 导出
         if (module.default && this.isPluginLoader(module.default)) {
             return module.default;
@@ -287,12 +287,12 @@ export class PluginLoader {
     /**
      * 验证对象是否为有效的插件
      */
-    private isPluginLoader(obj: any): obj is IPlugin {
+    private isPluginLoader(obj: any): obj is IRuntimePlugin {
         if (!obj || typeof obj !== 'object') {
             return false;
         }
 
-        // 新的 IPlugin 接口检查
+        // IRuntimePlugin 接口检查
         if (obj.manifest && this.isModuleManifest(obj.manifest)) {
             return true;
         }
@@ -315,7 +315,7 @@ export class PluginLoader {
     /**
      * 同步插件语言设置
      */
-    private syncPluginLocale(plugin: IPlugin, pluginName: string): void {
+    private syncPluginLocale(plugin: IRuntimePlugin, pluginName: string): void {
         try {
             const localeService = Core.services.resolve(LocaleService);
             const currentLocale = localeService.getCurrentLocale();

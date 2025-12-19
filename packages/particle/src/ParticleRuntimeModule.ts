@@ -2,7 +2,7 @@ import type { IComponentRegistry, IScene } from '@esengine/ecs-framework';
 import type { IRuntimeModule, IRuntimePlugin, ModuleManifest, SystemContext } from '@esengine/engine-core';
 import { TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { AssetManagerToken } from '@esengine/asset-system';
-import { RenderSystemToken, EngineBridgeToken, EngineIntegrationToken } from '@esengine/ecs-engine-bindgen';
+import { RenderSystemToken, EngineIntegrationToken, TextureServiceToken, CoordinateServiceToken } from '@esengine/ecs-engine-bindgen';
 import { Physics2DQueryToken } from '@esengine/physics-rapier2d';
 import { ParticleSystemComponent } from './ParticleSystemComponent';
 import { ClickFxComponent } from './ClickFxComponent';
@@ -30,7 +30,8 @@ class ParticleRuntimeModule implements IRuntimeModule {
         const assetManager = context.services.get(AssetManagerToken);
         const transformType = context.services.get(TransformTypeToken);
         const engineIntegration = context.services.get(EngineIntegrationToken);
-        const engineBridge = context.services.get(EngineBridgeToken);
+        const textureService = context.services.get(TextureServiceToken);
+        const coordinateService = context.services.get(CoordinateServiceToken);
         const physics2DQuery = context.services.get(Physics2DQueryToken);
         const renderSystem = context.services.get(RenderSystemToken);
 
@@ -60,9 +61,9 @@ class ParticleRuntimeModule implements IRuntimeModule {
             this._updateSystem.setEngineIntegration(engineIntegration);
         }
 
-        // 设置引擎桥接（用于加载默认纹理）| Set engine bridge (for loading default texture)
-        if (engineBridge) {
-            this._updateSystem.setEngineBridge(engineBridge);
+        // 设置纹理服务（用于加载默认纹理）| Set texture service (for loading default texture)
+        if (textureService) {
+            this._updateSystem.setTextureService(textureService);
         }
 
         // 设置 2D 物理查询（用于粒子与场景碰撞）| Set 2D physics query (for particle-scene collision)
@@ -77,10 +78,10 @@ class ParticleRuntimeModule implements IRuntimeModule {
         // ClickFxSystem no longer needs AssetManager, assets are loaded by ParticleUpdateSystem
         const clickFxSystem = new ClickFxSystem();
 
-        // 设置 EngineBridge（用于屏幕坐标转世界坐标）
-        // Set EngineBridge (for screen to world coordinate conversion)
-        if (engineBridge) {
-            clickFxSystem.setEngineBridge(engineBridge);
+        // 设置坐标服务（用于屏幕坐标转世界坐标）
+        // Set coordinate service (for screen to world coordinate conversion)
+        if (coordinateService) {
+            clickFxSystem.setCoordinateService(coordinateService);
         }
 
         // 从服务注册表获取 Canvas 元素（用于计算相对坐标）

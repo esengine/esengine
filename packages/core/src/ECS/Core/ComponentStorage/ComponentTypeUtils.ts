@@ -14,7 +14,11 @@ import type { Component } from '../../Component';
 /**
  * 组件类型定义
  * Component type definition
+ *
+ * 注意：构造函数参数使用 any[] 是必要的，因为组件可以有各种不同签名的构造函数
+ * Note: Constructor args use any[] because components can have various constructor signatures
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ComponentType<T extends Component = Component> = new (...args: any[]) => T;
 
 /**
@@ -62,6 +66,51 @@ export interface ComponentEditorOptions {
 }
 
 /**
+ * 组件构造函数上的元数据接口
+ * Metadata interface stored on component constructors
+ *
+ * 使用 Symbol 索引签名来类型安全地访问装饰器存储的元数据
+ * Uses Symbol index signature to safely access decorator-stored metadata
+ */
+export interface ComponentTypeMetadata {
+    readonly [COMPONENT_TYPE_NAME]?: string;
+    readonly [COMPONENT_DEPENDENCIES]?: string[];
+    readonly [COMPONENT_EDITOR_OPTIONS]?: ComponentEditorOptions;
+}
+
+/**
+ * 可写的组件类型元数据（用于装饰器设置）
+ * Writable component type metadata (for decorator setting)
+ */
+export interface WritableComponentTypeMetadata {
+    [COMPONENT_TYPE_NAME]?: string;
+    [COMPONENT_DEPENDENCIES]?: string[];
+    [COMPONENT_EDITOR_OPTIONS]?: ComponentEditorOptions;
+}
+
+/**
+ * 获取组件构造函数的元数据
+ * Get metadata from component constructor
+ *
+ * @param componentType 组件构造函数
+ * @returns 元数据对象
+ */
+export function getComponentTypeMetadata(componentType: ComponentType): ComponentTypeMetadata {
+    return componentType as unknown as ComponentTypeMetadata;
+}
+
+/**
+ * 获取可写的组件构造函数元数据（用于装饰器）
+ * Get writable metadata from component constructor (for decorators)
+ *
+ * @param componentType 组件构造函数
+ * @returns 可写的元数据对象
+ */
+export function getWritableComponentTypeMetadata(componentType: ComponentType): WritableComponentTypeMetadata {
+    return componentType as unknown as WritableComponentTypeMetadata;
+}
+
+/**
  * 检查组件是否使用了 @ECSComponent 装饰器
  * Check if component has @ECSComponent decorator
  *
@@ -69,7 +118,8 @@ export interface ComponentEditorOptions {
  * @returns 是否有装饰器
  */
 export function hasECSComponentDecorator(componentType: ComponentType): boolean {
-    return !!(componentType as any)[COMPONENT_TYPE_NAME];
+    const metadata = getComponentTypeMetadata(componentType);
+    return metadata[COMPONENT_TYPE_NAME] !== undefined;
 }
 
 /**
@@ -82,7 +132,8 @@ export function hasECSComponentDecorator(componentType: ComponentType): boolean 
 export function getComponentTypeName(componentType: ComponentType): string {
     // 优先使用装饰器指定的名称
     // Prefer decorator-specified name
-    const decoratorName = (componentType as any)[COMPONENT_TYPE_NAME];
+    const metadata = getComponentTypeMetadata(componentType);
+    const decoratorName = metadata[COMPONENT_TYPE_NAME];
     if (decoratorName) {
         return decoratorName;
     }
@@ -111,7 +162,8 @@ export function getComponentInstanceTypeName(component: Component): string {
  * @returns 依赖的组件名称列表
  */
 export function getComponentDependencies(componentType: ComponentType): string[] | undefined {
-    return (componentType as any)[COMPONENT_DEPENDENCIES];
+    const metadata = getComponentTypeMetadata(componentType);
+    return metadata[COMPONENT_DEPENDENCIES];
 }
 
 /**
@@ -122,7 +174,8 @@ export function getComponentDependencies(componentType: ComponentType): string[]
  * @returns 编辑器选项
  */
 export function getComponentEditorOptions(componentType: ComponentType): ComponentEditorOptions | undefined {
-    return (componentType as any)[COMPONENT_EDITOR_OPTIONS];
+    const metadata = getComponentTypeMetadata(componentType);
+    return metadata[COMPONENT_EDITOR_OPTIONS];
 }
 
 /**

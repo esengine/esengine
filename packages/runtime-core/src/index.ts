@@ -7,9 +7,6 @@ export {
     type IRuntimePlugin
 } from './PluginManager';
 
-/** @deprecated Use IRuntimePlugin instead */
-export type { IRuntimePlugin as IPlugin } from './PluginManager';
-
 export {
     createPlugin,
     registerPlugin,
@@ -123,13 +120,21 @@ export { TransformTypeToken } from '@esengine/engine-core';
 
 // Re-export service tokens from their respective modules
 export {
-    EngineBridgeToken,
     RenderSystemToken,
     EngineIntegrationToken,
-    type IEngineBridge,
+    // 新的单一职责服务令牌 | New single-responsibility service tokens
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
+    // 类型 | Types
     type IRenderSystem,
     type IRenderDataProvider,
-    type IEngineIntegration
+    type IEngineIntegration,
+    type ITextureService,
+    type IDynamicAtlasService,
+    type ICoordinateService,
+    type IRenderConfigService
 } from '@esengine/ecs-engine-bindgen';
 
 export {

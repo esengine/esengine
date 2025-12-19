@@ -16,7 +16,7 @@ import type {
 import {
     EntityStoreService,
     MessageHub,
-    ComponentRegistry,
+    EditorComponentRegistry,
     ComponentInspectorRegistry
 } from '@esengine/editor-core';
 import { TransformComponent } from '@esengine/engine-core';
@@ -47,7 +47,7 @@ export class SpriteEditorModule implements IEditorModuleLoader {
         }
 
         // 注册 Sprite 组件到编辑器组件注册表 | Register Sprite components to editor component registry
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             const spriteComponents = [
                 {

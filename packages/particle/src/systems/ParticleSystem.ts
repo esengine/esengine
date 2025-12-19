@@ -1,5 +1,5 @@
 import { EntitySystem, Matcher, ECSSystem, Time, Entity, type Component, type ComponentType } from '@esengine/ecs-framework';
-import type { IEngineIntegration, IEngineBridge } from '@esengine/ecs-engine-bindgen';
+import type { IEngineIntegration, ITextureService } from '@esengine/ecs-engine-bindgen';
 import type { IAssetManager } from '@esengine/asset-system';
 import { ParticleSystemComponent } from '../ParticleSystemComponent';
 import { ParticleRenderDataProvider } from '../rendering/ParticleRenderDataProvider';
@@ -78,7 +78,7 @@ export class ParticleUpdateSystem extends EntitySystem {
     private _transformType: ComponentType<Component & ITransformComponent> | null = null;
     private _renderDataProvider: ParticleRenderDataProvider;
     private _engineIntegration: IEngineIntegration | null = null;
-    private _engineBridge: IEngineBridge | null = null;
+    private _textureService: ITextureService | null = null;
     private _physics2DQuery: IPhysics2DQuery | null = null;
     private _assetManager: IAssetManager | null = null;
     private _defaultTextureLoaded: boolean = false;
@@ -114,11 +114,11 @@ export class ParticleUpdateSystem extends EntitySystem {
     }
 
     /**
-     * 设置引擎桥接（用于加载默认纹理）
-     * Set engine bridge (for loading default texture)
+     * 设置纹理服务（用于加载默认纹理）
+     * Set texture service (for loading default texture)
      */
-    setEngineBridge(bridge: IEngineBridge): void {
-        this._engineBridge = bridge;
+    setTextureService(textureService: ITextureService): void {
+        this._textureService = textureService;
     }
 
     /**
@@ -487,8 +487,8 @@ export class ParticleUpdateSystem extends EntitySystem {
         }
 
         // 没有引擎桥接，无法加载 | No engine bridge, cannot load
-        if (!this._engineBridge) {
-            console.warn('[ParticleUpdateSystem] EngineBridge not set, cannot load default texture');
+        if (!this._textureService) {
+            console.warn('[ParticleUpdateSystem] TextureService not set, cannot load default texture');
             return false;
         }
 
@@ -496,15 +496,9 @@ export class ParticleUpdateSystem extends EntitySystem {
         try {
             const dataUrl = generateDefaultParticleTextureDataURL();
             if (dataUrl) {
-                // 优先使用 loadTextureAsync（等待纹理就绪）
-                // Prefer loadTextureAsync (waits for texture ready)
-                if (this._engineBridge.loadTextureAsync) {
-                    await this._engineBridge.loadTextureAsync(DEFAULT_PARTICLE_TEXTURE_ID, dataUrl);
-                } else {
-                    // 回退到旧 API（可能显示灰色占位符）
-                    // Fallback to old API (may show gray placeholder)
-                    await this._engineBridge.loadTexture(DEFAULT_PARTICLE_TEXTURE_ID, dataUrl);
-                }
+                // 使用 loadTextureAsync（等待纹理就绪）
+                // Use loadTextureAsync (waits for texture ready)
+                await this._textureService.loadTextureAsync(DEFAULT_PARTICLE_TEXTURE_ID, dataUrl);
                 this._defaultTextureLoaded = true;
             }
         } catch (error) {

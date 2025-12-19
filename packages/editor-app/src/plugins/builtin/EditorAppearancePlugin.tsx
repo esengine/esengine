@@ -5,7 +5,7 @@
 
 import type { ServiceContainer } from '@esengine/ecs-framework';
 import { createLogger } from '@esengine/ecs-framework';
-import type { IPlugin, IEditorModuleLoader, ModuleManifest } from '@esengine/editor-core';
+import type { IEditorPlugin, IEditorModuleLoader, ModuleManifest } from '@esengine/editor-core';
 import { SettingsRegistry } from '@esengine/editor-core';
 import { SettingsService } from '../../services/SettingsService';
 
@@ -146,7 +146,7 @@ const manifest: ModuleManifest = {
     exports: {}
 };
 
-export const EditorAppearancePlugin: IPlugin = {
+export const EditorAppearancePlugin: IEditorPlugin = {
     manifest,
     editorModule: new EditorAppearanceEditorModule()
 };

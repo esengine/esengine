@@ -15,7 +15,9 @@ import {
     COMPONENT_TYPE_NAME,
     COMPONENT_DEPENDENCIES,
     COMPONENT_EDITOR_OPTIONS,
-    type ComponentEditorOptions
+    getWritableComponentTypeMetadata,
+    type ComponentEditorOptions,
+    type ComponentType
 } from '../Core/ComponentStorage/ComponentTypeUtils';
 
 /**
@@ -23,6 +25,50 @@ import {
  * Symbol key for storing system type name
  */
 export const SYSTEM_TYPE_NAME = Symbol('SystemTypeName');
+
+/**
+ * 系统类型元数据接口
+ * System type metadata interface
+ */
+export interface SystemTypeMetadata {
+    readonly [SYSTEM_TYPE_NAME]?: string;
+    readonly __systemMetadata__?: SystemMetadata;
+}
+
+/**
+ * 可写的系统类型元数据
+ * Writable system type metadata
+ */
+interface WritableSystemTypeMetadata {
+    [SYSTEM_TYPE_NAME]?: string;
+    __systemMetadata__?: SystemMetadata;
+}
+
+/**
+ * 获取系统类型元数据
+ * Get system type metadata
+ */
+function getSystemTypeMetadata(systemType: SystemConstructor): SystemTypeMetadata {
+    return systemType as unknown as SystemTypeMetadata;
+}
+
+/**
+ * 获取可写的系统类型元数据
+ * Get writable system type metadata
+ */
+function getWritableSystemTypeMetadata(systemType: SystemConstructor): WritableSystemTypeMetadata {
+    return systemType as unknown as WritableSystemTypeMetadata;
+}
+
+/**
+ * 系统构造函数类型
+ * System constructor type
+ *
+ * 注意：构造函数参数使用 any[] 是必要的，因为系统可以有各种不同签名的构造函数
+ * Note: Constructor args use any[] because systems can have various constructor signatures
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SystemConstructor<T extends EntitySystem = EntitySystem> = new (...args: any[]) => T;
 
 /**
  * 组件装饰器配置选项
@@ -67,25 +113,29 @@ export interface ComponentOptions {
  * ```
  */
 export function ECSComponent(typeName: string, options?: ComponentOptions) {
-    return function <T extends new (...args: any[]) => Component>(target: T): T {
+    return function <T extends ComponentType<Component>>(target: T): T {
         if (!typeName || typeof typeName !== 'string') {
             throw new Error('ECSComponent装饰器必须提供有效的类型名称');
         }
 
+        // 获取可写的元数据对象
+        // Get writable metadata object
+        const metadata = getWritableComponentTypeMetadata(target);
+
         // 在构造函数上存储类型名称
         // Store type name on constructor
-        (target as any)[COMPONENT_TYPE_NAME] = typeName;
+        metadata[COMPONENT_TYPE_NAME] = typeName;
 
         // 存储依赖关系
         // Store dependencies
         if (options?.requires) {
-            (target as any)[COMPONENT_DEPENDENCIES] = options.requires;
+            metadata[COMPONENT_DEPENDENCIES] = options.requires;
         }
 
         // 存储编辑器选项
         // Store editor options
         if (options?.editor) {
-            (target as any)[COMPONENT_EDITOR_OPTIONS] = options.editor;
+            metadata[COMPONENT_EDITOR_OPTIONS] = options.editor;
         }
 
         // 自动注册到全局 ComponentRegistry，使组件可以通过名称查找
@@ -154,19 +204,23 @@ export interface SystemMetadata {
  * ```
  */
 export function ECSSystem(typeName: string, metadata?: SystemMetadata) {
-    return function <T extends new (...args: any[]) => EntitySystem>(target: T): T {
+    return function <T extends SystemConstructor>(target: T): T {
         if (!typeName || typeof typeName !== 'string') {
             throw new Error('ECSSystem装饰器必须提供有效的类型名称');
         }
 
+        // 获取可写的元数据对象
+        // Get writable metadata object
+        const meta = getWritableSystemTypeMetadata(target);
+
         // 在构造函数上存储类型名称
         // Store type name on constructor
-        (target as any)[SYSTEM_TYPE_NAME] = typeName;
+        meta[SYSTEM_TYPE_NAME] = typeName;
 
         // 存储元数据
         // Store metadata
         if (metadata) {
-            (target as any).__systemMetadata__ = metadata;
+            meta.__systemMetadata__ = metadata;
         }
 
         return target;
@@ -177,8 +231,9 @@ export function ECSSystem(typeName: string, metadata?: SystemMetadata) {
  * 获取 System 的元数据
  * Get System metadata
  */
-export function getSystemMetadata(systemType: new (...args: any[]) => EntitySystem): SystemMetadata | undefined {
-    return (systemType as any).__systemMetadata__;
+export function getSystemMetadata(systemType: SystemConstructor): SystemMetadata | undefined {
+    const meta = getSystemTypeMetadata(systemType);
+    return meta.__systemMetadata__;
 }
 
 /**
@@ -189,7 +244,7 @@ export function getSystemMetadata(systemType: new (...args: any[]) => EntitySyst
  * @returns 系统元数据 | System metadata
  */
 export function getSystemInstanceMetadata(system: EntitySystem): SystemMetadata | undefined {
-    return getSystemMetadata(system.constructor as new (...args: any[]) => EntitySystem);
+    return getSystemMetadata(system.constructor as SystemConstructor);
 }
 
 /**
@@ -200,9 +255,10 @@ export function getSystemInstanceMetadata(system: EntitySystem): SystemMetadata 
  * @returns 系统类型名称 | System type name
  */
 export function getSystemTypeName<T extends EntitySystem>(
-    systemType: new (...args: any[]) => T
+    systemType: SystemConstructor<T>
 ): string {
-    const decoratorName = (systemType as any)[SYSTEM_TYPE_NAME];
+    const meta = getSystemTypeMetadata(systemType);
+    const decoratorName = meta[SYSTEM_TYPE_NAME];
     if (decoratorName) {
         return decoratorName;
     }
@@ -217,5 +273,5 @@ export function getSystemTypeName<T extends EntitySystem>(
  * @returns 系统类型名称 | System type name
  */
 export function getSystemInstanceTypeName(system: EntitySystem): string {
-    return getSystemTypeName(system.constructor as new (...args: any[]) => EntitySystem);
+    return getSystemTypeName(system.constructor as SystemConstructor);
 }

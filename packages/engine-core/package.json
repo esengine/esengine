@@ -30,8 +30,7 @@
     "dependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/ecs-framework-math": "workspace:*",
-        "@esengine/platform-common": "workspace:*",
-        "@esengine/plugin-types": "workspace:*"
+        "@esengine/platform-common": "workspace:*"
     },
     "devDependencies": {
         "@esengine/build-config": "workspace:*",

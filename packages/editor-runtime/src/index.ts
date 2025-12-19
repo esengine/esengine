@@ -108,7 +108,7 @@ export type { IVector2, IVector3 } from '@esengine/ecs-framework-math';
 // Rename conflicting exports to avoid collision with ecs-framework
 // =============================================================================
 export {
-    ComponentRegistry as EditorComponentRegistry,
+    EditorComponentRegistry,
 } from '@esengine/editor-core';
 
 export type {
@@ -229,7 +229,7 @@ export type {
     ModuleCategory,
     ModulePlatform,
     ModuleExports,
-    IPlugin,
+    IRuntimePlugin,
     IRuntimeModule,
     SystemContext,
     ComponentInspectorProviderDef,

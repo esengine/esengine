@@ -4,18 +4,18 @@
  */
 
 import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framework';
-import type { IEngineBridge } from '@esengine/engine-core';
+import type { IRenderConfigService } from '@esengine/engine-core';
 import { CameraComponent } from './CameraComponent';
 
 @ECSSystem('Camera', { updateOrder: -100 })
 export class CameraSystem extends EntitySystem {
-    private bridge: IEngineBridge;
+    private renderConfig: IRenderConfigService;
     private lastAppliedCameraId: number | null = null;
 
-    constructor(bridge: IEngineBridge) {
+    constructor(renderConfig: IRenderConfigService) {
         // Match entities with CameraComponent
         super(Matcher.empty().all(CameraComponent));
-        this.bridge = bridge;
+        this.renderConfig = renderConfig;
     }
 
     protected override onBegin(): void {
@@ -47,6 +47,6 @@ export class CameraSystem extends EntitySystem {
         const r = parseInt(bgColor.slice(1, 3), 16) / 255;
         const g = parseInt(bgColor.slice(3, 5), 16) / 255;
         const b = parseInt(bgColor.slice(5, 7), 16) / 255;
-        this.bridge.setClearColor(r, g, b, 1.0);
+        this.renderConfig.setClearColor(r, g, b, 1.0);
     }
 }

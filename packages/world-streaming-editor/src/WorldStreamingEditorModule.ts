@@ -20,7 +20,7 @@ import {
     InspectorRegistry,
     EntityStoreService,
     MessageHub,
-    ComponentRegistry
+    EditorComponentRegistry
 } from '@esengine/editor-core';
 import { TransformComponent } from '@esengine/engine-core';
 import {
@@ -47,7 +47,7 @@ export class WorldStreamingEditorModule implements IEditorModuleLoader {
             inspectorRegistry.register(new StreamingAnchorInspectorProvider());
         }
 
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             componentRegistry.register({
                 name: 'ChunkLoader',

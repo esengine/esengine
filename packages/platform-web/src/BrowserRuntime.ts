@@ -18,7 +18,7 @@ import {
     BrowserFileSystemService,
     RuntimeSceneManager,
     RuntimeSceneManagerToken,
-    type IPlugin,
+    type IRuntimePlugin,
     type IRuntimeSceneManager
 } from '@esengine/runtime-core';
 import { isValidGUID, setGlobalAssetFileLoader, type IAssetManager, type IAssetFileLoader } from '@esengine/asset-system';
@@ -75,7 +75,7 @@ export class BrowserRuntime {
      *
      * Call this before initialize() to register plugins.
      */
-    registerPlugin(plugin: IPlugin): void {
+    registerPlugin(plugin: IRuntimePlugin): void {
         if (plugin) {
             runtimePluginManager.register(plugin);
             runtimePluginManager.enable(plugin.manifest.id);
@@ -87,7 +87,7 @@ export class BrowserRuntime {
      * Register multiple plugins
      * 注册多个插件
      */
-    registerPlugins(plugins: IPlugin[]): void {
+    registerPlugins(plugins: IRuntimePlugin[]): void {
         for (const plugin of plugins) {
             this.registerPlugin(plugin);
         }

@@ -32,7 +32,7 @@ import {
 import {
     MessageHub,
     CommandManager,
-    ComponentRegistry,
+    EditorComponentRegistry,
     ComponentActionRegistry,
     ComponentInspectorRegistry,
     PrefabService,
@@ -147,7 +147,7 @@ export const EntityInspectorPanel: React.FC<EntityInspectorPanelProps> = ({
 
     // ==================== 服务 | Services ====================
 
-    const componentRegistry = Core.services.resolve(ComponentRegistry);
+    const componentRegistry = Core.services.resolve(EditorComponentRegistry);
     const componentActionRegistry = Core.services.resolve(ComponentActionRegistry);
     const componentInspectorRegistry = Core.services.resolve(ComponentInspectorRegistry);
     const prefabService = Core.services.tryResolve(PrefabService) as PrefabService | null;

@@ -7,7 +7,7 @@ import {
     IMessageHub,
     SerializerRegistry,
     EntityStoreService,
-    ComponentRegistry,
+    EditorComponentRegistry,
     ProjectService,
     ComponentDiscoveryService,
     PropertyMetadataService,
@@ -90,7 +90,7 @@ export interface EditorServices {
     messageHub: MessageHub;
     serializerRegistry: SerializerRegistry;
     entityStore: EntityStoreService;
-    componentRegistry: ComponentRegistry;
+    componentRegistry: EditorComponentRegistry;
     projectService: ProjectService;
     componentDiscovery: ComponentDiscoveryService;
     propertyMetadata: PropertyMetadataService;
@@ -121,7 +121,7 @@ export class ServiceRegistry {
         const messageHub = new MessageHub();
         const serializerRegistry = new SerializerRegistry();
         const entityStore = new EntityStoreService(messageHub);
-        const componentRegistry = new ComponentRegistry();
+        const componentRegistry = new EditorComponentRegistry();
 
         // 注册标准组件到编辑器和核心注册表
         // Register to both editor registry (for UI) and core registry (for serialization)
@@ -168,7 +168,7 @@ export class ServiceRegistry {
         Core.services.registerInstance(IMessageHub, messageHub);  // Symbol 注册用于跨包插件访问
         Core.services.registerInstance(SerializerRegistry, serializerRegistry);
         Core.services.registerInstance(EntityStoreService, entityStore);
-        Core.services.registerInstance(ComponentRegistry, componentRegistry);
+        Core.services.registerInstance(EditorComponentRegistry, componentRegistry);
         Core.services.registerInstance(ProjectService, projectService);
         Core.services.registerInstance(ComponentDiscoveryService, componentDiscovery);
         Core.services.registerInstance(PropertyMetadataService, propertyMetadata);

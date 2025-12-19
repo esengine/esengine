@@ -10,9 +10,12 @@ import { Core, Scene, SceneSerializer, HierarchySystem, PluginServiceRegistry, c
 import {
     EngineBridge,
     EngineRenderSystem,
-    EngineBridgeToken,
     RenderSystemToken,
     EngineIntegrationToken,
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
     type IUIRenderDataProvider
 } from '@esengine/ecs-engine-bindgen';
 import {
@@ -360,7 +363,11 @@ export class GameRuntime {
             const services = new PluginServiceRegistry();
 
             // 注册核心服务 | Register core services
-            services.register(EngineBridgeToken, this._bridge);
+            // 使用单一职责接口注册 EngineBridge | Register EngineBridge with single-responsibility interfaces
+            services.register(TextureServiceToken, this._bridge);
+            services.register(DynamicAtlasServiceToken, this._bridge);
+            services.register(CoordinateServiceToken, this._bridge);
+            services.register(RenderConfigServiceToken, this._bridge);
             services.register(RenderSystemToken, this._renderSystem);
             services.register(EngineIntegrationToken, this._engineIntegration);
             services.register(AssetManagerToken, this._assetManager);

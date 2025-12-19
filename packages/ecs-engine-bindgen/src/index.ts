@@ -8,12 +8,20 @@
 // Service tokens and interfaces (谁定义接口，谁导出 Token)
 export {
     RenderSystemToken,
-    EngineBridgeToken,
     EngineIntegrationToken,
+    // 新的单一职责服务令牌 | New single-responsibility service tokens
+    TextureServiceToken,
+    DynamicAtlasServiceToken,
+    CoordinateServiceToken,
+    RenderConfigServiceToken,
+    // 接口类型 | Interface types
     type IRenderSystem,
-    type IEngineBridge,
     type IEngineIntegration,
-    type IRenderDataProvider
+    type IRenderDataProvider,
+    type ITextureService,
+    type IDynamicAtlasService,
+    type ICoordinateService,
+    type IRenderConfigService
 } from './tokens';
 
 export { EngineBridge } from './core/EngineBridge';

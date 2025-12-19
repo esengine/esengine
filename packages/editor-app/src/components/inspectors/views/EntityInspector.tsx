@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Settings, ChevronDown, ChevronRight, X, Plus, Box, Search, Lock, Unlock } from 'lucide-react';
 import { Entity, Component, Core, getComponentDependencies, getComponentTypeName, getComponentInstanceTypeName, isComponentInstanceHiddenInInspector, PrefabInstanceComponent } from '@esengine/ecs-framework';
-import { MessageHub, CommandManager, ComponentRegistry, ComponentActionRegistry, ComponentInspectorRegistry, PrefabService } from '@esengine/editor-core';
+import { MessageHub, CommandManager, EditorComponentRegistry, ComponentActionRegistry, ComponentInspectorRegistry, PrefabService } from '@esengine/editor-core';
 import { PropertyInspector } from '../../PropertyInspector';
 import { NotificationService } from '../../../services/NotificationService';
 import { RemoveComponentCommand, UpdateComponentCommand, AddComponentCommand } from '../../../application/commands/component';
@@ -11,7 +11,7 @@ import * as LucideIcons from 'lucide-react';
 
 type CategoryFilter = 'all' | 'general' | 'transform' | 'rendering' | 'physics' | 'audio' | 'other';
 
-// 从 ComponentRegistry category 到 CategoryFilter 的映射
+// 从 EditorComponentRegistry category 到 CategoryFilter 的映射
 const categoryKeyMap: Record<string, CategoryFilter> = {
     'components.category.core': 'general',
     'components.category.rendering': 'rendering',
@@ -84,7 +84,7 @@ export function EntityInspector({
     const addButtonRef = useRef<HTMLButtonElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    const componentRegistry = Core.services.resolve(ComponentRegistry);
+    const componentRegistry = Core.services.resolve(EditorComponentRegistry);
     const componentActionRegistry = Core.services.resolve(ComponentActionRegistry);
     const componentInspectorRegistry = Core.services.resolve(ComponentInspectorRegistry);
     const prefabService = Core.services.tryResolve(PrefabService) as PrefabService | null;

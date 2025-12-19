@@ -1,5 +1,5 @@
 import { Entity, Component, getComponentDependencies, getComponentTypeName } from '@esengine/ecs-framework';
-import { MessageHub, ComponentRegistry } from '@esengine/editor-core';
+import { MessageHub, EditorComponentRegistry } from '@esengine/editor-core';
 import { Core } from '@esengine/ecs-framework';
 import { BaseCommand } from '../BaseCommand';
 
@@ -55,7 +55,7 @@ export class AddComponentCommand extends BaseCommand {
             return;
         }
 
-        const componentRegistry = Core.services.tryResolve(ComponentRegistry) as ComponentRegistry | null;
+        const componentRegistry = Core.services.tryResolve(EditorComponentRegistry) as EditorComponentRegistry | null;
         if (!componentRegistry) {
             return;
         }

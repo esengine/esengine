@@ -5,7 +5,7 @@
 
 import type { ServiceContainer } from '@esengine/ecs-framework';
 import { createLogger } from '@esengine/ecs-framework';
-import type { IPlugin, IEditorModuleLoader, ModuleManifest } from '@esengine/editor-core';
+import type { IEditorPlugin, IEditorModuleLoader, ModuleManifest } from '@esengine/editor-core';
 import { SettingsRegistry } from '@esengine/editor-core';
 
 const logger = createLogger('PluginConfigPlugin');
@@ -69,7 +69,7 @@ const manifest: ModuleManifest = {
     exports: {}
 };
 
-export const PluginConfigPlugin: IPlugin = {
+export const PluginConfigPlugin: IEditorPlugin = {
     manifest,
     editorModule: new PluginConfigEditorModule()
 };
