@@ -24,6 +24,10 @@ export type {
     SerializationMetadata
 } from './SerializationDecorators';
 
+// 值序列化器
+export { ValueSerializer } from './ValueSerializer';
+export type { SerializableValue, TypeHandler, TypedValue } from './ValueSerializer';
+
 // 组件序列化器
 export { ComponentSerializer } from './ComponentSerializer';
 export type { SerializedComponent } from './ComponentSerializer';

@@ -14,6 +14,7 @@ import { BinarySerializer } from '../../Utils/BinarySerializer';
 import { HierarchySystem } from '../Systems/HierarchySystem';
 import { HierarchyComponent } from '../Components/HierarchyComponent';
 import { SerializationContext } from './SerializationContext';
+import { ValueSerializer, SerializableValue } from './ValueSerializer';
 
 /**
  * 场景序列化格式
@@ -387,127 +388,19 @@ export class SceneSerializer {
         }
     }
 
-    /**
-     * 序列化场景自定义数据
-     *
-     * 将 Map<string, any> 转换为普通对象
-     */
-    private static serializeSceneData(sceneData: Map<string, any>): Record<string, any> {
-        const result: Record<string, any> = {};
-
+    private static serializeSceneData(sceneData: Map<string, unknown>): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
         for (const [key, value] of sceneData) {
-            result[key] = this.serializeValue(value);
+            result[key] = ValueSerializer.serialize(value);
         }
-
         return result;
     }
 
-    /**
-     * 反序列化场景自定义数据
-     *
-     * 将普通对象还原为 Map<string, any>
-     */
-    private static deserializeSceneData(
-        data: Record<string, any>,
-        targetMap: Map<string, any>
-    ): void {
+    private static deserializeSceneData(data: Record<string, unknown>, targetMap: Map<string, unknown>): void {
         targetMap.clear();
-
         for (const [key, value] of Object.entries(data)) {
-            targetMap.set(key, this.deserializeValue(value));
+            targetMap.set(key, ValueSerializer.deserialize(value as SerializableValue));
         }
-    }
-
-    /**
-     * 序列化单个值（带循环引用检测）
-     */
-    private static serializeValue(value: any, seen = new WeakSet<object>()): any {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        const type = typeof value;
-        if (type === 'string' || type === 'number' || type === 'boolean') {
-            return value;
-        }
-
-        if (type === 'object') {
-            if (seen.has(value)) {
-                return undefined;
-            }
-            seen.add(value);
-
-            if (value instanceof Date) {
-                return { __type: 'Date', value: value.toISOString() };
-            }
-
-            if (value instanceof Map) {
-                return { __type: 'Map', value: Array.from(value.entries()) };
-            }
-
-            if (value instanceof Set) {
-                return { __type: 'Set', value: Array.from(value) };
-            }
-
-            if (Array.isArray(value)) {
-                return value.map((item) => this.serializeValue(item, seen));
-            }
-
-            const result: Record<string, any> = {};
-            for (const key in value) {
-                if (Object.prototype.hasOwnProperty.call(value, key)) {
-                    result[key] = this.serializeValue(value[key], seen);
-                }
-            }
-            return result;
-        }
-
-        return undefined;
-    }
-
-    /**
-     * 反序列化单个值
-     */
-    private static deserializeValue(value: any): any {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        // 基本类型
-        const type = typeof value;
-        if (type === 'string' || type === 'number' || type === 'boolean') {
-            return value;
-        }
-
-        // 处理特殊类型标记
-        if (type === 'object' && value.__type) {
-            switch (value.__type) {
-                case 'Date':
-                    return new Date(value.value);
-                case 'Map':
-                    return new Map(value.value);
-                case 'Set':
-                    return new Set(value.value);
-            }
-        }
-
-        // 数组
-        if (Array.isArray(value)) {
-            return value.map((item) => this.deserializeValue(item));
-        }
-
-        // 普通对象
-        if (type === 'object') {
-            const result: Record<string, any> = {};
-            for (const key in value) {
-                if (value.hasOwnProperty(key)) {
-                    result[key] = this.deserializeValue(value[key]);
-                }
-            }
-            return result;
-        }
-
-        return value;
     }
 
     /**
