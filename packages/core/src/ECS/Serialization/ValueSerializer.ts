@@ -97,7 +97,10 @@ function deserialize(value: SerializableValue): unknown {
 }
 
 function isTypedValue(v: unknown): v is { __type: string; value: unknown } {
-    return typeof v === 'object' && v !== null && '__type' in v;
+    if (v === null || typeof v !== 'object') {
+        return false;
+    }
+    return '__type' in v;
 }
 
 export const ValueSerializer = {
