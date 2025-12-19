@@ -419,51 +419,49 @@ export class SceneSerializer {
     }
 
     /**
-     * 序列化单个值
+     * 序列化单个值（带循环引用检测）
      */
-    private static serializeValue(value: any): any {
+    private static serializeValue(value: any, seen = new WeakSet<object>()): any {
         if (value === null || value === undefined) {
             return value;
         }
 
-        // 基本类型
         const type = typeof value;
         if (type === 'string' || type === 'number' || type === 'boolean') {
             return value;
         }
 
-        // Date
-        if (value instanceof Date) {
-            return { __type: 'Date', value: value.toISOString() };
-        }
-
-        // Map
-        if (value instanceof Map) {
-            return { __type: 'Map', value: Array.from(value.entries()) };
-        }
-
-        // Set
-        if (value instanceof Set) {
-            return { __type: 'Set', value: Array.from(value) };
-        }
-
-        // 数组
-        if (Array.isArray(value)) {
-            return value.map((item) => this.serializeValue(item));
-        }
-
-        // 普通对象
         if (type === 'object') {
+            if (seen.has(value)) {
+                return undefined;
+            }
+            seen.add(value);
+
+            if (value instanceof Date) {
+                return { __type: 'Date', value: value.toISOString() };
+            }
+
+            if (value instanceof Map) {
+                return { __type: 'Map', value: Array.from(value.entries()) };
+            }
+
+            if (value instanceof Set) {
+                return { __type: 'Set', value: Array.from(value) };
+            }
+
+            if (Array.isArray(value)) {
+                return value.map((item) => this.serializeValue(item, seen));
+            }
+
             const result: Record<string, any> = {};
             for (const key in value) {
-                if (value.hasOwnProperty(key)) {
-                    result[key] = this.serializeValue(value[key]);
+                if (Object.prototype.hasOwnProperty.call(value, key)) {
+                    result[key] = this.serializeValue(value[key], seen);
                 }
             }
             return result;
         }
 
-        // 其他类型不序列化
         return undefined;
     }
 

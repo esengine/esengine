@@ -214,63 +214,51 @@ export class ComponentSerializer {
     }
 
     /**
-     * 默认值序列化
-     *
-     * 处理基本类型、数组、对象等的序列化
+     * 默认值序列化（带循环引用检测）
      */
-    private static serializeValue(value: SerializableValue): SerializableValue {
+    private static serializeValue(value: SerializableValue, seen = new WeakSet<object>()): SerializableValue {
         if (value === null || value === undefined) {
             return value;
         }
 
-        // 基本类型
         const type = typeof value;
         if (type === 'string' || type === 'number' || type === 'boolean') {
             return value;
         }
 
-        // 日期
-        if (value instanceof Date) {
-            return {
-                __type: 'Date',
-                value: value.toISOString()
-            };
-        }
+        if (type === 'object') {
+            const obj = value as object;
+            if (seen.has(obj)) {
+                return undefined; // 跳过循环引用
+            }
+            seen.add(obj);
 
-        // 数组
-        if (Array.isArray(value)) {
-            return value.map((item) => this.serializeValue(item));
-        }
+            if (value instanceof Date) {
+                return { __type: 'Date', value: value.toISOString() };
+            }
 
-        // Map (如果没有使用@SerializeMap装饰器)
-        if (value instanceof Map) {
-            return {
-                __type: 'Map',
-                value: Array.from(value.entries())
-            };
-        }
+            if (Array.isArray(value)) {
+                return value.map((item) => this.serializeValue(item, seen));
+            }
 
-        // Set
-        if (value instanceof Set) {
-            return {
-                __type: 'Set',
-                value: Array.from(value)
-            };
-        }
+            if (value instanceof Map) {
+                return { __type: 'Map', value: Array.from(value.entries()) };
+            }
 
-        // 普通对象
-        if (type === 'object' && typeof value === 'object' && !Array.isArray(value)) {
+            if (value instanceof Set) {
+                return { __type: 'Set', value: Array.from(value) };
+            }
+
             const result: Record<string, SerializableValue> = {};
-            const obj = value as Record<string, SerializableValue>;
-            for (const key in obj) {
-                if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                    result[key] = this.serializeValue(obj[key]);
+            const record = value as Record<string, SerializableValue>;
+            for (const key in record) {
+                if (Object.prototype.hasOwnProperty.call(record, key)) {
+                    result[key] = this.serializeValue(record[key], seen);
                 }
             }
             return result;
         }
 
-        // 其他类型（函数等）不序列化
         return undefined;
     }
 
