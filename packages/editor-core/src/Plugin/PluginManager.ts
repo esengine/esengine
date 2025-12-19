@@ -22,7 +22,7 @@ import { UIRegistry } from '../Services/UIRegistry';
 import { MessageHub } from '../Services/MessageHub';
 import { moduleRegistry } from '../Services/Module/ModuleRegistry';
 import { SerializerRegistry } from '../Services/SerializerRegistry';
-import { ComponentRegistry as EditorComponentRegistry } from '../Services/ComponentRegistry';
+import { EditorComponentRegistry } from '../Services/ComponentRegistry';
 
 const logger = createLogger('PluginManager');
 

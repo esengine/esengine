@@ -15,7 +15,7 @@ import {
     UIRegistry,
     MessageHub,
     EntityStoreService,
-    ComponentRegistry,
+    EditorComponentRegistry,
     LocaleService,
     LogService,
     SettingsRegistry,
@@ -394,7 +394,7 @@ function App() {
                         setStatus(t('header.status.remoteConnected'));
                     } else {
                         if (projectLoaded) {
-                            const componentRegistry = Core.services.resolve(ComponentRegistry);
+                            const componentRegistry = Core.services.resolve(EditorComponentRegistry);
                             const componentCount = componentRegistry?.getAllComponents().length || 0;
                             setStatus(t('header.status.projectOpened') + (componentCount > 0 ? ` (${componentCount} components registered)` : ''));
                         } else {

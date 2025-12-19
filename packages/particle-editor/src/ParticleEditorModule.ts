@@ -22,7 +22,7 @@ import {
     InspectorRegistry,
     EntityStoreService,
     MessageHub,
-    ComponentRegistry,
+    EditorComponentRegistry,
     FileActionRegistry
 } from '@esengine/editor-core';
 import { TransformComponent } from '@esengine/engine-core';
@@ -56,7 +56,7 @@ export class ParticleEditorModule implements IEditorModuleLoader {
         }
 
         // 注册组件到编辑器组件注册表 | Register to editor component registry
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             componentRegistry.register({
                 name: 'ParticleSystem',

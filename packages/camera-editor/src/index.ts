@@ -15,13 +15,13 @@ import type {
 import {
     EntityStoreService,
     MessageHub,
-    ComponentRegistry
+    EditorComponentRegistry
 } from '@esengine/editor-core';
 import { CameraComponent } from '@esengine/camera';
 
 export class CameraEditorModule implements IEditorModuleLoader {
     async install(services: ServiceContainer): Promise<void> {
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             componentRegistry.register({
                 name: 'Camera',

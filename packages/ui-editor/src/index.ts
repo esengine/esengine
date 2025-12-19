@@ -14,7 +14,7 @@ import type {
 import {
     EntityStoreService,
     MessageHub,
-    ComponentRegistry,
+    EditorComponentRegistry,
     ComponentInspectorRegistry
 } from '@esengine/editor-core';
 
@@ -47,7 +47,7 @@ export { registerUITransformGizmo, unregisterUITransformGizmo } from './gizmos';
 export class UIEditorModule implements IEditorModuleLoader {
     async install(services: ServiceContainer): Promise<void> {
         // 注册 UI 组件到编辑器组件注册表 | Register UI components to editor component registry
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             const uiComponents = [
                 { name: 'UITransform', type: UITransformComponent, category: 'components.category.ui', description: 'UI element positioning and sizing', icon: 'Move' },

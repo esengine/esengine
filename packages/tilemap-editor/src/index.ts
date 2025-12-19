@@ -20,7 +20,7 @@ import {
     InspectorRegistry,
     EntityStoreService,
     MessageHub,
-    ComponentRegistry,
+    EditorComponentRegistry,
     IDialogService,
     IFileSystemService,
     FileActionRegistry
@@ -72,7 +72,7 @@ export class TilemapEditorModule implements IEditorModuleLoader {
         }
 
         // 注册组件到编辑器组件注册表 | Register to editor component registry
-        const componentRegistry = services.resolve(ComponentRegistry);
+        const componentRegistry = services.resolve(EditorComponentRegistry);
         if (componentRegistry) {
             componentRegistry.register({
                 name: 'Tilemap',
