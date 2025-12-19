@@ -11,6 +11,7 @@ import { EntitySystem, Matcher, Entity, ECSSystem } from '@esengine/ecs-framewor
 import { UITransformComponent } from '../../components/UITransformComponent';
 import { UITextComponent } from '../../components/UITextComponent';
 import { getUIRenderCollector, registerCacheInvalidationCallback, unregisterCacheInvalidationCallback } from './UIRenderCollector';
+import { getUIRenderTransform } from './UIRenderUtils';
 
 /**
  * Text texture cache entry
@@ -55,6 +56,10 @@ export class UITextRenderSystem extends EntitySystem {
     private nextTextureId = 90000;
     private onTextureCreated: ((id: number, dataUrl: string) => void) | null = null;
     private cacheInvalidationBound: () => void;
+    /** 检查纹理是否已就绪的回调 | Callback to check if texture is ready */
+    private textureReadyChecker: ((id: number) => boolean) | null = null;
+    /** 待确认就绪的纹理 ID 集合 | Set of texture IDs pending ready confirmation */
+    private pendingTextures: Set<number> = new Set();
 
     constructor() {
         super(Matcher.empty().all(UITransformComponent, UITextComponent));
@@ -90,8 +95,41 @@ export class UITextRenderSystem extends EntitySystem {
         this.onTextureCreated = callback;
     }
 
+    /**
+     * Set callback to check if texture is ready
+     * 设置检查纹理是否就绪的回调
+     *
+     * This is used to verify that dynamically created textures
+     * have finished loading before caching them.
+     * 用于验证动态创建的纹理在缓存前已加载完成。
+     */
+    setTextureReadyChecker(checker: (id: number) => boolean): void {
+        this.textureReadyChecker = checker;
+    }
+
     protected process(entities: readonly Entity[]): void {
         const collector = getUIRenderCollector();
+
+        // 检查待确认的纹理是否已就绪
+        // Check if pending textures are ready
+        if (this.pendingTextures.size > 0 && this.textureReadyChecker) {
+            const nowReady: number[] = [];
+            for (const textureId of this.pendingTextures) {
+                if (this.textureReadyChecker(textureId)) {
+                    nowReady.push(textureId);
+                }
+            }
+            if (nowReady.length > 0) {
+                for (const id of nowReady) {
+                    this.pendingTextures.delete(id);
+                }
+                // 纹理就绪后不需要做任何特殊处理！
+                // Rust 端的纹理已经从 1x1 占位符更新为真实内容。
+                // 注意：不要调用 invalidateUIRenderCaches()，那会清除缓存导致无限循环。
+                // No special action needed - Rust texture is already updated.
+                // Note: Do NOT call invalidateUIRenderCaches(), it would cause infinite loop.
+            }
+        }
 
         for (const entity of entities) {
             const transform = entity.getComponent(UITransformComponent);
@@ -101,50 +139,38 @@ export class UITextRenderSystem extends EntitySystem {
             // Null check - component may not be ready during deserialization or initialization
             if (!transform || !text) continue;
 
-            if (!transform.worldVisible || !text.text) continue;
+            // 使用工具函数获取渲染变换数据（包含 layoutComputed 检查）
+            // Use utility function to get render transform data (includes layoutComputed check)
+            const rt = getUIRenderTransform(transform);
+            if (!rt) continue;
 
-            const x = transform.worldX ?? transform.x;
-            const y = transform.worldY ?? transform.y;
-            // 使用世界缩放和旋转
-            const scaleX = transform.worldScaleX ?? transform.scaleX;
-            const scaleY = transform.worldScaleY ?? transform.scaleY;
-            // 角度转弧度 | Convert degrees to radians
-            const rotationDegrees = transform.worldRotation ?? transform.rotation;
-            const rotation = (rotationDegrees * Math.PI) / 180;
-            const width = (transform.computedWidth ?? transform.width) * scaleX;
-            const height = (transform.computedHeight ?? transform.height) * scaleY;
-            const alpha = transform.worldAlpha ?? transform.alpha;
-            // 使用排序层和世界层内顺序 | Use sorting layer and world order in layer
-            const sortingLayer = transform.sortingLayer;
-            const orderInLayer = transform.worldOrderInLayer;
-            // 使用 transform 的 pivot 作为旋转/缩放中心
-            const pivotX = transform.pivotX;
-            const pivotY = transform.pivotY;
-            // 渲染位置 = 左下角 + pivot 偏移
-            const renderX = x + width * pivotX;
-            const renderY = y + height * pivotY;
+            // 跳过空文本 | Skip empty text
+            if (!text.text) continue;
 
             // Generate or retrieve cached texture
             // 生成或获取缓存的纹理
             const textureId = this.getOrCreateTextTexture(
-                entity.id, text, Math.ceil(width), Math.ceil(height)
+                entity.id, text, Math.ceil(rt.width), Math.ceil(rt.height)
             );
 
             if (textureId === null) continue;
 
-            // Use pivot position with transform's pivot values
+            // 文本渲染在背景之上 | Text renders above background
+            const textOrderInLayer = rt.orderInLayer + 1;
+
             // 使用 transform 的 pivot 值作为旋转中心
+            // Use pivot position with transform's pivot values
             collector.addRect(
-                renderX, renderY,
-                width, height,
+                rt.renderX, rt.renderY,
+                rt.width, rt.height,
                 0xFFFFFF,  // White tint (color is baked into texture)
-                alpha,
-                sortingLayer,
-                orderInLayer,  // 使用 worldOrderInLayer，子节点已经通过 depth 保证在父节点之上
+                rt.alpha,
+                rt.sortingLayer,
+                textOrderInLayer,  // 使用调整后的 orderInLayer
                 {
-                    rotation,
-                    pivotX,
-                    pivotY,
+                    rotation: rt.rotation,
+                    pivotX: rt.pivotX,
+                    pivotY: rt.pivotY,
                     textureId,
                     entityId: entity.id
                 }
@@ -241,6 +267,11 @@ export class UITextRenderSystem extends EntitySystem {
             // 通知回调新纹理
             if (this.onTextureCreated) {
                 this.onTextureCreated(textureId, dataUrl);
+                // 如果有就绪检查器，将新纹理添加到待确认列表
+                // If ready checker is available, add new texture to pending list
+                if (this.textureReadyChecker) {
+                    this.pendingTextures.add(textureId);
+                }
             } else {
                 // 警告：回调未设置（只输出一次）
                 // Warning: callback not set (output once only)
@@ -323,6 +354,7 @@ export class UITextRenderSystem extends EntitySystem {
      */
     clearTextCache(): void {
         this.textTextureCache.clear();
+        this.pendingTextures.clear();
     }
 
     /**
@@ -341,6 +373,8 @@ export class UITextRenderSystem extends EntitySystem {
         this.textCanvas = null;
         this.textCtx = null;
         this.textTextureCache.clear();
+        this.pendingTextures.clear();
         this.onTextureCreated = null;
+        this.textureReadyChecker = null;
     }
 }

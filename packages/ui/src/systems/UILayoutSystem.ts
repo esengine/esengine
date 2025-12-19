@@ -3,6 +3,7 @@ import { SortingLayers } from '@esengine/engine-core';
 import { UICanvasComponent } from '../components/UICanvasComponent';
 import { UIAlignItems, UIJustifyContent, UILayoutComponent, UILayoutType } from '../components/UILayoutComponent';
 import { UITransformComponent } from '../components/UITransformComponent';
+import { getUIRenderCollector } from './render/UIRenderCollector';
 
 /** 度转弧度常量 | Degrees to radians constant */
 const DEG_TO_RAD = Math.PI / 180;
@@ -50,7 +51,7 @@ interface CanvasContext {
  * 注意：canvasWidth/canvasHeight 是 UI 设计的参考尺寸，不是实际渲染视口大小
  * Note: canvasWidth/canvasHeight is the UI design reference size, not the actual render viewport size
  */
-@ECSSystem('UILayout', { runInEditMode: true })
+@ECSSystem('UILayout', { updateOrder: 50, runInEditMode: true })
 export class UILayoutSystem extends EntitySystem {
     /**
      * UI 画布宽度（设计尺寸）
@@ -64,8 +65,26 @@ export class UILayoutSystem extends EntitySystem {
      */
     public canvasHeight: number = 1080;
 
+    /**
+     * 当前帧的实体映射（用于快速查找）
+     * Entity map for current frame (for fast lookup)
+     */
+    private currentFrameEntityMap: Map<number, Entity> = new Map();
+
     constructor() {
         super(Matcher.empty().all(UITransformComponent));
+    }
+
+    /**
+     * 帧开始时调用
+     * Called at the start of each frame
+     *
+     * 清除 UI 渲染收集器，为本帧的渲染数据做准备
+     * Clear the UI render collector to prepare for this frame's render data
+     */
+    protected override onBegin(): void {
+        const collector = getUIRenderCollector();
+        collector.clear();
     }
 
     /**
@@ -97,12 +116,30 @@ export class UILayoutSystem extends EntitySystem {
     }
 
     protected process(entities: readonly Entity[]): void {
+        // 构建当前帧的实体映射（用于快速查找，解决第一帧 findEntityById 返回 null 的问题）
+        // Build entity map for current frame (for fast lookup, fixes findEntityById returning null on first frame)
+        this.currentFrameEntityMap.clear();
+        for (const e of entities) {
+            this.currentFrameEntityMap.set(e.id, e);
+        }
+
         // 首先处理根元素（没有父元素的）
+        // 修复：如果父实体在当前处理的实体集合中，则不是根实体
+        // 这解决了第一帧时 findEntityById 可能返回 null 的问题
+        // Fix: If parent entity is in current entity set, this is not a root
+        // This fixes the issue where findEntityById may return null on first frame
         const rootEntities = entities.filter(e => {
             const hierarchy = e.getComponent(HierarchyComponent);
             if (!hierarchy || hierarchy.parentId === null) {
                 return true;
             }
+            // 如果父实体在我们的实体集合中，这不是根实体（父实体会递归处理它）
+            // If parent is in our entity set, this is NOT a root (parent will recursively process this child)
+            if (this.currentFrameEntityMap.has(hierarchy.parentId)) {
+                return false;
+            }
+            // 如果父实体不在我们的集合中，检查它是否存在于场景中
+            // If parent is not in our set, check if it exists in scene
             const parent = this.scene?.findEntityById(hierarchy.parentId);
             return !parent || !parent.hasComponent(UITransformComponent);
         });
@@ -271,7 +308,7 @@ export class UILayoutSystem extends EntitySystem {
 
         transform.layoutDirty = false;
 
-        // 处理子元素布局
+        // 处理子元素布局 | Process child element layout
         const children = this.getUIChildren(entity);
         if (children.length === 0) return;
 
@@ -644,6 +681,7 @@ export class UILayoutSystem extends EntitySystem {
      * Get child entities that have UITransformComponent
      *
      * 优先使用 HierarchyComponent，如果没有则返回空数组
+     * 优先从当前帧实体映射查找，解决第一帧 findEntityById 返回 null 的问题
      */
     private getUIChildren(entity: Entity): Entity[] {
         const hierarchy = entity.getComponent(HierarchyComponent);
@@ -660,7 +698,15 @@ export class UILayoutSystem extends EntitySystem {
 
         const children: Entity[] = [];
         for (const childId of hierarchy.childIds) {
-            const child = this.scene?.findEntityById(childId);
+            // 优先从当前帧实体映射查找（解决第一帧问题）
+            // Prefer looking up from current frame entity map (fixes first frame issue)
+            let child = this.currentFrameEntityMap.get(childId);
+            const fromMap = !!child;
+            if (!child) {
+                // 回退到场景查找
+                // Fallback to scene lookup
+                child = this.scene?.findEntityById(childId) ?? undefined;
+            }
             if (child && child.hasComponent(UITransformComponent)) {
                 children.push(child);
             }
