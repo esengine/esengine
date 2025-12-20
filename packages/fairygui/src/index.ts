@@ -16,6 +16,16 @@ export { Controller } from './core/Controller';
 export { Transition } from './core/Transition';
 export { Timer } from './core/Timer';
 export { Stage, EScaleMode, EAlignMode } from './core/Stage';
+export { UIConfig, getUIConfig, setUIConfig } from './core/UIConfig';
+export { UIObjectFactory } from './core/UIObjectFactory';
+export {
+    ServiceContainer,
+    getGlobalContainer,
+    setGlobalContainer,
+    EServiceLifecycle,
+    Inject
+} from './core/ServiceContainer';
+export type { ServiceIdentifier, ServiceFactory } from './core/ServiceContainer';
 
 // Field types | 字段类型
 export {
@@ -63,6 +73,7 @@ export { GSlider } from './widgets/GSlider';
 
 // Events | 事件
 export { EventDispatcher } from './events/EventDispatcher';
+export type { TypedEventListener, EventListener, FGUIEventType, IEventContext } from './events/EventDispatcher';
 export { FGUIEvents } from './events/Events';
 export type { IInputEventData } from './events/Events';
 
@@ -85,7 +96,23 @@ export { Point, Rectangle, Margin } from './utils/MathTypes';
 export type { IPoint, IRectangle } from './utils/MathTypes';
 export { ByteBuffer } from './utils/ByteBuffer';
 
+// Binding | 绑定
+export {
+    ObservableProperty,
+    ComputedProperty,
+    PropertyBinder
+} from './binding/PropertyBinding';
+export type {
+    IObservableProperty,
+    IWritableProperty,
+    IPropertySubscription,
+    PropertyChangeCallback
+} from './binding/PropertyBinding';
+
 // Render | 渲染
+export { RenderCollector } from './render/RenderCollector';
+export { RenderBridge } from './render/RenderBridge';
+export { Canvas2DBackend } from './render/Canvas2DBackend';
 export type {
     IRenderCollector,
     IRenderPrimitive,
@@ -93,3 +120,10 @@ export type {
     ETextAlign,
     ETextVAlign
 } from './render/IRenderCollector';
+export type {
+    IRenderBackend,
+    IRenderStats,
+    ITextureHandle,
+    IFontHandle,
+    RenderBackendFactory
+} from './render/IRenderBackend';

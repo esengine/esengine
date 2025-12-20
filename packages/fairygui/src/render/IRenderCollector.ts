@@ -11,7 +11,33 @@ export const enum ERenderPrimitiveType {
     Image = 'image',
     Text = 'text',
     Mesh = 'mesh',
-    Graph = 'graph'
+    Graph = 'graph',
+    Ellipse = 'ellipse',
+    Polygon = 'polygon'
+}
+
+/**
+ * Blend mode
+ * 混合模式
+ */
+export const enum EBlendModeType {
+    Normal = 'normal',
+    Add = 'add',
+    Multiply = 'multiply',
+    Screen = 'screen'
+}
+
+/**
+ * Transform matrix (2D affine)
+ * 变换矩阵（2D 仿射）
+ */
+export interface ITransformMatrix {
+    a: number;
+    b: number;
+    c: number;
+    d: number;
+    tx: number;
+    ty: number;
 }
 
 /**
@@ -48,6 +74,12 @@ export interface IRenderPrimitive {
     /** World matrix (6 elements: a, b, c, d, tx, ty) | 世界矩阵 */
     worldMatrix: Float32Array;
 
+    /** X position | X 坐标 */
+    x?: number;
+
+    /** Y position | Y 坐标 */
+    y?: number;
+
     /** Width | 宽度 */
     width: number;
 
@@ -60,8 +92,17 @@ export interface IRenderPrimitive {
     /** Is grayed | 是否灰度 */
     grayed: boolean;
 
+    /** Transform matrix | 变换矩阵 */
+    transform?: ITransformMatrix;
+
+    /** Blend mode | 混合模式 */
+    blendMode?: EBlendModeType;
+
     /** Clip rect (in stage coordinates) | 裁剪矩形（舞台坐标） */
     clipRect?: IRectangle;
+
+    /** Source rectangle (for image) | 源矩形（用于图像） */
+    srcRect?: IRectangle;
 
     // Image properties | 图像属性
 
@@ -106,8 +147,14 @@ export interface IRenderPrimitive {
     /** Text align | 文本对齐 */
     align?: ETextAlign | EAlignType;
 
+    /** Text horizontal align (alias) | 文本水平对齐（别名） */
+    textAlign?: ETextAlign | string;
+
     /** Text vertical align | 文本垂直对齐 */
     valign?: ETextVAlign | EVertAlignType;
+
+    /** Text vertical align (alias) | 文本垂直对齐（别名） */
+    textVAlign?: ETextVAlign | string;
 
     /** Leading (line spacing) | 行间距 */
     leading?: number;
@@ -163,6 +210,12 @@ export interface IRenderPrimitive {
 
     /** Polygon points | 多边形顶点 */
     polygonPoints?: number[];
+
+    /** Points array (alias for polygonPoints) | 点数组（polygonPoints 别名） */
+    points?: number[];
+
+    /** Line width | 线宽 */
+    lineWidth?: number;
 
     /** Sides for regular polygon | 正多边形边数 */
     sides?: number;
