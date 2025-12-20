@@ -19,6 +19,15 @@ export class GImage extends GObject {
 
     constructor() {
         super();
+        // Ensure _image is initialized - super() calls createDisplayObject() but
+        // class field initializers run after super(), which may cause issues
+        this.ensureImage();
+    }
+
+    private ensureImage(): void {
+        if (!this._image) {
+            this.createDisplayObject();
+        }
     }
 
     /**
@@ -38,7 +47,7 @@ export class GImage extends GObject {
     }
 
     public set color(value: string) {
-        if (this._image.color !== value) {
+        if (this._image && this._image.color !== value) {
             this._image.color = value;
             this.updateGear(4);
         }
@@ -78,7 +87,9 @@ export class GImage extends GObject {
     }
 
     public set fillMethod(value: EFillMethod) {
-        this._image.fillMethod = value;
+        if (this._image) {
+            this._image.fillMethod = value;
+        }
     }
 
     /**
@@ -90,7 +101,9 @@ export class GImage extends GObject {
     }
 
     public set fillOrigin(value: number) {
-        this._image.fillOrigin = value;
+        if (this._image) {
+            this._image.fillOrigin = value;
+        }
     }
 
     /**
@@ -102,7 +115,9 @@ export class GImage extends GObject {
     }
 
     public set fillClockwise(value: boolean) {
-        this._image.fillClockwise = value;
+        if (this._image) {
+            this._image.fillClockwise = value;
+        }
     }
 
     /**
@@ -114,13 +129,15 @@ export class GImage extends GObject {
     }
 
     public set fillAmount(value: number) {
-        this._image.fillAmount = value;
+        if (this._image) {
+            this._image.fillAmount = value;
+        }
     }
 
     protected createDisplayObject(): void {
         this._displayObject = this._image = new Image();
         this._image.touchable = false;
-        (this._displayObject as any)['$owner'] = this;
+        this._displayObject.gOwner = this;
     }
 
     /**
@@ -129,6 +146,8 @@ export class GImage extends GObject {
      */
     public constructFromResource(): void {
         if (!this.packageItem) return;
+
+        this.ensureImage();
 
         this._contentItem = this.packageItem;
 
@@ -147,6 +166,11 @@ export class GImage extends GObject {
             : null;
         this._image.scaleByTile = this._contentItem.scaleByTile;
         this._image.tileGridIndice = this._contentItem.tileGridIndice;
+
+        // Load texture from package (this decodes the sprite info)
+        if (this._contentItem.owner) {
+            this._contentItem.owner.getItemAsset(this._contentItem);
+        }
         this._image.texture = this._contentItem.texture;
 
         this.setSize(this.sourceWidth, this.sourceHeight);
@@ -189,11 +213,20 @@ export class GImage extends GObject {
             this.color = buffer.readS();
         }
         this.flip = buffer.readByte();
-        this._image.fillMethod = buffer.readByte();
-        if (this._image.fillMethod !== EFillMethod.None) {
-            this._image.fillOrigin = buffer.readByte();
-            this._image.fillClockwise = buffer.readBool();
-            this._image.fillAmount = buffer.getFloat32();
+
+        const fillMethodValue = buffer.readByte();
+        if (this._image) {
+            this._image.fillMethod = fillMethodValue;
+            if (this._image.fillMethod !== EFillMethod.None) {
+                this._image.fillOrigin = buffer.readByte();
+                this._image.fillClockwise = buffer.readBool();
+                this._image.fillAmount = buffer.getFloat32();
+            }
+        } else if (fillMethodValue !== EFillMethod.None) {
+            // Skip bytes if _image not ready
+            buffer.readByte();  // fillOrigin
+            buffer.readBool();  // fillClockwise
+            buffer.getFloat32(); // fillAmount
         }
     }
 }

@@ -32,6 +32,12 @@ export class GRoot extends GComponent {
 
         this._inputProcessor = new InputProcessor(this);
 
+        // Set this as stage root so children receive addedToStage events
+        // 将自己设置为舞台根，这样子对象才能收到 addedToStage 事件
+        if (this.displayObject) {
+            this.displayObject.setStage(this.displayObject);
+        }
+
         // Bind to stage events
         const stage = Stage.inst;
         stage.on('mousedown', this.onStageMouseDown, this);
@@ -298,19 +304,75 @@ export class GRoot extends GComponent {
     // Drag and drop | 拖放
 
     /**
-     * Start drag
-     * 开始拖拽
+     * Start dragging a source object
+     * 开始拖拽源对象
      */
-    public startDrag(source: GObject): void {
+    public startDragSource(source: GObject): void {
         GObject.draggingObject = source;
     }
 
     /**
-     * Stop drag
+     * Stop dragging
      * 停止拖拽
      */
-    public stopDrag(): void {
+    public stopDragSource(): void {
         GObject.draggingObject = null;
+    }
+
+    // Window management | 窗口管理
+
+    /**
+     * Show window
+     * 显示窗口
+     */
+    public showWindow(win: GObject): void {
+        this.addChild(win);
+        this.adjustModalLayer();
+    }
+
+    /**
+     * Hide window immediately
+     * 立即隐藏窗口
+     */
+    public hideWindowImmediately(win: GObject): void {
+        if (win.parent === this) {
+            this.removeChild(win);
+        }
+        this.adjustModalLayer();
+    }
+
+    /**
+     * Bring window to front
+     * 将窗口置于最前
+     */
+    public bringToFront(win: GObject): void {
+        const cnt = this.numChildren;
+        let i: number;
+        if (this._modalLayer && this._modalLayer.parent === this) {
+            i = this.getChildIndex(this._modalLayer);
+        } else {
+            i = cnt - 1;
+        }
+
+        const index = this.getChildIndex(win);
+        if (index < i) {
+            this.setChildIndex(win, i);
+        }
+    }
+
+    /**
+     * Get top window
+     * 获取最上层窗口
+     */
+    public getTopWindow(): GObject | null {
+        const cnt = this.numChildren;
+        for (let i = cnt - 1; i >= 0; i--) {
+            const child = this.getChildAt(i);
+            if (child !== this._modalLayer) {
+                return child;
+            }
+        }
+        return null;
     }
 
     // Update | 更新

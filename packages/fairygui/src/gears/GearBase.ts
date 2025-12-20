@@ -1,5 +1,6 @@
 import type { GObject } from '../core/GObject';
 import type { Controller } from '../core/Controller';
+import type { ByteBuffer } from '../utils/ByteBuffer';
 import { EEaseType } from '../core/FieldTypes';
 
 /**
@@ -70,6 +71,57 @@ export abstract class GearBase {
      * 更新当前状态
      */
     public abstract updateState(): void;
+
+    /**
+     * Setup gear from buffer
+     * 从缓冲区设置齿轮
+     */
+    public setup(buffer: ByteBuffer): void {
+        const parent = this.owner.parent;
+        if (!parent) return;
+
+        this._controller = parent.getControllerAt(buffer.getInt16());
+        this.init();
+
+        const cnt = buffer.getInt16();
+
+        // Read pages - subclasses should override to parse their specific data
+        this.readStatusFromBuffer(buffer, cnt);
+
+        // Read default status
+        if (buffer.readBool()) {
+            this.readDefaultStatusFromBuffer(buffer);
+        }
+
+        // Read tween config
+        if (buffer.readBool()) {
+            this.tweenConfig = new GearTweenConfig();
+            this.tweenConfig.easeType = buffer.readByte() as EEaseType;
+            this.tweenConfig.duration = buffer.getFloat32();
+            this.tweenConfig.delay = buffer.getFloat32();
+        }
+    }
+
+    /**
+     * Read status data from buffer
+     * 从缓冲区读取状态数据
+     */
+    protected readStatusFromBuffer(_buffer: ByteBuffer, _cnt: number): void {
+        // Override in subclasses to parse specific gear data
+        // Default: skip the data (each page has a string ID)
+        for (let i = 0; i < _cnt; i++) {
+            _buffer.readS(); // page id
+            // Subclass should read its specific data here
+        }
+    }
+
+    /**
+     * Read default status from buffer
+     * 从缓冲区读取默认状态
+     */
+    protected readDefaultStatusFromBuffer(_buffer: ByteBuffer): void {
+        // Override in subclasses
+    }
 
     /**
      * Dispose

@@ -18,6 +18,8 @@ export { Timer } from './core/Timer';
 export { Stage, EScaleMode, EAlignMode } from './core/Stage';
 export { UIConfig, getUIConfig, setUIConfig } from './core/UIConfig';
 export { UIObjectFactory } from './core/UIObjectFactory';
+export { GObjectPool } from './core/GObjectPool';
+export { DragDropManager } from './core/DragDropManager';
 export {
     ServiceContainer,
     getGlobalContainer,
@@ -59,9 +61,13 @@ export {
 
 // Display objects | 显示对象
 export { DisplayObject } from './display/DisplayObject';
+export { Container } from './display/Container';
 export { Image } from './display/Image';
 export { TextField } from './display/TextField';
 export { Graph } from './display/Graph';
+export { MovieClip } from './display/MovieClip';
+export type { IFrame, SimpleHandler } from './display/MovieClip';
+export { InputTextField } from './display/InputTextField';
 
 // Widgets | 控件
 export { GImage } from './widgets/GImage';
@@ -70,6 +76,14 @@ export { GGraph } from './widgets/GGraph';
 export { GButton } from './widgets/GButton';
 export { GProgressBar } from './widgets/GProgressBar';
 export { GSlider } from './widgets/GSlider';
+export { GLoader } from './widgets/GLoader';
+export { GMovieClip } from './widgets/GMovieClip';
+export { GList } from './widgets/GList';
+export type { ItemRenderer, ItemProvider } from './widgets/GList';
+export { GTextInput, EKeyboardType } from './widgets/GTextInput';
+export { PopupMenu } from './widgets/PopupMenu';
+export { Window } from './widgets/Window';
+export type { IUISource } from './widgets/Window';
 
 // Events | 事件
 export { EventDispatcher } from './events/EventDispatcher';
@@ -82,7 +96,20 @@ export { Relations } from './layout/Relations';
 export { RelationItem } from './layout/RelationItem';
 
 // Gears | 齿轮
-export { GearBase, GearTweenConfig } from './gears/GearBase';
+export {
+    GearBase,
+    GearTweenConfig,
+    GearDisplay,
+    GearDisplay2,
+    GearXY,
+    GearSize,
+    GearLook,
+    GearColor,
+    GearText,
+    GearIcon,
+    GearFontSize,
+    GearAnimation
+} from './gears';
 
 // Scroll | 滚动
 export { ScrollPane } from './scroll/ScrollPane';
@@ -113,6 +140,15 @@ export type {
 export { RenderCollector } from './render/RenderCollector';
 export { RenderBridge } from './render/RenderBridge';
 export { Canvas2DBackend } from './render/Canvas2DBackend';
+export {
+    FGUIRenderDataProvider,
+    createFGUIRenderDataProvider
+} from './render/FGUIRenderDataProvider';
+export type {
+    IEngineRenderData,
+    IFGUIRenderDataProvider,
+    TextureResolverFn
+} from './render/FGUIRenderDataProvider';
 export type {
     IRenderCollector,
     IRenderPrimitive,
@@ -127,3 +163,44 @@ export type {
     IFontHandle,
     RenderBackendFactory
 } from './render/IRenderBackend';
+
+// Tween | 补间动画
+export { GTween } from './tween/GTween';
+export { GTweener } from './tween/GTweener';
+export type { TweenCallback } from './tween/GTweener';
+export { TweenManager } from './tween/TweenManager';
+export { TweenValue } from './tween/TweenValue';
+export { evaluateEase } from './tween/EaseType';
+
+// Asset | 资产
+export {
+    FUIAssetLoader,
+    fuiAssetLoader,
+    FGUITextureManager,
+    getFGUITextureManager,
+    createTextureResolver,
+    setGlobalTextureService,
+    getGlobalTextureService
+} from './asset';
+export type {
+    IFUIAsset,
+    IAssetLoader,
+    IAssetContent,
+    IAssetParseContext,
+    ITextureService
+} from './asset';
+
+// ECS Integration | ECS 集成
+export {
+    FGUIComponent,
+    FGUIRenderSystem,
+    FGUIRenderSystemToken,
+    getFGUIRenderSystem,
+    setFGUIRenderSystem,
+    FGUIRuntimeModule,
+    FGUIPlugin
+} from './ecs';
+export type { IFGUIComponentData, RenderSubmitCallback } from './ecs';
+
+// Internal wiring (breaks circular dependencies)
+import './core/init';

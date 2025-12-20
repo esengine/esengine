@@ -127,6 +127,8 @@ const EXTENSION_TYPE_MAP: Record<string, AssetRegistryType> = {
     '.tsx': 'tileset',
     // Particle system
     '.particle': 'particle',
+    // FairyGUI
+    '.fui': 'fui',
 };
 
 /**

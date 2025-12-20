@@ -165,7 +165,10 @@ export function inferAssetType(path: string): AssetType {
         btree: 'behavior-tree',
         bp: 'blueprint',
         mat: 'material',
-        particle: 'particle'
+        particle: 'particle',
+
+        // FairyGUI
+        fui: 'fui'
     };
 
     return typeMap[ext] || 'binary';

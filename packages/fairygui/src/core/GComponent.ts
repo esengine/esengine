@@ -2,10 +2,14 @@ import { GObject } from './GObject';
 import { GGroup } from './GGroup';
 import { Controller } from './Controller';
 import { Transition } from './Transition';
+import { UIObjectFactory } from './UIObjectFactory';
 import { EOverflowType, EChildrenRenderOrder } from './FieldTypes';
-import { Rectangle } from '../utils/MathTypes';
+import { Rectangle, Margin } from '../utils/MathTypes';
+import { Container } from '../display/Container';
 import type { ScrollPane } from '../scroll/ScrollPane';
 import type { IRenderCollector } from '../render/IRenderCollector';
+import type { ByteBuffer } from '../utils/ByteBuffer';
+import type { PackageItem } from '../package/PackageItem';
 
 /**
  * GComponent
@@ -19,7 +23,7 @@ export class GComponent extends GObject {
     /** Opaque hit area | 不透明点击区域 */
     public opaque: boolean = true;
 
-    protected _margin: Rectangle = new Rectangle();
+    protected _margin: Margin = new Margin();
     protected _trackBounds: boolean = false;
     protected _boundsChanged: boolean = false;
     protected _childrenRenderOrder: EChildrenRenderOrder = EChildrenRenderOrder.Ascent;
@@ -39,6 +43,15 @@ export class GComponent extends GObject {
 
     constructor() {
         super();
+    }
+
+    /**
+     * Create display object for this component
+     * 为此组件创建显示对象
+     */
+    protected createDisplayObject(): void {
+        this._displayObject = new Container();
+        this._displayObject.gOwner = this;
     }
 
     // Children management | 子对象管理
@@ -184,6 +197,19 @@ export class GComponent extends GObject {
     public getVisibleChild(name: string): GObject | null {
         for (const child of this._children) {
             if (child.name === name && child.internalVisible) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get child by ID
+     * 通过 ID 获取子对象
+     */
+    public getChildById(id: string): GObject | null {
+        for (const child of this._children) {
+            if (child.id === id) {
                 return child;
             }
         }
@@ -642,6 +668,277 @@ export class GComponent extends GObject {
         this._buildingDisplayList = false;
     }
 
+    // Setup methods | 设置方法
+
+    /**
+     * Setup scroll pane from buffer
+     * 从缓冲区设置滚动面板
+     */
+    protected setupScroll(_buffer: ByteBuffer): void {
+        // ScrollPane setup will be implemented when needed
+        // For now, create a basic scroll pane
+        const { ScrollPane } = require('../scroll/ScrollPane');
+        this._scrollPane = new ScrollPane(this);
+    }
+
+    /**
+     * Setup overflow behavior
+     * 设置溢出行为
+     */
+    protected setupOverflow(overflow: EOverflowType): void {
+        this._overflow = overflow;
+        if (overflow === EOverflowType.Hidden) {
+            this._clipRect = new Rectangle(0, 0, this._width, this._height);
+        }
+    }
+
+    // Construction from resource | 从资源构建
+
+    /**
+     * Construct from resource
+     * 从资源构建
+     */
+    public constructFromResource(): void {
+        this.constructFromResource2(null, 0);
+    }
+
+    /**
+     * Construct from resource with object pool
+     * 从资源构建（使用对象池）
+     */
+    public constructFromResource2(objectPool: GObject[] | null, poolIndex: number): void {
+        if (!this.packageItem) {
+            console.warn('[GComponent] constructFromResource2: packageItem is null');
+            return;
+        }
+
+        const contentItem = this.packageItem.getBranch ? this.packageItem.getBranch() : this.packageItem;
+        if (!contentItem.rawData) {
+            console.warn('[GComponent] constructFromResource2: rawData is null for', contentItem.name);
+            return;
+        }
+
+        const buffer = contentItem.rawData;
+        buffer.seek(0, 0);
+
+        this._underConstruct = true;
+
+        this.sourceWidth = buffer.getInt32();
+        this.sourceHeight = buffer.getInt32();
+        this.initWidth = this.sourceWidth;
+        this.initHeight = this.sourceHeight;
+
+        this.setSize(this.sourceWidth, this.sourceHeight);
+
+        if (buffer.readBool()) {
+            this.minWidth = buffer.getInt32();
+            this.maxWidth = buffer.getInt32();
+            this.minHeight = buffer.getInt32();
+            this.maxHeight = buffer.getInt32();
+        }
+
+        if (buffer.readBool()) {
+            const f1 = buffer.getFloat32();
+            const f2 = buffer.getFloat32();
+            this.internalSetPivot(f1, f2, buffer.readBool());
+        }
+
+        if (buffer.readBool()) {
+            this._margin.top = buffer.getInt32();
+            this._margin.bottom = buffer.getInt32();
+            this._margin.left = buffer.getInt32();
+            this._margin.right = buffer.getInt32();
+        }
+
+        const overflow = buffer.readByte() as EOverflowType;
+        if (overflow === EOverflowType.Scroll) {
+            const savedPos = buffer.pos;
+            buffer.seek(0, 7);
+            this.setupScroll(buffer);
+            buffer.pos = savedPos;
+        } else {
+            this.setupOverflow(overflow);
+        }
+
+        if (buffer.readBool()) {
+            buffer.skip(8); // Skip custom data
+        }
+
+        this._buildingDisplayList = true;
+
+        // Read controllers
+        buffer.seek(0, 1);
+        const controllerCount = buffer.getInt16();
+        for (let i = 0; i < controllerCount; i++) {
+            let nextPos = buffer.getInt16();
+            nextPos += buffer.pos;
+
+            const controller = new Controller();
+            this._controllers.push(controller);
+            controller.parent = this;
+            controller.setup(buffer);
+
+            buffer.pos = nextPos;
+        }
+
+        // Read children
+        buffer.seek(0, 2);
+        const childCount = buffer.getInt16();
+
+        for (let i = 0; i < childCount; i++) {
+            const dataLen = buffer.getInt16();
+            const curPos = buffer.pos;
+
+            let child: GObject;
+            if (objectPool) {
+                child = objectPool[poolIndex + i];
+            } else {
+                buffer.seek(curPos, 0);
+
+                const type = buffer.readByte();
+                const src = buffer.readS();
+                const pkgId = buffer.readS();
+
+                let pi: PackageItem | null = null;
+                // Note: readS() returns '' for null/empty, so check for non-empty string
+                if (src && contentItem.owner) {
+                    const pkg = pkgId
+                        ? contentItem.owner.getPackageById(pkgId)
+                        : contentItem.owner;
+
+                    pi = pkg ? pkg.getItemById(src) : null;
+                } else {
+                }
+
+                if (pi) {
+                    child = UIObjectFactory.newObject(pi);
+                    child.constructFromResource();
+                } else {
+                    child = UIObjectFactory.newObject(type);
+                }
+            }
+
+            child._underConstruct = true;
+            child.setup_beforeAdd(buffer, curPos);
+            child._parent = this;
+            this._children.push(child);
+
+            buffer.pos = curPos + dataLen;
+        }
+
+        // Setup relations for this component
+        buffer.seek(0, 3);
+        this.relations.setup(buffer, true);
+
+        // Setup relations for children
+        buffer.seek(0, 2);
+        buffer.skip(2); // Skip child count
+
+        for (let i = 0; i < childCount; i++) {
+            let nextPos = buffer.getInt16();
+            nextPos += buffer.pos;
+
+            buffer.seek(buffer.pos, 3);
+            this._children[i].relations.setup(buffer, false);
+
+            buffer.pos = nextPos;
+        }
+
+        // Call setup_afterAdd for children
+        buffer.seek(0, 2);
+        buffer.skip(2); // Skip child count
+
+        for (let i = 0; i < childCount; i++) {
+            let nextPos = buffer.getInt16();
+            nextPos += buffer.pos;
+
+            const child = this._children[i];
+            child.setup_afterAdd(buffer, buffer.pos);
+            child._underConstruct = false;
+
+            buffer.pos = nextPos;
+        }
+
+        // Read custom properties
+        buffer.seek(0, 4);
+        buffer.skip(2); // customData
+        this.opaque = buffer.readBool();
+
+        const maskId = buffer.getInt16();
+        if (maskId !== -1) {
+            // Mask setup - skip for now
+            buffer.readBool(); // inverted mask
+        }
+
+        // Hit test - skip for now
+        buffer.readS(); // hitTestId
+        buffer.getInt32(); // i1
+        buffer.getInt32(); // i2
+
+        // Read transitions
+        buffer.seek(0, 5);
+        const transitionCount = buffer.getInt16();
+        for (let i = 0; i < transitionCount; i++) {
+            let nextPos = buffer.getInt16();
+            nextPos += buffer.pos;
+
+            const trans = new Transition(this);
+            trans.setup(buffer);
+            this._transitions.push(trans);
+
+            buffer.pos = nextPos;
+        }
+
+        // Apply all controllers
+        if (this._transitions.length > 0) {
+            for (const trans of this._transitions) {
+                if (trans.autoPlay) {
+                    trans.play();
+                }
+            }
+        }
+
+        this.applyAllControllers();
+
+        this._buildingDisplayList = false;
+        this._underConstruct = false;
+
+        this.buildNativeDisplayList();
+        this.setBoundsChangedFlag();
+
+        if (contentItem.objectType !== undefined) {
+            this.constructExtension(buffer);
+        }
+
+        this.onConstruct();
+    }
+
+    /**
+     * Internal set pivot
+     * 内部设置轴心
+     */
+    protected internalSetPivot(xv: number, yv: number, bAsAnchor: boolean): void {
+        this._pivotX = xv;
+        this._pivotY = yv;
+        this._pivotAsAnchor = bAsAnchor;
+    }
+
+    /**
+     * Construct extension (override in subclasses)
+     * 构建扩展（子类重写）
+     */
+    protected constructExtension(_buffer: ByteBuffer): void {
+        // Override in subclasses
+    }
+
+    /**
+     * Called after construction is complete
+     * 构建完成后调用
+     */
+    protected onConstruct(): void {
+        // Override in subclasses
+    }
+
     // Size handling | 尺寸处理
 
     protected handleSizeChanged(): void {
@@ -684,6 +981,12 @@ export class GComponent extends GObject {
 
     public collectRenderData(collector: IRenderCollector): void {
         if (!this._visible) return;
+
+        // Update this component's display object transform
+        // 更新此组件的显示对象变换
+        if (this._displayObject) {
+            this._displayObject.updateTransform();
+        }
 
         if (this._clipRect) {
             collector.pushClipRect(this._clipRect);

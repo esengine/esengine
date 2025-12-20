@@ -6,7 +6,7 @@ import { ERelationType, EObjectPropID } from './FieldTypes';
 import type { GComponent } from './GComponent';
 import type { GGroup } from './GGroup';
 import type { GRoot } from './GRoot';
-import type { Relations } from '../layout/Relations';
+import { Relations } from '../layout/Relations';
 import type { GearBase } from '../gears/GearBase';
 import type { Controller } from './Controller';
 import type { PackageItem } from '../package/PackageItem';
@@ -60,7 +60,7 @@ export class GObject extends EventDispatcher {
     protected _yOffset: number = 0;
 
     // Constraints and states | 约束和状态
-    protected _relations!: Relations;
+    protected _relations: Relations;
     protected _group: GGroup | null = null;
     protected _gears: (GearBase | null)[] = [];
     protected _draggable: boolean = false;
@@ -93,6 +93,7 @@ export class GObject extends EventDispatcher {
     constructor() {
         super();
         this._id = '' + _gInstanceCounter++;
+        this._relations = new Relations(this);
         this.createDisplayObject();
         this._gears = new Array(10).fill(null);
     }
@@ -109,6 +110,17 @@ export class GObject extends EventDispatcher {
 
     public set name(value: string) {
         this._name = value;
+    }
+
+    /**
+     * Get resource URL if this object was created from a package resource
+     * 如果此对象是从包资源创建的，则获取资源 URL
+     */
+    public get resourceURL(): string {
+        if (this.packageItem) {
+            return `ui://${this.packageItem.owner?.id || ''}${this.packageItem.id}`;
+        }
+        return '';
     }
 
     // Position | 位置
@@ -458,6 +470,32 @@ export class GObject extends EventDispatcher {
         this.touchable = value;
     }
 
+    public get draggable(): boolean {
+        return this._draggable;
+    }
+
+    public set draggable(value: boolean) {
+        this._draggable = value;
+    }
+
+    /**
+     * Start dragging this object
+     * 开始拖拽此对象
+     */
+    public startDrag(touchPointId?: number): void {
+        GObject.draggingObject = this;
+    }
+
+    /**
+     * Stop dragging this object
+     * 停止拖拽此对象
+     */
+    public stopDrag(): void {
+        if (GObject.draggingObject === this) {
+            GObject.draggingObject = null;
+        }
+    }
+
     public get rotation(): number {
         return this._rotation;
     }
@@ -571,6 +609,14 @@ export class GObject extends EventDispatcher {
             p = p._parent;
         }
         return p as GRoot | null;
+    }
+
+    /**
+     * Check if this object is on stage (has a root parent)
+     * 检查此对象是否在舞台上（有根父容器）
+     */
+    public get onStage(): boolean {
+        return this.root !== null;
     }
 
     public get displayObject(): DisplayObject | null {
@@ -912,12 +958,123 @@ export class GObject extends EventDispatcher {
         // Override in subclasses
     }
 
-    public setup_beforeAdd(_buffer: ByteBuffer, _beginPos: number): void {
-        // Override in subclasses
+    /**
+     * Setup before adding to parent
+     * 添加到父容器之前的设置
+     */
+    public setup_beforeAdd(buffer: ByteBuffer, beginPos: number): void {
+        buffer.seek(beginPos, 0);
+        buffer.skip(5); // skip type, src, pkgId
+
+        this._id = buffer.readS() || this._id;
+        this._name = buffer.readS() || '';
+
+        let f1: number;
+        let f2: number;
+
+        f1 = buffer.getInt32();
+        f2 = buffer.getInt32();
+        this.setXY(f1, f2);
+
+        if (buffer.readBool()) {
+            this.initWidth = buffer.getInt32();
+            this.initHeight = buffer.getInt32();
+            this.setSize(this.initWidth, this.initHeight, true);
+        }
+
+        if (buffer.readBool()) {
+            this.minWidth = buffer.getInt32();
+            this.maxWidth = buffer.getInt32();
+            this.minHeight = buffer.getInt32();
+            this.maxHeight = buffer.getInt32();
+        }
+
+        if (buffer.readBool()) {
+            f1 = buffer.getFloat32();
+            f2 = buffer.getFloat32();
+            this.setScale(f1, f2);
+        }
+
+        if (buffer.readBool()) {
+            f1 = buffer.getFloat32();
+            f2 = buffer.getFloat32();
+            this.setSkew(f1, f2);
+        }
+
+        if (buffer.readBool()) {
+            f1 = buffer.getFloat32();
+            f2 = buffer.getFloat32();
+            this.setPivot(f1, f2, buffer.readBool());
+        }
+
+        f1 = buffer.getFloat32();
+        if (f1 !== 1) {
+            this.alpha = f1;
+        }
+
+        f1 = buffer.getFloat32();
+        if (f1 !== 0) {
+            this.rotation = f1;
+        }
+
+        if (!buffer.readBool()) {
+            this.visible = false;
+        }
+        if (!buffer.readBool()) {
+            this.touchable = false;
+        }
+        if (buffer.readBool()) {
+            this.grayed = true;
+        }
+
+        // BlendMode
+        buffer.readByte();
+
+        // Filter
+        const filter = buffer.readByte();
+        if (filter === 1) {
+            // Color filter - skip 4 floats
+            buffer.skip(16);
+        }
+
+        const str = buffer.readS();
+        if (str) {
+            this.data = str;
+        }
     }
 
-    public setup_afterAdd(_buffer: ByteBuffer, _beginPos: number): void {
-        // Override in subclasses
+    /**
+     * Setup after adding to parent
+     * 添加到父容器之后的设置
+     */
+    public setup_afterAdd(buffer: ByteBuffer, beginPos: number): void {
+        buffer.seek(beginPos, 1);
+
+        const str = buffer.readS();
+        if (str) {
+            this.tooltips = str;
+        }
+
+        const groupId = buffer.getInt16();
+        if (groupId >= 0 && this._parent) {
+            this.group = this._parent.getChildAt(groupId) as GGroup;
+        }
+
+        buffer.seek(beginPos, 2);
+
+        const cnt = buffer.getInt16();
+        for (let i = 0; i < cnt; i++) {
+            let nextPos = buffer.getInt16();
+            nextPos += buffer.pos;
+
+            const gearIndex = buffer.readByte();
+            const gear = this.getGear(gearIndex);
+            if (gear) {
+                gear.setup(buffer);
+            }
+
+            buffer.pos = nextPos;
+        }
     }
 
     // Render data collection | 渲染数据收集

@@ -5,7 +5,9 @@
     "esengine": {
         "plugin": true,
         "pluginExport": "FGUIPlugin",
-        "category": "ui"
+        "editorPackage": "@esengine/fairygui-editor",
+        "category": "ui",
+        "isEngineModule": true
     },
     "main": "dist/index.js",
     "module": "dist/index.js",

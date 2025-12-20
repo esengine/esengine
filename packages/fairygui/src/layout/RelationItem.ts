@@ -84,11 +84,25 @@ export class RelationItem {
         this.internalAdd(relationType, bUsePercent);
     }
 
-    private internalAdd(relationType: ERelationType, bUsePercent: boolean): void {
-        if (!this._target) return;
+    /**
+     * Internal add relation (used by Relations.setup)
+     * 内部添加关联（由 Relations.setup 使用）
+     */
+    public internalAdd(relationType: ERelationType, bUsePercent: boolean): void {
+        // Add the relation definition if it doesn't exist
+        let def = this._relations.find(r => r.relationType === relationType);
+        if (!def) {
+            def = {
+                relationType,
+                usePercent: bUsePercent,
+                percent: 0
+            };
+            this._relations.push(def);
+        } else {
+            def.usePercent = bUsePercent;
+        }
 
-        const def = this._relations.find(r => r.relationType === relationType);
-        if (!def) return;
+        if (!this._target) return;
 
         // Calculate initial percent if needed
         if (bUsePercent) {

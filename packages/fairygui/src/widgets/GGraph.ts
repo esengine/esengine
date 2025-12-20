@@ -31,7 +31,7 @@ export class GGraph extends GObject {
     protected createDisplayObject(): void {
         this._displayObject = this._graph = new Graph();
         this._graph.touchable = false;
-        (this._displayObject as any)['$owner'] = this;
+        this._displayObject.gOwner = this;
     }
 
     /**
@@ -180,6 +180,8 @@ export class GGraph extends GObject {
     }
 
     private updateGraph(): void {
+        if (!this._graph) return;
+
         this._graph.touchable = this.touchable;
 
         const w = this.width;

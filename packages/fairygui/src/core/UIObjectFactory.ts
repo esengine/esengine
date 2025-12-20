@@ -1,12 +1,4 @@
 import { GObject } from './GObject';
-import { GComponent } from './GComponent';
-import { GImage } from '../widgets/GImage';
-import { GGraph } from '../widgets/GGraph';
-import { GTextField } from '../widgets/GTextField';
-import { GButton } from '../widgets/GButton';
-import { GProgressBar } from '../widgets/GProgressBar';
-import { GSlider } from '../widgets/GSlider';
-import { GGroup } from './GGroup';
 import { EObjectType } from './FieldTypes';
 import type { PackageItem } from '../package/PackageItem';
 
@@ -20,23 +12,23 @@ export type ObjectCreator = () => GObject;
  * Extension creator function type
  * 扩展创建函数类型
  */
-export type ExtensionCreator = () => GComponent;
+export type ExtensionCreator = () => GObject;
 
 /**
  * UIObjectFactory
  *
  * Factory for creating FairyGUI objects.
- * Supports custom object type registration and extension creation.
+ * All object types are registered via registerCreator() to avoid circular dependencies.
  *
- * FairyGUI 对象工厂，支持自定义对象类型注册和扩展创建
+ * FairyGUI 对象工厂，所有对象类型通过 registerCreator() 注册以避免循环依赖
  */
 export class UIObjectFactory {
     private static _creators: Map<EObjectType, ObjectCreator> = new Map();
     private static _extensions: Map<string, ExtensionCreator> = new Map();
 
     /**
-     * Register a custom creator for an object type
-     * 注册自定义对象类型创建器
+     * Register a creator for an object type
+     * 注册对象类型创建器
      */
     public static registerCreator(type: EObjectType, creator: ObjectCreator): void {
         UIObjectFactory._creators.set(type, creator);
@@ -63,44 +55,78 @@ export class UIObjectFactory {
      * 根据类型创建对象
      */
     public static createObject(type: EObjectType, _userClass?: new () => GObject): GObject | null {
-        const customCreator = UIObjectFactory._creators.get(type);
-        if (customCreator) {
-            return customCreator();
+        const creator = UIObjectFactory._creators.get(type);
+        if (creator) {
+            const obj = creator();
+            return obj;
         }
 
+        // Fallback for component-based types
         switch (type) {
-            case EObjectType.Image:
-                return new GImage();
-            case EObjectType.Graph:
-                return new GGraph();
-            case EObjectType.Text:
-            case EObjectType.RichText:
-            case EObjectType.InputText:
-                return new GTextField();
-            case EObjectType.Group:
-                return new GGroup();
             case EObjectType.Component:
-                return new GComponent();
-            case EObjectType.Button:
-                return new GButton();
-            case EObjectType.ProgressBar:
-                return new GProgressBar();
-            case EObjectType.Slider:
-                return new GSlider();
             case EObjectType.Label:
             case EObjectType.ComboBox:
             case EObjectType.List:
             case EObjectType.Tree:
             case EObjectType.ScrollBar:
-                return new GComponent();
             case EObjectType.MovieClip:
             case EObjectType.Swf:
             case EObjectType.Loader:
             case EObjectType.Loader3D:
-                // Not implemented yet
-                return new GComponent();
-            default:
-                return null;
+                // Use Component creator if specific creator not registered
+                const componentCreator = UIObjectFactory._creators.get(EObjectType.Component);
+                if (componentCreator) {
+                    const obj = componentCreator();
+                    return obj;
+                }
+                break;
+        }
+
+        return new GObject();
+    }
+
+    /**
+     * Create new object by type (number)
+     * 根据类型号创建新对象
+     */
+    public static newObject(type: number): GObject;
+    /**
+     * Create new object from package item
+     * 从包资源项创建新对象
+     */
+    public static newObject(item: PackageItem): GObject;
+    public static newObject(arg: number | PackageItem): GObject {
+        if (typeof arg === 'number') {
+            const obj = UIObjectFactory.createObject(arg as EObjectType) || new GObject();
+            return obj;
+        } else {
+            const item = arg as PackageItem;
+
+            // Check for extension
+            if (item.owner) {
+                const url = 'ui://' + item.owner.id + item.id;
+                const extensionCreator = UIObjectFactory._extensions.get(url);
+                if (extensionCreator) {
+                    const obj = extensionCreator();
+                    obj.packageItem = item;
+                    return obj;
+                }
+
+                // Also check by name
+                const urlByName = 'ui://' + item.owner.name + '/' + item.name;
+                const extensionCreatorByName = UIObjectFactory._extensions.get(urlByName);
+                if (extensionCreatorByName) {
+                    const obj = extensionCreatorByName();
+                    obj.packageItem = item;
+                    return obj;
+                }
+            }
+
+            const obj = UIObjectFactory.createObject(item.objectType);
+            if (obj) {
+                obj.packageItem = item;
+            }
+            return obj || new GObject();
         }
     }
 
@@ -127,6 +153,24 @@ export class UIObjectFactory {
             return extensionCreator();
         }
         return null;
+    }
+
+    /**
+     * Resolve package item extension
+     * 解析包项扩展
+     */
+    public static resolvePackageItemExtension(item: PackageItem): void {
+        if (!item.owner) return;
+
+        const url = 'ui://' + item.owner.id + item.id;
+        if (UIObjectFactory._extensions.has(url)) {
+            return;
+        }
+
+        const urlByName = 'ui://' + item.owner.name + '/' + item.name;
+        if (UIObjectFactory._extensions.has(urlByName)) {
+            return;
+        }
     }
 
     /**

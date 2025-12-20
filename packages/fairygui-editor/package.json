@@ -1,0 +1,49 @@
+{
+    "name": "@esengine/fairygui-editor",
+    "version": "1.0.0",
+    "description": "Editor support for @esengine/fairygui - inspectors, gizmos, and entity templates",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./plugin.json": "./plugin.json"
+    },
+    "files": [
+        "dist",
+        "plugin.json"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@esengine/fairygui": "workspace:*"
+    },
+    "devDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/engine-core": "workspace:*",
+        "@esengine/editor-core": "workspace:*",
+        "@esengine/asset-system": "workspace:*",
+        "@esengine/build-config": "workspace:*",
+        "lucide-react": "^0.545.0",
+        "react": "^18.3.1",
+        "@types/react": "^18.3.12",
+        "rimraf": "^5.0.5",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.3"
+    },
+    "keywords": [
+        "ecs",
+        "fairygui",
+        "editor"
+    ],
+    "author": "",
+    "license": "MIT"
+}

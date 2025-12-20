@@ -26,7 +26,7 @@
         "@esengine/engine-core": "workspace:*",
         "@esengine/ecs-framework-math": "workspace:*",
         "@esengine/sprite": "workspace:*",
-        "@esengine/ui": "workspace:*",
+        "@esengine/fairygui": "workspace:*",
         "@esengine/audio": "workspace:*",
         "@esengine/camera": "workspace:*",
         "@esengine/particle": "workspace:*",

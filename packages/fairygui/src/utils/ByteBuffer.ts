@@ -83,18 +83,24 @@ export class ByteBuffer {
 
         const segCount = this.getUint8();
         if (blockIndex < segCount) {
-            let useShort = this.getUint8() === 1;
-            this._position = indexTablePos + 2;
+            const useShort = this.getUint8() === 1;
+            let newPos: number;
 
             if (useShort) {
-                this._position += 2 * blockIndex;
-                this._position = this.getUint16() + indexTablePos;
+                this._position = indexTablePos + 2 + 2 * blockIndex;
+                newPos = this.getUint16();
             } else {
-                this._position += 4 * blockIndex;
-                this._position = this.getInt32() + indexTablePos;
+                this._position = indexTablePos + 2 + 4 * blockIndex;
+                newPos = this.getUint32();
             }
 
-            return true;
+            if (newPos > 0) {
+                this._position = indexTablePos + newPos;
+                return true;
+            } else {
+                this._position = tmp;
+                return false;
+            }
         } else {
             this._position = tmp;
             return false;
@@ -263,15 +269,102 @@ export class ByteBuffer {
      * Set string table
      * 设置字符串表
      */
-    public setStringTable(strings: string[]): void {
-        this._stringTable = strings;
+    public set stringTable(value: string[]) {
+        this._stringTable = value;
     }
 
     /**
      * Get string table
      * 获取字符串表
      */
-    public getStringTable(): string[] {
+    public get stringTable(): string[] {
         return this._stringTable;
+    }
+
+    /**
+     * Alias for position getter
+     * position getter 别名
+     */
+    public get pos(): number {
+        return this._position;
+    }
+
+    /**
+     * Alias for position setter
+     * position setter 别名
+     */
+    public set pos(value: number) {
+        this._position = value;
+    }
+
+    /**
+     * Get underlying buffer
+     * 获取底层缓冲区
+     */
+    public get buffer(): ArrayBuffer {
+        return this._data.buffer as ArrayBuffer;
+    }
+
+    /**
+     * Read UTF string (length-prefixed)
+     * 读取 UTF 字符串（带长度前缀）
+     */
+    public readUTFString(): string {
+        const len = this.getUint16();
+        if (len === 0) {
+            return '';
+        }
+        return this.readStringWithLength(len);
+    }
+
+    /**
+     * Read string array
+     * 读取字符串数组
+     */
+    public readSArray(count: number): string[] {
+        const arr: string[] = [];
+        for (let i = 0; i < count; i++) {
+            arr.push(this.readS());
+        }
+        return arr;
+    }
+
+    /**
+     * Read custom string with specified length
+     * 读取指定长度的自定义字符串
+     */
+    public getCustomString(len: number): string {
+        const bytes = new Uint8Array(this._data.buffer, this._data.byteOffset + this._position, len);
+        this._position += len;
+        return new TextDecoder('utf-8').decode(bytes);
+    }
+
+    /**
+     * Read sub-buffer
+     * 读取子缓冲区
+     */
+    public readBuffer(): ByteBuffer {
+        const len = this.getUint32();
+        const buffer = new ByteBuffer(this._data.buffer as ArrayBuffer, this._data.byteOffset + this._position, len);
+        buffer.version = this._version;
+        buffer.stringTable = this._stringTable;
+        this._position += len;
+        return buffer;
+    }
+
+    /**
+     * Read Int32 (alias)
+     * 读取 Int32（别名）
+     */
+    public readInt32(): number {
+        return this.getInt32();
+    }
+
+    /**
+     * Read Uint16 (alias)
+     * 读取 Uint16（别名）
+     */
+    public readUint16(): number {
+        return this.getUint16();
     }
 }

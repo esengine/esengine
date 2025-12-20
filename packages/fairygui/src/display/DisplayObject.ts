@@ -1,6 +1,8 @@
 import { EventDispatcher } from '../events/EventDispatcher';
+import { FGUIEvents } from '../events/Events';
 import { Point, Rectangle } from '../utils/MathTypes';
 import type { IRenderCollector } from '../render/IRenderCollector';
+import type { GObject } from '../core/GObject';
 
 /**
  * DisplayObject
@@ -36,6 +38,9 @@ export abstract class DisplayObject extends EventDispatcher {
     protected _parent: DisplayObject | null = null;
     protected _children: DisplayObject[] = [];
 
+    // Stage reference | 舞台引用
+    protected _stage: DisplayObject | null = null;
+
     // Dirty flags | 脏标记
     protected _transformDirty: boolean = true;
     protected _boundsDirty: boolean = true;
@@ -46,7 +51,10 @@ export abstract class DisplayObject extends EventDispatcher {
     protected _bounds: Rectangle = new Rectangle();
 
     // User data | 用户数据
-    public userData: any = null;
+    public userData: unknown = null;
+
+    /** Owner GObject reference | 所属 GObject 引用 */
+    public gOwner: GObject | null = null;
 
     constructor() {
         super();
@@ -265,6 +273,24 @@ export abstract class DisplayObject extends EventDispatcher {
         return this._parent;
     }
 
+    /**
+     * Get stage reference
+     * 获取舞台引用
+     */
+    public get stage(): DisplayObject | null {
+        return this._stage;
+    }
+
+    /**
+     * Set stage reference (internal use)
+     * 设置舞台引用（内部使用）
+     *
+     * @internal
+     */
+    public setStage(stage: DisplayObject | null): void {
+        this._stage = stage;
+    }
+
     public get numChildren(): number {
         return this._children.length;
     }
@@ -295,6 +321,36 @@ export abstract class DisplayObject extends EventDispatcher {
         this._children.splice(index, 0, child);
         child._parent = this;
         child.markTransformDirty();
+
+        // Dispatch addedToStage event if this is on stage
+        // 如果当前对象在舞台上，分发 addedToStage 事件
+        if (this._stage !== null) {
+            this.setChildStage(child, this._stage);
+        }
+    }
+
+    /**
+     * Set stage for child and its descendants, dispatch events
+     * 为子对象及其后代设置舞台，分发事件
+     */
+    private setChildStage(child: DisplayObject, stage: DisplayObject | null): void {
+        const wasOnStage = child._stage !== null;
+        const isOnStage = stage !== null;
+
+        child._stage = stage;
+
+        if (!wasOnStage && isOnStage) {
+            // Dispatch addedToStage event
+            child.emit(FGUIEvents.ADDED_TO_STAGE);
+        } else if (wasOnStage && !isOnStage) {
+            // Dispatch removedFromStage event
+            child.emit(FGUIEvents.REMOVED_FROM_STAGE);
+        }
+
+        // Recursively set stage for all children
+        for (const grandChild of child._children) {
+            this.setChildStage(grandChild, stage);
+        }
     }
 
     /**
@@ -318,6 +374,13 @@ export abstract class DisplayObject extends EventDispatcher {
         }
 
         const child = this._children[index];
+
+        // Dispatch removedFromStage event if on stage
+        // 如果在舞台上，分发 removedFromStage 事件
+        if (this._stage !== null) {
+            this.setChildStage(child, null);
+        }
+
         this._children.splice(index, 1);
         child._parent = null;
         return child;
@@ -328,6 +391,14 @@ export abstract class DisplayObject extends EventDispatcher {
      * 移除所有子显示对象
      */
     public removeChildren(): void {
+        // Dispatch removedFromStage events if on stage
+        // 如果在舞台上，分发 removedFromStage 事件
+        if (this._stage !== null) {
+            for (const child of this._children) {
+                this.setChildStage(child, null);
+            }
+        }
+
         for (const child of this._children) {
             child._parent = null;
         }
@@ -399,6 +470,12 @@ export abstract class DisplayObject extends EventDispatcher {
     /**
      * Update world matrix
      * 更新世界矩阵
+     *
+     * World matrix is in FGUI's coordinate system (top-left origin, Y-down).
+     * Coordinate system conversion to engine (center origin, Y-up) is done in FGUIRenderDataProvider.
+     *
+     * 世界矩阵使用 FGUI 坐标系（左上角原点，Y 向下）。
+     * 坐标系转换到引擎（中心原点，Y 向上）在 FGUIRenderDataProvider 中完成。
      */
     public updateTransform(): void {
         if (!this._transformDirty) return;
@@ -412,6 +489,9 @@ export abstract class DisplayObject extends EventDispatcher {
         m[1] = sin * this._scaleX;
         m[2] = -sin * this._scaleY;
         m[3] = cos * this._scaleY;
+
+        // Keep FGUI's coordinate system (top-left origin, Y-down)
+        // 保持 FGUI 坐标系（左上角原点，Y 向下）
         m[4] = this._x - this._pivotX * m[0] - this._pivotY * m[2];
         m[5] = this._y - this._pivotX * m[1] - this._pivotY * m[3];
 

@@ -45,15 +45,6 @@ import { AssetManager, EngineIntegration, AssetManagerToken, setGlobalAssetDatab
 // ============================================================================
 
 /**
- * UI 输入系统接口（最小化定义，用于类型安全的服务访问）
- * UI input system interface (minimal definition for type-safe service access)
- */
-interface IUIInputSystem {
-    bindToCanvas(canvas: HTMLCanvasElement): void;
-    unbind?(): void;
-}
-
-/**
  * 可启用/禁用的系统接口
  * Interface for systems that can be enabled/disabled
  */
@@ -87,7 +78,6 @@ interface ITilemapSystem {
 
 // UI 模块服务令牌 | UI module service tokens
 const UIRenderProviderToken = createServiceToken<IUIRenderDataProvider>('uiRenderProvider');
-const UIInputSystemToken = createServiceToken<IUIInputSystem>('uiInputSystem');
 
 // Sprite 模块服务令牌 | Sprite module service tokens
 const SpriteAnimatorSystemToken = createServiceToken<IEnableableSystem>('spriteAnimatorSystem');
@@ -559,15 +549,6 @@ export class GameRuntime {
         // 启用游戏逻辑系统
         this._enableGameLogicSystems();
 
-        // 绑定 UI 输入
-        const uiInputSystem = this._systemContext?.services.get(UIInputSystemToken);
-        if (uiInputSystem && this._config.canvasId) {
-            const canvas = document.getElementById(this._config.canvasId) as HTMLCanvasElement;
-            if (canvas) {
-                uiInputSystem.bindToCanvas(canvas);
-            }
-        }
-
         // 确保渲染循环在运行
         this._startRenderLoop();
     }
@@ -617,18 +598,11 @@ export class GameRuntime {
             this._scene.isEditorMode = true;
         }
 
-        // 解绑 UI 输入
-        const services = this._systemContext?.services;
-        const uiInputSystem = services?.get(UIInputSystemToken);
-        if (uiInputSystem) {
-            uiInputSystem.unbind?.();
-        }
-
         // 禁用游戏逻辑系统
         this._disableGameLogicSystems();
 
         // 重置物理系统
-        const physicsSystem = services?.get(Physics2DSystemToken);
+        const physicsSystem = this._systemContext?.services.get(Physics2DSystemToken);
         if (physicsSystem) {
             physicsSystem.reset?.();
         }

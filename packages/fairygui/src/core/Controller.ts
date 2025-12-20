@@ -1,6 +1,7 @@
 import { EventDispatcher } from '../events/EventDispatcher';
 import { FGUIEvents } from '../events/Events';
 import type { GComponent } from './GComponent';
+import type { ByteBuffer } from '../utils/ByteBuffer';
 
 /**
  * Controller
@@ -263,6 +264,56 @@ export class Controller extends EventDispatcher {
      */
     public runActions(): void {
         // Override in subclasses or handle via events
+    }
+
+    /**
+     * Setup controller from buffer
+     * 从缓冲区设置控制器
+     */
+    public setup(buffer: ByteBuffer): void {
+        const beginPos = buffer.pos;
+        buffer.seek(beginPos, 0);
+
+        this.name = buffer.readS() || '';
+        if (buffer.readBool()) {
+            this.autoRadioGroupDepth = true;
+        }
+
+        buffer.seek(beginPos, 1);
+
+        const cnt = buffer.getInt16();
+        for (let i = 0; i < cnt; i++) {
+            this._pageIds.push(buffer.readS() || '');
+            this._pageNames.push(buffer.readS() || '');
+        }
+
+        // Home page index (simplified - ignore advanced home page types)
+        let homePageIndex = 0;
+        const homePageType = buffer.readByte();
+        if (homePageType === 1) {
+            homePageIndex = buffer.getInt16();
+        } else if (homePageType === 2 || homePageType === 3) {
+            // Skip variable name for type 3
+            if (homePageType === 3) {
+                buffer.readS();
+            }
+        }
+
+        buffer.seek(beginPos, 2);
+
+        // Skip actions for now
+        const actionCount = buffer.getInt16();
+        for (let i = 0; i < actionCount; i++) {
+            let nextPos = buffer.getInt16();
+            nextPos += buffer.pos;
+            buffer.pos = nextPos;
+        }
+
+        if (this.parent && this._pageIds.length > 0) {
+            this._selectedIndex = homePageIndex;
+        } else {
+            this._selectedIndex = -1;
+        }
     }
 
     /**

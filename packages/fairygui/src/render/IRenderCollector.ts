@@ -118,6 +118,12 @@ export interface IRenderPrimitive {
     /** Nine-patch grid | 九宫格 */
     scale9Grid?: IRectangle;
 
+    /** Source width for nine-slice (original texture region width) | 九宫格源宽度（原始纹理区域宽度） */
+    sourceWidth?: number;
+
+    /** Source height for nine-slice (original texture region height) | 九宫格源高度（原始纹理区域高度） */
+    sourceHeight?: number;
+
     /** Tile mode | 平铺模式 */
     tileMode?: boolean;
 

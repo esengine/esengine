@@ -184,14 +184,23 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
             }
         }
 
-        console.log('[SettingsWindow] Initial values for profiler:',
-            Array.from(initialValues.entries()).filter(([k]) => k.startsWith('profiler.')));
         setValues(initialValues);
     }, [settingsRegistry, initialCategoryId]);
 
     const handleValueChange = (key: string, value: any, descriptor: SettingDescriptor) => {
         const newValues = new Map(values);
         newValues.set(key, value);
+
+        // When preset is selected, also update width and height values
+        // 当选择预设时，同时更新宽度和高度值
+        if (key === 'project.uiDesignResolution.preset' && typeof value === 'string' && value.includes('x')) {
+            const [w, h] = value.split('x').map(Number);
+            if (w && h) {
+                newValues.set('project.uiDesignResolution.width', w);
+                newValues.set('project.uiDesignResolution.height', h);
+            }
+        }
+
         setValues(newValues);
 
         const newErrors = new Map(errors);
@@ -218,7 +227,6 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
 
         if (!shouldDeferSave) {
             settings.set(key, value);
-            console.log(`[SettingsWindow] Saved ${key}:`, value);
 
             // 触发设置变更事件
             // Trigger settings changed event
@@ -237,28 +245,27 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
         const projectService = Core.services.tryResolve<ProjectService>(ProjectService);
         const changedSettings: Record<string, any> = {};
 
-        let uiResolutionChanged = false;
-        let newWidth = 1920;
-        let newHeight = 1080;
+        // Get width and height directly from values - these are the actual UI input values
+        // 直接从 values 获取宽高 - 这些是实际的 UI 输入值
+        const widthFromValues = values.get('project.uiDesignResolution.width');
+        const heightFromValues = values.get('project.uiDesignResolution.height');
+
+        // Use the width/height values directly (they are always set from either user input or initial load)
+        // 直接使用 width/height 值（它们总是从用户输入或初始加载设置的）
+        const newWidth = typeof widthFromValues === 'number' ? widthFromValues : 1920;
+        const newHeight = typeof heightFromValues === 'number' ? heightFromValues : 1080;
+
+        // Check if resolution differs from saved config
+        // 检查分辨率是否与保存的配置不同
+        const currentResolution = projectService?.getUIDesignResolution() || { width: 1920, height: 1080 };
+        const uiResolutionChanged = newWidth !== currentResolution.width || newHeight !== currentResolution.height;
+
         let disabledModulesChanged = false;
         let newDisabledModules: string[] = [];
 
         for (const [key, value] of values.entries()) {
             if (key.startsWith('project.') && projectService) {
-                if (key === 'project.uiDesignResolution.width') {
-                    newWidth = value;
-                    uiResolutionChanged = true;
-                } else if (key === 'project.uiDesignResolution.height') {
-                    newHeight = value;
-                    uiResolutionChanged = true;
-                } else if (key === 'project.uiDesignResolution.preset') {
-                    const [w, h] = value.split('x').map(Number);
-                    if (w && h) {
-                        newWidth = w;
-                        newHeight = h;
-                        uiResolutionChanged = true;
-                    }
-                } else if (key === 'project.disabledModules') {
+                if (key === 'project.disabledModules') {
                     newDisabledModules = value as string[];
                     disabledModulesChanged = true;
                 }
@@ -270,7 +277,9 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
         }
 
         if (uiResolutionChanged && projectService) {
+            console.log(`[SettingsWindow] Saving UI resolution: ${newWidth}x${newHeight}`);
             await projectService.setUIDesignResolution({ width: newWidth, height: newHeight });
+            console.log(`[SettingsWindow] UI resolution saved, verifying: ${JSON.stringify(projectService.getUIDesignResolution())}`);
         }
 
         if (disabledModulesChanged && projectService) {
@@ -570,14 +579,14 @@ export function SettingsWindow({ onClose, settingsRegistry, initialCategoryId }:
     const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
 
     return (
-        <div className="settings-overlay" onClick={handleCancel}>
+        <div className="settings-overlay" onClick={handleSave}>
             <div className="settings-window-new" onClick={(e) => e.stopPropagation()}>
                 {/* Left Sidebar */}
                 <div className="settings-sidebar-new">
                     <div className="settings-sidebar-header">
                         <SettingsIcon size={16} />
                         <span>{t('settingsWindow.editorPreferences')}</span>
-                        <button className="settings-sidebar-close" onClick={handleCancel}>
+                        <button className="settings-sidebar-close" onClick={handleSave}>
                             <X size={14} />
                         </button>
                     </div>

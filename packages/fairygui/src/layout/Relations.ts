@@ -1,5 +1,7 @@
 import { ERelationType } from '../core/FieldTypes';
 import type { GObject } from '../core/GObject';
+import type { GComponent } from '../core/GComponent';
+import type { ByteBuffer } from '../utils/ByteBuffer';
 import { RelationItem } from './RelationItem';
 
 /**
@@ -136,6 +138,40 @@ export class Relations {
      */
     public get count(): number {
         return this._items.length;
+    }
+
+    /**
+     * Setup relations from buffer
+     * 从缓冲区设置关联
+     */
+    public setup(buffer: ByteBuffer, bParentToChild: boolean): void {
+        const cnt = buffer.readByte();
+
+        for (let i = 0; i < cnt; i++) {
+            const targetIndex = buffer.getInt16();
+            let target: GObject | null = null;
+
+            if (targetIndex === -1) {
+                target = this.owner.parent;
+            } else if (bParentToChild) {
+                target = (this.owner as GComponent).getChildAt(targetIndex);
+            } else if (this.owner.parent) {
+                target = this.owner.parent.getChildAt(targetIndex);
+            }
+
+            if (!target) continue;
+
+            const newItem = new RelationItem(this.owner);
+            newItem.target = target;
+            this._items.push(newItem);
+
+            const cnt2 = buffer.readByte();
+            for (let j = 0; j < cnt2; j++) {
+                const rt = buffer.readByte() as ERelationType;
+                const bUsePercent = buffer.readBool();
+                newItem.internalAdd(rt, bUsePercent);
+            }
+        }
     }
 
     /**

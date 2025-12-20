@@ -525,3 +525,11 @@ pub async fn read_binary_file_as_base64(path: String) -> Result<String, String> 
 
     Ok(STANDARD.encode(&bytes))
 }
+
+/// Read binary file and return as raw bytes.
+/// 读取二进制文件并返回原始字节。
+#[tauri::command]
+pub async fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
+    fs::read(&file_path)
+        .map_err(|e| format!("Failed to read binary file | 读取二进制文件失败: {}", e))
+}

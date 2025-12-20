@@ -7,12 +7,20 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import type { IAssetReader } from '@esengine/asset-system';
+
+/** Blob URL cache to avoid re-reading files | Blob URL 缓存避免重复读取文件 */
+const blobUrlCache = new Map<string, string>();
 
 /**
  * Asset reader implementation for Tauri.
  * Tauri 的资产读取器实现。
+ *
+ * Uses Tauri backend commands to read files and creates Blob URLs for images.
+ * This approach works reliably with WebGL/Canvas without protocol restrictions.
+ *
+ * 使用 Tauri 后端命令读取文件，并为图片创建 Blob URL。
+ * 这种方法在 WebGL/Canvas 中可靠工作，没有协议限制。
  */
 export class TauriAssetReader implements IAssetReader {
     /**
@@ -33,29 +41,69 @@ export class TauriAssetReader implements IAssetReader {
     }
 
     /**
-     * Load image from file.
-     * 从文件加载图片。
+     * Load image from file via backend.
+     * 通过后端从文件加载图片。
+     *
+     * Reads binary data via Tauri backend and creates a Blob URL.
+     * This bypasses browser protocol restrictions (asset://, file://).
+     *
+     * 通过 Tauri 后端读取二进制数据并创建 Blob URL。
+     * 这绕过了浏览器协议限制。
      */
     async loadImage(absolutePath: string): Promise<HTMLImageElement> {
-        // Only convert if not already a URL.
-        // 仅当不是 URL 时才转换。
-        let assetUrl = absolutePath;
-        if (!absolutePath.startsWith('http://') &&
-            !absolutePath.startsWith('https://') &&
-            !absolutePath.startsWith('data:') &&
-            !absolutePath.startsWith('asset://')) {
-            assetUrl = convertFileSrc(absolutePath);
+        // Return cached if available
+        let blobUrl = blobUrlCache.get(absolutePath);
+
+        if (!blobUrl) {
+            // Read binary via backend
+            const bytes = await invoke<number[]>('read_binary_file', { filePath: absolutePath });
+            const data = new Uint8Array(bytes);
+
+            // Determine MIME type from extension
+            const ext = absolutePath.toLowerCase().split('.').pop();
+            let mimeType = 'image/png';
+            if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+            else if (ext === 'gif') mimeType = 'image/gif';
+            else if (ext === 'webp') mimeType = 'image/webp';
+
+            // Create Blob URL
+            const blob = new Blob([data], { type: mimeType });
+            blobUrl = URL.createObjectURL(blob);
+            blobUrlCache.set(absolutePath, blobUrl);
         }
 
+        // Load image from Blob URL
         return new Promise((resolve, reject) => {
             const image = new Image();
-            // 允许跨域访问，防止 canvas 被污染
-            // Allow cross-origin access to prevent canvas tainting
-            image.crossOrigin = 'anonymous';
             image.onload = () => resolve(image);
             image.onerror = () => reject(new Error(`Failed to load image: ${absolutePath}`));
-            image.src = assetUrl;
+            image.src = blobUrl!;
         });
+    }
+
+    /**
+     * Get Blob URL for a file (for engine texture loading).
+     * 获取文件的 Blob URL（用于引擎纹理加载）。
+     */
+    async getBlobUrl(absolutePath: string): Promise<string> {
+        let blobUrl = blobUrlCache.get(absolutePath);
+
+        if (!blobUrl) {
+            const bytes = await invoke<number[]>('read_binary_file', { filePath: absolutePath });
+            const data = new Uint8Array(bytes);
+
+            const ext = absolutePath.toLowerCase().split('.').pop();
+            let mimeType = 'image/png';
+            if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+            else if (ext === 'gif') mimeType = 'image/gif';
+            else if (ext === 'webp') mimeType = 'image/webp';
+
+            const blob = new Blob([data], { type: mimeType });
+            blobUrl = URL.createObjectURL(blob);
+            blobUrlCache.set(absolutePath, blobUrl);
+        }
+
+        return blobUrl;
     }
 
     /**

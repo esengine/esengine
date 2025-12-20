@@ -1,7 +1,6 @@
 import { Entity, Component } from '@esengine/ecs-framework';
 import { MessageHub } from '@esengine/editor-core';
 import { TransformComponent } from '@esengine/engine-core';
-import { UITransformComponent } from '@esengine/ui';
 import { BaseCommand } from '../BaseCommand';
 import { ICommand } from '../ICommand';
 
@@ -10,7 +9,6 @@ import { ICommand } from '../ICommand';
  * Transform state snapshot
  */
 export interface TransformState {
-    // TransformComponent
     positionX?: number;
     positionY?: number;
     positionZ?: number;
@@ -20,14 +18,6 @@ export interface TransformState {
     scaleX?: number;
     scaleY?: number;
     scaleZ?: number;
-    // UITransformComponent
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    rotation?: number;
-    uiScaleX?: number;
-    uiScaleY?: number;
 }
 
 /**
@@ -41,19 +31,17 @@ export type TransformOperationType = 'move' | 'rotate' | 'scale';
  * Transform command for undo/redo support
  */
 export class TransformCommand extends BaseCommand {
-    private readonly componentType: 'transform' | 'uiTransform';
     private readonly timestamp: number;
 
     constructor(
         private readonly messageHub: MessageHub,
         private readonly entity: Entity,
-        private readonly component: Component,
+        private readonly component: TransformComponent,
         private readonly operationType: TransformOperationType,
         private readonly oldState: TransformState,
         private newState: TransformState
     ) {
         super();
-        this.componentType = component instanceof TransformComponent ? 'transform' : 'uiTransform';
         this.timestamp = Date.now();
     }
 
@@ -114,25 +102,16 @@ export class TransformCommand extends BaseCommand {
      * Apply transform state
      */
     private applyState(state: TransformState): void {
-        if (this.componentType === 'transform') {
-            const transform = this.component as TransformComponent;
-            if (state.positionX !== undefined) transform.position.x = state.positionX;
-            if (state.positionY !== undefined) transform.position.y = state.positionY;
-            if (state.positionZ !== undefined) transform.position.z = state.positionZ;
-            if (state.rotationX !== undefined) transform.rotation.x = state.rotationX;
-            if (state.rotationY !== undefined) transform.rotation.y = state.rotationY;
-            if (state.rotationZ !== undefined) transform.rotation.z = state.rotationZ;
-            if (state.scaleX !== undefined) transform.scale.x = state.scaleX;
-            if (state.scaleY !== undefined) transform.scale.y = state.scaleY;
-            if (state.scaleZ !== undefined) transform.scale.z = state.scaleZ;
-        } else {
-            const uiTransform = this.component as UITransformComponent;
-            if (state.x !== undefined) uiTransform.x = state.x;
-            if (state.y !== undefined) uiTransform.y = state.y;
-            if (state.rotation !== undefined) uiTransform.rotation = state.rotation;
-            if (state.uiScaleX !== undefined) uiTransform.scaleX = state.uiScaleX;
-            if (state.uiScaleY !== undefined) uiTransform.scaleY = state.uiScaleY;
-        }
+        const transform = this.component;
+        if (state.positionX !== undefined) transform.position.x = state.positionX;
+        if (state.positionY !== undefined) transform.position.y = state.positionY;
+        if (state.positionZ !== undefined) transform.position.z = state.positionZ;
+        if (state.rotationX !== undefined) transform.rotation.x = state.rotationX;
+        if (state.rotationY !== undefined) transform.rotation.y = state.rotationY;
+        if (state.rotationZ !== undefined) transform.rotation.z = state.rotationZ;
+        if (state.scaleX !== undefined) transform.scale.x = state.scaleX;
+        if (state.scaleY !== undefined) transform.scale.y = state.scaleY;
+        if (state.scaleZ !== undefined) transform.scale.z = state.scaleZ;
     }
 
     /**
@@ -141,18 +120,16 @@ export class TransformCommand extends BaseCommand {
      */
     private notifyChange(): void {
         const propertyName = this.operationType === 'move'
-            ? (this.componentType === 'transform' ? 'position' : 'x')
+            ? 'position'
             : this.operationType === 'rotate'
                 ? 'rotation'
-                : (this.componentType === 'transform' ? 'scale' : 'scaleX');
+                : 'scale';
 
         this.messageHub.publish('component:property:changed', {
             entity: this.entity,
             component: this.component,
             propertyName,
-            value: this.componentType === 'transform'
-                ? (this.component as TransformComponent)[propertyName as keyof TransformComponent]
-                : (this.component as UITransformComponent)[propertyName as keyof UITransformComponent]
+            value: this.component[propertyName as keyof TransformComponent]
         });
 
         // 通知 Inspector 刷新 | Notify Inspector to refresh
@@ -174,20 +151,6 @@ export class TransformCommand extends BaseCommand {
             scaleX: transform.scale.x,
             scaleY: transform.scale.y,
             scaleZ: transform.scale.z
-        };
-    }
-
-    /**
-     * 从 UITransformComponent 捕获状态
-     * Capture state from UITransformComponent
-     */
-    static captureUITransformState(uiTransform: UITransformComponent): TransformState {
-        return {
-            x: uiTransform.x,
-            y: uiTransform.y,
-            rotation: uiTransform.rotation,
-            uiScaleX: uiTransform.scaleX,
-            uiScaleY: uiTransform.scaleY
         };
     }
 }

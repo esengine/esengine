@@ -26,12 +26,21 @@ export class GTextField extends GObject {
 
     constructor() {
         super();
+        // Ensure _textField is initialized - super() calls createDisplayObject() but
+        // class field initializers run after super(), which may cause issues
+        this.ensureTextField();
+    }
+
+    private ensureTextField(): void {
+        if (!this._textField) {
+            this.createDisplayObject();
+        }
     }
 
     protected createDisplayObject(): void {
         this._displayObject = this._textField = new TextField();
         this._textField.touchable = false;
-        (this._displayObject as any)['$owner'] = this;
+        this._displayObject.gOwner = this;
     }
 
     /**
@@ -52,8 +61,10 @@ export class GTextField extends GObject {
 
     public set text(value: string) {
         this._text = value;
-        this._textField.text = value;
-        this.updateSize();
+        if (this._textField) {
+            this._textField.text = value;
+            this.updateSize();
+        }
     }
 
     /**
@@ -65,7 +76,9 @@ export class GTextField extends GObject {
     }
 
     public set font(value: string) {
-        this._textField.font = value;
+        if (this._textField) {
+            this._textField.font = value;
+        }
     }
 
     /**
@@ -77,7 +90,9 @@ export class GTextField extends GObject {
     }
 
     public set fontSize(value: number) {
-        this._textField.fontSize = value;
+        if (this._textField) {
+            this._textField.fontSize = value;
+        }
     }
 
     /**
@@ -110,7 +125,9 @@ export class GTextField extends GObject {
     }
 
     public set align(value: EAlignType) {
-        this._textField.align = value;
+        if (this._textField) {
+            this._textField.align = value;
+        }
     }
 
     /**
@@ -122,7 +139,9 @@ export class GTextField extends GObject {
     }
 
     public set valign(value: EVertAlignType) {
-        this._textField.valign = value;
+        if (this._textField) {
+            this._textField.valign = value;
+        }
     }
 
     /**
@@ -134,7 +153,9 @@ export class GTextField extends GObject {
     }
 
     public set leading(value: number) {
-        this._textField.leading = value;
+        if (this._textField) {
+            this._textField.leading = value;
+        }
     }
 
     /**
@@ -146,7 +167,9 @@ export class GTextField extends GObject {
     }
 
     public set letterSpacing(value: number) {
-        this._textField.letterSpacing = value;
+        if (this._textField) {
+            this._textField.letterSpacing = value;
+        }
     }
 
     /**
@@ -158,7 +181,9 @@ export class GTextField extends GObject {
     }
 
     public set bold(value: boolean) {
-        this._textField.bold = value;
+        if (this._textField) {
+            this._textField.bold = value;
+        }
     }
 
     /**
@@ -170,7 +195,9 @@ export class GTextField extends GObject {
     }
 
     public set italic(value: boolean) {
-        this._textField.italic = value;
+        if (this._textField) {
+            this._textField.italic = value;
+        }
     }
 
     /**
@@ -182,7 +209,9 @@ export class GTextField extends GObject {
     }
 
     public set underline(value: boolean) {
-        this._textField.underline = value;
+        if (this._textField) {
+            this._textField.underline = value;
+        }
     }
 
     /**
@@ -195,8 +224,10 @@ export class GTextField extends GObject {
 
     public set singleLine(value: boolean) {
         this._singleLine = value;
-        this._textField.singleLine = value;
-        this._textField.wordWrap = !this._widthAutoSize && !this._singleLine;
+        if (this._textField) {
+            this._textField.singleLine = value;
+            this._textField.wordWrap = !this._widthAutoSize && !this._singleLine;
+        }
     }
 
     /**
@@ -208,7 +239,9 @@ export class GTextField extends GObject {
     }
 
     public set stroke(value: number) {
-        this._textField.stroke = value;
+        if (this._textField) {
+            this._textField.stroke = value;
+        }
     }
 
     /**
@@ -220,7 +253,7 @@ export class GTextField extends GObject {
     }
 
     public set strokeColor(value: string) {
-        if (this._textField.strokeColor !== value) {
+        if (this._textField && this._textField.strokeColor !== value) {
             this._textField.strokeColor = value;
             this.updateGear(4);
         }
@@ -235,7 +268,9 @@ export class GTextField extends GObject {
     }
 
     public set ubbEnabled(value: boolean) {
-        this._textField.ubbEnabled = value;
+        if (this._textField) {
+            this._textField.ubbEnabled = value;
+        }
     }
 
     /**
@@ -258,6 +293,8 @@ export class GTextField extends GObject {
     }
 
     protected updateAutoSize(): void {
+        if (!this._textField) return;
+
         this._textField.wordWrap = !this._widthAutoSize && !this._singleLine;
         this._textField.autoSize = this._autoSize;
         if (!this._underConstruct) {
@@ -287,7 +324,9 @@ export class GTextField extends GObject {
     }
 
     public set templateVars(value: Record<string, string> | null) {
-        this._textField.templateVars = value;
+        if (this._textField) {
+            this._textField.templateVars = value;
+        }
     }
 
     /**
@@ -295,7 +334,9 @@ export class GTextField extends GObject {
      * 设置模板变量
      */
     public setVar(name: string, value: string): GTextField {
-        this._textField.setVar(name, value);
+        if (this._textField) {
+            this._textField.setVar(name, value);
+        }
         return this;
     }
 
@@ -312,6 +353,8 @@ export class GTextField extends GObject {
     }
 
     private updateSize(): void {
+        if (!this._textField) return;
+
         if (this._widthAutoSize) {
             this.setSize(this._textField.textWidth, this._textField.textHeight);
         } else if (this._heightAutoSize) {
@@ -321,17 +364,21 @@ export class GTextField extends GObject {
 
     protected handleSizeChanged(): void {
         super.handleSizeChanged();
-        this._textField.width = this._width;
-        this._textField.height = this._height;
+        if (this._textField) {
+            this._textField.width = this._width;
+            this._textField.height = this._height;
+        }
     }
 
     protected handleGrayedChanged(): void {
         super.handleGrayedChanged();
 
-        if (this.grayed) {
-            this._textField.color = '#AAAAAA';
-        } else {
-            this._textField.color = this._color;
+        if (this._textField) {
+            if (this.grayed) {
+                this._textField.color = '#AAAAAA';
+            } else {
+                this._textField.color = this._color;
+            }
         }
     }
 

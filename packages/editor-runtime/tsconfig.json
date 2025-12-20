@@ -22,7 +22,6 @@
   "include": ["src"],
   "references": [
     { "path": "../core" },
-    { "path": "../editor-core" },
-    { "path": "../ui" }
+    { "path": "../editor-core" }
   ]
 }

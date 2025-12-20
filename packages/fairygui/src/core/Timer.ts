@@ -62,6 +62,30 @@ export class Timer {
     }
 
     /**
+     * Get current time (static shortcut)
+     * 获取当前时间（静态快捷方式）
+     */
+    public static get time(): number {
+        return Timer.inst.currentTime;
+    }
+
+    /**
+     * Add a callback to be called each frame
+     * 添加每帧调用的回调
+     */
+    public static add(callback: Function, caller: any): void {
+        Timer.inst.frameLoop(1, caller, callback);
+    }
+
+    /**
+     * Remove a callback
+     * 移除回调
+     */
+    public static remove(callback: Function, caller: any): void {
+        Timer.inst.clear(caller, callback);
+    }
+
+    /**
      * Update timer (called by ECS system each frame)
      * 更新定时器（每帧由 ECS 系统调用）
      *

@@ -4,3 +4,7 @@ export { GGraph } from './GGraph';
 export { GButton } from './GButton';
 export { GProgressBar } from './GProgressBar';
 export { GSlider } from './GSlider';
+export { GLoader } from './GLoader';
+export { GList } from './GList';
+export type { ItemRenderer, ItemProvider } from './GList';
+export { GTextInput, EKeyboardType } from './GTextInput';

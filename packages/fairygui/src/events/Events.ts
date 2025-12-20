@@ -39,6 +39,9 @@ export const FGUIEvents = {
     /** Removed from stage | 从舞台移除 */
     REMOVED_FROM_STAGE: 'removedFromStage',
 
+    /** Display (added and visible) | 显示（添加并可见） */
+    DISPLAY: 'display',
+
     /** Status changed (for Controller) | 状态改变（控制器） */
     STATUS_CHANGED: 'statusChanged',
 
@@ -82,7 +85,10 @@ export const FGUIEvents = {
     LINK: 'link',
 
     /** Play complete (MovieClip/Transition) | 播放完成 */
-    PLAY_COMPLETE: 'playComplete'
+    PLAY_COMPLETE: 'playComplete',
+
+    /** Click on list item | 列表项点击 */
+    CLICK_ITEM: 'clickItem'
 } as const;
 
 /**

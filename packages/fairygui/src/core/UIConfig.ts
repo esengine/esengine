@@ -62,7 +62,22 @@ export const UIConfig = {
     branch: '',
 
     /** Loading animation resource | 加载动画资源 */
-    loadingAnimation: ''
+    loadingAnimation: '',
+
+    /** Loader error sign resource | 加载器错误标志资源 */
+    loaderErrorSign: '',
+
+    /** Popup menu resource | 弹出菜单资源 */
+    popupMenu: '',
+
+    /** Popup menu separator resource | 弹出菜单分隔符资源 */
+    popupMenuSeperator: '',
+
+    /** Window modal waiting resource | 窗口模态等待资源 */
+    windowModalWaiting: '',
+
+    /** Bring window to front on click | 点击时将窗口置顶 */
+    bringWindowToFrontOnClick: true
 } as const;
 
 /**
