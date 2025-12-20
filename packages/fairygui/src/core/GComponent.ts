@@ -30,7 +30,7 @@ export class GComponent extends GObject {
     protected _transitions: Transition[] = [];
     protected _scrollPane: ScrollPane | null = null;
 
-    protected _buildingDisplayList: boolean = false;
+    public _buildingDisplayList: boolean = false;
     protected _sortingChildCount: number = 0;
 
     // Overflow and masking | 溢出和遮罩

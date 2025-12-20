@@ -43,11 +43,23 @@ export {
     EGearType,
     EEaseType,
     EBlendMode,
-    ETransitionActionType
+    ETransitionActionType,
+    EGraphType
 } from './core/FieldTypes';
 
 // Display objects | 显示对象
 export { DisplayObject } from './display/DisplayObject';
+export { Image } from './display/Image';
+export { TextField } from './display/TextField';
+export { Graph } from './display/Graph';
+
+// Widgets | 控件
+export { GImage } from './widgets/GImage';
+export { GTextField } from './widgets/GTextField';
+export { GGraph } from './widgets/GGraph';
+export { GButton } from './widgets/GButton';
+export { GProgressBar } from './widgets/GProgressBar';
+export { GSlider } from './widgets/GSlider';
 
 // Events | 事件
 export { EventDispatcher } from './events/EventDispatcher';

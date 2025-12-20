@@ -79,10 +79,32 @@ export class Controller extends EventDispatcher {
      * 设置选中页面
      */
     public set selectedPage(value: string) {
-        const index = this._pageNames.indexOf(value);
+        let index = this._pageNames.indexOf(value);
         if (index === -1) {
-            index === this._pageIds.indexOf(value);
+            index = this._pageIds.indexOf(value);
         }
+        if (index !== -1) {
+            this.selectedIndex = index;
+        }
+    }
+
+    /**
+     * Get selected page ID
+     * 获取选中页面 ID
+     */
+    public get selectedPageId(): string {
+        if (this._selectedIndex === -1) {
+            return '';
+        }
+        return this._pageIds[this._selectedIndex] || '';
+    }
+
+    /**
+     * Set selected page ID
+     * 设置选中页面 ID
+     */
+    public set selectedPageId(value: string) {
+        const index = this._pageIds.indexOf(value);
         if (index !== -1) {
             this.selectedIndex = index;
         }

@@ -1,5 +1,7 @@
 import type { IRectangle } from '../utils/MathTypes';
 
+import type { EGraphType, EAlignType, EVertAlignType } from '../core/FieldTypes';
+
 /**
  * Render primitive type
  * 渲染图元类型
@@ -8,7 +10,8 @@ export const enum ERenderPrimitiveType {
     Rect = 'rect',
     Image = 'image',
     Text = 'text',
-    Mesh = 'mesh'
+    Mesh = 'mesh',
+    Graph = 'graph'
 }
 
 /**
@@ -101,10 +104,10 @@ export interface IRenderPrimitive {
     underline?: boolean;
 
     /** Text align | 文本对齐 */
-    align?: ETextAlign;
+    align?: ETextAlign | EAlignType;
 
     /** Text vertical align | 文本垂直对齐 */
-    valign?: ETextVAlign;
+    valign?: ETextVAlign | EVertAlignType;
 
     /** Leading (line spacing) | 行间距 */
     leading?: number;
@@ -136,7 +139,39 @@ export interface IRenderPrimitive {
     strokeWidth?: number;
 
     /** Corner radius | 圆角半径 */
-    cornerRadius?: number;
+    cornerRadius?: number | number[];
+
+    /** Single line | 单行 */
+    singleLine?: boolean;
+
+    /** Word wrap | 自动换行 */
+    wordWrap?: boolean;
+
+    /** Stroke | 描边宽度 */
+    stroke?: number;
+
+    // Graph properties | 图形属性
+
+    /** Graph type | 图形类型 */
+    graphType?: EGraphType;
+
+    /** Line size | 线宽 */
+    lineSize?: number;
+
+    /** Line color | 线颜色 */
+    lineColor?: number;
+
+    /** Polygon points | 多边形顶点 */
+    polygonPoints?: number[];
+
+    /** Sides for regular polygon | 正多边形边数 */
+    sides?: number;
+
+    /** Start angle for regular polygon | 正多边形起始角度 */
+    startAngle?: number;
+
+    /** Distance multipliers for regular polygon | 正多边形距离乘数 */
+    distances?: number[];
 
     // Mesh properties | 网格属性
 

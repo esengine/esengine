@@ -388,3 +388,15 @@ export const enum ETransitionActionType {
     Icon = 15,
     Unknown = 16
 }
+
+/**
+ * Graph type
+ * 图形类型
+ */
+export const enum EGraphType {
+    Empty = 0,
+    Rect = 1,
+    Ellipse = 2,
+    Polygon = 3,
+    RegularPolygon = 4
+}

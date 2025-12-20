@@ -42,6 +42,9 @@ export const FGUIEvents = {
     /** Status changed (for Controller) | 状态改变（控制器） */
     STATUS_CHANGED: 'statusChanged',
 
+    /** State changed (for Button/Slider) | 状态改变（按钮/滑块） */
+    STATE_CHANGED: 'stateChanged',
+
     /** Pull down release (for list refresh) | 下拉刷新释放 */
     PULL_DOWN_RELEASE: 'pullDownRelease',
 
