@@ -2,15 +2,12 @@ import { GObject } from '../core/GObject';
 import { Graph } from '../display/Graph';
 import { EGraphType, EObjectPropID } from '../core/FieldTypes';
 import type { ByteBuffer } from '../utils/ByteBuffer';
-import type { GComponent } from '../core/GComponent';
 
 /**
- * GGraph
+ * GGraph - FairyGUI 图形显示对象
  *
- * Graph display object for FairyGUI.
  * Supports rect, ellipse, polygon, and regular polygon shapes.
- *
- * FairyGUI 图形显示对象，支持矩形、椭圆、多边形和正多边形
+ * 支持矩形、椭圆、多边形和正多边形
  */
 export class GGraph extends GObject {
     private _graph!: Graph;
@@ -26,6 +23,13 @@ export class GGraph extends GObject {
 
     constructor() {
         super();
+        this.ensureGraph();
+    }
+
+    private ensureGraph(): void {
+        if (!this._graph) {
+            this.createDisplayObject();
+        }
     }
 
     protected createDisplayObject(): void {
@@ -34,26 +38,14 @@ export class GGraph extends GObject {
         this._displayObject.gOwner = this;
     }
 
-    /**
-     * Get graph type
-     * 获取图形类型
-     */
     public get type(): EGraphType {
         return this._type;
     }
 
-    /**
-     * Get polygon points
-     * 获取多边形顶点
-     */
     public get polygonPoints(): number[] | null {
         return this._polygonPoints;
     }
 
-    /**
-     * Get/set fill color
-     * 获取/设置填充颜色
-     */
     public get fillColor(): string {
         return this._fillColor;
     }
@@ -64,10 +56,6 @@ export class GGraph extends GObject {
         this.updateGraph();
     }
 
-    /**
-     * Get/set line color
-     * 获取/设置线颜色
-     */
     public get lineColor(): string {
         return this._lineColor;
     }
@@ -78,10 +66,6 @@ export class GGraph extends GObject {
         this.updateGraph();
     }
 
-    /**
-     * Get/set color (alias for fillColor)
-     * 获取/设置颜色（fillColor 的别名）
-     */
     public get color(): string {
         return this._fillColor;
     }
@@ -94,10 +78,6 @@ export class GGraph extends GObject {
         }
     }
 
-    /**
-     * Get/set distances for regular polygon
-     * 获取/设置正多边形距离乘数
-     */
     public get distances(): number[] | null {
         return this._distances;
     }
@@ -109,10 +89,6 @@ export class GGraph extends GObject {
         }
     }
 
-    /**
-     * Draw a rectangle
-     * 绘制矩形
-     */
     public drawRect(
         lineSize: number,
         lineColor: string,
@@ -127,10 +103,6 @@ export class GGraph extends GObject {
         this.updateGraph();
     }
 
-    /**
-     * Draw an ellipse
-     * 绘制椭圆
-     */
     public drawEllipse(lineSize: number, lineColor: string, fillColor: string): void {
         this._type = EGraphType.Ellipse;
         this._lineSize = lineSize;
@@ -139,10 +111,6 @@ export class GGraph extends GObject {
         this.updateGraph();
     }
 
-    /**
-     * Draw a regular polygon
-     * 绘制正多边形
-     */
     public drawRegularPolygon(
         lineSize: number,
         lineColor: string,
@@ -161,10 +129,6 @@ export class GGraph extends GObject {
         this.updateGraph();
     }
 
-    /**
-     * Draw a polygon
-     * 绘制多边形
-     */
     public drawPolygon(
         lineSize: number,
         lineColor: string,
@@ -180,6 +144,7 @@ export class GGraph extends GObject {
     }
 
     private updateGraph(): void {
+        this.ensureGraph();
         if (!this._graph) return;
 
         this._graph.touchable = this.touchable;
@@ -252,10 +217,6 @@ export class GGraph extends GObject {
         }
     }
 
-    /**
-     * Replace this object with another
-     * 用另一个对象替换此对象
-     */
     public replaceMe(target: GObject): void {
         if (!this._parent) {
             throw new Error('parent not set');
@@ -277,10 +238,6 @@ export class GGraph extends GObject {
         this._parent.removeChild(this, true);
     }
 
-    /**
-     * Add target before this object
-     * 在此对象前添加目标
-     */
     public addBeforeMe(target: GObject): void {
         if (!this._parent) {
             throw new Error('parent not set');
@@ -334,8 +291,8 @@ export class GGraph extends GObject {
         this._type = buffer.readByte();
         if (this._type !== EGraphType.Empty) {
             this._lineSize = buffer.getInt32();
-            this._lineColor = buffer.readS();
-            this._fillColor = buffer.readS();
+            this._lineColor = buffer.readColorS(true);
+            this._fillColor = buffer.readColorS(true);
             if (buffer.readBool()) {
                 this._cornerRadius = [];
                 for (let i = 0; i < 4; i++) {
@@ -360,7 +317,13 @@ export class GGraph extends GObject {
                     }
                 }
             }
+        }
+    }
 
+    public setup_afterAdd(buffer: ByteBuffer, beginPos: number): void {
+        super.setup_afterAdd(buffer, beginPos);
+
+        if (this._type !== EGraphType.Empty) {
             this.updateGraph();
         }
     }

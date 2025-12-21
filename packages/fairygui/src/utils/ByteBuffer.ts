@@ -244,15 +244,40 @@ export class ByteBuffer {
     }
 
     /**
-     * Read color
-     * 读取颜色
+     * Read color as packed u32 (0xRRGGBBAA format)
+     * 读取颜色为打包的 u32（0xRRGGBBAA 格式）
      */
     public readColor(bHasAlpha: boolean = false): number {
         const r = this.getUint8();
         const g = this.getUint8();
         const b = this.getUint8();
-        const a = bHasAlpha ? this.getUint8() : 255;
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        const a = this.getUint8();
+        return ((r << 24) | (g << 16) | (b << 8) | (bHasAlpha ? a : 0xFF)) >>> 0;
+    }
+
+    /**
+     * Read color as CSS string (always reads 4 bytes: r, g, b, a)
+     * 读取颜色为 CSS 字符串（总是读取 4 字节：r, g, b, a）
+     *
+     * FairyGUI 二进制格式颜色存储顺序为 R, G, B, A
+     */
+    public readColorS(bHasAlpha: boolean = false): string {
+        const byte0 = this.getUint8();
+        const byte1 = this.getUint8();
+        const byte2 = this.getUint8();
+        const byte3 = this.getUint8();
+
+        // FairyGUI stores colors as R, G, B, A
+        const r = byte0;
+        const g = byte1;
+        const b = byte2;
+        const a = byte3;
+
+        if (bHasAlpha && a !== 255) {
+            return `rgba(${r},${g},${b},${(a / 255).toFixed(2)})`;
+        } else {
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
     }
 
     /**
