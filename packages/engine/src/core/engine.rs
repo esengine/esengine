@@ -7,7 +7,7 @@ use super::context::WebGLContext;
 use super::error::Result;
 use crate::backend::WebGL2Backend;
 use crate::input::InputManager;
-use crate::renderer::{Renderer2D, GridRenderer, GizmoRenderer, TransformMode, ViewportManager};
+use crate::renderer::{Renderer2D, GridRenderer, GizmoRenderer, TransformMode, ViewportManager, TextBatch, MeshBatch};
 use crate::resource::TextureManager;
 use es_engine_shared::traits::backend::GraphicsBackend;
 
@@ -96,6 +96,14 @@ pub struct Engine {
     /// and axis indicator are automatically hidden.
     /// 当为 false（运行时模式）时，编辑器专用 UI（如网格、gizmos、坐标轴指示器）会自动隐藏。
     is_editor: bool,
+
+    /// Text batch renderer for MSDF text.
+    /// MSDF 文本批处理渲染器。
+    text_batch: TextBatch,
+
+    /// Mesh batch renderer for arbitrary 2D geometry.
+    /// 任意 2D 几何体的网格批处理渲染器。
+    mesh_batch: MeshBatch,
 }
 
 impl Engine {
@@ -137,6 +145,10 @@ impl Engine {
             .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
         let gizmo_renderer = GizmoRenderer::new(&mut backend)
             .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let text_batch = TextBatch::new(&mut backend, 10000)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let mesh_batch = MeshBatch::new(&mut backend, 10000, 30000)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
 
         log::info!("Engine created successfully | 引擎创建成功");
 
@@ -153,6 +165,8 @@ impl Engine {
             viewport_manager: ViewportManager::new(),
             show_gizmos: true,
             is_editor: true,
+            text_batch,
+            mesh_batch,
         })
     }
 
@@ -194,6 +208,10 @@ impl Engine {
             .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
         let gizmo_renderer = GizmoRenderer::new(&mut backend)
             .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let text_batch = TextBatch::new(&mut backend, 10000)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        let mesh_batch = MeshBatch::new(&mut backend, 10000, 30000)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
 
         log::info!("Engine created from external context | 从外部上下文创建引擎");
 
@@ -210,6 +228,8 @@ impl Engine {
             viewport_manager: ViewportManager::new(),
             show_gizmos: true,
             is_editor: true,
+            text_batch,
+            mesh_batch,
         })
     }
 
@@ -289,6 +309,91 @@ impl Engine {
     ) -> Result<()> {
         self.renderer.submit_batch(transforms, texture_ids, uvs, colors, material_ids)
             .map_err(|e| crate::core::error::EngineError::WebGLError(e))
+    }
+
+    /// Submit MSDF text batch for rendering.
+    /// 提交 MSDF 文本批次进行渲染。
+    ///
+    /// # Arguments | 参数
+    /// * `positions` - Float32Array [x, y, ...] for each vertex (4 per glyph)
+    /// * `tex_coords` - Float32Array [u, v, ...] for each vertex
+    /// * `colors` - Float32Array [r, g, b, a, ...] for each vertex
+    /// * `outline_colors` - Float32Array [r, g, b, a, ...] for each vertex
+    /// * `outline_widths` - Float32Array [width, ...] for each vertex
+    /// * `texture_id` - Font atlas texture ID
+    /// * `px_range` - Pixel range for MSDF shader
+    pub fn submit_text_batch(
+        &mut self,
+        positions: &[f32],
+        tex_coords: &[f32],
+        colors: &[f32],
+        outline_colors: &[f32],
+        outline_widths: &[f32],
+        texture_id: u32,
+        px_range: f32,
+    ) -> Result<()> {
+        self.text_batch.add_glyphs(positions, tex_coords, colors, outline_colors, outline_widths)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+
+        // Render text immediately with proper setup
+        let projection = self.renderer.camera().projection_matrix();
+        let shader = self.text_batch.shader();
+
+        self.backend.bind_shader(shader).ok();
+        self.backend.set_blend_mode(es_engine_shared::types::blend::BlendMode::Alpha);
+        self.backend.set_uniform_mat3("u_projection", &projection).ok();
+        self.backend.set_uniform_i32("u_msdfTexture", 0).ok();
+        self.backend.set_uniform_f32("u_pxRange", px_range).ok();
+
+        // Bind font atlas texture
+        self.texture_manager.bind_texture_via_backend(&mut self.backend, texture_id, 0);
+
+        // Flush and render
+        self.text_batch.flush(&mut self.backend);
+        self.text_batch.clear();
+
+        Ok(())
+    }
+
+    /// Submit mesh batch for rendering arbitrary 2D geometry.
+    /// 提交网格批次进行任意 2D 几何体渲染。
+    ///
+    /// # Arguments | 参数
+    /// * `positions` - Float array [x, y, ...] for each vertex
+    /// * `uvs` - Float array [u, v, ...] for each vertex
+    /// * `colors` - Packed RGBA colors (one per vertex)
+    /// * `indices` - Triangle indices
+    /// * `texture_id` - Texture ID to use
+    pub fn submit_mesh_batch(
+        &mut self,
+        positions: &[f32],
+        uvs: &[f32],
+        colors: &[u32],
+        indices: &[u16],
+        texture_id: u32,
+    ) -> Result<()> {
+        self.mesh_batch.add_mesh(positions, uvs, colors, indices, 0.0, 0.0)
+            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+
+        // Render mesh immediately with proper setup
+        let projection = self.renderer.camera().projection_matrix();
+        let shader_id = crate::renderer::shader::SHADER_ID_DEFAULT_SPRITE;
+
+        if let Some(shader) = self.renderer.get_shader_handle(shader_id) {
+            self.backend.bind_shader(shader).ok();
+            self.backend.set_blend_mode(es_engine_shared::types::blend::BlendMode::Alpha);
+            self.backend.set_uniform_mat3("u_projection", &projection).ok();
+
+            // Bind texture
+            self.texture_manager.bind_texture_via_backend(&mut self.backend, texture_id, 0);
+
+            // Flush and render
+            self.mesh_batch.flush(&mut self.backend);
+        }
+
+        self.mesh_batch.clear();
+
+        Ok(())
     }
 
     pub fn render(&mut self) -> Result<()> {

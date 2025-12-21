@@ -50,6 +50,8 @@ export * from './Services/IViewportService';
 export * from './Services/PreviewSceneService';
 export * from './Services/EditorViewportService';
 export * from './Services/PrefabService';
+export * from './Services/VirtualNodeRegistry';
+export * from './Services/GizmoInteractionService';
 
 // Build System | 构建系统
 export * from './Services/Build';

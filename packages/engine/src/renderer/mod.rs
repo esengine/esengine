@@ -14,7 +14,7 @@ mod viewport;
 
 pub use renderer2d::Renderer2D;
 pub use camera::Camera2D;
-pub use batch::SpriteBatch;
+pub use batch::{SpriteBatch, TextBatch, MeshBatch};
 pub use texture::{Texture, TextureManager};
 pub use grid::GridRenderer;
 pub use gizmo::{GizmoRenderer, TransformMode};

@@ -87,21 +87,16 @@ export class Image extends DisplayObject {
     }
 
     /**
-     * Parse color string to number
-     * 解析颜色字符串为数字
+     * Parse color string to packed u32 (0xRRGGBBAA format)
+     * 解析颜色字符串为打包的 u32（0xRRGGBBAA 格式）
      */
     private parseColor(color: string): number {
         if (color.startsWith('#')) {
             const hex = color.slice(1);
             if (hex.length === 6) {
-                return parseInt(hex, 16) | 0xFF000000;
+                return ((parseInt(hex, 16) << 8) | 0xFF) >>> 0;
             } else if (hex.length === 8) {
-                // RRGGBBAA -> AARRGGBB
-                const r = parseInt(hex.slice(0, 2), 16);
-                const g = parseInt(hex.slice(2, 4), 16);
-                const b = parseInt(hex.slice(4, 6), 16);
-                const a = parseInt(hex.slice(6, 8), 16);
-                return (a << 24) | (r << 16) | (g << 8) | b;
+                return parseInt(hex, 16) >>> 0;
             }
         }
         return 0xFFFFFFFF;

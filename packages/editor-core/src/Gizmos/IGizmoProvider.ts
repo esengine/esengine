@@ -28,10 +28,26 @@ export interface GizmoColor {
 }
 
 /**
+ * Base gizmo data with optional virtual node reference
+ * 带有可选虚拟节点引用的基础 Gizmo 数据
+ */
+export interface IGizmoDataBase {
+    /**
+     * Optional virtual node ID for component internal nodes
+     * 可选的虚拟节点 ID，用于组件内部节点
+     *
+     * When set, clicking this gizmo will select the virtual node
+     * instead of just the entity.
+     * 设置后，点击此 gizmo 将选中虚拟节点而不只是实体。
+     */
+    virtualNodeId?: string;
+}
+
+/**
  * Rectangle gizmo data (rendered via Rust WebGL)
  * 矩形 gizmo 数据（通过 Rust WebGL 渲染）
  */
-export interface IRectGizmoData {
+export interface IRectGizmoData extends IGizmoDataBase {
     type: 'rect';
     /** Center X position in world space | 世界空间中心 X 位置 */
     x: number;
@@ -57,7 +73,7 @@ export interface IRectGizmoData {
  * Circle gizmo data
  * 圆形 gizmo 数据
  */
-export interface ICircleGizmoData {
+export interface ICircleGizmoData extends IGizmoDataBase {
     type: 'circle';
     /** Center X position | 中心 X 位置 */
     x: number;
@@ -73,7 +89,7 @@ export interface ICircleGizmoData {
  * Line gizmo data
  * 线条 gizmo 数据
  */
-export interface ILineGizmoData {
+export interface ILineGizmoData extends IGizmoDataBase {
     type: 'line';
     /** Line points | 线段点 */
     points: Array<{ x: number; y: number }>;
@@ -87,7 +103,7 @@ export interface ILineGizmoData {
  * Grid gizmo data
  * 网格 gizmo 数据
  */
-export interface IGridGizmoData {
+export interface IGridGizmoData extends IGizmoDataBase {
     type: 'grid';
     /** Top-left X position | 左上角 X 位置 */
     x: number;
@@ -109,7 +125,7 @@ export interface IGridGizmoData {
  * Capsule gizmo data
  * 胶囊 gizmo 数据
  */
-export interface ICapsuleGizmoData {
+export interface ICapsuleGizmoData extends IGizmoDataBase {
     type: 'capsule';
     /** Center X position | 中心 X 位置 */
     x: number;

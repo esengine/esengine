@@ -224,6 +224,19 @@ impl Renderer2D {
         id == 0 || self.custom_shaders.contains_key(&id)
     }
 
+    /// Get shader handle by ID.
+    /// 按 ID 获取着色器句柄。
+    ///
+    /// Returns the default shader for ID 0, or custom shader for other IDs.
+    /// ID 0 返回默认着色器，其他 ID 返回自定义着色器。
+    pub fn get_shader_handle(&self, id: u32) -> Option<ShaderHandle> {
+        if id == 0 || id == crate::renderer::shader::SHADER_ID_DEFAULT_SPRITE {
+            Some(self.default_shader)
+        } else {
+            self.custom_shaders.get(&id).copied()
+        }
+    }
+
     pub fn remove_shader(&mut self, id: u32) -> bool {
         if id < 100 { return false; }
         self.custom_shaders.remove(&id).is_some()

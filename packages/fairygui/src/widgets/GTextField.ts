@@ -419,7 +419,7 @@ export class GTextField extends GObject {
 
         this.font = buffer.readS();
         this.fontSize = buffer.getInt16();
-        this.color = buffer.readS();
+        this.color = buffer.readColorS();
         const alignValue = buffer.readByte();
         this.align =
             alignValue === 0
@@ -443,7 +443,7 @@ export class GTextField extends GObject {
         this.bold = buffer.readBool();
         this.singleLine = buffer.readBool();
         if (buffer.readBool()) {
-            this.strokeColor = buffer.readS();
+            this.strokeColor = buffer.readColorS();
             this.stroke = buffer.getFloat32() + 1;
         }
 

@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { Core, HierarchyComponent, PrefabInstanceComponent } from '@esengine/ecs-framework';
 import type { MessageHub, EntityStoreService, SceneManagerService } from '@esengine/editor-core';
+import { VirtualNodeRegistry } from '@esengine/editor-core';
 import { useHierarchyStore } from '../stores/HierarchyStore';
 import { useInspectorStore } from '../stores/InspectorStore';
 import { getProfilerService } from '../services/getService';
@@ -285,6 +286,7 @@ export function useStoreSubscriptions({
             setRemoteEntityTarget,
             setAssetFileTarget,
             setExtensionTarget,
+            setVirtualNodeTarget,
             clearTarget,
             updateRemoteEntityDetails,
             incrementComponentVersion,
@@ -306,6 +308,9 @@ export function useStoreSubscriptions({
 
         // 实体选择处理 | Handle entity selection
         const handleEntitySelection = (data: { entity: any | null }) => {
+            // Clear virtual node selection when selecting an entity
+            // 选择实体时清除虚拟节点选择
+            VirtualNodeRegistry.clearSelectedVirtualNode();
             if (data.entity) {
                 setEntityTarget(data.entity);
             } else {
@@ -334,6 +339,18 @@ export function useStoreSubscriptions({
         // 扩展选择处理 | Handle extension selection
         const handleExtensionSelection = (data: { data: unknown }) => {
             setExtensionTarget(data.data as Record<string, unknown>);
+        };
+
+        // 虚拟节点选择处理 | Handle virtual node selection
+        const handleVirtualNodeSelection = (data: {
+            parentEntityId: number;
+            virtualNodeId: string;
+            virtualNode: any;
+        }) => {
+            // Update VirtualNodeRegistry for Gizmo highlighting
+            // 更新 VirtualNodeRegistry 用于 Gizmo 高亮
+            VirtualNodeRegistry.setSelectedVirtualNode(data.parentEntityId, data.virtualNodeId);
+            setVirtualNodeTarget(data.parentEntityId, data.virtualNodeId, data.virtualNode);
         };
 
         // 资产文件选择处理 | Handle asset file selection
@@ -382,6 +399,7 @@ export function useStoreSubscriptions({
         const unsubSceneRestored = messageHub.subscribe('scene:restored', handleSceneRestored);
         const unsubRemoteSelect = messageHub.subscribe('remote-entity:selected', handleRemoteEntitySelection);
         const unsubNodeSelect = messageHub.subscribe('behavior-tree:node-selected', handleExtensionSelection);
+        const unsubVirtualNodeSelect = messageHub.subscribe('virtual-node:selected', handleVirtualNodeSelection);
         const unsubAssetFileSelect = messageHub.subscribe('asset-file:selected', handleAssetFileSelection);
         const unsubComponentAdded = messageHub.subscribe('component:added', incrementComponentVersion);
         const unsubComponentRemoved = messageHub.subscribe('component:removed', incrementComponentVersion);
@@ -394,6 +412,7 @@ export function useStoreSubscriptions({
             unsubSceneRestored();
             unsubRemoteSelect();
             unsubNodeSelect();
+            unsubVirtualNodeSelect();
             unsubAssetFileSelect();
             unsubComponentAdded();
             unsubComponentRemoved();

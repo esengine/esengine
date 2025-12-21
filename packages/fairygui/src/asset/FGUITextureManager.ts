@@ -238,6 +238,12 @@ export function getFGUITextureManager(): FGUITextureManager {
 }
 
 /**
+ * Special texture key for white pixel (used for Graph rendering)
+ * 白色像素的特殊纹理键（用于 Graph 渲染）
+ */
+export const WHITE_PIXEL_TEXTURE_KEY = '__fgui_white_pixel__';
+
+/**
  * Create texture resolver function for FGUIRenderDataProvider
  * 创建 FGUIRenderDataProvider 的纹理解析函数
  */
@@ -248,6 +254,15 @@ export function createTextureResolver(): (textureId: string | number) => number 
         if (typeof textureId === 'number') {
             return textureId;
         }
+
+        // Handle special white pixel texture for Graph rendering
+        // Engine texture ID 0 is the default white texture
+        // 处理用于 Graph 渲染的特殊白色像素纹理
+        // 引擎纹理 ID 0 是默认的白色纹理
+        if (textureId === WHITE_PIXEL_TEXTURE_KEY) {
+            return 0;
+        }
+
         return manager.resolveTexture(textureId);
     };
 }

@@ -170,6 +170,59 @@ impl GameEngine {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// Submit MSDF text batch for rendering.
+    /// 提交 MSDF 文本批次进行渲染。
+    ///
+    /// # Arguments | 参数
+    /// * `positions` - Float32Array [x, y, ...] for each vertex (4 per glyph)
+    /// * `tex_coords` - Float32Array [u, v, ...] for each vertex
+    /// * `colors` - Float32Array [r, g, b, a, ...] for each vertex
+    /// * `outline_colors` - Float32Array [r, g, b, a, ...] for each vertex
+    /// * `outline_widths` - Float32Array [width, ...] for each vertex
+    /// * `texture_id` - Font atlas texture ID
+    /// * `px_range` - Pixel range for MSDF shader
+    #[wasm_bindgen(js_name = submitTextBatch)]
+    pub fn submit_text_batch(
+        &mut self,
+        positions: &[f32],
+        tex_coords: &[f32],
+        colors: &[f32],
+        outline_colors: &[f32],
+        outline_widths: &[f32],
+        texture_id: u32,
+        px_range: f32,
+    ) -> std::result::Result<(), JsValue> {
+        self.engine
+            .submit_text_batch(positions, tex_coords, colors, outline_colors, outline_widths, texture_id, px_range)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Submit mesh batch for rendering arbitrary 2D geometry.
+    /// 提交网格批次进行任意 2D 几何体渲染。
+    ///
+    /// Used for rendering ellipses, polygons, and other complex shapes.
+    /// 用于渲染椭圆、多边形和其他复杂形状。
+    ///
+    /// # Arguments | 参数
+    /// * `positions` - Float32Array [x, y, ...] for each vertex
+    /// * `uvs` - Float32Array [u, v, ...] for each vertex
+    /// * `colors` - Uint32Array of packed RGBA colors (one per vertex)
+    /// * `indices` - Uint16Array of triangle indices
+    /// * `texture_id` - Texture ID to use (0 for white pixel)
+    #[wasm_bindgen(js_name = submitMeshBatch)]
+    pub fn submit_mesh_batch(
+        &mut self,
+        positions: &[f32],
+        uvs: &[f32],
+        colors: &[u32],
+        indices: &[u16],
+        texture_id: u32,
+    ) -> std::result::Result<(), JsValue> {
+        self.engine
+            .submit_mesh_batch(positions, uvs, colors, indices, texture_id)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
     /// Render the current frame.
     /// 渲染当前帧。
     pub fn render(&mut self) -> std::result::Result<(), JsValue> {

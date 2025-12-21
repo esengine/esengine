@@ -108,8 +108,8 @@ impl Color {
         }
     }
 
-    /// Convert to packed u32 (ABGR format for WebGL).
-    /// 转换为打包的u32（WebGL的ABGR格式）。
+    /// Convert to packed u32 (0xRRGGBBAA format, industry standard).
+    /// 转换为打包的 u32（0xRRGGBBAA 格式，行业标准）。
     #[inline]
     pub fn to_packed(&self) -> u32 {
         let r = (self.r.clamp(0.0, 1.0) * 255.0) as u32;
@@ -117,19 +117,31 @@ impl Color {
         let b = (self.b.clamp(0.0, 1.0) * 255.0) as u32;
         let a = (self.a.clamp(0.0, 1.0) * 255.0) as u32;
 
-        (a << 24) | (b << 16) | (g << 8) | r
+        (r << 24) | (g << 16) | (b << 8) | a
     }
 
-    /// Create from packed u32 (ABGR format).
-    /// 从打包的u32创建（ABGR格式）。
+    /// Create from packed u32 (0xRRGGBBAA format, industry standard).
+    /// 从打包的 u32 创建（0xRRGGBBAA 格式，行业标准）。
     #[inline]
     pub fn from_packed(packed: u32) -> Self {
         Self::from_rgba8(
-            (packed & 0xFF) as u8,
-            ((packed >> 8) & 0xFF) as u8,
-            ((packed >> 16) & 0xFF) as u8,
             ((packed >> 24) & 0xFF) as u8,
+            ((packed >> 16) & 0xFF) as u8,
+            ((packed >> 8) & 0xFF) as u8,
+            (packed & 0xFF) as u8,
         )
+    }
+
+    /// Convert to GPU vertex format (ABGR for WebGL little-endian).
+    /// 转换为 GPU 顶点格式（WebGL 小端序 ABGR）。
+    #[inline]
+    pub fn to_vertex_u32(&self) -> u32 {
+        let r = (self.r.clamp(0.0, 1.0) * 255.0) as u32;
+        let g = (self.g.clamp(0.0, 1.0) * 255.0) as u32;
+        let b = (self.b.clamp(0.0, 1.0) * 255.0) as u32;
+        let a = (self.a.clamp(0.0, 1.0) * 255.0) as u32;
+
+        (a << 24) | (b << 16) | (g << 8) | r
     }
 
     /// Linear interpolation between two colors.

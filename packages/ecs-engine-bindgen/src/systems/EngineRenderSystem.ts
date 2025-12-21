@@ -69,6 +69,23 @@ export interface IRenderDataProvider {
 }
 
 /**
+ * Mesh render data for arbitrary 2D geometry
+ * 任意 2D 几何体的网格渲染数据
+ */
+export interface MeshRenderData {
+    /** Vertex positions [x, y, ...] | 顶点位置 */
+    positions: Float32Array;
+    /** Texture coordinates [u, v, ...] | 纹理坐标 */
+    uvs: Float32Array;
+    /** Vertex colors (packed RGBA) | 顶点颜色 */
+    colors: Uint32Array;
+    /** Triangle indices | 三角形索引 */
+    indices: Uint16Array;
+    /** Texture ID (0 = white pixel) | 纹理 ID */
+    textureId: number;
+}
+
+/**
  * Interface for UI render data providers
  * UI 渲染数据提供者接口
  *
@@ -78,6 +95,8 @@ export interface IRenderDataProvider {
 export interface IUIRenderDataProvider extends IRenderDataProvider {
     /** Get UI render data | 获取 UI 渲染数据 */
     getRenderData(): readonly ProviderRenderData[];
+    /** Get mesh render data for complex shapes | 获取复杂形状的网格渲染数据 */
+    getMeshRenderData?(): readonly MeshRenderData[];
     /** @deprecated Use getRenderData() instead */
     getScreenSpaceRenderData?(): readonly ProviderRenderData[];
     /** @deprecated World space UI is no longer supported */
@@ -535,6 +554,34 @@ export class EngineRenderSystem extends EntitySystem {
                 this.worldSpaceItemCount = this.addRenderItem(
                     this.worldSpaceItems, this.worldSpaceItemCount,
                     sortKey, this.worldSpaceItemCount, startIndex, data.tileCount
+                );
+            }
+        }
+
+        // Collect mesh render data for complex shapes (ellipses, polygons, etc.)
+        // 收集复杂形状（椭圆、多边形等）的网格渲染数据
+        if (this.uiRenderDataProvider.getMeshRenderData) {
+            const meshRenderData = this.uiRenderDataProvider.getMeshRenderData();
+            if (meshRenderData.length > 0) {
+                console.log(`[EngineRenderSystem] Submitting ${meshRenderData.length} mesh batches`);
+            }
+            for (const mesh of meshRenderData) {
+                if (mesh.positions.length === 0) continue;
+
+                console.log('[EngineRenderSystem] Mesh batch:', {
+                    vertices: mesh.positions.length / 2,
+                    indices: mesh.indices.length,
+                    textureId: mesh.textureId
+                });
+
+                // Submit mesh data directly to the engine
+                // 直接将网格数据提交到引擎
+                this.bridge.submitMeshBatch(
+                    mesh.positions,
+                    mesh.uvs,
+                    mesh.colors,
+                    mesh.indices,
+                    mesh.textureId
                 );
             }
         }

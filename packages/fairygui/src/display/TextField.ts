@@ -11,8 +11,6 @@ import { ERenderPrimitiveType } from '../render/IRenderCollector';
  * 用于渲染文本的显示对象
  */
 export class TextField extends DisplayObject {
-    /** Text content | 文本内容 */
-    public text: string = '';
 
     /** Font name | 字体名称 */
     public font: string = '';
@@ -71,8 +69,30 @@ export class TextField extends DisplayObject {
     /** Text height after layout | 排版后文本高度 */
     private _textHeight: number = 0;
 
+    /** Text content changed flag | 文本内容变化标记 */
+    private _textChanged: boolean = true;
+
+    /** Internal text storage | 内部文本存储 */
+    private _text: string = '';
+
     constructor() {
         super();
+    }
+
+    /**
+     * Get/set text content
+     * 获取/设置文本内容
+     */
+    public get text(): string {
+        return this._text;
+    }
+
+    public set text(value: string) {
+        if (this._text !== value) {
+            this._text = value;
+            this._textChanged = true;
+            this.ensureSizeCorrect();
+        }
     }
 
     /**
@@ -80,6 +100,9 @@ export class TextField extends DisplayObject {
      * 获取文本宽度
      */
     public get textWidth(): number {
+        if (this._textChanged) {
+            this.buildLines();
+        }
         return this._textWidth;
     }
 
@@ -88,7 +111,97 @@ export class TextField extends DisplayObject {
      * 获取文本高度
      */
     public get textHeight(): number {
+        if (this._textChanged) {
+            this.buildLines();
+        }
         return this._textHeight;
+    }
+
+    /**
+     * Ensure text size is calculated correctly
+     * 确保文本尺寸正确计算
+     */
+    public ensureSizeCorrect(): void {
+        if (this._textChanged && this.autoSize !== EAutoSizeType.None) {
+            this.buildLines();
+        }
+    }
+
+    /** Shared canvas context for text measurement | 共享的 Canvas 上下文用于文本测量 */
+    private static _measureContext: CanvasRenderingContext2D | null = null;
+
+    /**
+     * Get or create canvas context for text measurement
+     * 获取或创建用于文本测量的 canvas 上下文
+     */
+    private static getMeasureContext(): CanvasRenderingContext2D {
+        if (!TextField._measureContext) {
+            const canvas = document.createElement('canvas');
+            TextField._measureContext = canvas.getContext('2d')!;
+        }
+        return TextField._measureContext;
+    }
+
+    /**
+     * Build lines and calculate text dimensions
+     * 构建行信息并计算文本尺寸
+     *
+     * 使用 Canvas 2D measureText 精确测量文本尺寸
+     * Use Canvas 2D measureText for accurate text measurement
+     */
+    private buildLines(): void {
+        this._textChanged = false;
+
+        if (!this._text) {
+            this._textWidth = 0;
+            this._textHeight = this.fontSize;
+            return;
+        }
+
+        const ctx = TextField.getMeasureContext();
+
+        // 设置字体样式
+        // Set font style
+        const fontStyle = this.italic ? 'italic ' : '';
+        const fontWeight = this.bold ? 'bold ' : '';
+        const fontFamily = this.font || 'Arial, sans-serif';
+        ctx.font = `${fontStyle}${fontWeight}${this.fontSize}px ${fontFamily}`;
+
+        const lines = this._text.split('\n');
+        const lineHeight = this.fontSize + this.leading;
+
+        let maxWidth = 0;
+
+        for (const line of lines) {
+            // 使用 canvas measureText 获取精确宽度
+            // Use canvas measureText for accurate width
+            let lineWidth = ctx.measureText(line).width;
+
+            // 添加字符间距
+            // Add letter spacing
+            if (this.letterSpacing !== 0 && line.length > 1) {
+                lineWidth += this.letterSpacing * (line.length - 1);
+            }
+
+            if (lineWidth > maxWidth) {
+                maxWidth = lineWidth;
+            }
+        }
+
+        // 单行模式只取第一行
+        // Single line mode only takes first line
+        if (this.singleLine) {
+            this._textWidth = maxWidth;
+            this._textHeight = lineHeight;
+        } else {
+            this._textWidth = maxWidth;
+            this._textHeight = lines.length * lineHeight;
+        }
+
+        // 添加 gutter 边距（参考 Unity 实现的 GUTTER_X = 2, GUTTER_Y = 2）
+        // Add gutter padding (refer to Unity implementation: GUTTER_X = 2, GUTTER_Y = 2)
+        this._textWidth += 4;
+        this._textHeight += 4;
     }
 
     /**
@@ -103,27 +216,23 @@ export class TextField extends DisplayObject {
     }
 
     /**
-     * Parse color string to number
-     * 解析颜色字符串为数字
+     * Parse color string to packed u32 (0xRRGGBBAA format)
+     * 解析颜色字符串为打包的 u32（0xRRGGBBAA 格式）
      */
     private parseColor(color: string): number {
         if (color.startsWith('#')) {
             const hex = color.slice(1);
             if (hex.length === 6) {
-                return parseInt(hex, 16) | 0xFF000000;
+                return ((parseInt(hex, 16) << 8) | 0xFF) >>> 0;
             } else if (hex.length === 8) {
-                const r = parseInt(hex.slice(0, 2), 16);
-                const g = parseInt(hex.slice(2, 4), 16);
-                const b = parseInt(hex.slice(4, 6), 16);
-                const a = parseInt(hex.slice(6, 8), 16);
-                return (a << 24) | (r << 16) | (g << 8) | b;
+                return parseInt(hex, 16) >>> 0;
             }
         }
-        return 0xFF000000;
+        return 0x000000FF;
     }
 
     public collectRenderData(collector: IRenderCollector): void {
-        if (!this._visible || this._alpha <= 0 || !this.text) return;
+        if (!this._visible || this._alpha <= 0 || !this._text) return;
 
         this.updateTransform();
 
@@ -135,7 +244,7 @@ export class TextField extends DisplayObject {
             height: this._height,
             alpha: this._worldAlpha,
             grayed: this._grayed,
-            text: this.text,
+            text: this._text,
             font: this.font,
             fontSize: this.fontSize,
             color: this.parseColor(this.color),

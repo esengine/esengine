@@ -10,7 +10,7 @@ import { useLocale } from '../hooks/useLocale';
 import { EngineService } from '../services/EngineService';
 import { Core, Entity, SceneSerializer, PrefabSerializer, GlobalComponentRegistry } from '@esengine/ecs-framework';
 import type { PrefabData, ComponentType } from '@esengine/ecs-framework';
-import { MessageHub, ProjectService, AssetRegistryService, EntityStoreService, CommandManager, SceneManagerService, UserCodeService, UserCodeTarget } from '@esengine/editor-core';
+import { MessageHub, ProjectService, AssetRegistryService, EntityStoreService, CommandManager, SceneManagerService, UserCodeService, UserCodeTarget, VirtualNodeRegistry } from '@esengine/editor-core';
 import { InstantiatePrefabCommand } from '../application/commands/prefab/InstantiatePrefabCommand';
 import { TransformCommand, type TransformState, type TransformOperationType } from '../application/commands';
 import { TransformComponent } from '@esengine/engine-core';
@@ -454,18 +454,48 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     if (gizmoService) {
                         const worldPos = screenToWorld(e.clientX, e.clientY);
                         const zoom = camera2DZoomRef.current;
-                        const hitEntityId = gizmoService.handleClick(worldPos.x, worldPos.y, zoom);
+                        const clickResult = gizmoService.handleClickEx(worldPos.x, worldPos.y, zoom);
 
-                        if (hitEntityId !== null) {
+                        if (clickResult !== null) {
                             // Find and select the hit entity
                             // 找到并选中命中的实体
                             const scene = Core.scene;
                             if (scene) {
-                                const hitEntity = scene.entities.findEntityById(hitEntityId);
+                                const hitEntity = scene.entities.findEntityById(clickResult.entityId);
                                 if (hitEntity && messageHubRef.current) {
                                     const entityStore = Core.services.tryResolve(EntityStoreService);
                                     entityStore?.selectEntity(hitEntity);
-                                    messageHubRef.current.publish('entity:selected', { entity: hitEntity });
+
+                                    // Check if clicked on a virtual node
+                                    // 检查是否点击了虚拟节点
+                                    if (clickResult.virtualNodeId) {
+                                        // Get the virtual node data from VirtualNodeRegistry
+                                        // 从 VirtualNodeRegistry 获取虚拟节点数据
+                                        const virtualNodes = VirtualNodeRegistry.getAllVirtualNodesForEntity(hitEntity);
+                                        const findVirtualNode = (nodes: typeof virtualNodes, targetId: string): typeof virtualNodes[0] | null => {
+                                            for (const node of nodes) {
+                                                if (node.id === targetId) return node;
+                                                const found = findVirtualNode(node.children, targetId);
+                                                if (found) return found;
+                                            }
+                                            return null;
+                                        };
+                                        const virtualNode = findVirtualNode(virtualNodes, clickResult.virtualNodeId);
+
+                                        if (virtualNode) {
+                                            // Publish virtual-node:selected event (will trigger Inspector update)
+                                            // 发布 virtual-node:selected 事件（将触发 Inspector 更新）
+                                            messageHubRef.current.publish('virtual-node:selected', {
+                                                parentEntityId: clickResult.entityId,
+                                                virtualNodeId: clickResult.virtualNodeId,
+                                                virtualNode
+                                            });
+                                        }
+                                    } else {
+                                        // Normal entity selection
+                                        // 普通实体选择
+                                        messageHubRef.current.publish('entity:selected', { entity: hitEntity });
+                                    }
                                     e.preventDefault();
                                     return; // Don't start camera pan
                                 }

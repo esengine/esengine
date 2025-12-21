@@ -26,7 +26,8 @@ import {
     FGUIRenderDataProvider,
     setGlobalTextureService,
     createTextureResolver,
-    Stage
+    Stage,
+    getDOMTextRenderer
 } from '@esengine/fairygui';
 import { SettingsService } from './SettingsService';
 import * as esEngine from '@esengine/engine';
@@ -332,10 +333,19 @@ export class EngineService {
             // 使用 FGUITextureManager 的集中式纹理解析器
             fguiRenderDataProvider.setTextureResolver(createTextureResolver());
 
+            // Initialize DOM text renderer for text fallback
+            // 初始化 DOM 文本渲染器作为文本回退
+            const domTextRenderer = getDOMTextRenderer();
+            const canvas = document.getElementById('viewport-canvas') as HTMLCanvasElement;
+            if (canvas) {
+                domTextRenderer.initialize(canvas);
+            }
+
             // Create UI render data provider adapter for EngineRenderSystem
             // 为 EngineRenderSystem 创建 UI 渲染数据提供者适配器
             // This adapter updates FGUI and returns render data in the format expected by the engine
             // 此适配器更新 FGUI 并以引擎期望的格式返回渲染数据
+            const runtime = this._runtime;
             const uiRenderProvider = {
                 getRenderData: () => {
                     // Update canvas size for coordinate conversion
@@ -346,14 +356,43 @@ export class EngineService {
                     const canvasHeight = canvasSize.height > 0 ? canvasSize.height : 1080;
                     fguiRenderDataProvider.setCanvasSize(canvasWidth, canvasHeight);
 
+                    // Update DOM text renderer settings
+                    // 更新 DOM 文本渲染器设置
+                    domTextRenderer.setDesignSize(canvasWidth, canvasHeight);
+                    domTextRenderer.setPreviewMode(renderSystem.isPreviewMode());
+
+                    // In editor mode, sync camera state for world-space text rendering
+                    // 在编辑器模式下，同步相机状态以进行世界空间文本渲染
+                    if (!renderSystem.isPreviewMode() && runtime?.bridge) {
+                        const camera = runtime.bridge.getCamera();
+                        domTextRenderer.setCamera({
+                            x: camera.x,
+                            y: camera.y,
+                            zoom: camera.zoom,
+                            rotation: camera.rotation
+                        });
+                    }
+
                     // Update FGUI system to collect render primitives
                     // 更新 FGUI 系统以收集渲染图元
                     fguiRenderSystem.update();
+
+                    // Render text using DOM (fallback until MSDF text is fully integrated)
+                    // 使用 DOM 渲染文本（作为回退，直到 MSDF 文本完全集成）
+                    domTextRenderer.beginFrame();
+                    domTextRenderer.renderPrimitives(fguiRenderSystem.collector.getPrimitives());
+                    domTextRenderer.endFrame();
 
                     // Get render data from provider
                     // 从提供者获取渲染数据
                     fguiRenderDataProvider.setCollector(fguiRenderSystem.collector);
                     return fguiRenderDataProvider.getRenderData();
+                },
+
+                getMeshRenderData: () => {
+                    // Get mesh render data for complex shapes (ellipses, polygons, etc.)
+                    // 获取复杂形状（椭圆、多边形等）的网格渲染数据
+                    return fguiRenderDataProvider.getMeshRenderData();
                 }
             };
 

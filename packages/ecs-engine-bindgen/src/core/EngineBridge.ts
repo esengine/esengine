@@ -216,6 +216,31 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
     }
 
     /**
+     * Submit mesh batch for rendering arbitrary 2D geometry.
+     * 提交网格批次进行任意 2D 几何体渲染。
+     *
+     * Used for rendering ellipses, polygons, and other complex shapes.
+     * 用于渲染椭圆、多边形和其他复杂形状。
+     *
+     * @param positions - Vertex positions [x, y, ...]
+     * @param uvs - Texture coordinates [u, v, ...]
+     * @param colors - Packed RGBA colors (one per vertex)
+     * @param indices - Triangle indices
+     * @param textureId - Texture ID (0 = white pixel)
+     */
+    submitMeshBatch(
+        positions: Float32Array,
+        uvs: Float32Array,
+        colors: Uint32Array,
+        indices: Uint16Array,
+        textureId: number
+    ): void {
+        if (!this.initialized || positions.length === 0) return;
+
+        this.getEngine().submitMeshBatch(positions, uvs, colors, indices, textureId);
+    }
+
+    /**
      * Render the current frame.
      * 渲染当前帧。
      */

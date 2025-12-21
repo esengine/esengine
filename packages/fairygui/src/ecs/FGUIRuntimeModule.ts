@@ -16,6 +16,7 @@ import { FGUIRenderSystem, setFGUIRenderSystem } from './FGUIRenderSystem';
 import { FGUIUpdateSystem } from './FGUIUpdateSystem';
 import { FUIAssetLoader, FUI_ASSET_TYPE } from '../asset/FUIAssetLoader';
 import { Stage } from '../core/Stage';
+import { getDynamicFontManager, COMMON_ASCII_CHARS } from '../text/DynamicFont';
 
 /**
  * FGUIRuntimeModule
@@ -79,11 +80,56 @@ export class FGUIRuntimeModule implements IRuntimeModule {
             Stage.inst.bindToCanvas(canvas);
         }
 
+        // Initialize dynamic font system with system default font
+        // 使用系统默认字体初始化动态字体系统
+        this.initDynamicFonts();
+
         // Initialize the render system
         this._renderSystem.initialize();
 
         // Store global reference
         setFGUIRenderSystem(this._renderSystem);
+    }
+
+    /**
+     * Initialize dynamic font system
+     * 初始化动态字体系统
+     *
+     * Creates a default dynamic font using system fonts.
+     * This allows text rendering without preloaded MSDF fonts.
+     *
+     * 创建使用系统字体的默认动态字体。
+     * 这允许在没有预加载 MSDF 字体的情况下渲染文本。
+     */
+    private initDynamicFonts(): void {
+        const fontManager = getDynamicFontManager();
+
+        // Create default font using system fonts (cross-platform, no licensing issues)
+        // 使用系统字体创建默认字体（跨平台，无许可问题）
+        // Font stack: system-ui for modern browsers, then common fallbacks
+        const defaultFont = fontManager.createFont('default', {
+            fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif',
+            fontSize: 32,
+            atlasWidth: 1024,
+            atlasHeight: 1024,
+            padding: 2,
+            preloadChars: COMMON_ASCII_CHARS
+        });
+
+        // Also create Arial alias using system sans-serif
+        // 为 Arial 创建别名，使用系统 sans-serif
+        fontManager.createFont('Arial', {
+            fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif',
+            fontSize: 32,
+            atlasWidth: 1024,
+            atlasHeight: 1024,
+            padding: 2,
+            preloadChars: COMMON_ASCII_CHARS
+        });
+
+        // Register as MSDF-compatible fonts
+        // 注册为 MSDF 兼容字体
+        defaultFont.registerAsMSDFFont();
     }
 
     /**

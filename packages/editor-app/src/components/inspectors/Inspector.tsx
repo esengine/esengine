@@ -15,7 +15,8 @@ import {
     ExtensionInspector,
     AssetFileInspector,
     RemoteEntityInspector,
-    PrefabInspector
+    PrefabInspector,
+    VirtualNodeInspector
 } from './views';
 import { EntityInspectorPanel } from '../inspector';
 
@@ -108,6 +109,15 @@ export function Inspector({ entityStore: _entityStore, messageHub, inspectorRegi
                 componentVersion={componentVersion}
                 isLocked={isLocked}
                 onLockChange={setIsLocked}
+            />
+        );
+    }
+
+    if (target.type === 'virtual-node') {
+        return (
+            <VirtualNodeInspector
+                parentEntityId={target.data.parentEntityId}
+                virtualNode={target.data.virtualNode}
             />
         );
     }

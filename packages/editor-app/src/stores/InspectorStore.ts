@@ -9,7 +9,8 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { Entity } from '@esengine/ecs-framework';
-import type { InspectorTarget, AssetFileInfo, RemoteEntity, EntityDetails } from '../components/inspectors/types';
+import type { IVirtualNode } from '@esengine/editor-core';
+import type { InspectorTarget, AssetFileInfo, RemoteEntity, EntityDetails, VirtualNodeTargetData } from '../components/inspectors/types';
 
 // ============= Types =============
 
@@ -45,6 +46,8 @@ export interface InspectorActions {
     setAssetFileTarget: (fileInfo: AssetFileInfo, content?: string, isImage?: boolean) => void;
     /** 设置扩展目标 | Set extension target */
     setExtensionTarget: (data: Record<string, unknown>) => void;
+    /** 设置虚拟节点目标 | Set virtual node target */
+    setVirtualNodeTarget: (parentEntityId: number, virtualNodeId: string, virtualNode: IVirtualNode) => void;
     /** 清除目标 | Clear target */
     clearTarget: () => void;
     /** 更新远程实体详情 | Update remote entity details */
@@ -115,6 +118,17 @@ export const useInspectorStore = create<InspectorStore>()(
             if (get().isLocked) return;
             set({
                 target: { type: 'extension', data }
+            });
+        },
+
+        setVirtualNodeTarget: (parentEntityId, virtualNodeId, virtualNode) => {
+            // 锁定时忽略 | Ignore when locked
+            if (get().isLocked) return;
+            set({
+                target: {
+                    type: 'virtual-node',
+                    data: { parentEntityId, virtualNodeId, virtualNode }
+                }
             });
         },
 

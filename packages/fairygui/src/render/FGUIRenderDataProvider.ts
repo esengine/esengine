@@ -9,8 +9,15 @@
  */
 
 import type { IRenderPrimitive } from './IRenderCollector';
+import { ERenderPrimitiveType } from './IRenderCollector';
 import type { RenderCollector } from './RenderCollector';
 import { Stage } from '../core/Stage';
+import { getMSDFFontManager, MSDFFont } from '../text/MSDFFont';
+import { getDynamicFontManager } from '../text/DynamicFont';
+import { layoutText } from '../text/TextLayout';
+import { createTextBatch } from '../text/TextBatch';
+import { EAlignType, EVertAlignType, EGraphType } from '../core/FieldTypes';
+import { GraphMeshGenerator, type GraphMeshData } from './GraphMeshGenerator';
 
 /**
  * Engine render data format (matches ProviderRenderData from ecs-engine-bindgen)
@@ -30,11 +37,64 @@ export interface IEngineRenderData {
 }
 
 /**
+ * MSDF text render data format
+ * MSDF 文本渲染数据格式
+ */
+export interface ITextRenderData {
+    /** Vertex positions [x, y, ...] for each vertex (4 per glyph) | 顶点位置 */
+    positions: Float32Array;
+
+    /** Texture coordinates [u, v, ...] for each vertex | 纹理坐标 */
+    texCoords: Float32Array;
+
+    /** Colors [r, g, b, a, ...] for each vertex | 颜色 */
+    colors: Float32Array;
+
+    /** Outline colors [r, g, b, a, ...] for each vertex | 描边颜色 */
+    outlineColors: Float32Array;
+
+    /** Outline widths for each vertex | 描边宽度 */
+    outlineWidths: Float32Array;
+
+    /** Font texture ID | 字体纹理 ID */
+    textureId: number;
+
+    /** Pixel range for MSDF shader | 着色器像素范围 */
+    pxRange: number;
+
+    /** Glyph count | 字形数量 */
+    glyphCount: number;
+}
+
+/**
+ * Mesh render data format for arbitrary 2D geometry
+ * 用于任意 2D 几何体的网格渲染数据格式
+ */
+export interface IMeshRenderData {
+    /** Vertex positions [x, y, ...] | 顶点位置 */
+    positions: Float32Array;
+
+    /** Texture coordinates [u, v, ...] | 纹理坐标 */
+    uvs: Float32Array;
+
+    /** Vertex colors (packed RGBA) | 顶点颜色 */
+    colors: Uint32Array;
+
+    /** Triangle indices | 三角形索引 */
+    indices: Uint16Array;
+
+    /** Texture ID (0 = white pixel) | 纹理 ID */
+    textureId: number;
+}
+
+/**
  * Render data provider interface (matches IRenderDataProvider from ecs-engine-bindgen)
  * 渲染数据提供者接口
  */
 export interface IFGUIRenderDataProvider {
     getRenderData(): readonly IEngineRenderData[];
+    getTextRenderData(): readonly ITextRenderData[];
+    getMeshRenderData(): readonly IMeshRenderData[];
 }
 
 /**
@@ -65,6 +125,12 @@ export class FGUIRenderDataProvider implements IFGUIRenderDataProvider {
 
     /** Cached render data | 缓存的渲染数据 */
     private _cachedData: IEngineRenderData[] = [];
+
+    /** Cached text render data | 缓存的文本渲染数据 */
+    private _cachedTextData: ITextRenderData[] = [];
+
+    /** Cached mesh render data | 缓存的网格渲染数据 */
+    private _cachedMeshData: IMeshRenderData[] = [];
 
     /** Default texture ID when texture not found | 找不到纹理时的默认纹理 ID */
     private _defaultTextureId: number = 0;
@@ -175,6 +241,443 @@ export class FGUIRenderDataProvider implements IFGUIRenderDataProvider {
     }
 
     /**
+     * Get text render data for the engine
+     * 获取引擎文本渲染数据
+     *
+     * Note: MSDF text rendering requires font atlas to be loaded.
+     * Text primitives are converted to MSDF glyph batches.
+     *
+     * 注意：MSDF 文本渲染需要加载字体图集。
+     * 文本图元被转换为 MSDF 字形批次。
+     */
+    public getTextRenderData(): readonly ITextRenderData[] {
+        if (!this._collector) {
+            return [];
+        }
+
+        const primitives = this._collector.getPrimitives();
+        this._cachedTextData.length = 0;
+
+        // Get canvas size for coordinate conversion
+        const canvasSize = this.getEffectiveCanvasSize();
+        const halfWidth = canvasSize.width / 2;
+        const halfHeight = canvasSize.height / 2;
+
+        // Get font managers
+        const msdfFontManager = getMSDFFontManager();
+        const dynamicFontManager = getDynamicFontManager();
+
+        // Group text primitives by font for batching
+        const textBatches = new Map<string, IRenderPrimitive[]>();
+
+        for (const primitive of primitives) {
+            if (primitive.type !== ERenderPrimitiveType.Text) continue;
+            if (!primitive.text) continue;
+
+            const fontName = primitive.font || '';
+            let batch = textBatches.get(fontName);
+            if (!batch) {
+                batch = [];
+                textBatches.set(fontName, batch);
+            }
+            batch.push(primitive);
+        }
+
+        // Convert each font batch to render data
+        for (const [fontName, batch] of textBatches) {
+            // Try MSDF font first
+            let font: MSDFFont | undefined = msdfFontManager.getFont(fontName);
+
+            // Try dynamic font if MSDF not available
+            if (!font) {
+                // Try exact name first, then fallback to 'default'
+                let dynamicFont = dynamicFontManager.getFont(fontName);
+                if (!dynamicFont && fontName !== 'default') {
+                    dynamicFont = dynamicFontManager.getFont('default');
+                }
+
+                if (dynamicFont) {
+                    // Request characters for all text in this batch
+                    for (const primitive of batch) {
+                        if (primitive.text) {
+                            dynamicFont.requestCharacters(primitive.text);
+                        }
+                    }
+                    // Register as MSDF font if not already
+                    font = msdfFontManager.getFont(dynamicFont.name);
+                    if (!font) {
+                        font = dynamicFont.registerAsMSDFFont();
+                    }
+                }
+            }
+
+            if (!font) {
+                // Skip if no font available - will fall back to DOM renderer
+                continue;
+            }
+
+            for (const primitive of batch) {
+                const textRenderData = this.convertTextPrimitive(
+                    primitive,
+                    font,
+                    halfWidth,
+                    halfHeight
+                );
+                if (textRenderData) {
+                    this._cachedTextData.push(textRenderData);
+                }
+            }
+        }
+
+        return this._cachedTextData;
+    }
+
+    /**
+     * Get mesh render data for the engine
+     * 获取引擎网格渲染数据
+     *
+     * Used for rendering complex shapes like ellipses, polygons, etc.
+     * 用于渲染椭圆、多边形等复杂形状
+     */
+    public getMeshRenderData(): readonly IMeshRenderData[] {
+        if (!this._collector) {
+            return [];
+        }
+
+        const primitives = this._collector.getPrimitives();
+        this._cachedMeshData.length = 0;
+
+        // Get canvas size for coordinate conversion
+        const canvasSize = this.getEffectiveCanvasSize();
+        const halfWidth = canvasSize.width / 2;
+        const halfHeight = canvasSize.height / 2;
+
+        for (const primitive of primitives) {
+            if (primitive.type !== ERenderPrimitiveType.Graph) continue;
+
+            const graphType = primitive.graphType;
+
+            // Skip simple rectangles - they're handled by getRenderData using white pixel
+            if (graphType === EGraphType.Rect) continue;
+
+            // Generate mesh for complex shapes
+            const meshData = this.generateGraphMesh(primitive, halfWidth, halfHeight);
+            if (meshData) {
+                this._cachedMeshData.push(meshData);
+            }
+
+            // Generate outline mesh if needed
+            if (primitive.lineSize && primitive.lineSize > 0) {
+                const outlineMesh = this.generateGraphOutlineMesh(primitive, halfWidth, halfHeight);
+                if (outlineMesh) {
+                    this._cachedMeshData.push(outlineMesh);
+                }
+            }
+        }
+
+        return this._cachedMeshData;
+    }
+
+    /**
+     * Generate mesh data for a graph primitive
+     * 为图形图元生成网格数据
+     */
+    private generateGraphMesh(
+        primitive: IRenderPrimitive,
+        halfWidth: number,
+        halfHeight: number
+    ): IMeshRenderData | null {
+        const graphType = primitive.graphType;
+        const width = primitive.width;
+        const height = primitive.height;
+        const fillColor = primitive.fillColor ?? 0xFFFFFFFF;
+
+        let meshData: GraphMeshData | null = null;
+
+        switch (graphType) {
+            case EGraphType.Ellipse:
+                meshData = GraphMeshGenerator.generateEllipse(width, height, fillColor);
+                break;
+            case EGraphType.Polygon:
+                if (primitive.polygonPoints) {
+                    meshData = GraphMeshGenerator.generatePolygon(
+                        primitive.polygonPoints,
+                        width,
+                        height,
+                        fillColor
+                    );
+                }
+                break;
+            case EGraphType.RegularPolygon:
+                // Generate regular polygon points
+                const sides = primitive.sides ?? 6;
+                const points = this.generateRegularPolygonPoints(width, height, sides);
+                meshData = GraphMeshGenerator.generatePolygon(points, width, height, fillColor);
+                break;
+        }
+
+        if (!meshData || meshData.positions.length === 0) {
+            return null;
+        }
+
+        // Get world position from matrix
+        const m = primitive.worldMatrix;
+        const baseX = m ? m[4] : 0;
+        const baseY = m ? m[5] : 0;
+
+        // Convert FGUI coordinates to engine coordinates
+        const engineBaseX = baseX - halfWidth;
+        const engineBaseY = halfHeight - baseY;
+
+        // Apply coordinate transformation to positions
+        const positions = new Float32Array(meshData.positions.length);
+        for (let i = 0; i < meshData.positions.length; i += 2) {
+            positions[i] = meshData.positions[i] + engineBaseX;
+            // Flip Y for engine coordinate system
+            positions[i + 1] = engineBaseY - meshData.positions[i + 1];
+        }
+
+        return {
+            positions,
+            uvs: new Float32Array(meshData.uvs),
+            colors: new Uint32Array(meshData.colors),
+            indices: new Uint16Array(meshData.indices),
+            textureId: 0 // White pixel texture
+        };
+    }
+
+    /**
+     * Generate outline mesh data for a graph primitive
+     * 为图形图元生成轮廓网格数据
+     */
+    private generateGraphOutlineMesh(
+        primitive: IRenderPrimitive,
+        halfWidth: number,
+        halfHeight: number
+    ): IMeshRenderData | null {
+        const graphType = primitive.graphType;
+        const width = primitive.width;
+        const height = primitive.height;
+        const lineWidth = primitive.lineSize ?? 1;
+        const lineColor = primitive.lineColor ?? 0x000000FF;
+
+        let meshData: GraphMeshData | null = null;
+
+        switch (graphType) {
+            case EGraphType.Ellipse:
+                meshData = GraphMeshGenerator.generateEllipseOutline(width, height, lineWidth, lineColor);
+                break;
+            case EGraphType.Polygon:
+                if (primitive.polygonPoints) {
+                    meshData = GraphMeshGenerator.generateOutline(
+                        primitive.polygonPoints,
+                        lineWidth,
+                        lineColor,
+                        true
+                    );
+                }
+                break;
+            case EGraphType.RegularPolygon:
+                const sides = primitive.sides ?? 6;
+                const points = this.generateRegularPolygonPoints(width, height, sides);
+                meshData = GraphMeshGenerator.generateOutline(points, lineWidth, lineColor, true);
+                break;
+        }
+
+        if (!meshData || meshData.positions.length === 0) {
+            return null;
+        }
+
+        // Get world position from matrix
+        const m = primitive.worldMatrix;
+        const baseX = m ? m[4] : 0;
+        const baseY = m ? m[5] : 0;
+
+        // Convert FGUI coordinates to engine coordinates
+        const engineBaseX = baseX - halfWidth;
+        const engineBaseY = halfHeight - baseY;
+
+        // Apply coordinate transformation to positions
+        const positions = new Float32Array(meshData.positions.length);
+        for (let i = 0; i < meshData.positions.length; i += 2) {
+            positions[i] = meshData.positions[i] + engineBaseX;
+            positions[i + 1] = engineBaseY - meshData.positions[i + 1];
+        }
+
+        return {
+            positions,
+            uvs: new Float32Array(meshData.uvs),
+            colors: new Uint32Array(meshData.colors),
+            indices: new Uint16Array(meshData.indices),
+            textureId: 0 // White pixel texture
+        };
+    }
+
+    /**
+     * Generate points for a regular polygon
+     * 生成正多边形的点
+     */
+    private generateRegularPolygonPoints(width: number, height: number, sides: number): number[] {
+        const points: number[] = [];
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radiusX = width / 2;
+        const radiusY = height / 2;
+        const angleStep = (Math.PI * 2) / sides;
+        const startAngle = -Math.PI / 2; // Start from top
+
+        for (let i = 0; i < sides; i++) {
+            const angle = startAngle + angleStep * i;
+            points.push(
+                centerX + Math.cos(angle) * radiusX,
+                centerY + Math.sin(angle) * radiusY
+            );
+        }
+
+        return points;
+    }
+
+    /**
+     * Convert a text primitive to MSDF render data
+     * 将文本图元转换为 MSDF 渲染数据
+     */
+    private convertTextPrimitive(
+        primitive: IRenderPrimitive,
+        font: MSDFFont,
+        halfWidth: number,
+        halfHeight: number
+    ): ITextRenderData | null {
+        const text = primitive.text;
+        if (!text) return null;
+
+        // Get text properties
+        const fontSize = primitive.fontSize ?? 12;
+        const maxWidth = primitive.width;
+        const maxHeight = primitive.height;
+
+        // Convert alignment types
+        let align = EAlignType.Left;
+        if (primitive.align !== undefined) {
+            align = typeof primitive.align === 'string'
+                ? this.parseHAlign(primitive.align)
+                : primitive.align;
+        } else if (primitive.textAlign !== undefined) {
+            align = this.parseHAlign(primitive.textAlign as string);
+        }
+
+        let valign = EVertAlignType.Top;
+        if (primitive.valign !== undefined) {
+            valign = typeof primitive.valign === 'string'
+                ? this.parseVAlign(primitive.valign)
+                : primitive.valign;
+        } else if (primitive.textVAlign !== undefined) {
+            valign = this.parseVAlign(primitive.textVAlign as string);
+        }
+
+        // Layout text
+        const layoutResult = layoutText({
+            font,
+            text,
+            fontSize,
+            maxWidth,
+            maxHeight,
+            align,
+            valign,
+            lineHeight: 1.2,
+            letterSpacing: primitive.letterSpacing ?? 0,
+            wordWrap: primitive.wordWrap ?? false,
+            singleLine: primitive.singleLine ?? false
+        });
+
+        if (layoutResult.glyphs.length === 0) {
+            return null;
+        }
+
+        // Get world position from matrix
+        const m = primitive.worldMatrix;
+        const baseX = m ? m[4] : (primitive.x ?? 0);
+        const baseY = m ? m[5] : (primitive.y ?? 0);
+
+        // Convert FGUI coordinates to engine coordinates
+        // FGUI: top-left origin, Y-down
+        // Engine: center origin, Y-up
+        const engineBaseX = baseX - halfWidth;
+        const engineBaseY = halfHeight - baseY;
+
+        // Get text color
+        const textColor = primitive.textColor ?? primitive.color ?? 0xFFFFFFFF;
+
+        // Create text batch with coordinate offset
+        const batchData = createTextBatch(
+            layoutResult.glyphs,
+            font.textureId,
+            font.pxRange,
+            {
+                color: textColor,
+                alpha: primitive.alpha,
+                outlineColor: primitive.outlineColor,
+                outlineWidth: primitive.outlineWidth ?? primitive.stroke,
+                offsetX: engineBaseX,
+                offsetY: engineBaseY
+            }
+        );
+
+        // Convert Y coordinates (flip for engine coordinate system)
+        // The batch was created in FGUI Y-down space, need to flip
+        this.flipTextYCoordinates(batchData.positions, engineBaseY);
+
+        return {
+            positions: batchData.positions,
+            texCoords: batchData.texCoords,
+            colors: batchData.colors,
+            outlineColors: batchData.outlineColors,
+            outlineWidths: batchData.outlineWidths,
+            textureId: batchData.textureId,
+            pxRange: batchData.pxRange,
+            glyphCount: batchData.glyphCount
+        };
+    }
+
+    /**
+     * Flip Y coordinates for engine coordinate system
+     * 翻转 Y 坐标以适配引擎坐标系
+     */
+    private flipTextYCoordinates(positions: Float32Array, baseY: number): void {
+        // Each glyph has 4 vertices, each vertex has 2 floats (x, y)
+        // Flip Y: newY = baseY - (y - baseY) = 2 * baseY - y
+        // But since we already offset, we just negate the Y relative to base
+        for (let i = 1; i < positions.length; i += 2) {
+            // Y is at odd indices
+            // Convert from Y-down to Y-up by negating the local Y offset
+            positions[i] = baseY - (positions[i] - baseY);
+        }
+    }
+
+    /**
+     * Parse horizontal alignment string
+     * 解析水平对齐字符串
+     */
+    private parseHAlign(align: string): EAlignType {
+        switch (align.toLowerCase()) {
+            case 'center': return EAlignType.Center;
+            case 'right': return EAlignType.Right;
+            default: return EAlignType.Left;
+        }
+    }
+
+    /**
+     * Parse vertical alignment string
+     * 解析垂直对齐字符串
+     */
+    private parseVAlign(align: string): EVertAlignType {
+        switch (align.toLowerCase()) {
+            case 'middle': return EVertAlignType.Middle;
+            case 'bottom': return EVertAlignType.Bottom;
+            default: return EVertAlignType.Top;
+        }
+    }
+
+    /**
      * Group primitives by texture for batching
      * 按纹理分组图元以进行批处理
      */
@@ -182,27 +685,177 @@ export class FGUIRenderDataProvider implements IFGUIRenderDataProvider {
         const batches = new Map<string | number | undefined, IRenderPrimitive[]>();
 
         for (const primitive of primitives) {
-            // Only handle image primitives for now
-            if (primitive.type !== 'image') continue;
+            // Handle image primitives
+            // 处理图像图元
+            if (primitive.type === ERenderPrimitiveType.Image) {
+                const key = primitive.textureId ?? 'none';
+                let batch = batches.get(key);
+                if (!batch) {
+                    batch = [];
+                    batches.set(key, batch);
+                }
 
-            const key = primitive.textureId ?? 'none';
-            let batch = batches.get(key);
-            if (!batch) {
-                batch = [];
-                batches.set(key, batch);
+                // Expand nine-slice primitives into 9 sub-primitives
+                // 将九宫格图元展开为 9 个子图元
+                if (primitive.scale9Grid) {
+                    const subPrimitives = this.expandScale9Grid(primitive);
+                    batch.push(...subPrimitives);
+                } else {
+                    batch.push(primitive);
+                }
             }
+            // Handle graph primitives (rect, ellipse, polygon)
+            // 处理图形图元（矩形、椭圆、多边形）
+            else if (primitive.type === ERenderPrimitiveType.Graph) {
+                // Use special key for graph primitives (white pixel texture)
+                // 为图形图元使用特殊键（白色像素纹理）
+                const key = '__fgui_white_pixel__';
+                let batch = batches.get(key);
+                if (!batch) {
+                    batch = [];
+                    batches.set(key, batch);
+                }
 
-            // Expand nine-slice primitives into 9 sub-primitives
-            // 将九宫格图元展开为 9 个子图元
-            if (primitive.scale9Grid) {
-                const subPrimitives = this.expandScale9Grid(primitive);
-                batch.push(...subPrimitives);
-            } else {
-                batch.push(primitive);
+                // Convert graph fill to primitive for rendering
+                // 将图形填充转换为图元进行渲染
+                const fillPrimitive = this.convertGraphToPrimitive(primitive);
+                if (fillPrimitive) {
+                    batch.push(fillPrimitive);
+                }
+
+                // Generate outline (stroke) if lineSize > 0
+                // 如果 lineSize > 0，生成轮廓线（描边）
+                if (primitive.lineSize && primitive.lineSize > 0) {
+                    const outlinePrimitives = this.convertGraphOutlineToPrimitive(primitive);
+                    batch.push(...outlinePrimitives);
+                }
             }
         }
 
         return batches;
+    }
+
+    /**
+     * Convert a graph primitive to image-like primitives for rendering
+     * 将图形图元转换为类似图像的图元进行渲染
+     *
+     * Currently supports only filled rectangles using a white pixel texture.
+     * Ellipse, polygon, and rounded rectangles require mesh rendering support
+     * which needs to be added to the engine.
+     *
+     * 目前只支持使用白色像素纹理的填充矩形
+     * 椭圆、多边形和圆角矩形需要网格渲染支持，需要在引擎中添加
+     */
+    private convertGraphToPrimitive(primitive: IRenderPrimitive): IRenderPrimitive | null {
+        const graphType = primitive.graphType;
+
+        // Only support simple filled rectangles for now
+        // Other shapes (ellipse, polygon, rounded rect) need mesh rendering support in the engine
+        // 目前只支持简单填充矩形
+        // 其他形状（椭圆、多边形、圆角矩形）需要引擎中的网格渲染支持
+        if (graphType !== EGraphType.Rect) {
+            // TODO: Add mesh batch rendering to engine for complex shapes
+            // TODO: 在引擎中添加网格批处理渲染以支持复杂形状
+            return null;
+        }
+
+        // Simple filled rectangle - use white pixel texture with fillColor
+        // 简单填充矩形 - 使用白色像素纹理配合 fillColor
+        return {
+            type: ERenderPrimitiveType.Image,
+            sortOrder: primitive.sortOrder,
+            worldMatrix: primitive.worldMatrix,
+            width: primitive.width,
+            height: primitive.height,
+            alpha: primitive.alpha,
+            grayed: primitive.grayed,
+            blendMode: primitive.blendMode,
+            clipRect: primitive.clipRect,
+            textureId: '__fgui_white_pixel__',
+            uvRect: [0, 0, 1, 1],
+            color: primitive.fillColor ?? 0xFFFFFFFF
+        };
+    }
+
+    /**
+     * Convert graph outline to primitive for rendering
+     * 将图形轮廓线转换为图元进行渲染
+     *
+     * Currently only supports rectangle outlines (rendered as 4 thin rectangles).
+     * Other shapes need mesh rendering support in the engine.
+     *
+     * 目前只支持矩形轮廓（渲染为 4 个细矩形）
+     * 其他形状需要引擎中的网格渲染支持
+     */
+    private convertGraphOutlineToPrimitive(primitive: IRenderPrimitive): IRenderPrimitive[] {
+        const graphType = primitive.graphType;
+
+        // Only support rectangle outlines for now
+        // 目前只支持矩形轮廓
+        if (graphType !== EGraphType.Rect) {
+            return [];
+        }
+
+        const lineWidth = primitive.lineSize ?? 1;
+        const lineColor = primitive.lineColor ?? 0x000000FF;
+        const width = primitive.width;
+        const height = primitive.height;
+
+        // Get position from world matrix
+        const m = primitive.worldMatrix;
+        const baseX = m ? m[4] : 0;
+        const baseY = m ? m[5] : 0;
+
+        const result: IRenderPrimitive[] = [];
+
+        // Create 4 thin rectangles for the outline
+        // Top edge
+        result.push(this.createOutlineRect(baseX, baseY, width, lineWidth, lineColor, primitive));
+        // Bottom edge
+        result.push(this.createOutlineRect(baseX, baseY + height - lineWidth, width, lineWidth, lineColor, primitive));
+        // Left edge (excluding corners already covered by top/bottom)
+        result.push(this.createOutlineRect(baseX, baseY + lineWidth, lineWidth, height - lineWidth * 2, lineColor, primitive));
+        // Right edge
+        result.push(this.createOutlineRect(baseX + width - lineWidth, baseY + lineWidth, lineWidth, height - lineWidth * 2, lineColor, primitive));
+
+        return result;
+    }
+
+    /**
+     * Create a single outline rectangle primitive
+     * 创建单个轮廓矩形图元
+     */
+    private createOutlineRect(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        color: number,
+        source: IRenderPrimitive
+    ): IRenderPrimitive {
+        // Create new world matrix with the position
+        const matrix = new Float32Array(6);
+        matrix[0] = 1;
+        matrix[1] = 0;
+        matrix[2] = 0;
+        matrix[3] = 1;
+        matrix[4] = x;
+        matrix[5] = y;
+
+        return {
+            type: ERenderPrimitiveType.Image,
+            sortOrder: source.sortOrder + 0.1,
+            worldMatrix: matrix,
+            width,
+            height,
+            alpha: source.alpha,
+            grayed: source.grayed,
+            blendMode: source.blendMode,
+            clipRect: source.clipRect,
+            textureId: '__fgui_white_pixel__',
+            uvRect: [0, 0, 1, 1],
+            color
+        };
     }
 
     /**
@@ -487,11 +1140,11 @@ export class FGUIRenderDataProvider implements IFGUIRenderDataProvider {
                 uvs[baseUvIdx + 3] = 1;
             }
 
-            // Color (pack RGBA into uint32)
+            // Color (0xRRGGBBAA format)
             if (primitive.color !== undefined) {
                 colors[i] = primitive.color;
             } else {
-                // White with alpha
+                // White with alpha (0xRRGGBBAA)
                 const alpha = Math.floor(primitive.alpha * 255);
                 colors[i] = (255 << 24) | (255 << 16) | (255 << 8) | alpha;
             }

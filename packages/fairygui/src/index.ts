@@ -141,11 +141,19 @@ export { RenderCollector } from './render/RenderCollector';
 export { RenderBridge } from './render/RenderBridge';
 export { Canvas2DBackend } from './render/Canvas2DBackend';
 export {
+    DOMTextRenderer,
+    getDOMTextRenderer,
+    setDOMTextRenderer
+} from './render/DOMTextRenderer';
+export type { ICameraState } from './render/DOMTextRenderer';
+export {
     FGUIRenderDataProvider,
     createFGUIRenderDataProvider
 } from './render/FGUIRenderDataProvider';
 export type {
     IEngineRenderData,
+    ITextRenderData,
+    IMeshRenderData,
     IFGUIRenderDataProvider,
     TextureResolverFn
 } from './render/FGUIRenderDataProvider';
@@ -171,6 +179,46 @@ export type { TweenCallback } from './tween/GTweener';
 export { TweenManager } from './tween/TweenManager';
 export { TweenValue } from './tween/TweenValue';
 export { evaluateEase } from './tween/EaseType';
+
+// Text | 文本渲染
+export {
+    MSDFFont,
+    MSDFFontManager,
+    getMSDFFontManager,
+    layoutText,
+    measureText,
+    createTextBatch,
+    mergeTextBatches,
+    MSDFFontLoader,
+    loadMSDFFont,
+    createFontData,
+    BitmapFont,
+    BitmapFontManager,
+    getBitmapFontManager,
+    convertBitmapToMSDFFormat,
+    DynamicFont,
+    DynamicFontManager,
+    getDynamicFontManager,
+    COMMON_CJK_CHARS,
+    COMMON_ASCII_CHARS
+} from './text';
+export type {
+    IMSDFGlyph,
+    IMSDFKerning,
+    IMSDFFontAtlas,
+    IMSDFFontMetrics,
+    IMSDFFontData,
+    IPositionedGlyph,
+    ITextLayoutOptions,
+    ITextLayoutResult,
+    ITextBatchData,
+    ITextBatchOptions,
+    IFontLoadResult,
+    IBitmapGlyph,
+    IBitmapFontData,
+    IDynamicFontConfig,
+    TextureUploadCallback
+} from './text';
 
 // Asset | 资产
 export {

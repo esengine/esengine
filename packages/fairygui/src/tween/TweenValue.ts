@@ -24,11 +24,11 @@ export class TweenValue {
 
     public set color(value: number) {
         this._color = value;
-        // Unpack color to x, y, z, w (r, g, b, a)
-        this.x = (value >> 16) & 0xff;
-        this.y = (value >> 8) & 0xff;
-        this.z = value & 0xff;
-        this.w = (value >> 24) & 0xff;
+        // Unpack color from 0xRRGGBBAA to x, y, z, w (r, g, b, a)
+        this.x = (value >> 24) & 0xff;
+        this.y = (value >> 16) & 0xff;
+        this.z = (value >> 8) & 0xff;
+        this.w = value & 0xff;
     }
 
     /**

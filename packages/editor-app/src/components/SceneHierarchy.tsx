@@ -9,7 +9,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Entity, Core, HierarchySystem, HierarchyComponent, EntityTags, isFolder, PrefabSerializer, ComponentRegistry, getComponentInstanceTypeName, PrefabInstanceComponent } from '@esengine/ecs-framework';
 import type { PrefabData, ComponentType } from '@esengine/ecs-framework';
-import { EntityStoreService, MessageHub, CommandManager, EntityCreationRegistry, EntityCreationTemplate, PrefabService, AssetRegistryService, ProjectService } from '@esengine/editor-core';
+import { EntityStoreService, MessageHub, CommandManager, EntityCreationRegistry, EntityCreationTemplate, PrefabService, AssetRegistryService, ProjectService, VirtualNodeRegistry } from '@esengine/editor-core';
+import type { IVirtualNode } from '@esengine/editor-core';
 import { useLocale } from '../hooks/useLocale';
 import { useHierarchyStore } from '../stores';
 import * as LucideIcons from 'lucide-react';
@@ -48,6 +49,36 @@ const categoryIconMap: Record<string, string> = {
     'other': 'MoreHorizontal',
 };
 
+/**
+ * Map virtual node types to Lucide icon names
+ * 将虚拟节点类型映射到 Lucide 图标名称
+ */
+const virtualNodeIconMap: Record<string, string> = {
+    'Component': 'LayoutGrid',
+    'Image': 'Image',
+    'Graph': 'Square',
+    'TextField': 'Type',
+    'RichTextField': 'FileText',
+    'Button': 'MousePointer',
+    'List': 'List',
+    'Loader': 'Loader',
+    'ProgressBar': 'BarChart',
+    'Slider': 'Sliders',
+    'ComboBox': 'ChevronDown',
+    'ScrollPane': 'Scroll',
+    'Group': 'FolderOpen',
+    'MovieClip': 'Film',
+    'TextInput': 'FormInput',
+};
+
+/**
+ * Get icon name for a virtual node type
+ * 获取虚拟节点类型的图标名称
+ */
+function getVirtualNodeIcon(nodeType: string): string {
+    return virtualNodeIconMap[nodeType] || 'Circle';
+}
+
 // 实体类型到图标的映射
 const entityTypeIcons: Record<string, React.ReactNode> = {
     'World': <Mountain size={14} className="entity-type-icon world" />,
@@ -77,6 +108,21 @@ interface EntityNode {
     children: EntityNode[];
     depth: number;
     bIsFolder: boolean;
+    hasChildren: boolean;
+    /** Virtual nodes from components (e.g., FGUI internal nodes) | 组件的虚拟节点（如 FGUI 内部节点） */
+    virtualNodes?: IVirtualNode[];
+}
+
+/**
+ * Flattened list item - can be either an entity node or a virtual node
+ * 扁平化列表项 - 可以是实体节点或虚拟节点
+ */
+interface FlattenedItem {
+    type: 'entity' | 'virtual';
+    entityNode?: EntityNode;
+    virtualNode?: IVirtualNode;
+    depth: number;
+    parentEntityId: number;
     hasChildren: boolean;
 }
 
@@ -140,6 +186,15 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [editingEntityId, setEditingEntityId] = useState<number | null>(null);
     const [editingName, setEditingName] = useState('');
+    // Expanded virtual node IDs (format: "entityId:virtualNodeId")
+    // 展开的虚拟节点 ID（格式："entityId:virtualNodeId"）
+    const [expandedVirtualIds, setExpandedVirtualIds] = useState<Set<string>>(new Set());
+    // Selected virtual node (format: "entityId:virtualNodeId")
+    // 选中的虚拟节点（格式："entityId:virtualNodeId"）
+    const [selectedVirtualId, setSelectedVirtualId] = useState<string | null>(null);
+    // Refresh counter to force virtual nodes recollection
+    // 刷新计数器，用于强制重新收集虚拟节点
+    const [virtualNodeRefreshKey, setVirtualNodeRefreshKey] = useState(0);
     const { t, locale } = useLocale();
 
     // Ref for auto-scrolling to selected item | 选中项自动滚动 ref
@@ -173,6 +228,10 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
 
     /**
      * 构建层级树结构
+     * Build hierarchical tree structure
+     *
+     * Also collects virtual nodes from components using VirtualNodeRegistry.
+     * 同时使用 VirtualNodeRegistry 收集组件的虚拟节点。
      */
     const buildEntityTree = useCallback((rootEntities: Entity[]): EntityNode[] => {
         const scene = Core.scene;
@@ -191,12 +250,17 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
                 }
             }
 
+            // Collect virtual nodes from components
+            // 从组件收集虚拟节点
+            const virtualNodes = VirtualNodeRegistry.getAllVirtualNodesForEntity(entity);
+
             return {
                 entity,
                 children,
                 depth,
                 bIsFolder: bIsEntityFolder,
-                hasChildren: children.length > 0
+                hasChildren: children.length > 0 || virtualNodes.length > 0,
+                virtualNodes: virtualNodes.length > 0 ? virtualNodes : undefined
             };
         };
 
@@ -205,17 +269,68 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
 
     /**
      * 扁平化树为带深度信息的列表（用于渲染）
+     * Flatten tree to list with depth info (for rendering)
+     *
+     * Also includes virtual nodes when their parent entity is expanded.
+     * 当父实体展开时，也包含虚拟节点。
      */
-    const flattenTree = useCallback((nodes: EntityNode[], expandedSet: Set<number>): EntityNode[] => {
-        const result: EntityNode[] = [];
+    const flattenTree = useCallback((
+        nodes: EntityNode[],
+        expandedSet: Set<number>,
+        expandedVirtualSet: Set<string>
+    ): FlattenedItem[] => {
+        const result: FlattenedItem[] = [];
+
+        // Flatten virtual nodes recursively
+        // 递归扁平化虚拟节点
+        const flattenVirtualNodes = (
+            virtualNodes: IVirtualNode[],
+            parentEntityId: number,
+            baseDepth: number
+        ) => {
+            for (const vnode of virtualNodes) {
+                const vnodeKey = `${parentEntityId}:${vnode.id}`;
+                const hasVChildren = vnode.children && vnode.children.length > 0;
+
+                result.push({
+                    type: 'virtual',
+                    virtualNode: vnode,
+                    depth: baseDepth,
+                    parentEntityId,
+                    hasChildren: hasVChildren
+                });
+
+                // If virtual node is expanded, add its children
+                // 如果虚拟节点已展开，添加其子节点
+                if (hasVChildren && expandedVirtualSet.has(vnodeKey)) {
+                    flattenVirtualNodes(vnode.children, parentEntityId, baseDepth + 1);
+                }
+            }
+        };
 
         const traverse = (nodeList: EntityNode[]) => {
             for (const node of nodeList) {
-                result.push(node);
+                // Add entity node
+                result.push({
+                    type: 'entity',
+                    entityNode: node,
+                    depth: node.depth,
+                    parentEntityId: node.entity.id,
+                    hasChildren: node.hasChildren
+                });
 
                 const bIsExpanded = expandedSet.has(node.entity.id);
-                if (bIsExpanded && node.children.length > 0) {
-                    traverse(node.children);
+                if (bIsExpanded) {
+                    // Add child entities
+                    if (node.children.length > 0) {
+                        traverse(node.children);
+                    }
+
+                    // Add virtual nodes after entity children
+                    // 在实体子节点后添加虚拟节点
+                    if (node.virtualNodes && node.virtualNodes.length > 0) {
+                        flattenVirtualNodes(node.virtualNodes, node.entity.id, node.depth + 1);
+                    }
                 }
             }
         };
@@ -226,12 +341,77 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
 
     /**
      * 层级树和扁平化列表
+     * Hierarchy tree and flattened list
+     *
+     * virtualNodeRefreshKey is used to force rebuild when components change.
+     * virtualNodeRefreshKey 用于在组件变化时强制重建。
      */
-    const entityTree = useMemo(() => buildEntityTree(entities), [entities, buildEntityTree]);
-    const flattenedEntities = useMemo(
-        () => expandedIds.has(-1) ? flattenTree(entityTree, expandedIds) : [],
-        [entityTree, expandedIds, flattenTree]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const entityTree = useMemo(() => buildEntityTree(entities), [entities, buildEntityTree, virtualNodeRefreshKey]);
+    const flattenedItems = useMemo(
+        () => expandedIds.has(-1) ? flattenTree(entityTree, expandedIds, expandedVirtualIds) : [],
+        [entityTree, expandedIds, expandedVirtualIds, flattenTree]
     );
+
+    /**
+     * Toggle virtual node expansion
+     * 切换虚拟节点展开状态
+     */
+    const toggleVirtualExpand = useCallback((parentEntityId: number, virtualNodeId: string) => {
+        const key = `${parentEntityId}:${virtualNodeId}`;
+        setExpandedVirtualIds(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    }, []);
+
+    /**
+     * Handle virtual node click
+     * 处理虚拟节点点击
+     */
+    const handleVirtualNodeClick = useCallback((parentEntityId: number, virtualNode: IVirtualNode) => {
+        const key = `${parentEntityId}:${virtualNode.id}`;
+        setSelectedVirtualId(key);
+        // Clear entity selection when selecting virtual node
+        // 选择虚拟节点时清除实体选择
+        setSelectedIds(new Set());
+
+        // Publish event for Inspector to display virtual node properties
+        // 发布事件以便 Inspector 显示虚拟节点属性
+        messageHub.publish('virtual-node:selected', {
+            parentEntityId,
+            virtualNodeId: virtualNode.id,
+            virtualNode
+        });
+    }, [messageHub, setSelectedIds]);
+
+    // Subscribe to scene:modified to refresh virtual nodes when components change
+    // 订阅 scene:modified 事件，当组件变化时刷新虚拟节点
+    useEffect(() => {
+        const unsubModified = messageHub.subscribe('scene:modified', () => {
+            setVirtualNodeRefreshKey(prev => prev + 1);
+        });
+
+        // Also subscribe to component-specific events
+        // 同时订阅组件相关事件
+        const unsubComponentAdded = messageHub.subscribe('component:added', () => {
+            setVirtualNodeRefreshKey(prev => prev + 1);
+        });
+        const unsubComponentRemoved = messageHub.subscribe('component:removed', () => {
+            setVirtualNodeRefreshKey(prev => prev + 1);
+        });
+
+        return () => {
+            unsubModified();
+            unsubComponentAdded();
+            unsubComponentRemoved();
+        };
+    }, [messageHub]);
 
     // 获取插件实体创建模板 | Get entity creation templates from plugins
     useEffect(() => {
@@ -257,6 +437,14 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
     // Note: Scene/entity/remote subscriptions moved to useStoreSubscriptions
 
     const handleEntityClick = (entity: Entity, e: React.MouseEvent) => {
+        // Clear virtual node selection when selecting an entity
+        // 选择实体时清除虚拟节点选择
+        setSelectedVirtualId(null);
+
+        // Force refresh virtual nodes to pick up any newly loaded components
+        // 强制刷新虚拟节点以获取新加载的组件
+        setVirtualNodeRefreshKey(prev => prev + 1);
+
         if (e.ctrlKey || e.metaKey) {
             setSelectedIds(prev => {
                 const next = new Set(prev);
@@ -927,22 +1115,26 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
             }
 
             // 方向键导航 | Arrow key navigation
-            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && flattenedEntities.length > 0) {
+            // Only navigate entity nodes, skip virtual nodes
+            // 只导航实体节点，跳过虚拟节点
+            const entityItems = flattenedItems.filter(item => item.type === 'entity');
+            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && entityItems.length > 0) {
                 e.preventDefault();
                 const currentIndex = selectedId
-                    ? flattenedEntities.findIndex(n => n.entity.id === selectedId)
+                    ? entityItems.findIndex(item => item.entityNode?.entity.id === selectedId)
                     : -1;
 
                 let newIndex: number;
                 if (e.key === 'ArrowUp') {
-                    newIndex = currentIndex <= 0 ? flattenedEntities.length - 1 : currentIndex - 1;
+                    newIndex = currentIndex <= 0 ? entityItems.length - 1 : currentIndex - 1;
                 } else {
-                    newIndex = currentIndex >= flattenedEntities.length - 1 ? 0 : currentIndex + 1;
+                    newIndex = currentIndex >= entityItems.length - 1 ? 0 : currentIndex + 1;
                 }
 
-                const newEntity = flattenedEntities[newIndex]?.entity;
+                const newEntity = entityItems[newIndex]?.entityNode?.entity;
                 if (newEntity) {
                     setSelectedIds(new Set([newEntity.id]));
+                    setSelectedVirtualId(null); // Clear virtual selection
                     entityStore.selectEntity(newEntity);
                     messageHub.publish('entity:selected', { entity: newEntity });
                 }
@@ -952,7 +1144,7 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedId, isShowingRemote, editingEntityId, flattenedEntities, entityStore, messageHub, handleStartRename, handleConfirmRename, handleCancelRename, handleDuplicateEntity]);
+    }, [selectedId, isShowingRemote, editingEntityId, flattenedItems, entityStore, messageHub, handleStartRename, handleConfirmRename, handleCancelRename, handleDuplicateEntity]);
 
     /**
      * 创建文件夹实体
@@ -1303,107 +1495,164 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
                                 </div>
                             </div>
 
-                            {/* Hierarchical Entity Items */}
-                            {flattenedEntities.map((node) => {
-                                const { entity, depth, hasChildren, bIsFolder } = node;
-                                const bIsExpanded = expandedIds.has(entity.id);
-                                const bIsSelected = selectedIds.has(entity.id);
-                                const bIsDragging = draggedEntityId === entity.id;
-                                const currentDropTarget = dropTarget?.entityId === entity.id ? dropTarget : null;
-                                const bIsPrefabInstance = isEntityPrefabInstance(entity);
+                            {/* Hierarchical Entity and Virtual Node Items */}
+                            {flattenedItems.map((item, index) => {
+                                // Render entity node
+                                if (item.type === 'entity' && item.entityNode) {
+                                    const node = item.entityNode;
+                                    const { entity, bIsFolder } = node;
+                                    const bIsExpanded = expandedIds.has(entity.id);
+                                    const bIsSelected = selectedIds.has(entity.id);
+                                    const bIsDragging = draggedEntityId === entity.id;
+                                    const currentDropTarget = dropTarget?.entityId === entity.id ? dropTarget : null;
+                                    const bIsPrefabInstance = isEntityPrefabInstance(entity);
 
-                                // 计算缩进 (每层 16px，加上基础 8px)
-                                const indent = 8 + depth * 16;
+                                    // 计算缩进 (每层 16px，加上基础 8px)
+                                    const indent = 8 + item.depth * 16;
 
-                                // 构建 drop indicator 类名
-                                let dropIndicatorClass = '';
-                                if (currentDropTarget) {
-                                    dropIndicatorClass = `drop-${currentDropTarget.indicator}`;
+                                    // 构建 drop indicator 类名
+                                    let dropIndicatorClass = '';
+                                    if (currentDropTarget) {
+                                        dropIndicatorClass = `drop-${currentDropTarget.indicator}`;
+                                    }
+
+                                    return (
+                                        <div
+                                            key={`entity-${entity.id}`}
+                                            ref={bIsSelected ? selectedItemRef : undefined}
+                                            className={`outliner-item ${bIsSelected ? 'selected' : ''} ${bIsDragging ? 'dragging' : ''} ${dropIndicatorClass} ${bIsPrefabInstance ? 'prefab-instance' : ''}`}
+                                            style={{ paddingLeft: `${indent}px` }}
+                                            draggable
+                                            onClick={(e) => handleEntityClick(entity, e)}
+                                            onDragStart={(e) => handleDragStart(e, entity.id)}
+                                            onDragOver={(e) => handleDragOver(e, node)}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={(e) => handleDrop(e, node)}
+                                            onDragEnd={handleDragEnd}
+                                            onContextMenu={(e) => {
+                                                e.stopPropagation();
+                                                handleEntityClick(entity, e);
+                                                handleContextMenu(e, entity.id);
+                                            }}
+                                        >
+                                            <div className="outliner-item-icons">
+                                                {isEntityVisible(entity) ? (
+                                                    <Eye
+                                                        size={12}
+                                                        className="item-icon visibility"
+                                                        onClick={(e) => handleToggleVisibility(entity, e)}
+                                                    />
+                                                ) : (
+                                                    <EyeOff
+                                                        size={12}
+                                                        className="item-icon visibility hidden"
+                                                        onClick={(e) => handleToggleVisibility(entity, e)}
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="outliner-item-content">
+                                                {/* 展开/折叠按钮 */}
+                                                {item.hasChildren || bIsFolder ? (
+                                                    <span
+                                                        className="outliner-item-expand clickable"
+                                                        onClick={(e) => { e.stopPropagation(); toggleExpand(entity.id); }}
+                                                    >
+                                                        {bIsExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    </span>
+                                                ) : (
+                                                    <span className="outliner-item-expand" />
+                                                )}
+                                                {getEntityIcon(entity)}
+                                                {editingEntityId === entity.id ? (
+                                                    <input
+                                                        className="outliner-item-name-input"
+                                                        value={editingName}
+                                                        onChange={(e) => setEditingName(e.target.value)}
+                                                        onBlur={handleConfirmRename}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleConfirmRename();
+                                                            if (e.key === 'Escape') handleCancelRename();
+                                                            e.stopPropagation();
+                                                        }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        autoFocus
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        className="outliner-item-name"
+                                                        onDoubleClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingEntityId(entity.id);
+                                                            setEditingName(entity.name || '');
+                                                        }}
+                                                    >
+                                                        {entity.name || `Entity ${entity.id}`}
+                                                    </span>
+                                                )}
+                                                {/* 预制体实例徽章 | Prefab instance badge */}
+                                                {bIsPrefabInstance && (
+                                                    <span className="prefab-badge" title={t('inspector.prefab.instance', {}, 'Prefab Instance')}>
+                                                        P
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="outliner-item-type">{getEntityType(entity)}</div>
+                                        </div>
+                                    );
                                 }
 
-                                return (
-                                    <div
-                                        key={entity.id}
-                                        ref={bIsSelected ? selectedItemRef : undefined}
-                                        className={`outliner-item ${bIsSelected ? 'selected' : ''} ${bIsDragging ? 'dragging' : ''} ${dropIndicatorClass} ${bIsPrefabInstance ? 'prefab-instance' : ''}`}
-                                        style={{ paddingLeft: `${indent}px` }}
-                                        draggable
-                                        onClick={(e) => handleEntityClick(entity, e)}
-                                        onDragStart={(e) => handleDragStart(e, entity.id)}
-                                        onDragOver={(e) => handleDragOver(e, node)}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={(e) => handleDrop(e, node)}
-                                        onDragEnd={handleDragEnd}
-                                        onContextMenu={(e) => {
-                                            e.stopPropagation();
-                                            handleEntityClick(entity, e);
-                                            handleContextMenu(e, entity.id);
-                                        }}
-                                    >
-                                        <div className="outliner-item-icons">
-                                            {isEntityVisible(entity) ? (
-                                                <Eye
-                                                    size={12}
-                                                    className="item-icon visibility"
-                                                    onClick={(e) => handleToggleVisibility(entity, e)}
-                                                />
-                                            ) : (
-                                                <EyeOff
-                                                    size={12}
-                                                    className="item-icon visibility hidden"
-                                                    onClick={(e) => handleToggleVisibility(entity, e)}
-                                                />
-                                            )}
+                                // Render virtual node (read-only)
+                                // 渲染虚拟节点（只读）
+                                if (item.type === 'virtual' && item.virtualNode) {
+                                    const vnode = item.virtualNode;
+                                    const vnodeKey = `${item.parentEntityId}:${vnode.id}`;
+                                    const bIsVExpanded = expandedVirtualIds.has(vnodeKey);
+                                    const bIsVSelected = selectedVirtualId === vnodeKey;
+
+                                    // 计算缩进
+                                    const indent = 8 + item.depth * 16;
+
+                                    return (
+                                        <div
+                                            key={`virtual-${vnodeKey}-${index}`}
+                                            className={`outliner-item virtual-node ${bIsVSelected ? 'selected' : ''} ${!vnode.visible ? 'hidden-node' : ''}`}
+                                            style={{ paddingLeft: `${indent}px` }}
+                                            onClick={() => handleVirtualNodeClick(item.parentEntityId, vnode)}
+                                        >
+                                            <div className="outliner-item-icons">
+                                                {vnode.visible ? (
+                                                    <Eye size={12} className="item-icon visibility" />
+                                                ) : (
+                                                    <EyeOff size={12} className="item-icon visibility hidden" />
+                                                )}
+                                            </div>
+                                            <div className="outliner-item-content">
+                                                {/* 展开/折叠按钮 */}
+                                                {item.hasChildren ? (
+                                                    <span
+                                                        className="outliner-item-expand clickable"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleVirtualExpand(item.parentEntityId, vnode.id);
+                                                        }}
+                                                    >
+                                                        {bIsVExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                    </span>
+                                                ) : (
+                                                    <span className="outliner-item-expand" />
+                                                )}
+                                                {/* 虚拟节点类型图标 */}
+                                                {getIconComponent(getVirtualNodeIcon(vnode.type), 14)}
+                                                <span className="outliner-item-name virtual-name">
+                                                    {vnode.name}
+                                                </span>
+                                            </div>
+                                            <div className="outliner-item-type virtual-type">{vnode.type}</div>
                                         </div>
-                                        <div className="outliner-item-content">
-                                            {/* 展开/折叠按钮 */}
-                                            {hasChildren || bIsFolder ? (
-                                                <span
-                                                    className="outliner-item-expand clickable"
-                                                    onClick={(e) => { e.stopPropagation(); toggleExpand(entity.id); }}
-                                                >
-                                                    {bIsExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                                </span>
-                                            ) : (
-                                                <span className="outliner-item-expand" />
-                                            )}
-                                            {getEntityIcon(entity)}
-                                            {editingEntityId === entity.id ? (
-                                                <input
-                                                    className="outliner-item-name-input"
-                                                    value={editingName}
-                                                    onChange={(e) => setEditingName(e.target.value)}
-                                                    onBlur={handleConfirmRename}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') handleConfirmRename();
-                                                        if (e.key === 'Escape') handleCancelRename();
-                                                        e.stopPropagation();
-                                                    }}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    autoFocus
-                                                />
-                                            ) : (
-                                                <span
-                                                    className="outliner-item-name"
-                                                    onDoubleClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEditingEntityId(entity.id);
-                                                        setEditingName(entity.name || '');
-                                                    }}
-                                                >
-                                                    {entity.name || `Entity ${entity.id}`}
-                                                </span>
-                                            )}
-                                            {/* 预制体实例徽章 | Prefab instance badge */}
-                                            {bIsPrefabInstance && (
-                                                <span className="prefab-badge" title={t('inspector.prefab.instance', {}, 'Prefab Instance')}>
-                                                    P
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="outliner-item-type">{getEntityType(entity)}</div>
-                                    </div>
-                                );
+                                    );
+                                }
+
+                                return null;
                             })}
                         </div>
                     )

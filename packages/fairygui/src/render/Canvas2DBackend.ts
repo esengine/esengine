@@ -511,11 +511,16 @@ export class Canvas2DBackend implements IRenderBackend {
         this._stats.triangles += sides;
     }
 
+    /**
+     * Convert packed color (0xRRGGBBAA) to CSS rgba string
+     * 将打包颜色（0xRRGGBBAA）转换为 CSS rgba 字符串
+     */
     private colorToCSS(color: number): string {
-        const r = (color >> 16) & 0xff;
-        const g = (color >> 8) & 0xff;
-        const b = color & 0xff;
-        return `rgb(${r},${g},${b})`;
+        const r = (color >> 24) & 0xff;
+        const g = (color >> 16) & 0xff;
+        const b = (color >> 8) & 0xff;
+        const a = (color & 0xff) / 255;
+        return `rgba(${r},${g},${b},${a})`;
     }
 
     private mapHAlign(align: ETextAlign | string | undefined): CanvasTextAlign {

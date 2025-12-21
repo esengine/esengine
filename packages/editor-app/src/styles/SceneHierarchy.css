@@ -795,3 +795,49 @@
         display: none;
     }
 }
+
+/* ==================== Virtual Nodes | 虚拟节点 ==================== */
+/* Virtual nodes are read-only internal nodes from components like FGUI */
+/* 虚拟节点是来自组件（如 FGUI）的只读内部节点 */
+
+.outliner-item.virtual-node {
+    background: rgba(245, 158, 11, 0.05);
+    border-left: 2px solid rgba(245, 158, 11, 0.4);
+}
+
+.outliner-item.virtual-node:hover {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.outliner-item.virtual-node.selected {
+    background: rgba(245, 158, 11, 0.2);
+    border-left-color: #f59e0b;
+}
+
+.outliner-item.virtual-node .outliner-item-name.virtual-name {
+    color: #fbbf24;
+    font-style: italic;
+}
+
+.outliner-item.virtual-node .outliner-item-type.virtual-type {
+    color: #d97706;
+    font-size: 10px;
+}
+
+/* Hidden virtual node (invisible in UI) */
+/* 隐藏的虚拟节点（在 UI 中不可见） */
+.outliner-item.virtual-node.hidden-node {
+    opacity: 0.5;
+}
+
+.outliner-item.virtual-node.hidden-node .outliner-item-name {
+    text-decoration: line-through;
+}
+
+/* Virtual node icon colors */
+/* 虚拟节点图标颜色 */
+.outliner-item.virtual-node svg {
+    color: #f59e0b;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
