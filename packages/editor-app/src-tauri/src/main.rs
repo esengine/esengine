@@ -109,6 +109,7 @@ fn main() {
             commands::write_json_file,
             commands::list_files_by_extension,
             commands::read_binary_file_as_base64,
+            commands::read_binary_file,
             // Engine modules | 引擎模块
             commands::read_engine_modules_index,
             commands::read_module_manifest,

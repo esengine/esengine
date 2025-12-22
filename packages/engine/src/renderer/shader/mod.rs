@@ -6,5 +6,8 @@ mod builtin;
 mod manager;
 
 pub use program::ShaderProgram;
-pub use builtin::{SPRITE_VERTEX_SHADER, SPRITE_FRAGMENT_SHADER};
+pub use builtin::{
+    SPRITE_VERTEX_SHADER, SPRITE_FRAGMENT_SHADER,
+    MSDF_TEXT_VERTEX_SHADER, MSDF_TEXT_FRAGMENT_SHADER
+};
 pub use manager::{ShaderManager, SHADER_ID_DEFAULT_SPRITE};

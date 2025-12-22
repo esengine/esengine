@@ -10,7 +10,7 @@ import { Core, Entity } from '@esengine/ecs-framework';
 import { TransformComponent } from '@esengine/engine-core';
 import { SpriteComponent } from '@esengine/sprite';
 import { ParticleSystemComponent } from '@esengine/particle';
-import { UITransformComponent, UIRenderComponent, UITextComponent, getUIRenderCollector, type BatchDebugInfo, registerTexturePathMapping, getDynamicAtlasService } from '@esengine/ui';
+import { FGUIComponent, GRoot, GComponent } from '@esengine/fairygui';
 import { AssetRegistryService, ProjectService } from '@esengine/editor-core';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -102,123 +102,41 @@ export interface ParticleDebugInfo {
 }
 
 /**
- * UI 元素调试信息
- * UI element debug info
+ * FairyGUI 元素调试信息
+ * FairyGUI element debug info
  */
-export interface UIDebugInfo {
+export interface FGUIDebugInfo {
     entityId: number;
     entityName: string;
-    type: 'rect' | 'image' | 'text' | 'ninepatch' | 'circle' | 'rounded-rect' | 'unknown';
+    packageName: string;
+    componentName: string;
     x: number;
     y: number;
     width: number;
     height: number;
-    worldX: number;
-    worldY: number;
-    rotation: number;
     visible: boolean;
     alpha: number;
-    sortingLayer: string;
-    orderInLayer: number;
-    /** 层级深度（从根节点计算）| Hierarchy depth (from root) */
-    depth: number;
-    /** 世界层内顺序 = depth * 1000 + orderInLayer | World order in layer */
-    worldOrderInLayer: number;
-    textureGuid?: string;
-    textureUrl?: string;
-    backgroundColor?: string;
-    text?: string;
-    fontSize?: number;
-    /** 材质/着色器 ID | Material/Shader ID */
-    materialId: number;
-    /** 着色器名称 | Shader name */
-    shaderName: string;
-    /** Shader uniform 覆盖值 | Shader uniform override values */
-    uniforms: Record<string, UniformDebugValue>;
-    /** 顶点属性: 宽高比 (width/height) | Vertex attribute: aspect ratio */
-    aspectRatio: number;
+    /** 子对象数量 | Child count */
+    childCount: number;
 }
 
 /**
  * 渲染调试快照
  * Render debug snapshot
  */
-/**
- * 图集条目调试信息
- * Atlas entry debug info
- */
-export interface AtlasEntryDebugInfo {
-    /** 纹理 GUID | Texture GUID */
-    guid: string;
-    /** 在图集中的位置 | Position in atlas */
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    /** UV 坐标 | UV coordinates */
-    uv: [number, number, number, number];
-    /** 纹理图像 data URL（用于预览）| Texture image data URL (for preview) */
-    dataUrl?: string;
-}
-
-/**
- * 图集页面调试信息
- * Atlas page debug info
- */
-export interface AtlasPageDebugInfo {
-    /** 页面索引 | Page index */
-    pageIndex: number;
-    /** 纹理 ID | Texture ID */
-    textureId: number;
-    /** 页面尺寸 | Page size */
-    width: number;
-    height: number;
-    /** 占用率 | Occupancy */
-    occupancy: number;
-    /** 此页面中的条目 | Entries in this page */
-    entries: AtlasEntryDebugInfo[];
-}
-
-/**
- * 动态图集统计信息
- * Dynamic atlas statistics
- */
-export interface AtlasStats {
-    /** 是否启用 | Whether enabled */
-    enabled: boolean;
-    /** 图集页数 | Number of atlas pages */
-    pageCount: number;
-    /** 已加入图集的纹理数 | Number of textures in atlas */
-    textureCount: number;
-    /** 平均占用率 | Average occupancy */
-    averageOccupancy: number;
-    /** 正在加载的纹理数 | Number of loading textures */
-    loadingCount: number;
-    /** 加载失败的纹理数 | Number of failed textures */
-    failedCount: number;
-    /** 每个页面的详细信息 | Detailed info for each page */
-    pages: AtlasPageDebugInfo[];
-}
-
 export interface RenderDebugSnapshot {
     timestamp: number;
     frameNumber: number;
     textures: TextureDebugInfo[];
     sprites: SpriteDebugInfo[];
     particles: ParticleDebugInfo[];
-    uiElements: UIDebugInfo[];
-    /** UI 合批调试信息 | UI batch debug info */
-    uiBatches: BatchDebugInfo[];
-    /** 动态图集统计 | Dynamic atlas stats */
-    atlasStats?: AtlasStats;
+    fguiElements: FGUIDebugInfo[];
     stats: {
         totalSprites: number;
         totalParticles: number;
-        totalUIElements: number;
+        totalFGUIElements: number;
         totalTextures: number;
         drawCalls: number;
-        /** UI 批次数 | UI batch count */
-        uiBatchCount: number;
     };
 }
 
@@ -374,12 +292,6 @@ export class RenderDebugService {
             const dataUrl = `data:${mimeType};base64,${base64}`;
 
             this._textureCache.set(textureGuid, dataUrl);
-
-            // 注册 GUID 到 data URL 映射（用于动态图集）
-            // Register GUID to data URL mapping (for dynamic atlas)
-            if (isGuid) {
-                registerTexturePathMapping(textureGuid, dataUrl);
-            }
         } catch (err) {
             console.error('[RenderDebugService] Failed to load texture:', textureGuid, err);
         } finally {
@@ -399,82 +311,28 @@ export class RenderDebugService {
 
         this._frameNumber++;
 
-        // 收集 UI 合批信息 | Collect UI batch info
-        const uiCollector = getUIRenderCollector();
-        const uiBatches = [...uiCollector.getBatchDebugInfo()];
-
-        // 收集动态图集统计 | Collect dynamic atlas stats
-        const atlasService = getDynamicAtlasService();
-        let atlasStats: AtlasStats | undefined;
-        if (atlasService) {
-            const stats = atlasService.getStats();
-            const pageDetails = atlasService.getPageDetails();
-
-            // 转换页面详细信息 | Convert page details
-            const pages: AtlasPageDebugInfo[] = pageDetails.map(page => ({
-                pageIndex: page.pageIndex,
-                textureId: page.textureId,
-                width: page.width,
-                height: page.height,
-                occupancy: page.occupancy,
-                entries: page.entries.map(e => ({
-                    guid: e.guid,
-                    x: e.entry.region.x,
-                    y: e.entry.region.y,
-                    width: e.entry.region.width,
-                    height: e.entry.region.height,
-                    uv: e.entry.uv,
-                    // 从纹理缓存获取 data URL | Get data URL from texture cache
-                    dataUrl: this._textureCache.get(e.guid)
-                }))
-            }));
-
-            atlasStats = {
-                enabled: true,
-                pageCount: stats.pageCount,
-                textureCount: stats.textureCount,
-                averageOccupancy: stats.averageOccupancy,
-                loadingCount: stats.loadingCount,
-                failedCount: stats.failedCount,
-                pages
-            };
-        } else {
-            atlasStats = {
-                enabled: false,
-                pageCount: 0,
-                textureCount: 0,
-                averageOccupancy: 0,
-                loadingCount: 0,
-                failedCount: 0,
-                pages: []
-            };
-        }
-
         const snapshot: RenderDebugSnapshot = {
             timestamp: Date.now(),
             frameNumber: this._frameNumber,
             textures: this._collectTextures(),
             sprites: this._collectSprites(scene.entities.buffer),
             particles: this._collectParticles(scene.entities.buffer),
-            uiElements: this._collectUI(scene.entities.buffer),
-            uiBatches,
-            atlasStats,
+            fguiElements: this._collectFGUI(scene.entities.buffer),
             stats: {
                 totalSprites: 0,
                 totalParticles: 0,
-                totalUIElements: 0,
+                totalFGUIElements: 0,
                 totalTextures: 0,
                 drawCalls: 0,
-                uiBatchCount: uiBatches.length,
             },
         };
 
         // 计算统计 | Calculate stats
         snapshot.stats.totalSprites = snapshot.sprites.length;
         snapshot.stats.totalParticles = snapshot.particles.reduce((sum, p) => sum + p.activeCount, 0);
-        snapshot.stats.totalUIElements = snapshot.uiElements.length;
+        snapshot.stats.totalFGUIElements = snapshot.fguiElements.length;
         snapshot.stats.totalTextures = snapshot.textures.length;
-        snapshot.stats.drawCalls = uiBatches.length; // UI batches as draw calls
+        snapshot.stats.drawCalls = snapshot.sprites.length + snapshot.particles.length + snapshot.fguiElements.length;
 
         // 保存快照 | Save snapshot
         this._snapshots.push(snapshot);
@@ -673,97 +531,36 @@ export class RenderDebugService {
     }
 
     /**
-     * 收集 UI 元素信息
-     * Collect UI element info
+     * 收集 FairyGUI 元素信息
+     * Collect FairyGUI element info
      */
-    private _collectUI(entities: readonly Entity[]): UIDebugInfo[] {
-        const uiElements: UIDebugInfo[] = [];
+    private _collectFGUI(entities: readonly Entity[]): FGUIDebugInfo[] {
+        const fguiElements: FGUIDebugInfo[] = [];
 
         for (const entity of entities) {
-            const uiTransform = entity.getComponent(UITransformComponent);
+            const fguiComp = entity.getComponent(FGUIComponent) as FGUIComponent | null;
 
-            if (!uiTransform) continue;
+            if (!fguiComp) continue;
 
-            const uiRender = entity.getComponent(UIRenderComponent);
-            const uiText = entity.getComponent(UITextComponent);
+            const root = fguiComp.root;
+            const displayObject = root as GComponent | null;
 
-            // 确定类型 | Determine type
-            let type: UIDebugInfo['type'] = 'unknown';
-            if (uiText) {
-                type = 'text';
-            } else if (uiRender) {
-                switch (uiRender.type) {
-                    case 'rect': type = 'rect'; break;
-                    case 'image': type = 'image'; break;
-                    case 'ninepatch': type = 'ninepatch'; break;
-                    case 'circle': type = 'circle'; break;
-                    case 'rounded-rect': type = 'rounded-rect'; break;
-                    default: type = 'rect';
-                }
-            }
-
-            // 获取纹理 GUID | Get texture GUID
-            const textureGuid = uiRender?.textureGuid?.toString() ?? '';
-
-            // 转换颜色为十六进制字符串 | Convert color to hex string
-            const backgroundColor = uiRender?.backgroundColor !== undefined
-                ? `#${uiRender.backgroundColor.toString(16).padStart(6, '0')}`
-                : undefined;
-
-            // 获取材质/着色器 ID | Get material/shader ID
-            const materialId = uiRender?.getMaterialId?.() ?? 0;
-
-            // 收集 uniform 覆盖值 | Collect uniform override values
-            const uniforms: Record<string, UniformDebugValue> = {};
-            const overrides = uiRender?.materialOverrides ?? {};
-            for (const [name, override] of Object.entries(overrides)) {
-                uniforms[name] = {
-                    type: override.type,
-                    value: override.value
-                };
-            }
-
-            // 计算 aspectRatio (与 Rust 端一致: width / height)
-            // Calculate aspectRatio (same as Rust side: width / height)
-            const uiWidth = uiTransform.width * (uiTransform.scaleX ?? 1);
-            const uiHeight = uiTransform.height * (uiTransform.scaleY ?? 1);
-            const aspectRatio = Math.abs(uiHeight) > 0.001 ? uiWidth / uiHeight : 1.0;
-
-            // 获取世界层内顺序并计算层级深度 | Get world order in layer and compute depth
-            // worldOrderInLayer = depth * 1000 + orderInLayer
-            const worldOrderInLayer = uiTransform.worldOrderInLayer ?? uiTransform.orderInLayer;
-            const depth = Math.floor(worldOrderInLayer / 1000);
-
-            uiElements.push({
+            fguiElements.push({
                 entityId: entity.id,
                 entityName: entity.name,
-                type,
-                x: uiTransform.x,
-                y: uiTransform.y,
-                width: uiTransform.width,
-                height: uiTransform.height,
-                worldX: uiTransform.worldX,
-                worldY: uiTransform.worldY,
-                rotation: uiTransform.rotation,
-                visible: uiTransform.visible && uiTransform.worldVisible,
-                alpha: uiTransform.worldAlpha,
-                sortingLayer: uiTransform.sortingLayer,
-                orderInLayer: uiTransform.orderInLayer,
-                depth,
-                worldOrderInLayer,
-                textureGuid: textureGuid || undefined,
-                textureUrl: textureGuid ? this._resolveTextureUrl(textureGuid) : undefined,
-                backgroundColor,
-                text: uiText?.text,
-                fontSize: uiText?.fontSize,
-                materialId,
-                shaderName: getShaderName(materialId),
-                uniforms,
-                aspectRatio,
+                packageName: fguiComp.packageGuid ?? '',
+                componentName: fguiComp.componentName ?? '',
+                x: displayObject?.x ?? 0,
+                y: displayObject?.y ?? 0,
+                width: displayObject?.width ?? 0,
+                height: displayObject?.height ?? 0,
+                visible: displayObject?.visible ?? true,
+                alpha: displayObject?.alpha ?? 1,
+                childCount: displayObject?.numChildren ?? 0,
             });
         }
 
-        return uiElements;
+        return fguiElements;
     }
 
     /**
@@ -805,8 +602,3 @@ export class RenderDebugService {
 
 // 全局实例 | Global instance
 export const renderDebugService = RenderDebugService.getInstance();
-
-// 导出到全局以便控制台使用 | Export to global for console usage
-if (typeof window !== 'undefined') {
-    (window as any).renderDebugService = renderDebugService;
-}

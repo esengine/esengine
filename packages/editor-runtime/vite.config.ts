@@ -35,7 +35,7 @@ export default defineConfig({
                 '@esengine/engine-core',      // TransformComponent 等核心组件
                 '@esengine/ecs-components',
                 '@esengine/tilemap',
-                '@esengine/ui',
+                '@esengine/fairygui',         // FairyGUI system
                 '@esengine/behavior-tree',
                 '@esengine/platform-web',
                 '@esengine/ecs-engine-bindgen',

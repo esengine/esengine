@@ -22,7 +22,7 @@ import { BehaviorTreePlugin } from '@esengine/behavior-tree-editor';
 import { ParticlePlugin } from '@esengine/particle-editor';
 import { Physics2DPlugin } from '@esengine/physics-rapier2d-editor';
 import { TilemapPlugin } from '@esengine/tilemap-editor';
-import { UIPlugin } from '@esengine/ui-editor';
+import { FGUIPlugin } from '@esengine/fairygui-editor';
 import { BlueprintPlugin } from '@esengine/blueprint-editor';
 import { MaterialPlugin } from '@esengine/material-editor';
 import { SpritePlugin } from '@esengine/sprite-editor';
@@ -63,7 +63,7 @@ export class PluginInstaller {
             { name: 'CameraPlugin', plugin: CameraPlugin },
             { name: 'SpritePlugin', plugin: SpritePlugin },
             { name: 'TilemapPlugin', plugin: TilemapPlugin },
-            { name: 'UIPlugin', plugin: UIPlugin },
+            { name: 'FGUIPlugin', plugin: FGUIPlugin },
             { name: 'BehaviorTreePlugin', plugin: BehaviorTreePlugin },
             { name: 'ParticlePlugin', plugin: ParticlePlugin },
             { name: 'Physics2DPlugin', plugin: Physics2DPlugin },

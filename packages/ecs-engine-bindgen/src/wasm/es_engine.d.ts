@@ -205,6 +205,11 @@ export class GameEngine {
    */
   addGizmoCircle(x: number, y: number, radius: number, r: number, g: number, b: number, a: number): void;
   /**
+   * Get the graphics backend name (e.g., "WebGL2").
+   * 获取图形后端名称（如 "WebGL2"）。
+   */
+  getBackendName(): string;
+  /**
    * Get all registered viewport IDs.
    * 获取所有已注册的视口ID。
    */
@@ -273,6 +278,35 @@ export class GameEngine {
    */
   setMaterialVec4(material_id: number, name: string, x: number, y: number, z: number, w: number): boolean;
   /**
+   * Submit mesh batch for rendering arbitrary 2D geometry.
+   * 提交网格批次进行任意 2D 几何体渲染。
+   *
+   * Used for rendering ellipses, polygons, and other complex shapes.
+   * 用于渲染椭圆、多边形和其他复杂形状。
+   *
+   * # Arguments | 参数
+   * * `positions` - Float32Array [x, y, ...] for each vertex
+   * * `uvs` - Float32Array [u, v, ...] for each vertex
+   * * `colors` - Uint32Array of packed RGBA colors (one per vertex)
+   * * `indices` - Uint16Array of triangle indices
+   * * `texture_id` - Texture ID to use (0 for white pixel)
+   */
+  submitMeshBatch(positions: Float32Array, uvs: Float32Array, colors: Uint32Array, indices: Uint16Array, texture_id: number): void;
+  /**
+   * Submit MSDF text batch for rendering.
+   * 提交 MSDF 文本批次进行渲染。
+   *
+   * # Arguments | 参数
+   * * `positions` - Float32Array [x, y, ...] for each vertex (4 per glyph)
+   * * `tex_coords` - Float32Array [u, v, ...] for each vertex
+   * * `colors` - Float32Array [r, g, b, a, ...] for each vertex
+   * * `outline_colors` - Float32Array [r, g, b, a, ...] for each vertex
+   * * `outline_widths` - Float32Array [width, ...] for each vertex
+   * * `texture_id` - Font atlas texture ID
+   * * `px_range` - Pixel range for MSDF shader
+   */
+  submitTextBatch(positions: Float32Array, tex_coords: Float32Array, colors: Float32Array, outline_colors: Float32Array, outline_widths: Float32Array, texture_id: number, px_range: number): void;
+  /**
    * Clear all textures and reset state.
    * 清除所有纹理并重置状态。
    *
@@ -311,6 +345,11 @@ export class GameEngine {
    * * `mode` - 0=Select, 1=Move, 2=Rotate, 3=Scale
    */
   setTransformMode(mode: number): void;
+  /**
+   * Get the graphics backend version string.
+   * 获取图形后端版本字符串。
+   */
+  getBackendVersion(): string;
   /**
    * Get or load texture by path.
    * 按路径获取或加载纹理。
@@ -374,6 +413,11 @@ export class GameEngine {
    * The texture ID for the created blank texture | 创建的空白纹理ID
    */
   createBlankTexture(width: number, height: number): number;
+  /**
+   * Get maximum texture size supported by the backend.
+   * 获取后端支持的最大纹理尺寸。
+   */
+  getMaxTextureSize(): number;
   /**
    * Load texture by path, returning texture ID.
    * 按路径加载纹理，返回纹理ID。
@@ -516,7 +560,10 @@ export interface InitOutput {
   readonly gameengine_createMaterial: (a: number, b: number, c: number, d: number, e: number) => number;
   readonly gameengine_createMaterialWithId: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
   readonly gameengine_fromExternal: (a: any, b: number, c: number) => [number, number, number];
+  readonly gameengine_getBackendName: (a: number) => [number, number];
+  readonly gameengine_getBackendVersion: (a: number) => [number, number];
   readonly gameengine_getCamera: (a: number) => [number, number];
+  readonly gameengine_getMaxTextureSize: (a: number) => number;
   readonly gameengine_getOrLoadTextureByPath: (a: number, b: number, c: number) => [number, number, number];
   readonly gameengine_getTextureIdByPath: (a: number, b: number, c: number) => number;
   readonly gameengine_getTextureLoadingCount: (a: number) => number;
@@ -558,15 +605,17 @@ export interface InitOutput {
   readonly gameengine_setTransformMode: (a: number, b: number) => void;
   readonly gameengine_setViewportCamera: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
   readonly gameengine_setViewportConfig: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly gameengine_submitMeshBatch: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
   readonly gameengine_submitSpriteBatch: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number];
+  readonly gameengine_submitTextBatch: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number];
   readonly gameengine_unregisterViewport: (a: number, b: number, c: number) => void;
   readonly gameengine_updateInput: (a: number) => void;
   readonly gameengine_updateTextureRegion: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
   readonly gameengine_width: (a: number) => number;
   readonly gameengine_worldToScreen: (a: number, b: number, c: number) => [number, number];
   readonly init: () => void;
-  readonly wasm_bindgen__convert__closures_____invoke__hc746ced83e8f2609: (a: number, b: number) => void;
-  readonly wasm_bindgen__closure__destroy__hebcd2828f83f27ed: (a: number, b: number) => void;
+  readonly wasm_bindgen__convert__closures_____invoke__h0cae3d4947da04cb: (a: number, b: number) => void;
+  readonly wasm_bindgen__closure__destroy__h0c01365f59f73f28: (a: number, b: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;

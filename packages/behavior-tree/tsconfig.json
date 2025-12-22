@@ -32,7 +32,6 @@
     { "path": "../core" },
     { "path": "../engine-core" },
     { "path": "../editor-core" },
-    { "path": "../ui" },
     { "path": "../editor-runtime" }
   ]
 }

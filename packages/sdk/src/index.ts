@@ -39,10 +39,123 @@ export * from '@esengine/engine-core';
 export * from '@esengine/sprite';
 
 // ============================================================================
-// UI System (@esengine/ui)
-// UI 系统
+// FairyGUI System (@esengine/fairygui)
+// FairyGUI 系统
+// Note: Selective exports to avoid conflicts with ecs-framework and math
 // ============================================================================
-export * from '@esengine/ui';
+export {
+    // ECS Integration
+    FGUIComponent,
+    FGUIRenderSystem,
+    getFGUIRenderSystem,
+    setFGUIRenderSystem,
+    FGUIRuntimeModule,
+    FGUIPlugin,
+    // Core
+    GObject,
+    GComponent,
+    GRoot,
+    GGroup,
+    Controller,
+    Transition,
+    UIConfig,
+    getUIConfig,
+    setUIConfig,
+    UIObjectFactory,
+    GObjectPool,
+    DragDropManager,
+    EScaleMode,
+    EAlignMode,
+    // Widgets
+    GImage,
+    GTextField,
+    GGraph,
+    GButton,
+    GProgressBar,
+    GSlider,
+    GLoader,
+    GList,
+    GTextInput,
+    EKeyboardType,
+    PopupMenu,
+    Window,
+    // Package
+    UIPackage,
+    PackageItem,
+    // Events
+    EventDispatcher,
+    FGUIEvents,
+    // Render
+    RenderCollector,
+    RenderBridge,
+    Canvas2DBackend,
+    FGUIRenderDataProvider,
+    createFGUIRenderDataProvider,
+    // Tween
+    GTween,
+    GTweener,
+    TweenManager,
+    TweenValue,
+    evaluateEase,
+    // Asset
+    FUIAssetLoader,
+    fuiAssetLoader,
+    // Field Types
+    EButtonMode,
+    EAutoSizeType,
+    EAlignType,
+    EVertAlignType,
+    ELoaderFillType,
+    EListLayoutType,
+    EListSelectionMode,
+    EOverflowType,
+    EPackageItemType,
+    EObjectType,
+    EProgressTitleType,
+    EScrollBarDisplayType,
+    EScrollType,
+    EFlipType,
+    EChildrenRenderOrder,
+    EGroupLayoutType,
+    EPopupDirection,
+    ERelationType,
+    EFillMethod,
+    EFillOrigin,
+    EObjectPropID,
+    EGearType,
+    EEaseType,
+    EBlendMode,
+    ETransitionActionType,
+    EGraphType,
+} from '@esengine/fairygui';
+
+// Re-export conflicting types with FGUI prefix
+export {
+    Timer as FGUITimer,
+    Stage as FGUIStage,
+    ServiceContainer as FGUIServiceContainer,
+    Point as FGUIPoint,
+    Rectangle as FGUIRectangle,
+} from '@esengine/fairygui';
+
+export type {
+    // FairyGUI types
+    IFGUIComponentData,
+    RenderSubmitCallback,
+    ItemRenderer,
+    ItemProvider,
+    IUISource,
+    TypedEventListener,
+    EventListener,
+    FGUIEventType,
+    IEventContext,
+    IInputEventData,
+    IFUIAsset,
+    IEngineRenderData,
+    IFGUIRenderDataProvider,
+    TextureResolverFn,
+    TweenCallback,
+} from '@esengine/fairygui';
 
 // ============================================================================
 // Audio System (@esengine/audio)

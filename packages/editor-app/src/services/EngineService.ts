@@ -21,16 +21,14 @@ import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@ese
 import { SpriteComponent, SpriteAnimatorComponent, SpriteAnimatorSystemToken } from '@esengine/sprite';
 import { ParticleSystemComponent } from '@esengine/particle';
 import {
-    invalidateUIRenderCaches,
-    UIRenderProviderToken,
-    UIInputSystemToken,
-    initializeDynamicAtlasService,
-    reinitializeDynamicAtlasService,
-    registerTexturePathMapping,
-    AtlasExpansionStrategy,
-    type IAtlasEngineBridge,
-    type DynamicAtlasConfig
-} from '@esengine/ui';
+    FGUIRenderSystemToken,
+    getFGUIRenderSystem,
+    FGUIRenderDataProvider,
+    setGlobalTextureService,
+    createTextureResolver,
+    Stage,
+    getDOMTextRenderer
+} from '@esengine/fairygui';
 import { SettingsService } from './SettingsService';
 import * as esEngine from '@esengine/engine';
 import {
@@ -60,6 +58,7 @@ import { WebInputSubsystem } from '@esengine/platform-web';
 import { resetEngineState } from '../hooks/useEngine';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { IdGenerator } from '../utils/idGenerator';
+
 import { TauriAssetReader } from './TauriAssetReader';
 
 const logger = createLogger('EngineService');
@@ -303,20 +302,106 @@ export class EngineService {
             const animatorSystem = services.get(SpriteAnimatorSystemToken);
             const behaviorTreeSystem = services.get(BehaviorTreeSystemToken);
             const physicsSystem = services.get(Physics2DSystemToken);
-            const uiInputSystem = services.get(UIInputSystemToken);
-            const uiRenderProvider = services.get(UIRenderProviderToken);
+            const fguiRenderSystem = getFGUIRenderSystem();
 
             if (animatorSystem) runtimeServices.register(SpriteAnimatorSystemToken, animatorSystem);
             if (behaviorTreeSystem) runtimeServices.register(BehaviorTreeSystemToken, behaviorTreeSystem);
             if (physicsSystem) runtimeServices.register(Physics2DSystemToken, physicsSystem);
-            if (uiInputSystem) runtimeServices.register(UIInputSystemToken, uiInputSystem);
-            if (uiRenderProvider) runtimeServices.register(UIRenderProviderToken, uiRenderProvider);
+            if (fguiRenderSystem) runtimeServices.register(FGUIRenderSystemToken, fguiRenderSystem);
         }
 
-        // 设置 UI 渲染数据提供者
-        const uiRenderProvider = services.get(UIRenderProviderToken);
-        if (uiRenderProvider && this._runtime.renderSystem) {
-            this._runtime.renderSystem.setUIRenderDataProvider(uiRenderProvider);
+        // 设置 FairyGUI 渲染系统 | Set FairyGUI render system
+        const fguiRenderSystem = getFGUIRenderSystem();
+        const renderSystem = this._runtime?.renderSystem;
+        if (fguiRenderSystem && this._runtime?.bridge && renderSystem) {
+            const bridge = this._runtime.bridge;
+
+            // Set global texture service for FGUI
+            // 设置 FGUI 的全局纹理服务
+            setGlobalTextureService({
+                loadTextureByPath: (url: string) => bridge.loadTextureByPath(url),
+                getTextureIdByPath: (url: string) => bridge.getTextureIdByPath(url)
+            });
+
+            // Create render data provider to convert FGUI primitives to engine format
+            // 创建渲染数据提供者，将 FGUI 图元转换为引擎格式
+            const fguiRenderDataProvider = new FGUIRenderDataProvider();
+            fguiRenderDataProvider.setCollector(fguiRenderSystem.collector);
+            fguiRenderDataProvider.setSorting('UI', 1000);
+
+            // Use the centralized texture resolver from FGUITextureManager
+            // 使用 FGUITextureManager 的集中式纹理解析器
+            fguiRenderDataProvider.setTextureResolver(createTextureResolver());
+
+            // Initialize DOM text renderer for text fallback
+            // 初始化 DOM 文本渲染器作为文本回退
+            const domTextRenderer = getDOMTextRenderer();
+            const canvas = document.getElementById('viewport-canvas') as HTMLCanvasElement;
+            if (canvas) {
+                domTextRenderer.initialize(canvas);
+            }
+
+            // Create UI render data provider adapter for EngineRenderSystem
+            // 为 EngineRenderSystem 创建 UI 渲染数据提供者适配器
+            // This adapter updates FGUI and returns render data in the format expected by the engine
+            // 此适配器更新 FGUI 并以引擎期望的格式返回渲染数据
+            const runtime = this._runtime;
+            const uiRenderProvider = {
+                getRenderData: () => {
+                    // Update canvas size for coordinate conversion
+                    // FGUI uses top-left origin, engine uses center origin
+                    // 更新画布尺寸用于坐标转换（FGUI 使用左上角原点，引擎使用中心原点）
+                    const canvasSize = renderSystem.getUICanvasSize();
+                    const canvasWidth = canvasSize.width > 0 ? canvasSize.width : 1920;
+                    const canvasHeight = canvasSize.height > 0 ? canvasSize.height : 1080;
+                    fguiRenderDataProvider.setCanvasSize(canvasWidth, canvasHeight);
+
+                    // Update DOM text renderer settings
+                    // 更新 DOM 文本渲染器设置
+                    domTextRenderer.setDesignSize(canvasWidth, canvasHeight);
+                    domTextRenderer.setPreviewMode(renderSystem.isPreviewMode());
+
+                    // In editor mode, sync camera state for world-space text rendering
+                    // 在编辑器模式下，同步相机状态以进行世界空间文本渲染
+                    if (!renderSystem.isPreviewMode() && runtime?.bridge) {
+                        const camera = runtime.bridge.getCamera();
+                        domTextRenderer.setCamera({
+                            x: camera.x,
+                            y: camera.y,
+                            zoom: camera.zoom,
+                            rotation: camera.rotation
+                        });
+                    }
+
+                    // Update FGUI system to collect render primitives
+                    // 更新 FGUI 系统以收集渲染图元
+                    fguiRenderSystem.update();
+
+                    // Render text using DOM (fallback until MSDF text is fully integrated)
+                    // 使用 DOM 渲染文本（作为回退，直到 MSDF 文本完全集成）
+                    domTextRenderer.beginFrame();
+                    domTextRenderer.renderPrimitives(fguiRenderSystem.collector.getPrimitives());
+                    domTextRenderer.endFrame();
+
+                    // Get render data from provider
+                    // 从提供者获取渲染数据
+                    fguiRenderDataProvider.setCollector(fguiRenderSystem.collector);
+                    return fguiRenderDataProvider.getRenderData();
+                },
+
+                getMeshRenderData: () => {
+                    // Get mesh render data for complex shapes (ellipses, polygons, etc.)
+                    // 获取复杂形状（椭圆、多边形等）的网格渲染数据
+                    return fguiRenderDataProvider.getMeshRenderData();
+                }
+            };
+
+            // Register with EngineRenderSystem
+            // 注册到 EngineRenderSystem
+            renderSystem.setUIRenderDataProvider(uiRenderProvider);
+
+            fguiRenderSystem.enabled = true;
+            logger.info('FairyGUI render system connected to engine via UI render provider');
         }
 
         // 在编辑器模式下，禁用游戏逻辑系统
@@ -350,14 +435,10 @@ export class EngineService {
             pluginManager.clearSceneSystems();
         }
 
-        // 使用服务注册表获取 UI 输入系统
-        // Use service registry to get UI input system
-        const runtimeServices = this._runtime?.getServiceRegistry();
-        if (runtimeServices) {
-            const uiInputSystem = runtimeServices.get(UIInputSystemToken);
-            if (uiInputSystem && uiInputSystem.unbind) {
-                uiInputSystem.unbind();
-            }
+        // 清理 FairyGUI 渲染系统 | Clean up FairyGUI render system
+        const fguiRenderSystem = getFGUIRenderSystem();
+        if (fguiRenderSystem) {
+            fguiRenderSystem.enabled = false;
         }
 
         // 清理 viewport | Clear viewport
@@ -509,17 +590,26 @@ export class EngineService {
             const pathTransformerFn = (path: string) => {
                 if (!path.startsWith('http://') && !path.startsWith('https://') &&
                     !path.startsWith('data:') && !path.startsWith('asset://')) {
+                    // Normalize path separators to forward slashes first
+                    // 首先将路径分隔符规范化为正斜杠
+                    path = path.replace(/\\/g, '/');
+
                     if (!path.startsWith('/') && !path.match(/^[a-zA-Z]:/)) {
                         if (projectService && projectService.isProjectOpen()) {
                             const projectInfo = projectService.getCurrentProject();
                             if (projectInfo) {
-                                const projectPath = projectInfo.path;
-                                const separator = projectPath.includes('\\') ? '\\' : '/';
-                                path = `${projectPath}${separator}${path.replace(/\//g, separator)}`;
+                                // Normalize project path to forward slashes
+                                // 将项目路径规范化为正斜杠
+                                const projectPath = projectInfo.path.replace(/\\/g, '/');
+                                path = `${projectPath}/${path}`;
                             }
                         }
                     }
-                    return convertFileSrc(path);
+                    // Use convertFileSrc which handles the asset protocol correctly
+                    // 使用 convertFileSrc 正确处理 asset 协议
+                    const result = convertFileSrc(path);
+                    console.log(`[pathTransformer] ${path} -> ${result}`);
+                    return result;
                 }
                 return path;
             };
@@ -598,58 +688,6 @@ export class EngineService {
 
                 this._sceneResourceManager = new SceneResourceManager();
                 this._sceneResourceManager.setResourceLoader(this._engineIntegration);
-
-                // 初始化动态图集服务（用于 UI 合批）
-                // Initialize dynamic atlas service (for UI batching)
-                const bridge = this._runtime.bridge;
-                if (bridge.createBlankTexture && bridge.updateTextureRegion) {
-                    const atlasBridge: IAtlasEngineBridge = {
-                        createBlankTexture: (width: number, height: number) => {
-                            return bridge.createBlankTexture(width, height);
-                        },
-                        updateTextureRegion: (
-                            id: number,
-                            x: number,
-                            y: number,
-                            width: number,
-                            height: number,
-                            pixels: Uint8Array
-                        ) => {
-                            bridge.updateTextureRegion(id, x, y, width, height, pixels);
-                        }
-                    };
-
-                    // 从设置中获取动态图集配置
-                    // Get dynamic atlas config from settings
-                    const settingsService = SettingsService.getInstance();
-                    const atlasEnabled = settingsService.get('project.dynamicAtlas.enabled', true);
-
-                    if (atlasEnabled) {
-                        const strategyValue = settingsService.get<string>('project.dynamicAtlas.expansionStrategy', 'fixed');
-                        const expansionStrategy = strategyValue === 'dynamic'
-                            ? AtlasExpansionStrategy.Dynamic
-                            : AtlasExpansionStrategy.Fixed;
-                        const fixedPageSize = settingsService.get('project.dynamicAtlas.fixedPageSize', 1024);
-                        const maxPages = settingsService.get('project.dynamicAtlas.maxPages', 4);
-                        const maxTextureSize = settingsService.get('project.dynamicAtlas.maxTextureSize', 512);
-
-                        initializeDynamicAtlasService(atlasBridge, {
-                            expansionStrategy,
-                            initialPageSize: 256,    // 动态模式起始大小 | Dynamic mode initial size
-                            fixedPageSize,           // 固定模式页面大小 | Fixed mode page size
-                            maxPageSize: 2048,       // 最大页面大小 | Max page size
-                            maxPages,
-                            maxTextureSize,
-                            padding: 1
-                        });
-                    }
-
-                    // 注册纹理加载回调，当纹理加载时自动注册路径映射
-                    // Register texture load callback to register path mapping when textures load
-                    EngineIntegration.onTextureLoad((guid: string, path: string, _textureId: number) => {
-                        registerTexturePathMapping(guid, path);
-                    });
-                }
 
                 const sceneManagerService = Core.services.tryResolve<SceneManagerService>(SceneManagerService);
                 if (sceneManagerService) {
@@ -1178,9 +1216,16 @@ export class EngineService {
 
     /**
      * Set UI canvas size for boundary display.
+     * Also syncs with FGUI Stage design size for coordinate conversion.
+     *
+     * 设置 UI 画布尺寸用于边界显示，同时同步到 FGUI Stage 设计尺寸用于坐标转换
      */
     setUICanvasSize(width: number, height: number): void {
         this._runtime?.setUICanvasSize(width, height);
+
+        // Sync to FGUI Stage design size for coordinate conversion
+        // 同步到 FGUI Stage 设计尺寸用于坐标转换
+        Stage.inst.setDesignSize(width, height);
     }
 
     /**
@@ -1213,9 +1258,8 @@ export class EngineService {
         const success = this._runtime?.saveSceneSnapshot() ?? false;
 
         if (success) {
-            // 清除 UI 渲染缓存（因为纹理已被清除）
-            // Clear UI render caches (since textures have been cleared)
-            invalidateUIRenderCaches();
+            // 场景快照保存成功
+            // Scene snapshot saved successfully
         }
 
         return success;
@@ -1230,9 +1274,6 @@ export class EngineService {
         const success = await this._runtime.restoreSceneSnapshot();
 
         if (success) {
-            // 清除 UI 渲染缓存
-            invalidateUIRenderCaches();
-
             // Reset particle component textureIds before loading resources
             // 在加载资源前重置粒子组件的 textureId
             // This ensures ParticleUpdateSystem will reload textures
@@ -1406,76 +1447,6 @@ export class EngineService {
      */
     getRuntime(): GameRuntime | null {
         return this._runtime;
-    }
-
-    /**
-     * Reinitialize dynamic atlas with current settings.
-     * 使用当前设置重新初始化动态图集。
-     *
-     * Call this when dynamic atlas settings change to apply them.
-     * 当动态图集设置更改时调用此方法以应用更改。
-     */
-    reinitializeDynamicAtlas(): void {
-        const bridge = this._runtime?.bridge;
-        if (!bridge?.createBlankTexture || !bridge?.updateTextureRegion) {
-            logger.warn('Dynamic atlas requires createBlankTexture and updateTextureRegion');
-            return;
-        }
-
-        const atlasBridge: IAtlasEngineBridge = {
-            createBlankTexture: (width: number, height: number) => {
-                return bridge.createBlankTexture!(width, height);
-            },
-            updateTextureRegion: (
-                id: number,
-                x: number,
-                y: number,
-                width: number,
-                height: number,
-                pixels: Uint8Array
-            ) => {
-                bridge.updateTextureRegion!(id, x, y, width, height, pixels);
-            }
-        };
-
-        // 从设置中获取动态图集配置
-        // Get dynamic atlas config from settings
-        const settingsService = SettingsService.getInstance();
-        const atlasEnabled = settingsService.get('project.dynamicAtlas.enabled', true);
-
-        if (!atlasEnabled) {
-            logger.info('Dynamic atlas is disabled');
-            return;
-        }
-
-        const strategyValue = settingsService.get<string>('project.dynamicAtlas.expansionStrategy', 'fixed');
-        const expansionStrategy = strategyValue === 'dynamic'
-            ? AtlasExpansionStrategy.Dynamic
-            : AtlasExpansionStrategy.Fixed;
-        const fixedPageSize = settingsService.get('project.dynamicAtlas.fixedPageSize', 1024);
-        const maxPages = settingsService.get('project.dynamicAtlas.maxPages', 4);
-        const maxTextureSize = settingsService.get('project.dynamicAtlas.maxTextureSize', 512);
-
-        logger.info('Dynamic atlas settings read from SettingsService:', {
-            strategyValue,
-            expansionStrategy: expansionStrategy === AtlasExpansionStrategy.Dynamic ? 'dynamic' : 'fixed',
-            fixedPageSize,
-            maxPages,
-            maxTextureSize
-        });
-
-        const config: DynamicAtlasConfig = {
-            expansionStrategy,
-            initialPageSize: 256,
-            fixedPageSize,
-            maxPageSize: 2048,
-            maxPages,
-            maxTextureSize,
-            padding: 1
-        };
-
-        reinitializeDynamicAtlasService(atlasBridge, config);
-        logger.info('Dynamic atlas reinitialized with config:', config);
     }
 
     /**

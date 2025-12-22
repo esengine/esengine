@@ -1,5 +1,6 @@
 import { Entity } from '@esengine/ecs-framework';
 import { EntityStoreService, MessageHub, InspectorRegistry, CommandManager } from '@esengine/editor-core';
+import type { IVirtualNode } from '@esengine/editor-core';
 
 export interface InspectorProps {
     entityStore: EntityStoreService;
@@ -20,11 +21,22 @@ export interface AssetFileInfo {
 
 type ExtensionData = Record<string, any>;
 
+/**
+ * Virtual node target data
+ * 虚拟节点目标数据
+ */
+export interface VirtualNodeTargetData {
+    parentEntityId: number;
+    virtualNodeId: string;
+    virtualNode: IVirtualNode;
+}
+
 export type InspectorTarget =
     | { type: 'entity'; data: Entity }
     | { type: 'remote-entity'; data: RemoteEntity; details?: EntityDetails }
     | { type: 'asset-file'; data: AssetFileInfo; content?: string; isImage?: boolean }
     | { type: 'extension'; data: ExtensionData }
+    | { type: 'virtual-node'; data: VirtualNodeTargetData }
     | null;
 
 export interface RemoteEntity {

@@ -592,6 +592,12 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
+      '@esengine/fairygui':
+        specifier: workspace:*
+        version: link:../fairygui
+      '@esengine/fairygui-editor':
+        specifier: workspace:*
+        version: link:../fairygui-editor
       '@esengine/material-editor':
         specifier: workspace:*
         version: link:../material-editor
@@ -634,12 +640,6 @@ importers:
       '@esengine/tilemap-editor':
         specifier: workspace:*
         version: link:../tilemap-editor
-      '@esengine/ui':
-        specifier: workspace:*
-        version: link:../ui
-      '@esengine/ui-editor':
-        specifier: workspace:*
-        version: link:../ui-editor
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -871,9 +871,9 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
-      '@esengine/ui':
+      '@esengine/fairygui':
         specifier: workspace:*
-        version: link:../ui
+        version: link:../fairygui
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27
@@ -926,6 +926,80 @@ importers:
       '@esengine/build-config':
         specifier: workspace:*
         version: link:../build-config
+      rimraf:
+        specifier: ^5.0.5
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.1(@types/node@20.19.25))(@swc/core@1.15.3)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  packages/fairygui:
+    dependencies:
+      '@esengine/asset-system':
+        specifier: workspace:*
+        version: link:../asset-system
+      '@esengine/ecs-framework-math':
+        specifier: workspace:*
+        version: link:../math
+    devDependencies:
+      '@esengine/build-config':
+        specifier: workspace:*
+        version: link:../build-config
+      '@esengine/ecs-engine-bindgen':
+        specifier: workspace:*
+        version: link:../ecs-engine-bindgen
+      '@esengine/ecs-framework':
+        specifier: workspace:*
+        version: link:../core
+      '@esengine/engine-core':
+        specifier: workspace:*
+        version: link:../engine-core
+      '@esengine/material-system':
+        specifier: workspace:*
+        version: link:../material-system
+      rimraf:
+        specifier: ^5.0.5
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.1(@types/node@20.19.25))(@swc/core@1.15.3)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  packages/fairygui-editor:
+    dependencies:
+      '@esengine/fairygui':
+        specifier: workspace:*
+        version: link:../fairygui
+    devDependencies:
+      '@esengine/asset-system':
+        specifier: workspace:*
+        version: link:../asset-system
+      '@esengine/build-config':
+        specifier: workspace:*
+        version: link:../build-config
+      '@esengine/ecs-framework':
+        specifier: workspace:*
+        version: link:../core
+      '@esengine/editor-core':
+        specifier: workspace:*
+        version: link:../editor-core
+      '@esengine/engine-core':
+        specifier: workspace:*
+        version: link:../engine-core
+      '@types/react':
+        specifier: ^18.3.12
+        version: 18.3.27
+      lucide-react:
+        specifier: ^0.545.0
+        version: 0.545.0(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
       rimraf:
         specifier: ^5.0.5
         version: 5.0.10
@@ -1394,6 +1468,9 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
+      '@esengine/fairygui':
+        specifier: workspace:*
+        version: link:../fairygui
       '@esengine/particle':
         specifier: workspace:*
         version: link:../particle
@@ -1406,9 +1483,6 @@ importers:
       '@esengine/tilemap':
         specifier: workspace:*
         version: link:../tilemap
-      '@esengine/ui':
-        specifier: workspace:*
-        version: link:../ui
     devDependencies:
       '@esengine/build-config':
         specifier: workspace:*
@@ -1607,77 +1681,6 @@ importers:
       zustand:
         specifier: ^5.0.8
         version: 5.0.8(@types/react@18.3.27)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
-
-  packages/ui:
-    dependencies:
-      '@esengine/asset-system':
-        specifier: workspace:*
-        version: link:../asset-system
-    devDependencies:
-      '@esengine/build-config':
-        specifier: workspace:*
-        version: link:../build-config
-      '@esengine/ecs-engine-bindgen':
-        specifier: workspace:*
-        version: link:../ecs-engine-bindgen
-      '@esengine/ecs-framework':
-        specifier: workspace:*
-        version: link:../core
-      '@esengine/engine-core':
-        specifier: workspace:*
-        version: link:../engine-core
-      '@esengine/material-system':
-        specifier: workspace:*
-        version: link:../material-system
-      rimraf:
-        specifier: ^5.0.5
-        version: 5.0.10
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(@microsoft/api-extractor@7.55.1(@types/node@20.19.25))(@swc/core@1.15.3)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.1)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-
-  packages/ui-editor:
-    dependencies:
-      '@esengine/ui':
-        specifier: workspace:*
-        version: link:../ui
-    devDependencies:
-      '@esengine/build-config':
-        specifier: workspace:*
-        version: link:../build-config
-      '@esengine/ecs-framework':
-        specifier: workspace:*
-        version: link:../core
-      '@esengine/editor-core':
-        specifier: workspace:*
-        version: link:../editor-core
-      '@esengine/editor-runtime':
-        specifier: workspace:*
-        version: link:../editor-runtime
-      '@esengine/material-system':
-        specifier: workspace:*
-        version: link:../material-system
-      '@types/react':
-        specifier: ^18.3.12
-        version: 18.3.27
-      lucide-react:
-        specifier: ^0.545.0
-        version: 0.545.0(react@18.3.1)
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      rimraf:
-        specifier: ^5.0.5
-        version: 5.0.10
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(@microsoft/api-extractor@7.55.1(@types/node@20.19.25))(@swc/core@1.15.3)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.1)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
 
   packages/worker-generator:
     dependencies:

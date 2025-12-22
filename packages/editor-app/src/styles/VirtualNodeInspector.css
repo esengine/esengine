@@ -1,0 +1,165 @@
+/**
+ * 虚拟节点检查器样式
+ * Virtual Node Inspector styles
+ */
+
+.virtual-node-inspector {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: #262626;
+    color: #ccc;
+    font-size: 11px;
+    overflow-y: auto;
+}
+
+/* Header */
+.virtual-node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(to right, rgba(245, 158, 11, 0.1), transparent);
+    border-bottom: 1px solid #3a3a3a;
+    border-left: 3px solid #f59e0b;
+}
+
+.virtual-node-header .header-icon {
+    color: #f59e0b;
+    flex-shrink: 0;
+}
+
+.virtual-node-header .header-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.virtual-node-header .header-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.virtual-node-header .header-type {
+    font-size: 10px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.virtual-node-header .header-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 3px;
+    color: #f59e0b;
+    white-space: nowrap;
+}
+
+/* Read-only notice */
+.virtual-node-notice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border-bottom: 1px solid #3a3a3a;
+    color: #60a5fa;
+    font-size: 10px;
+}
+
+/* Section */
+.virtual-node-section {
+    margin: 8px 0;
+}
+
+.virtual-node-section .section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #2d2d2d;
+    border-top: 1px solid #1a1a1a;
+    border-bottom: 1px solid #1a1a1a;
+    font-size: 10px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.virtual-node-section .section-content {
+    padding: 4px 0;
+}
+
+/* Property Row */
+.virtual-node-property-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    min-height: 24px;
+}
+
+.virtual-node-property-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.virtual-node-property-row .property-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100px;
+    flex-shrink: 0;
+    color: #999;
+    font-size: 11px;
+}
+
+.virtual-node-property-row .property-icon {
+    display: flex;
+    align-items: center;
+    color: #666;
+}
+
+.virtual-node-property-row .property-value {
+    flex: 1;
+    color: #ccc;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.virtual-node-property-row .property-value svg {
+    color: #4ade80;
+}
+
+.virtual-node-property-row .property-value svg.disabled {
+    color: #666;
+}
+
+/* Color swatch */
+.color-swatch-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.color-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+}
+
+.color-value {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #888;
+}

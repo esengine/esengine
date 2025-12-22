@@ -23,6 +23,19 @@ export interface GizmoHitResult {
     entityId: number;
     /** Distance from hit point to gizmo center | 命中点到 Gizmo 中心的距离 */
     distance: number;
+    /** Virtual node ID if this gizmo represents a virtual node | 虚拟节点 ID（如果此 gizmo 代表虚拟节点） */
+    virtualNodeId?: string;
+}
+
+/**
+ * Click result with entity and optional virtual node
+ * 点击结果，包含实体和可选的虚拟节点
+ */
+export interface GizmoClickResult {
+    /** Entity ID | 实体 ID */
+    entityId: number;
+    /** Virtual node ID if clicked on a virtual node gizmo | 虚拟节点 ID（如果点击了虚拟节点 gizmo） */
+    virtualNodeId?: string;
 }
 
 /**
@@ -73,6 +86,23 @@ export interface IGizmoInteractionService {
      * 清除悬停状态
      */
     clearHover(): void;
+
+    /**
+     * Handle click at position with virtual node support
+     * 处理位置点击，支持虚拟节点
+     *
+     * @param worldX World X coordinate | 世界 X 坐标
+     * @param worldY World Y coordinate | 世界 Y 坐标
+     * @param zoom Current viewport zoom level | 当前视口缩放级别
+     * @returns Click result with entity and optional virtual node | 点击结果
+     */
+    handleClickEx(worldX: number, worldY: number, zoom: number): GizmoClickResult | null;
+
+    /**
+     * Get currently hovered virtual node ID
+     * 获取当前悬停的虚拟节点 ID
+     */
+    getHoveredVirtualNodeId(): string | null;
 }
 
 /**
@@ -85,6 +115,7 @@ export interface IGizmoInteractionService {
 export class GizmoInteractionService implements IGizmoInteractionService {
     private hoveredEntityId: number | null = null;
     private hoveredGizmo: IGizmoRenderData | null = null;
+    private hoveredVirtualNodeId: string | null = null;
 
     /** Hover color multiplier for RGB channels | 悬停时 RGB 通道的颜色倍增 */
     private static readonly HOVER_COLOR_MULTIPLIER = 1.3;
@@ -96,8 +127,8 @@ export class GizmoInteractionService implements IGizmoInteractionService {
     private lastClickPos: { x: number; y: number } | null = null;
     /** Last click time | 上次点击时间 */
     private lastClickTime: number = 0;
-    /** All hit entities at current click position | 当前点击位置的所有命中实体 */
-    private hitEntitiesAtClick: number[] = [];
+    /** All hit results at current click position | 当前点击位置的所有命中结果 */
+    private hitResultsAtClick: GizmoClickResult[] = [];
     /** Current cycle index | 当前循环索引 */
     private cycleIndex: number = 0;
     /** Position tolerance for same-position detection | 判断相同位置的容差 */
@@ -122,6 +153,14 @@ export class GizmoInteractionService implements IGizmoInteractionService {
     }
 
     /**
+     * Get currently hovered virtual node ID
+     * 获取当前悬停的虚拟节点 ID
+     */
+    getHoveredVirtualNodeId(): string | null {
+        return this.hoveredVirtualNodeId;
+    }
+
+    /**
      * Update mouse position and perform hit test
      * 更新鼠标位置并执行命中测试
      */
@@ -130,6 +169,7 @@ export class GizmoInteractionService implements IGizmoInteractionService {
         if (!scene) {
             this.hoveredEntityId = null;
             this.hoveredGizmo = null;
+            this.hoveredVirtualNodeId = null;
             return;
         }
 
@@ -166,7 +206,8 @@ export class GizmoInteractionService implements IGizmoInteractionService {
                             closestHit = {
                                 gizmo,
                                 entityId: entity.id,
-                                distance
+                                distance,
+                                virtualNodeId: gizmo.virtualNodeId
                             };
                         }
                     }
@@ -176,6 +217,7 @@ export class GizmoInteractionService implements IGizmoInteractionService {
 
         this.hoveredEntityId = closestHit?.entityId ?? null;
         this.hoveredGizmo = closestHit?.gizmo ?? null;
+        this.hoveredVirtualNodeId = closestHit?.virtualNodeId ?? null;
     }
 
     /**
@@ -206,55 +248,65 @@ export class GizmoInteractionService implements IGizmoInteractionService {
      * 支持重复点击时循环选择重叠的实体
      */
     handleClick(worldX: number, worldY: number, zoom: number): number | null {
+        const result = this.handleClickEx(worldX, worldY, zoom);
+        return result?.entityId ?? null;
+    }
+
+    /**
+     * Handle click at position with virtual node support
+     * Supports cycling through overlapping gizmos on repeated clicks
+     * 处理位置点击，支持虚拟节点
+     * 支持重复点击时循环选择重叠的 gizmos
+     */
+    handleClickEx(worldX: number, worldY: number, zoom: number): GizmoClickResult | null {
         const now = Date.now();
         const isSamePosition = this.lastClickPos !== null &&
             Math.abs(worldX - this.lastClickPos.x) < GizmoInteractionService.CLICK_POSITION_TOLERANCE / zoom &&
             Math.abs(worldY - this.lastClickPos.y) < GizmoInteractionService.CLICK_POSITION_TOLERANCE / zoom;
         const isWithinTimeWindow = (now - this.lastClickTime) < GizmoInteractionService.CLICK_TIME_TOLERANCE;
 
-        // If clicking at same position within time window, cycle to next entity
-        // 如果在时间窗口内点击相同位置，循环到下一个实体
-        if (isSamePosition && isWithinTimeWindow && this.hitEntitiesAtClick.length > 1) {
-            this.cycleIndex = (this.cycleIndex + 1) % this.hitEntitiesAtClick.length;
+        // If clicking at same position within time window, cycle to next result
+        // 如果在时间窗口内点击相同位置，循环到下一个结果
+        if (isSamePosition && isWithinTimeWindow && this.hitResultsAtClick.length > 1) {
+            this.cycleIndex = (this.cycleIndex + 1) % this.hitResultsAtClick.length;
             this.lastClickTime = now;
-            const selectedId = this.hitEntitiesAtClick[this.cycleIndex];
-            this.hoveredEntityId = selectedId;
-            return selectedId;
+            const result = this.hitResultsAtClick[this.cycleIndex];
+            this.hoveredEntityId = result.entityId;
+            this.hoveredVirtualNodeId = result.virtualNodeId ?? null;
+            return result;
         }
 
-        // New position or timeout - collect all hit entities
-        // 新位置或超时 - 收集所有命中的实体
-        this.hitEntitiesAtClick = this.collectAllHitEntities(worldX, worldY, zoom);
+        // New position or timeout - collect all hit results
+        // 新位置或超时 - 收集所有命中结果
+        this.hitResultsAtClick = this.collectAllHitResults(worldX, worldY, zoom);
         this.cycleIndex = 0;
         this.lastClickPos = { x: worldX, y: worldY };
         this.lastClickTime = now;
 
-        if (this.hitEntitiesAtClick.length > 0) {
-            const selectedId = this.hitEntitiesAtClick[0];
-            this.hoveredEntityId = selectedId;
-            return selectedId;
+        if (this.hitResultsAtClick.length > 0) {
+            const result = this.hitResultsAtClick[0];
+            this.hoveredEntityId = result.entityId;
+            this.hoveredVirtualNodeId = result.virtualNodeId ?? null;
+            return result;
         }
 
         return null;
     }
 
     /**
-     * Collect all entities hit at the given position, sorted by distance
-     * 收集给定位置命中的所有实体，按距离排序
+     * Collect all hit results at the given position, sorted by distance
+     * 收集给定位置的所有命中结果，按距离排序
      */
-    private collectAllHitEntities(worldX: number, worldY: number, zoom: number): number[] {
+    private collectAllHitResults(worldX: number, worldY: number, zoom: number): GizmoClickResult[] {
         const scene = Core.scene;
         if (!scene) return [];
 
-        const hits: GizmoHitResult[] = [];
+        const hits: Array<GizmoClickResult & { distance: number }> = [];
 
         for (const entity of scene.entities.buffer) {
             if (!GizmoRegistry.hasAnyGizmoProvider(entity)) {
                 continue;
             }
-
-            let entityHit = false;
-            let minDistance = Infinity;
 
             for (const component of entity.components) {
                 const componentType = component.constructor as ComponentType;
@@ -265,22 +317,17 @@ export class GizmoInteractionService implements IGizmoInteractionService {
                 const gizmos = GizmoRegistry.getGizmoData(component, entity, false);
                 for (const gizmo of gizmos) {
                     if (GizmoHitTester.hitTest(worldX, worldY, gizmo, zoom)) {
-                        entityHit = true;
                         const center = GizmoHitTester.getGizmoCenter(gizmo);
                         const distance = Math.sqrt(
                             (worldX - center.x) ** 2 + (worldY - center.y) ** 2
                         );
-                        minDistance = Math.min(minDistance, distance);
+                        hits.push({
+                            entityId: entity.id,
+                            virtualNodeId: gizmo.virtualNodeId,
+                            distance
+                        });
                     }
                 }
-            }
-
-            if (entityHit) {
-                hits.push({
-                    gizmo: {} as IGizmoRenderData, // Not needed for sorting
-                    entityId: entity.id,
-                    distance: minDistance
-                });
             }
         }
 
@@ -288,7 +335,19 @@ export class GizmoInteractionService implements IGizmoInteractionService {
         // 按距离排序（最近的在前）
         hits.sort((a, b) => a.distance - b.distance);
 
-        return hits.map(hit => hit.entityId);
+        // Remove duplicates (same entity + virtualNodeId), keeping closest
+        // 去重（相同实体 + virtualNodeId），保留最近的
+        const seen = new Set<string>();
+        const uniqueHits: GizmoClickResult[] = [];
+        for (const hit of hits) {
+            const key = `${hit.entityId}:${hit.virtualNodeId ?? ''}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                uniqueHits.push({ entityId: hit.entityId, virtualNodeId: hit.virtualNodeId });
+            }
+        }
+
+        return uniqueHits;
     }
 
     /**
@@ -298,5 +357,6 @@ export class GizmoInteractionService implements IGizmoInteractionService {
     clearHover(): void {
         this.hoveredEntityId = null;
         this.hoveredGizmo = null;
+        this.hoveredVirtualNodeId = null;
     }
 }

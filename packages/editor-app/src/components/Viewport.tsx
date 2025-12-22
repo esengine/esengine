@@ -10,12 +10,12 @@ import { useLocale } from '../hooks/useLocale';
 import { EngineService } from '../services/EngineService';
 import { Core, Entity, SceneSerializer, PrefabSerializer, GlobalComponentRegistry } from '@esengine/ecs-framework';
 import type { PrefabData, ComponentType } from '@esengine/ecs-framework';
-import { MessageHub, ProjectService, AssetRegistryService, EntityStoreService, CommandManager, SceneManagerService, UserCodeService, UserCodeTarget } from '@esengine/editor-core';
+import { MessageHub, ProjectService, AssetRegistryService, EntityStoreService, CommandManager, SceneManagerService, UserCodeService, UserCodeTarget, VirtualNodeRegistry } from '@esengine/editor-core';
 import { InstantiatePrefabCommand } from '../application/commands/prefab/InstantiatePrefabCommand';
 import { TransformCommand, type TransformState, type TransformOperationType } from '../application/commands';
 import { TransformComponent } from '@esengine/engine-core';
 import { CameraComponent } from '@esengine/camera';
-import { UITransformComponent } from '@esengine/ui';
+import { FGUIComponent } from '@esengine/fairygui';
 import { TauriAPI } from '../api/tauri';
 import { open } from '@tauri-apps/plugin-shell';
 import { RuntimeResolver } from '../services/RuntimeResolver';
@@ -302,7 +302,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
     const transformModeRef = useRef<TransformMode>('select');
     // Initial transform state for undo/redo | 用于撤销/重做的初始变换状态
     const initialTransformStateRef = useRef<TransformState | null>(null);
-    const transformComponentRef = useRef<TransformComponent | UITransformComponent | null>(null);
+    const transformComponentRef = useRef<TransformComponent | null>(null);
     const snapEnabledRef = useRef(true);
     const gridSnapRef = useRef(10);
     const rotationSnapRef = useRef(15);
@@ -454,18 +454,48 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     if (gizmoService) {
                         const worldPos = screenToWorld(e.clientX, e.clientY);
                         const zoom = camera2DZoomRef.current;
-                        const hitEntityId = gizmoService.handleClick(worldPos.x, worldPos.y, zoom);
+                        const clickResult = gizmoService.handleClickEx(worldPos.x, worldPos.y, zoom);
 
-                        if (hitEntityId !== null) {
+                        if (clickResult !== null) {
                             // Find and select the hit entity
                             // 找到并选中命中的实体
                             const scene = Core.scene;
                             if (scene) {
-                                const hitEntity = scene.entities.findEntityById(hitEntityId);
+                                const hitEntity = scene.entities.findEntityById(clickResult.entityId);
                                 if (hitEntity && messageHubRef.current) {
                                     const entityStore = Core.services.tryResolve(EntityStoreService);
                                     entityStore?.selectEntity(hitEntity);
-                                    messageHubRef.current.publish('entity:selected', { entity: hitEntity });
+
+                                    // Check if clicked on a virtual node
+                                    // 检查是否点击了虚拟节点
+                                    if (clickResult.virtualNodeId) {
+                                        // Get the virtual node data from VirtualNodeRegistry
+                                        // 从 VirtualNodeRegistry 获取虚拟节点数据
+                                        const virtualNodes = VirtualNodeRegistry.getAllVirtualNodesForEntity(hitEntity);
+                                        const findVirtualNode = (nodes: typeof virtualNodes, targetId: string): typeof virtualNodes[0] | null => {
+                                            for (const node of nodes) {
+                                                if (node.id === targetId) return node;
+                                                const found = findVirtualNode(node.children, targetId);
+                                                if (found) return found;
+                                            }
+                                            return null;
+                                        };
+                                        const virtualNode = findVirtualNode(virtualNodes, clickResult.virtualNodeId);
+
+                                        if (virtualNode) {
+                                            // Publish virtual-node:selected event (will trigger Inspector update)
+                                            // 发布 virtual-node:selected 事件（将触发 Inspector 更新）
+                                            messageHubRef.current.publish('virtual-node:selected', {
+                                                parentEntityId: clickResult.entityId,
+                                                virtualNodeId: clickResult.virtualNodeId,
+                                                virtualNode
+                                            });
+                                        }
+                                    } else {
+                                        // Normal entity selection
+                                        // 普通实体选择
+                                        messageHubRef.current.publish('entity:selected', { entity: hitEntity });
+                                    }
                                     e.preventDefault();
                                     return; // Don't start camera pan
                                 }
@@ -487,13 +517,9 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     const entity = selectedEntityRef.current;
                     if (entity) {
                         const transform = entity.getComponent(TransformComponent);
-                        const uiTransform = entity.getComponent(UITransformComponent);
                         if (transform) {
                             initialTransformStateRef.current = TransformCommand.captureTransformState(transform);
                             transformComponentRef.current = transform;
-                        } else if (uiTransform) {
-                            initialTransformStateRef.current = TransformCommand.captureUITransformState(uiTransform);
-                            transformComponentRef.current = uiTransform;
                         }
                     }
                 }
@@ -573,63 +599,6 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                     }
                 }
 
-                // Try UITransformComponent
-                const uiTransform = entity.getComponent(UITransformComponent);
-                if (uiTransform) {
-                    if (mode === 'move') {
-                        uiTransform.x += worldDelta.x;
-                        uiTransform.y += worldDelta.y;
-                    } else if (mode === 'rotate') {
-                        const rotationSpeed = 0.01;
-                        uiTransform.rotation += deltaX * rotationSpeed;
-                    } else if (mode === 'scale') {
-                        const oldWidth = uiTransform.width * uiTransform.scaleX;
-                        const oldHeight = uiTransform.height * uiTransform.scaleY;
-
-                        // pivot点的世界坐标（缩放前）
-                        const pivotWorldX = uiTransform.x + oldWidth * uiTransform.pivotX;
-                        const pivotWorldY = uiTransform.y + oldHeight * uiTransform.pivotY;
-
-                        const startDist = Math.sqrt((worldStart.x - pivotWorldX) ** 2 + (worldStart.y - pivotWorldY) ** 2);
-                        const endDist = Math.sqrt((worldEnd.x - pivotWorldX) ** 2 + (worldEnd.y - pivotWorldY) ** 2);
-
-                        if (startDist > 0) {
-                            const scaleFactor = endDist / startDist;
-                            const newScaleX = uiTransform.scaleX * scaleFactor;
-                            const newScaleY = uiTransform.scaleY * scaleFactor;
-
-                            const newWidth = uiTransform.width * newScaleX;
-                            const newHeight = uiTransform.height * newScaleY;
-
-                            // 调整位置使pivot点保持不动
-                            uiTransform.x = pivotWorldX - newWidth * uiTransform.pivotX;
-                            uiTransform.y = pivotWorldY - newHeight * uiTransform.pivotY;
-                            uiTransform.scaleX = newScaleX;
-                            uiTransform.scaleY = newScaleY;
-                        }
-                    }
-
-                    // Update live transform display for UI | 更新 UI 的实时变换显示
-                    setLiveTransform({
-                        type: mode as 'move' | 'rotate' | 'scale',
-                        x: uiTransform.x,
-                        y: uiTransform.y,
-                        rotation: uiTransform.rotation * 180 / Math.PI,
-                        scaleX: uiTransform.scaleX,
-                        scaleY: uiTransform.scaleY
-                    });
-
-                    if (messageHubRef.current) {
-                        const propertyName = mode === 'move' ? 'x' : mode === 'rotate' ? 'rotation' : 'scaleX';
-                        messageHubRef.current.publish('component:property:changed', {
-                            entity,
-                            component: uiTransform,
-                            propertyName,
-                            value: uiTransform[propertyName]
-                        });
-                    }
-                }
-
                 lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             } else {
                 // Not dragging - update gizmo hover state
@@ -683,18 +652,6 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                         }
                     }
 
-                    const uiTransform = entity.getComponent(UITransformComponent);
-                    if (uiTransform) {
-                        if (mode === 'move') {
-                            uiTransform.x = snapToGrid(uiTransform.x);
-                            uiTransform.y = snapToGrid(uiTransform.y);
-                        } else if (mode === 'rotate') {
-                            uiTransform.rotation = snapRotation(uiTransform.rotation);
-                        } else if (mode === 'scale') {
-                            uiTransform.scaleX = snapScale(uiTransform.scaleX);
-                            uiTransform.scaleY = snapScale(uiTransform.scaleY);
-                        }
-                    }
                 }
 
                 // Create TransformCommand for undo/redo | 创建变换命令用于撤销/重做
@@ -705,13 +662,7 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
                 if (entity && initialState && component && hub && cmdManager) {
                     const mode = transformModeRef.current as TransformOperationType;
-                    let newState: TransformState;
-
-                    if (component instanceof TransformComponent) {
-                        newState = TransformCommand.captureTransformState(component);
-                    } else {
-                        newState = TransformCommand.captureUITransformState(component as UITransformComponent);
-                    }
+                    const newState = TransformCommand.captureTransformState(component);
 
                     // Only create command if state actually changed | 只有状态实际改变时才创建命令
                     const hasChanged = JSON.stringify(initialState) !== JSON.stringify(newState);
@@ -1715,58 +1666,115 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
     const handleViewportDrop = useCallback(async (e: React.DragEvent) => {
         const assetPath = e.dataTransfer.getData('asset-path');
-        if (!assetPath || !assetPath.toLowerCase().endsWith('.prefab')) {
+        const assetGuid = e.dataTransfer.getData('asset-guid');
+        const lowerPath = assetPath?.toLowerCase() || '';
+
+        if (!assetPath) {
+            return;
+        }
+
+        // Check for supported asset types | 检查支持的资产类型
+        const isPrefab = lowerPath.endsWith('.prefab');
+        const isFui = lowerPath.endsWith('.fui');
+
+        if (!isPrefab && !isFui) {
             return;
         }
 
         e.preventDefault();
 
+        // 获取服务 | Get services
+        const entityStore = Core.services.tryResolve(EntityStoreService) as EntityStoreService | null;
+        const scene = Core.scene;
+
+        if (!entityStore || !scene || !messageHub) {
+            console.error('[Viewport] Required services not available');
+            return;
+        }
+
+        // 计算放置位置（将屏幕坐标转换为世界坐标）| Calculate drop position (convert screen to world)
+        const canvas = canvasRef.current;
+        let worldPos = { x: 0, y: 0 };
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+            const canvasX = screenX * dpr;
+            const canvasY = screenY * dpr;
+            const centeredX = canvasX - canvas.width / 2;
+            const centeredY = canvas.height / 2 - canvasY;
+            worldPos = {
+                x: centeredX / camera2DZoomRef.current - camera2DOffsetRef.current.x,
+                y: centeredY / camera2DZoomRef.current - camera2DOffsetRef.current.y
+            };
+        }
+
         try {
-            // 读取预制体文件 | Read prefab file
-            const prefabJson = await TauriAPI.readFileContent(assetPath);
-            const prefabData = PrefabSerializer.deserialize(prefabJson);
-
-            // 获取服务 | Get services
-            const entityStore = Core.services.tryResolve(EntityStoreService) as EntityStoreService | null;
-
-            if (!entityStore || !messageHub || !commandManager) {
-                console.error('[Viewport] Required services not available');
-                return;
-            }
-
-            // 计算放置位置（将屏幕坐标转换为世界坐标）| Calculate drop position (convert screen to world)
-            const canvas = canvasRef.current;
-            let worldPos = { x: 0, y: 0 };
-            if (canvas) {
-                const rect = canvas.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 1;
-                const screenX = e.clientX - rect.left;
-                const screenY = e.clientY - rect.top;
-                const canvasX = screenX * dpr;
-                const canvasY = screenY * dpr;
-                const centeredX = canvasX - canvas.width / 2;
-                const centeredY = canvas.height / 2 - canvasY;
-                worldPos = {
-                    x: centeredX / camera2DZoomRef.current - camera2DOffsetRef.current.x,
-                    y: centeredY / camera2DZoomRef.current - camera2DOffsetRef.current.y
-                };
-            }
-
-            // 创建实例化命令 | Create instantiate command
-            const command = new InstantiatePrefabCommand(
-                entityStore,
-                messageHub,
-                prefabData,
-                {
-                    position: worldPos,
-                    trackInstance: true
+            if (isPrefab) {
+                // 处理预制体 | Handle prefab
+                if (!commandManager) {
+                    console.error('[Viewport] CommandManager not available');
+                    return;
                 }
-            );
-            commandManager.execute(command);
 
-            console.log(`[Viewport] Prefab instantiated at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}): ${prefabData.metadata.name}`);
+                const prefabJson = await TauriAPI.readFileContent(assetPath);
+                const prefabData = PrefabSerializer.deserialize(prefabJson);
+
+                const command = new InstantiatePrefabCommand(
+                    entityStore,
+                    messageHub,
+                    prefabData,
+                    {
+                        position: worldPos,
+                        trackInstance: true
+                    }
+                );
+                commandManager.execute(command);
+
+                console.log(`[Viewport] Prefab instantiated at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}): ${prefabData.metadata.name}`);
+            } else if (isFui) {
+                // 处理 FUI 文件 | Handle FUI file
+                const filename = assetPath.split(/[/\\]/).pop() || 'FGUI View';
+                const entityName = filename.replace('.fui', '');
+
+                // 生成唯一名称 | Generate unique name
+                const existingCount = entityStore.getAllEntities()
+                    .filter((ent: Entity) => ent.name.startsWith(entityName)).length;
+                const finalName = existingCount > 0 ? `${entityName} ${existingCount + 1}` : entityName;
+
+                // 创建实体 | Create entity
+                const entity = scene.createEntity(finalName);
+
+                // 添加 TransformComponent | Add TransformComponent
+                const transform = new TransformComponent();
+                transform.position.x = worldPos.x;
+                transform.position.y = worldPos.y;
+                entity.addComponent(transform);
+
+                // 添加 FGUIComponent | Add FGUIComponent
+                const fguiComponent = new FGUIComponent();
+                // 优先使用 GUID，如果没有则使用路径（编辑器会通过 AssetRegistry 解析）
+                // Prefer GUID, fallback to path (editor resolves via AssetRegistry)
+                fguiComponent.packageGuid = assetGuid || assetPath;
+                fguiComponent.width = 1920;
+                fguiComponent.height = 1080;
+                entity.addComponent(fguiComponent);
+
+                // 注册并选中实体 | Register and select entity
+                entityStore.addEntity(entity);
+                messageHub.publish('entity:added', { entity });
+                messageHub.publish('scene:modified', {});
+                entityStore.selectEntity(entity);
+
+                console.log(`[Viewport] FGUI entity created at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}): ${finalName}`);
+            }
         } catch (error) {
-            console.error('[Viewport] Failed to instantiate prefab:', error);
+            console.error('[Viewport] Failed to handle drop:', error);
+            messageHub?.publish('notification:error', {
+                title: 'Drop Failed',
+                message: error instanceof Error ? error.message : String(error)
+            });
         }
     }, [messageHub, commandManager]);
 

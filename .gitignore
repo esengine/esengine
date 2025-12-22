@@ -93,3 +93,4 @@ docs/.vitepress/dist/
 
 # Rust 构建产物
 **/engine-shared/target/
+external/

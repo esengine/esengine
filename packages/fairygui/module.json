@@ -1,0 +1,46 @@
+{
+  "id": "fairygui",
+  "name": "@esengine/fairygui",
+  "globalKey": "fairygui",
+  "displayName": "FairyGUI",
+  "description": "FairyGUI UI system integration | FairyGUI UI 系统集成",
+  "version": "1.0.0",
+  "category": "UI",
+  "icon": "Layout",
+  "tags": [
+    "ui",
+    "fairygui",
+    "gui"
+  ],
+  "isCore": false,
+  "defaultEnabled": true,
+  "isEngineModule": true,
+  "canContainContent": true,
+  "platforms": [
+    "web",
+    "desktop"
+  ],
+  "dependencies": [
+    "core",
+    "math",
+    "asset-system"
+  ],
+  "exports": {
+    "components": [
+      "FGUIComponent"
+    ],
+    "systems": [
+      "FGUIRenderSystem",
+      "FGUIUpdateSystem"
+    ],
+    "loaders": [
+      "FUIAssetLoader"
+    ]
+  },
+  "editorPackage": "@esengine/fairygui-editor",
+  "assetExtensions": {
+    ".fui": "fui"
+  },
+  "outputPath": "dist/index.js",
+  "pluginExport": "FGUIPlugin"
+}
