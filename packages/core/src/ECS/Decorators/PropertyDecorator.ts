@@ -1,4 +1,8 @@
-import 'reflect-metadata';
+/**
+ * 属性元数据存储
+ * Property metadata storage
+ */
+const metadataStorage = new WeakMap<Function, Record<string, unknown>>();
 
 export type PropertyType = 'number' | 'integer' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4' | 'enum' | 'asset' | 'array' | 'animationClips' | 'collisionLayer' | 'collisionMask' | 'entityRef';
 
@@ -21,7 +25,7 @@ export type EnumOption = string | { label: string; value: any };
  * Action button configuration for property fields
  * 属性字段的操作按钮配置
  */
-export interface PropertyAction {
+export type PropertyAction = {
     /** Action identifier | 操作标识符 */
     id: string;
     /** Button label | 按钮标签 */
@@ -36,7 +40,7 @@ export interface PropertyAction {
  * 控制关系声明
  * Control relationship declaration
  */
-export interface PropertyControl {
+export type PropertyControl = {
     /** 被控制的组件名称 | Target component name */
     component: string;
     /** 被控制的属性名称 | Target property name */
@@ -253,25 +257,27 @@ export const PROPERTY_METADATA = Symbol.for('@esengine/property:metadata');
  */
 export function Property(options: PropertyOptions): PropertyDecorator {
     return (target: object, propertyKey: string | symbol) => {
-        const constructor = target.constructor;
-        const existingMetadata = Reflect.getMetadata(PROPERTY_METADATA, constructor) || {};
+        const constructor = target.constructor as Function;
+        const existingMetadata = metadataStorage.get(constructor) || {};
 
         existingMetadata[propertyKey as string] = options;
 
-        Reflect.defineMetadata(PROPERTY_METADATA, existingMetadata, constructor);
+        metadataStorage.set(constructor, existingMetadata);
     };
 }
 
 /**
  * 获取组件类的所有属性元数据
+ * Get all property metadata for a component class
  */
 export function getPropertyMetadata(target: Function): Record<string, PropertyOptions> | undefined {
-    return Reflect.getMetadata(PROPERTY_METADATA, target);
+    return metadataStorage.get(target) as Record<string, PropertyOptions> | undefined;
 }
 
 /**
  * 检查组件类是否有属性元数据
+ * Check if a component class has property metadata
  */
 export function hasPropertyMetadata(target: Function): boolean {
-    return Reflect.hasMetadata(PROPERTY_METADATA, target);
+    return metadataStorage.has(target);
 }

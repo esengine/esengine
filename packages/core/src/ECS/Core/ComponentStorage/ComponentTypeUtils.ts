@@ -43,7 +43,7 @@ export const COMPONENT_EDITOR_OPTIONS = Symbol('ComponentEditorOptions');
  * 组件编辑器选项
  * Component editor options
  */
-export interface ComponentEditorOptions {
+export type ComponentEditorOptions = {
     /**
      * 是否在 Inspector 中隐藏此组件
      * Whether to hide this component in Inspector
@@ -72,7 +72,7 @@ export interface ComponentEditorOptions {
  * 使用 Symbol 索引签名来类型安全地访问装饰器存储的元数据
  * Uses Symbol index signature to safely access decorator-stored metadata
  */
-export interface ComponentTypeMetadata {
+export type ComponentTypeMetadata = {
     readonly [COMPONENT_TYPE_NAME]?: string;
     readonly [COMPONENT_DEPENDENCIES]?: string[];
     readonly [COMPONENT_EDITOR_OPTIONS]?: ComponentEditorOptions;
@@ -82,7 +82,7 @@ export interface ComponentTypeMetadata {
  * 可写的组件类型元数据（用于装饰器设置）
  * Writable component type metadata (for decorator setting)
  */
-export interface WritableComponentTypeMetadata {
+export type WritableComponentTypeMetadata = {
     [COMPONENT_TYPE_NAME]?: string;
     [COMPONENT_DEPENDENCIES]?: string[];
     [COMPONENT_EDITOR_OPTIONS]?: ComponentEditorOptions;

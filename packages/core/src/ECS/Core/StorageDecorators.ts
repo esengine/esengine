@@ -17,12 +17,8 @@
  * ```
  */
 
-// 从SoAStorage导入所有装饰器和类型
 export {
-    // 启用装饰器
     EnableSoA,
-
-    // 数值类型装饰器
     Float64,
     Float32,
     Int32,
@@ -32,13 +28,10 @@ export {
     Int8,
     Uint8,
     Uint8Clamped,
-
-    // 序列化装饰器
     SerializeMap,
     SerializeSet,
     SerializeArray,
-    DeepCopy,
-
-    // 类型定义
-    SupportedTypedArray
+    DeepCopy
 } from './SoAStorage';
+
+export type { SupportedTypedArray } from './SoAStorage';

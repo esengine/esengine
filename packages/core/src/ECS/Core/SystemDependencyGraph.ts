@@ -48,7 +48,7 @@ interface GraphNode {
  * 系统依赖信息
  * System dependency info
  */
-export interface SystemDependencyInfo {
+export type SystemDependencyInfo = {
     /** 系统名称 | System name */
     name: string;
     /** 在这些系统之前执行 | Execute before these systems */

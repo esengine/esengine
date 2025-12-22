@@ -35,7 +35,7 @@ export enum ProfileCategory {
 /**
  * 采样句柄
  */
-export interface SampleHandle {
+export type SampleHandle = {
     id: string;
     name: string;
     category: ProfileCategory;
@@ -47,7 +47,7 @@ export interface SampleHandle {
 /**
  * 性能采样数据
  */
-export interface ProfileSample {
+export type ProfileSample = {
     id: string;
     name: string;
     category: ProfileCategory;
@@ -66,7 +66,7 @@ export interface ProfileSample {
 /**
  * 聚合后的采样统计
  */
-export interface ProfileSampleStats {
+export type ProfileSampleStats = {
     name: string;
     category: ProfileCategory;
     /** 包含时间（包含子调用） */
@@ -94,7 +94,7 @@ export interface ProfileSampleStats {
 /**
  * 内存快照
  */
-export interface MemorySnapshot {
+export type MemorySnapshot = {
     timestamp: number;
     /** 已使用堆内存 (bytes) */
     usedHeapSize: number;
@@ -111,7 +111,7 @@ export interface MemorySnapshot {
 /**
  * 计数器数据
  */
-export interface ProfileCounter {
+export type ProfileCounter = {
     name: string;
     category: ProfileCategory;
     value: number;
@@ -122,7 +122,7 @@ export interface ProfileCounter {
 /**
  * 单帧性能数据
  */
-export interface ProfileFrame {
+export type ProfileFrame = {
     frameNumber: number;
     startTime: number;
     endTime: number;
@@ -142,7 +142,7 @@ export interface ProfileFrame {
 /**
  * 分析器配置
  */
-export interface ProfilerConfig {
+export type ProfilerConfig = {
     /** 是否启用 */
     enabled: boolean;
     /** 最大历史帧数 */
@@ -164,7 +164,7 @@ export interface ProfilerConfig {
 /**
  * 长任务信息
  */
-export interface LongTaskInfo {
+export type LongTaskInfo = {
     startTime: number;
     duration: number;
     attribution: string[];
@@ -173,7 +173,7 @@ export interface LongTaskInfo {
 /**
  * 调用关系节点
  */
-export interface CallGraphNode {
+export type CallGraphNode = {
     name: string;
     category: ProfileCategory;
     /** 被调用次数 */
@@ -189,7 +189,7 @@ export interface CallGraphNode {
 /**
  * 性能分析报告
  */
-export interface ProfileReport {
+export type ProfileReport = {
     startTime: number;
     endTime: number;
     totalFrames: number;

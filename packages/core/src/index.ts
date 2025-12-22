@@ -48,7 +48,7 @@ export type { InjectableMetadata, UpdatableMetadata } from './Core/DI';
 export { Emitter, FuncPack } from './Utils/Emitter';
 export { GlobalManager } from './Utils/GlobalManager';
 export { TimerManager } from './Utils/Timers/TimerManager';
-export { ITimer } from './Utils/Timers/ITimer';
+export type { ITimer } from './Utils/Timers/ITimer';
 export { Timer } from './Utils/Timers/Timer';
 
 // 日志系统
@@ -77,7 +77,8 @@ export * from './Utils';
 export * from './Types';
 
 // 显式导出ComponentPool类（解决与Types中ComponentPool接口的命名冲突）
-export { ComponentPool, ComponentPoolManager } from './ECS/Core/Storage';
+export { ComponentPoolManager } from './ECS/Core/Storage';
+export type { ComponentPool } from './ECS/Core/Storage';
 
 // 平台适配
 export * from './Platform';

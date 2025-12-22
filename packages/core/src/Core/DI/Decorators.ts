@@ -18,7 +18,7 @@ const updatableMetadata = new WeakMap<Constructor, UpdatableMetadata>();
 /**
  * 可注入元数据接口
  */
-export interface InjectableMetadata {
+export type InjectableMetadata = {
     /**
      * 是否可注入
      */
@@ -39,7 +39,7 @@ export interface InjectableMetadata {
 /**
  * 可更新元数据接口
  */
-export interface UpdatableMetadata {
+export type UpdatableMetadata = {
     /**
      * 是否可更新
      */

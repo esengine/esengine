@@ -38,7 +38,7 @@ export type MigrationFunction = (
 /**
  * 场景序列化选项
  */
-export interface SceneSerializationOptions {
+export type SceneSerializationOptions = {
     /**
      * 要序列化的组件类型列表
      * 如果未指定，则序列化所有可序列化的组件
@@ -69,7 +69,7 @@ export interface SceneSerializationOptions {
 /**
  * 场景反序列化选项
  */
-export interface SceneDeserializationOptions {
+export type SceneDeserializationOptions = {
     /**
      * 反序列化策略
      * - 'merge': 合并到现有场景
@@ -97,7 +97,7 @@ export interface SceneDeserializationOptions {
 /**
  * 序列化后的场景数据
  */
-export interface SerializedScene {
+export type SerializedScene = {
     /**
      * 场景名称
      */

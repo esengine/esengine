@@ -14,7 +14,7 @@ import type { SerializationContext, SerializedEntityRef } from './SerializationC
 
 export type { SerializableValue } from './ValueSerializer';
 
-export interface SerializedComponent {
+export type SerializedComponent = {
     type: string;
     version: number;
     data: Record<string, SerializableValue>;

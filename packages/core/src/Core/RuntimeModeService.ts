@@ -39,7 +39,7 @@ import { createServiceToken } from './PluginServiceRegistry';
  * 运行时模式接口
  * Runtime mode interface
  */
-export interface IRuntimeMode {
+export type IRuntimeMode = {
     /**
      * 是否为编辑器模式
      * Whether in editor mode
@@ -110,7 +110,7 @@ type ModeChangeCallback = (mode: IRuntimeMode) => void;
  * 运行时模式服务配置
  * Runtime mode service configuration
  */
-export interface RuntimeModeConfig {
+export type RuntimeModeConfig = {
     /** 是否为编辑器模式 | Whether in editor mode */
     isEditor?: boolean;
     /** 是否正在播放 | Whether playing */

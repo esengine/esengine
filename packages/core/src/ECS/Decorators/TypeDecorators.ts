@@ -30,7 +30,7 @@ export const SYSTEM_TYPE_NAME = Symbol('SystemTypeName');
  * 系统类型元数据接口
  * System type metadata interface
  */
-export interface SystemTypeMetadata {
+export type SystemTypeMetadata = {
     readonly [SYSTEM_TYPE_NAME]?: string;
     readonly __systemMetadata__?: SystemMetadata;
 }
@@ -74,7 +74,7 @@ type SystemConstructor<T extends EntitySystem = EntitySystem> = new (...args: an
  * 组件装饰器配置选项
  * Component decorator options
  */
-export interface ComponentOptions {
+export type ComponentOptions = {
     /** 依赖的其他组件名称列表 | List of required component names */
     requires?: string[];
 
@@ -150,7 +150,7 @@ export function ECSComponent(typeName: string, options?: ComponentOptions) {
  * System 元数据配置
  * System metadata configuration
  */
-export interface SystemMetadata {
+export type SystemMetadata = {
     /**
      * 更新顺序（数值越小越先执行，默认0）
      * Update order (lower values execute first, default 0)

@@ -53,7 +53,7 @@ export const DEFAULT_STAGE_ORDER: readonly SystemStage[] = [
  * 系统调度元数据
  * System scheduling metadata
  */
-export interface SystemSchedulingMetadata {
+export type SystemSchedulingMetadata = {
     /** 执行阶段 | Execution stage */
     stage: SystemStage;
     /** 在这些系统之前执行 | Execute before these systems */

@@ -7,7 +7,7 @@ const logger = createLogger('WorldManager');
 /**
  * WorldManager配置接口
  */
-export interface IWorldManagerConfig {
+export type IWorldManagerConfig = {
     /**
      * 最大World数量
      */

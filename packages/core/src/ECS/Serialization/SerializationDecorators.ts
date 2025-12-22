@@ -16,7 +16,7 @@ export const SERIALIZE_OPTIONS = Symbol('SerializeOptions');
 /**
  * 可序列化配置选项
  */
-export interface SerializableOptions {
+export type SerializableOptions = {
     /**
      * 序列化版本号，用于数据迁移
      */
@@ -31,7 +31,7 @@ export interface SerializableOptions {
 /**
  * 字段序列化配置
  */
-export interface FieldSerializeOptions {
+export type FieldSerializeOptions = {
     /**
      * 自定义序列化器
      */
@@ -51,7 +51,7 @@ export interface FieldSerializeOptions {
 /**
  * 序列化元数据
  */
-export interface SerializationMetadata {
+export type SerializationMetadata = {
     options: SerializableOptions;
     fields: Map<string | symbol, FieldSerializeOptions>;
     ignoredFields: Set<string | symbol>;

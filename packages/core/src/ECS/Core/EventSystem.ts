@@ -13,7 +13,7 @@ export type AsyncEventHandler<T> = (event: T) => Promise<void>;
 /**
  * 事件监听器配置
  */
-export interface EventListenerConfig {
+export type EventListenerConfig = {
     /** 是否只执行一次 */
     once?: boolean;
     /** 优先级（数字越大优先级越高） */
@@ -41,7 +41,7 @@ interface InternalEventListener {
 /**
  * 事件统计信息
  */
-export interface EventStats {
+export type EventStats = {
     /** 事件类型 */
     eventType: string;
     /** 监听器数量 */
@@ -59,7 +59,7 @@ export interface EventStats {
 /**
  * 事件批处理配置
  */
-export interface EventBatchConfig {
+export type EventBatchConfig = {
     /** 批处理大小 */
     batchSize: number;
     /** 批处理延迟（毫秒） */

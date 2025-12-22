@@ -2,7 +2,7 @@
  * 平台适配器接口
  * 用于适配不同的运行环境（浏览器、微信小游戏、字节跳动小游戏等）
  */
-export interface IPlatformAdapter {
+export type IPlatformAdapter = {
     /**
      * 平台名称
      */
@@ -60,7 +60,7 @@ export interface IPlatformAdapter {
 /**
  * Worker创建选项
  */
-export interface WorkerCreationOptions {
+export type WorkerCreationOptions = {
     /**
      * Worker类型
      */
@@ -80,7 +80,7 @@ export interface WorkerCreationOptions {
 /**
  * 平台Worker接口
  */
-export interface PlatformWorker {
+export type PlatformWorker = {
     /**
      * 发送消息到Worker
      */
@@ -110,7 +110,7 @@ export interface PlatformWorker {
 /**
  * 平台配置
  */
-export interface PlatformConfig {
+export type PlatformConfig = {
     /**
      * 最大Worker数量限制
      */
@@ -175,7 +175,7 @@ export interface PlatformConfig {
 /**
  * 平台检测结果
  */
-export interface PlatformDetectionResult {
+export type PlatformDetectionResult = {
     /**
      * 平台类型
      */

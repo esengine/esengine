@@ -1,2 +1,3 @@
 export { EventBus, GlobalEventBus } from '../EventBus';
-export { TypeSafeEventSystem, EventListenerConfig, EventStats } from '../EventSystem';
+export { TypeSafeEventSystem } from '../EventSystem';
+export type { EventListenerConfig, EventStats } from '../EventSystem';

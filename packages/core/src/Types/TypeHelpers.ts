@@ -48,7 +48,7 @@ export type ComponentTypeMap<T extends readonly ComponentConstructor[]> = {
  * 实体with组件的类型
  * 表示一个实体确定拥有某些组件
  */
-export interface EntityWithComponents<T extends readonly ComponentConstructor[]> {
+export type EntityWithComponents<T extends readonly ComponentConstructor[]> = {
     readonly id: number;
     readonly name: string;
 
@@ -163,7 +163,7 @@ export type TypedEventHandler<T> = (data: T) => void | Promise<void>;
 /**
  * 系统生命周期钩子类型
  */
-export interface SystemLifecycleHooks<T extends readonly ComponentConstructor[]> {
+export type SystemLifecycleHooks<T extends readonly ComponentConstructor[]> = {
     /**
      * 实体添加到系统时调用
      */
@@ -188,7 +188,7 @@ export interface SystemLifecycleHooks<T extends readonly ComponentConstructor[]>
 /**
  * Fluent API构建器类型
  */
-export interface TypeSafeBuilder<T> {
+export type TypeSafeBuilder<T> = {
     /**
      * 完成构建
      */
@@ -198,7 +198,7 @@ export interface TypeSafeBuilder<T> {
 /**
  * 组件池类型
  */
-export interface ComponentPool<T extends IComponent> {
+export type ComponentPool<T extends IComponent> = {
     /**
      * 从池中获取组件实例
      */
@@ -223,11 +223,11 @@ export interface ComponentPool<T extends IComponent> {
 /**
  * 实体查询条件类型
  */
-export interface TypedQueryCondition<
+export type TypedQueryCondition<
     All extends readonly ComponentConstructor[] = [],
     Any extends readonly ComponentConstructor[] = [],
     None extends readonly ComponentConstructor[] = []
-> {
+> = {
     all: All;
     any: Any;
     none: None;

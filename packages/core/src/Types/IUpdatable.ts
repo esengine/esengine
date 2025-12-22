@@ -3,7 +3,7 @@
  *
  * 实现此接口的服务将在每帧被Core自动调用update方法
  */
-export interface IUpdatable {
+export type IUpdatable = {
     /**
      * 每帧更新方法
      *

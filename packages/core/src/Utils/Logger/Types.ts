@@ -3,7 +3,7 @@ import type { LogLevel } from './Constants';
 /**
  * 日志接口
  */
-export interface ILogger {
+export type ILogger = {
     debug(...args: unknown[]): void;
     info(...args: unknown[]): void;
     warn(...args: unknown[]): void;
@@ -14,7 +14,7 @@ export interface ILogger {
 /**
  * 日志颜色配置接口
  */
-export interface LoggerColorConfig {
+export type LoggerColorConfig = {
     debug?: string;
     info?: string;
     warn?: string;
@@ -26,7 +26,7 @@ export interface LoggerColorConfig {
 /**
  * 日志配置
  */
-export interface LoggerConfig {
+export type LoggerConfig = {
     /** 日志级别 */
     level: LogLevel;
     /** 是否启用时间戳 */

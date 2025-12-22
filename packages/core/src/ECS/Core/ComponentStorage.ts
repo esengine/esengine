@@ -1,6 +1,7 @@
 import { Component } from '../Component';
 import { BitMask64Utils, BitMask64Data } from '../Utils/BigIntCompatibility';
-import { SoAStorage, SupportedTypedArray } from './SoAStorage';
+import { SoAStorage } from './SoAStorage';
+import type { SupportedTypedArray } from './SoAStorage';
 import { createLogger } from '../../Utils/Logger';
 import { getComponentTypeName, ComponentType } from '../Decorators';
 import { ComponentRegistry, GlobalComponentRegistry } from './ComponentStorage/ComponentRegistry';

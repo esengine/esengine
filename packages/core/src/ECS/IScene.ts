@@ -18,7 +18,7 @@ import type { IncrementalSnapshot, IncrementalSerializationOptions } from './Ser
  *
  * 定义场景应该实现的核心功能和属性，使用接口而非继承提供更灵活的实现方式。
  */
-export interface IScene {
+export type IScene = {
     /**
      * 场景名称
      */
@@ -362,7 +362,7 @@ export interface IScene {
 /**
  * 场景工厂接口
  */
-export interface ISceneFactory<T extends IScene> {
+export type ISceneFactory<T extends IScene> = {
     /**
      * 创建场景实例
      */
@@ -373,7 +373,7 @@ export interface ISceneFactory<T extends IScene> {
  * 场景配置接口
  * Scene configuration interface
  */
-export interface ISceneConfig {
+export type ISceneConfig = {
     /**
      * 场景名称
      * Scene name

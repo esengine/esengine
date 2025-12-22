@@ -14,7 +14,7 @@ const logger = createLogger('DebugPlugin');
 /**
  * ECS 调试插件统计信息
  */
-export interface ECSDebugStats {
+export type ECSDebugStats = {
     scenes: SceneDebugInfo[];
     totalEntities: number;
     totalSystems: number;
@@ -24,7 +24,7 @@ export interface ECSDebugStats {
 /**
  * 场景调试信息
  */
-export interface SceneDebugInfo {
+export type SceneDebugInfo = {
     name: string;
     entityCount: number;
     systems: SystemDebugInfo[];
@@ -34,7 +34,7 @@ export interface SceneDebugInfo {
 /**
  * 系统调试信息
  */
-export interface SystemDebugInfo {
+export type SystemDebugInfo = {
     name: string;
     enabled: boolean;
     updateOrder: number;
@@ -49,7 +49,7 @@ export interface SystemDebugInfo {
 /**
  * 实体调试信息
  */
-export interface EntityDebugInfo {
+export type EntityDebugInfo = {
     id: number;
     name: string;
     enabled: boolean;
@@ -61,7 +61,7 @@ export interface EntityDebugInfo {
 /**
  * 组件调试信息
  */
-export interface ComponentDebugInfo {
+export type ComponentDebugInfo = {
     type: string;
     data: any;
 }

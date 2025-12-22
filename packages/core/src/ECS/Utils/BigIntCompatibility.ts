@@ -17,7 +17,7 @@ export type BitMask64Segment = [number,number]
  * 扩展模式（128+位）：base[lo , hi] 作为第一段，segments 存储额外的 64 位段
  * segments[0] 对应 bit 64-127，segments[1] 对应 bit 128-191，以此类推
  */
-export interface BitMask64Data {
+export type BitMask64Data = {
     base: BitMask64Segment;
     /** 扩展段数组，每个元素是一个 64 位段，用于超过 64 位的场景 */
     segments?: BitMask64Segment[];

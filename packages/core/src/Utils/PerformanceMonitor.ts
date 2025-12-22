@@ -1,7 +1,7 @@
 /**
  * 性能监控数据
  */
-export interface PerformanceData {
+export type PerformanceData = {
     /** 系统名称 */
     name: string;
     /** 执行时间（毫秒） */
@@ -21,7 +21,7 @@ export interface PerformanceData {
 /**
  * 性能统计信息
  */
-export interface PerformanceStats {
+export type PerformanceStats = {
     /** 总执行时间 */
     totalTime: number;
     /** 平均执行时间 */
@@ -57,7 +57,7 @@ export enum PerformanceWarningType {
 /**
  * 性能警告
  */
-export interface PerformanceWarning {
+export type PerformanceWarning = {
     type: PerformanceWarningType;
     systemName: string;
     message: string;
@@ -71,7 +71,7 @@ export interface PerformanceWarning {
 /**
  * 性能阈值配置
  */
-export interface PerformanceThresholds {
+export type PerformanceThresholds = {
     /** 执行时间阈值（毫秒） */
     executionTime: {
         warning: number;

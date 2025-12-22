@@ -14,7 +14,7 @@ export * from './IUpdatable';
  * 定义组件的基本契约。
  * 在 ECS 架构中，组件应该是纯数据容器，不包含业务逻辑。
  */
-export interface IComponent {
+export type IComponent = {
     /** 组件唯一标识符 */
     readonly id: number;
     /** 组件所属的实体ID */
@@ -49,7 +49,7 @@ export interface IComponent {
  *
  * 为现有的EntitySystem类提供类型定义
  */
-export interface ISystemBase {
+export type ISystemBase = {
     /** 系统名称 */
     readonly systemName: string;
     /** 更新顺序/优先级 */
@@ -69,7 +69,7 @@ export interface ISystemBase {
  * 事件总线接口
  * 提供类型安全的事件发布订阅机制
  */
-export interface IEventBus {
+export type IEventBus = {
     /**
      * 发射事件
      * @param eventType 事件类型
@@ -145,7 +145,7 @@ export interface IEventBus {
 /**
  * 事件监听器配置接口
  */
-export interface IEventListenerConfig {
+export type IEventListenerConfig = {
     /** 是否只执行一次 */
     once?: boolean;
     /** 优先级（数字越大优先级越高） */
@@ -159,7 +159,7 @@ export interface IEventListenerConfig {
 /**
  * 事件统计信息接口
  */
-export interface IEventStats {
+export type IEventStats = {
     /** 事件类型 */
     eventType: string;
     /** 监听器数量 */
@@ -177,7 +177,7 @@ export interface IEventStats {
 /**
  * 事件数据基类接口
  */
-export interface IEventData {
+export type IEventData = {
     /** 事件时间戳 */
     timestamp: number;
     /** 事件来源 */
@@ -245,7 +245,7 @@ export interface IPerformanceEventData extends IEventData {
 /**
  * ECS调试配置接口
  */
-export interface IECSDebugConfig {
+export type IECSDebugConfig = {
     /** 是否启用调试 */
     enabled: boolean;
     /** WebSocket服务器URL */
@@ -269,7 +269,7 @@ export interface IECSDebugConfig {
 /**
  * Core配置接口
  */
-export interface ICoreConfig {
+export type ICoreConfig = {
     /** 是否启用调试模式 */
     debug?: boolean;
     /** 调试配置 */
@@ -281,7 +281,7 @@ export interface ICoreConfig {
 /**
  * ECS调试数据接口
  */
-export interface IECSDebugData {
+export type IECSDebugData = {
     /** 时间戳 */
     timestamp: number;
     /** 框架版本 */
@@ -307,7 +307,7 @@ export interface IECSDebugData {
 /**
  * 实体层次结构节点接口
  */
-export interface IEntityHierarchyNode {
+export type IEntityHierarchyNode = {
     id: number;
     name: string;
     active: boolean;
@@ -325,7 +325,7 @@ export interface IEntityHierarchyNode {
 /**
  * 实体调试数据接口
  */
-export interface IEntityDebugData {
+export type IEntityDebugData = {
     /** 总实体数 */
     totalEntities: number;
     /** 激活实体数 */
@@ -399,7 +399,7 @@ export interface IEntityDebugData {
 /**
  * 系统调试数据接口
  */
-export interface ISystemDebugData {
+export type ISystemDebugData = {
     /** 总系统数 */
     totalSystems: number;
     /** 系统信息列表 */
@@ -422,7 +422,7 @@ export interface ISystemDebugData {
 /**
  * 性能调试数据接口
  */
-export interface IPerformanceDebugData {
+export type IPerformanceDebugData = {
     /** ECS框架执行时间（毫秒） */
     frameTime: number;
     /** 引擎总帧时间（毫秒） */
@@ -472,7 +472,7 @@ export interface IPerformanceDebugData {
 /**
  * 组件调试数据接口
  */
-export interface IComponentDebugData {
+export type IComponentDebugData = {
     /** 组件类型数 */
     componentTypes: number;
     /** 组件实例总数 */
@@ -492,7 +492,7 @@ export interface IComponentDebugData {
 /**
  * 场景调试数据接口
  */
-export interface ISceneDebugData {
+export type ISceneDebugData = {
     /** 当前场景名称 */
     currentSceneName: string;
     /** 场景是否已初始化 */

@@ -18,7 +18,7 @@ const ENTITY_REF_VALUES = Symbol('EntityRefValues');
 /**
  * EntityRef元数据
  */
-export interface EntityRefMetadata {
+export type EntityRefMetadata = {
     properties: Set<string>;
 }
 

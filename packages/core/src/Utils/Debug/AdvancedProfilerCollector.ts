@@ -17,7 +17,7 @@ import { Time } from '../Time';
 /**
  * 旧版 PerformanceMonitor 接口 (用于兼容)
  */
-export interface ILegacyPerformanceMonitor {
+export type ILegacyPerformanceMonitor = {
     getAllSystemStats?: () => Map<string, {
         averageTime: number;
         minTime?: number;
@@ -33,7 +33,7 @@ export interface ILegacyPerformanceMonitor {
 /**
  * 热点函数项（支持递归层级）
  */
-export interface IHotspotItem {
+export type IHotspotItem = {
     name: string;
     category: string;
     inclusiveTime: number;
@@ -51,7 +51,7 @@ export interface IHotspotItem {
 /**
  * 高级性能数据接口
  */
-export interface IAdvancedProfilerData {
+export type IAdvancedProfilerData = {
     /** 当前帧信息 */
     currentFrame: {
         frameNumber: number;

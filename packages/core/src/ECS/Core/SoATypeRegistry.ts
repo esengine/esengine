@@ -40,7 +40,7 @@ export type TypedArrayTypeName =
 /**
  * 字段元数据
  */
-export interface FieldMetadata {
+export type FieldMetadata = {
     name: string;
     type: 'number' | 'boolean' | 'string' | 'object';
     arrayType?: TypedArrayTypeName;

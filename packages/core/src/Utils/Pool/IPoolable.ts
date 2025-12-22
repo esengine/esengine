@@ -1,7 +1,7 @@
 /**
  * 可池化对象接口
  */
-export interface IPoolable {
+export type IPoolable = {
     /**
      * 重置对象状态，准备重用
      */
@@ -11,7 +11,7 @@ export interface IPoolable {
 /**
  * 对象池统计信息
  */
-export interface PoolStats {
+export type PoolStats = {
     /** 池中对象数量 */
     size: number;
     /** 池的最大大小 */

@@ -15,7 +15,7 @@ import { ProfileCategory } from './ProfilerTypes';
 /**
  * 自动分析配置
  */
-export interface AutoProfilerConfig {
+export type AutoProfilerConfig = {
     /** 是否启用自动包装 */
     enabled: boolean;
     /** 采样间隔（毫秒），用于采样分析器 */

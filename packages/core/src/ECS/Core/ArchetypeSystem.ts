@@ -11,7 +11,7 @@ export type ArchetypeId = BitMask64Data;
 /**
  * 原型数据结构
  */
-export interface Archetype {
+export type Archetype = {
     /** 原型唯一标识符 */
     id: ArchetypeId;
     /** 包含的组件类型 */
@@ -23,7 +23,7 @@ export interface Archetype {
 /**
  * 原型查询结果
  */
-export interface ArchetypeQueryResult {
+export type ArchetypeQueryResult = {
     /** 匹配的原型列表 */
     archetypes: Archetype[];
     /** 所有匹配实体的总数 */

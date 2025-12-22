@@ -8,7 +8,7 @@ import {
 import { SoASerializer } from './SoASerializer';
 
 // 重新导出类型，保持向后兼容
-export { SupportedTypedArray, TypedArrayTypeName } from './SoATypeRegistry';
+export type { SupportedTypedArray, TypedArrayTypeName } from './SoATypeRegistry';
 export { SoATypeRegistry } from './SoATypeRegistry';
 export { SoASerializer } from './SoASerializer';
 

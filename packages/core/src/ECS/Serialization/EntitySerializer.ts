@@ -15,7 +15,7 @@ import { SerializationContext } from './SerializationContext';
 /**
  * 序列化后的实体数据
  */
-export interface SerializedEntity {
+export type SerializedEntity = {
     /**
      * 实体ID（运行时ID）
      *

@@ -10,7 +10,7 @@ const logger = createLogger('World');
  * 全局系统接口
  * 全局系统是在World级别运行的系统，不依赖特定Scene
  */
-export interface IGlobalSystem {
+export type IGlobalSystem = {
     /**
      * 系统名称
      */
@@ -40,7 +40,7 @@ export interface IGlobalSystem {
 /**
  * World配置接口
  */
-export interface IWorldConfig {
+export type IWorldConfig = {
     /**
      * World名称
      */

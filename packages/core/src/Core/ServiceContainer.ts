@@ -7,7 +7,7 @@ const logger = createLogger('ServiceContainer');
  * 服务基础接口
  * 所有通过 ServiceContainer 管理的服务都应该实现此接口
  */
-export interface IService {
+export type IService = {
     /**
      * 释放服务占用的资源
      * 当服务被注销或容器被清空时调用

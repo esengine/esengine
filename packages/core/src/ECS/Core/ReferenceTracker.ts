@@ -54,7 +54,7 @@ const WeakRefImpl: IWeakRefConstructor = (
 /**
  * Entity引用记录
  */
-export interface EntityRefRecord {
+export type EntityRefRecord = {
     component: IWeakRef<Component>;
     propertyKey: string;
 }

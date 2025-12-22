@@ -51,7 +51,7 @@ export enum PluginState {
  * }
  * ```
  */
-export interface IPlugin {
+export type IPlugin = {
     /**
      * 插件唯一名称
      *
@@ -96,7 +96,7 @@ export interface IPlugin {
 /**
  * 插件元数据
  */
-export interface IPluginMetadata {
+export type IPluginMetadata = {
     /**
      * 插件名称
      */

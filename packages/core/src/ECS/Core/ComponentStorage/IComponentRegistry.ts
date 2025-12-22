@@ -16,7 +16,7 @@ import type { ComponentType } from './ComponentTypeUtils';
  * Component Registry Interface.
  * 组件注册表接口。
  */
-export interface IComponentRegistry {
+export type IComponentRegistry = {
     /**
      * Register component type and allocate bitmask.
      * 注册组件类型并分配位掩码。

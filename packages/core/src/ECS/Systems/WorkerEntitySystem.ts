@@ -19,7 +19,7 @@ export type WorkerProcessFunction<T extends Record<string, any> = any> = (
 /**
  * Worker配置接口
  */
-export interface WorkerSystemConfig {
+export type WorkerSystemConfig = {
     /** 是否启用Worker并行处理 */
     enableWorker?: boolean;
     /** Worker数量，默认为CPU核心数，自动限制在系统最大值内 */

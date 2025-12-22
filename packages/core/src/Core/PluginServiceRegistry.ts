@@ -28,7 +28,7 @@
  * Note: __phantom is a required property to ensure TypeScript preserves generic
  * type information across packages.
  */
-export interface ServiceToken<T> {
+export type ServiceToken<T> = {
     readonly id: symbol;
     readonly name: string;
     /**

@@ -1,4 +1,4 @@
-export interface ITimer<TContext = unknown> {
+export type ITimer<TContext = unknown> = {
     context: TContext;
 
     /**

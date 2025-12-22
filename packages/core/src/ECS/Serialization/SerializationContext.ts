@@ -6,7 +6,7 @@ import type { Component } from '../Component';
  *
  * Serialized entity reference format.
  */
-export interface SerializedEntityRef {
+export type SerializedEntityRef = {
     /**
      * 运行时 ID（向后兼容）
      *

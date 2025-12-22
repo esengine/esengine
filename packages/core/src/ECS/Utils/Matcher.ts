@@ -4,7 +4,7 @@ import { getComponentTypeName } from '../Decorators';
 /**
  * 查询条件类型
  */
-export interface QueryCondition {
+export type QueryCondition = {
     all: ComponentType[];
     any: ComponentType[];
     none: ComponentType[];

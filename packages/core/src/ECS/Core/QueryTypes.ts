@@ -17,7 +17,7 @@ export enum QueryConditionType {
 /**
  * 查询条件接口
  */
-export interface QueryCondition {
+export type QueryCondition = {
     type: QueryConditionType;
     componentTypes: ComponentType[];
     mask: BitMask64Data;
@@ -26,7 +26,7 @@ export interface QueryCondition {
 /**
  * 实体查询结果接口
  */
-export interface QueryResult {
+export type QueryResult = {
     entities: readonly Entity[];
     count: number;
     /** 查询执行时间（毫秒） */

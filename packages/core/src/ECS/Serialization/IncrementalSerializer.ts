@@ -37,7 +37,7 @@ export enum ChangeOperation {
 /**
  * 实体变更记录
  */
-export interface EntityChange {
+export type EntityChange = {
     /** 操作类型 */
     operation: ChangeOperation;
     /** 实体ID */
@@ -51,7 +51,7 @@ export interface EntityChange {
 /**
  * 组件变更记录
  */
-export interface ComponentChange {
+export type ComponentChange = {
     /** 操作类型 */
     operation: ChangeOperation;
     /** 实体ID */
@@ -65,7 +65,7 @@ export interface ComponentChange {
 /**
  * 场景数据变更记录
  */
-export interface SceneDataChange {
+export type SceneDataChange = {
     /** 操作类型 */
     operation: ChangeOperation;
     /** 变更的键 */
@@ -79,7 +79,7 @@ export interface SceneDataChange {
 /**
  * 增量序列化数据
  */
-export interface IncrementalSnapshot {
+export type IncrementalSnapshot = {
     /** 快照版本号 */
     version: number;
     /** 时间戳 */
@@ -127,7 +127,7 @@ export type IncrementalSerializationFormat = 'json' | 'binary';
 /**
  * 增量序列化选项
  */
-export interface IncrementalSerializationOptions {
+export type IncrementalSerializationOptions = {
     /**
      * 是否包含组件数据的深度对比
      * 默认true，设为false可提升性能但可能漏掉组件内部字段变更

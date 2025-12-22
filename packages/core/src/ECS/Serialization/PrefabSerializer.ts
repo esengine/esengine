@@ -35,7 +35,7 @@ export interface SerializedPrefabEntity extends SerializedEntity {
  * 预制体元数据
  * Prefab metadata
  */
-export interface PrefabMetadata {
+export type PrefabMetadata = {
     /** 预制体名称 | Prefab name */
     name: string;
     /** 资产 GUID | Asset GUID */
@@ -58,7 +58,7 @@ export interface PrefabMetadata {
  * 组件类型注册条目
  * Component type registry entry
  */
-export interface PrefabComponentTypeEntry {
+export type PrefabComponentTypeEntry = {
     /** 组件类型名称 | Component type name */
     typeName: string;
     /** 组件版本号 | Component version number */
@@ -69,7 +69,7 @@ export interface PrefabComponentTypeEntry {
  * 预制体数据格式
  * Prefab data format
  */
-export interface PrefabData {
+export type PrefabData = {
     /** 预制体格式版本号 | Prefab format version number */
     version: number;
     /** 预制体元数据 | Prefab metadata */
@@ -84,7 +84,7 @@ export interface PrefabData {
  * 预制体创建选项
  * Prefab creation options
  */
-export interface PrefabCreateOptions {
+export type PrefabCreateOptions = {
     /** 预制体名称 | Prefab name */
     name: string;
     /** 预制体描述 | Prefab description */
@@ -99,7 +99,7 @@ export interface PrefabCreateOptions {
  * 预制体实例化选项
  * Prefab instantiation options
  */
-export interface PrefabInstantiateOptions {
+export type PrefabInstantiateOptions = {
     /** 父实体 ID | Parent entity ID */
     parentId?: number;
     /** 位置覆盖 | Position override */

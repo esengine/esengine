@@ -1,5 +1,6 @@
 import { Entity } from '../Entity';
-import { QueryCondition, QueryConditionType } from './QueryTypes';
+import type { QueryCondition } from './QueryTypes';
+import { QueryConditionType } from './QueryTypes';
 import { BitMask64Utils } from '../Utils/BigIntCompatibility';
 import { createLogger } from '../../Utils/Logger';
 
@@ -20,7 +21,7 @@ export enum ReactiveQueryChangeType {
 /**
  * 响应式查询变化事件
  */
-export interface ReactiveQueryChange {
+export type ReactiveQueryChange = {
     /** 变化类型 */
     type: ReactiveQueryChangeType;
     /** 变化的实体 */
@@ -41,7 +42,7 @@ export type ReactiveQueryListener = (change: ReactiveQueryChange) => void;
 /**
  * 响应式查询配置
  */
-export interface ReactiveQueryConfig {
+export type ReactiveQueryConfig = {
     /** 是否启用批量模式(减少通知频率) */
     enableBatchMode?: boolean;
     /** 批量模式的延迟时间(毫秒) */

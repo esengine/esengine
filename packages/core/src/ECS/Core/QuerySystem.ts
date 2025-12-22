@@ -6,10 +6,12 @@ import { createLogger } from '../../Utils/Logger';
 import { getComponentTypeName } from '../Decorators';
 import { Archetype, ArchetypeSystem } from './ArchetypeSystem';
 import { ReactiveQuery, ReactiveQueryConfig } from './ReactiveQuery';
-import { QueryCondition, QueryConditionType, QueryResult } from './QueryTypes';
+import type { QueryCondition, QueryResult } from './QueryTypes';
+import { QueryConditionType } from './QueryTypes';
 import { CompiledQuery } from './Query/CompiledQuery';
 
-export { QueryCondition, QueryConditionType, QueryResult };
+export { QueryConditionType };
+export type { QueryCondition, QueryResult };
 export { CompiledQuery };
 
 /**

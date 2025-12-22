@@ -25,7 +25,7 @@ export enum CommandType {
  * 延迟命令接口
  * Deferred command interface
  */
-export interface DeferredCommand {
+export type DeferredCommand = {
     /** 命令类型 | Command type */
     type: CommandType;
     /** 目标实体 | Target entity */
