@@ -35,9 +35,9 @@ export const BUILTIN_PLUGIN_PACKAGES: Record<string, PluginPackageInfo> = {
         category: 'audio',
         isEnginePlugin: true
     },
-    '@esengine/ui': {
+    '@esengine/fairygui': {
         plugin: true,
-        pluginExport: 'UIPlugin',
+        pluginExport: 'FGUIPlugin',
         category: 'ui'
     },
     '@esengine/tilemap': {
@@ -69,7 +69,7 @@ export function createDefaultProjectConfig(): ProjectConfig {
             '@esengine/camera': { enabled: true },
             '@esengine/sprite': { enabled: true },
             '@esengine/audio': { enabled: true },
-            '@esengine/ui': { enabled: true },
+            '@esengine/fairygui': { enabled: true },
             '@esengine/tilemap': { enabled: false },
             '@esengine/behavior-tree': { enabled: false },
             '@esengine/physics-rapier2d': { enabled: false }

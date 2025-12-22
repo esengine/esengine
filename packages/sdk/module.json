@@ -20,7 +20,7 @@
     "@esengine/ecs-framework-math",
     "@esengine/engine-core",
     "@esengine/sprite",
-    "@esengine/ui",
+    "@esengine/fairygui",
     "@esengine/audio",
     "@esengine/camera",
     "@esengine/particle",

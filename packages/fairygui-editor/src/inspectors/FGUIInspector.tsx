@@ -7,10 +7,11 @@
  * FGUIComponent 的自定义检视器，在默认 PropertyInspector 后追加组件选择 UI
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { Package, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import type { Component } from '@esengine/ecs-framework';
 import type { ComponentInspectorContext, IComponentInspector } from '@esengine/editor-core';
+import { VirtualNodeRegistry } from '@esengine/editor-core';
 import { FGUIComponent } from '@esengine/fairygui';
 
 /** Shared styles | 共享样式 */
@@ -78,14 +79,36 @@ const styles = {
 export const FGUIInspectorContent: React.FC<{ context: ComponentInspectorContext }> = ({ context }) => {
     const component = context.component as FGUIComponent;
     const onChange = context.onChange;
+    const entityId = context.entity?.id;
+
+    // Track version to trigger re-render when component state changes
+    // 跟踪版本以在组件状态变化时触发重新渲染
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    // Subscribe to VirtualNodeRegistry changes (event-driven, no polling)
+    // 订阅 VirtualNodeRegistry 变化（事件驱动，无需轮询）
+    useEffect(() => {
+        if (entityId === undefined) return;
+
+        const unsubscribe = VirtualNodeRegistry.onChange((event) => {
+            if (event.entityId === entityId) {
+                setRefreshKey(prev => prev + 1);
+            }
+        });
+
+        return unsubscribe;
+    }, [entityId]);
 
     // Get available components from loaded package
+    // Use refreshKey as dependency to refresh when package/component changes
+    // 使用 refreshKey 作为依赖，当包/组件变化时刷新
     const availableComponents = useMemo(() => {
         if (!component.package) return [];
         const exported = component.getAvailableComponentNames();
         if (exported.length > 0) return exported;
         return component.getAllComponentNames();
-    }, [component.package, component]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [component.package, refreshKey]);
 
     // Handle component name change
     const handleComponentChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {

@@ -5,8 +5,11 @@
  * Allows components to expose internal structure as read-only nodes
  * in the hierarchy panel.
  *
+ * Uses event-driven architecture for efficient change notification.
+ *
  * 场景层级中虚拟子节点的注册表。
  * 允许组件将内部结构作为只读节点暴露在层级面板中。
+ * 使用事件驱动架构实现高效的变化通知。
  */
 
 import type { Component, ComponentType, Entity } from '@esengine/ecs-framework';
@@ -60,10 +63,38 @@ export type VirtualNodeProviderFn<T extends Component = Component> = (
 ) => IVirtualNode[];
 
 /**
+ * Change event types for virtual nodes
+ * 虚拟节点的变化事件类型
+ */
+export type VirtualNodeChangeType = 'loaded' | 'updated' | 'disposed';
+
+/**
+ * Virtual node change event payload
+ * 虚拟节点变化事件载荷
+ */
+export interface VirtualNodeChangeEvent {
+    /** Entity ID that changed | 发生变化的实体 ID */
+    entityId: number;
+    /** Type of change | 变化类型 */
+    type: VirtualNodeChangeType;
+    /** Component that triggered the change (optional) | 触发变化的组件（可选） */
+    component?: Component;
+}
+
+/**
+ * Change listener function type
+ * 变化监听器函数类型
+ */
+export type VirtualNodeChangeListener = (event: VirtualNodeChangeEvent) => void;
+
+/**
  * VirtualNodeRegistry
  *
  * Manages virtual node providers for different component types.
+ * Provides event-driven change notifications for efficient UI updates.
+ *
  * 管理不同组件类型的虚拟节点提供者。
+ * 提供事件驱动的变化通知以实现高效的 UI 更新。
  */
 export class VirtualNodeRegistry {
     private static providers = new Map<ComponentType, VirtualNodeProviderFn>();
@@ -73,6 +104,11 @@ export class VirtualNodeRegistry {
         entityId: number;
         virtualNodeId: string;
     } | null = null;
+
+    /** Change listeners | 变化监听器 */
+    private static changeListeners = new Set<VirtualNodeChangeListener>();
+
+    // ============= Provider Registration | 提供者注册 =============
 
     /**
      * Register a virtual node provider for a component type
@@ -100,6 +136,8 @@ export class VirtualNodeRegistry {
     static hasProvider(componentType: ComponentType): boolean {
         return this.providers.has(componentType);
     }
+
+    // ============= Virtual Node Collection | 虚拟节点收集 =============
 
     /**
      * Get virtual nodes for a component
@@ -153,13 +191,89 @@ export class VirtualNodeRegistry {
         return false;
     }
 
+    // ============= Event System | 事件系统 =============
+
     /**
-     * Clear all registered providers
-     * 清除所有已注册的提供者
+     * Subscribe to virtual node changes
+     * 订阅虚拟节点变化
+     *
+     * @param listener Callback function for change events
+     * @returns Unsubscribe function
+     *
+     * @example
+     * ```typescript
+     * const unsubscribe = VirtualNodeRegistry.onChange((event) => {
+     *     if (event.entityId === selectedEntityId) {
+     *         refreshVirtualNodes();
+     *     }
+     * });
+     *
+     * // Later, cleanup
+     * unsubscribe();
+     * ```
      */
-    static clear(): void {
-        this.providers.clear();
+    static onChange(listener: VirtualNodeChangeListener): () => void {
+        this.changeListeners.add(listener);
+        return () => {
+            this.changeListeners.delete(listener);
+        };
     }
+
+    /**
+     * Notify that an entity's virtual nodes have changed
+     * Components should call this when their internal structure changes
+     *
+     * 通知实体的虚拟节点已更改
+     * 组件在内部结构变化时应调用此方法
+     *
+     * @param entityId The entity ID that changed
+     * @param type Type of change ('loaded', 'updated', 'disposed')
+     * @param component Optional component reference
+     *
+     * @example
+     * ```typescript
+     * // In FGUIComponent after loading completes:
+     * VirtualNodeRegistry.notifyChange(this.entity.id, 'loaded', this);
+     *
+     * // In FGUIComponent when switching component:
+     * VirtualNodeRegistry.notifyChange(this.entity.id, 'updated', this);
+     * ```
+     */
+    static notifyChange(
+        entityId: number,
+        type: VirtualNodeChangeType = 'updated',
+        component?: Component
+    ): void {
+        const event: VirtualNodeChangeEvent = { entityId, type, component };
+        for (const listener of this.changeListeners) {
+            try {
+                listener(event);
+            } catch (e) {
+                console.warn('[VirtualNodeRegistry] Error in change listener:', e);
+            }
+        }
+    }
+
+    /**
+     * Create a React hook-friendly subscription
+     * 创建对 React Hook 友好的订阅
+     *
+     * @param entityIds Set of entity IDs to watch
+     * @param callback Callback when any watched entity changes
+     * @returns Unsubscribe function
+     */
+    static watchEntities(
+        entityIds: Set<number>,
+        callback: () => void
+    ): () => void {
+        return this.onChange((event) => {
+            if (entityIds.has(event.entityId)) {
+                callback();
+            }
+        });
+    }
+
+    // ============= Selection State | 选择状态 =============
 
     /**
      * Set the currently selected virtual node
@@ -193,5 +307,17 @@ export class VirtualNodeRegistry {
         return this.selectedVirtualNodeInfo !== null &&
             this.selectedVirtualNodeInfo.entityId === entityId &&
             this.selectedVirtualNodeInfo.virtualNodeId === virtualNodeId;
+    }
+
+    // ============= Cleanup | 清理 =============
+
+    /**
+     * Clear all registered providers and listeners
+     * 清除所有已注册的提供者和监听器
+     */
+    static clear(): void {
+        this.providers.clear();
+        this.changeListeners.clear();
+        this.selectedVirtualNodeInfo = null;
     }
 }

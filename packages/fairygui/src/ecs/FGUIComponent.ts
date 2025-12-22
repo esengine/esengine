@@ -140,6 +140,19 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
     /** Error message if loading failed | 加载失败时的错误信息 */
     private _error: string | null = null;
 
+    /**
+     * Version counter, incremented on every state change (load, component change)
+     * Used by Inspector to detect when to refresh UI
+     * 版本计数器，每次状态变化（加载、组件切换）时递增，用于 Inspector 检测何时刷新 UI
+     */
+    private _version: number = 0;
+
+    /**
+     * Optional callback for state changes (used by editor for virtual node updates)
+     * 可选的状态变化回调（编辑器用于虚拟节点更新）
+     */
+    private _onStateChange: ((type: 'loaded' | 'updated' | 'disposed') => void) | null = null;
+
     // ============= Getters | 访问器 =============
 
     /**
@@ -188,6 +201,25 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
      */
     public get isReady(): boolean {
         return this._root !== null && this._component !== null;
+    }
+
+    /**
+     * Get version counter for change detection
+     * Used by Inspector to detect when to refresh UI
+     * 获取版本计数器用于变化检测，用于 Inspector 检测何时刷新 UI
+     */
+    public get version(): number {
+        return this._version;
+    }
+
+    /**
+     * Set state change callback for editor integration
+     * 设置状态变化回调用于编辑器集成
+     *
+     * @param callback Called when component state changes ('loaded', 'updated', 'disposed')
+     */
+    public set onStateChange(callback: ((type: 'loaded' | 'updated' | 'disposed') => void) | null) {
+        this._onStateChange = callback;
     }
 
     /**
@@ -249,11 +281,16 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
         this._package = pkg;
         this._loading = false;
         this._error = null;
+        this._version++;
+        this._onStateChange?.('loaded');
     }
 
     /**
      * Create component from loaded package
      * 从已加载的包创建组件
+     *
+     * Note: Disposes existing component before creating new one to avoid visual overlap
+     * 注意：创建新组件前会先销毁已有组件，避免视觉叠加
      */
     public createComponent(componentName?: string): GObject | null {
         const name = componentName || this.componentName;
@@ -264,6 +301,16 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
             return null;
         }
 
+        // Dispose existing component before creating new one
+        // 创建新组件前先销毁已有组件
+        if (this._component) {
+            if (this._root) {
+                this._root.removeChild(this._component);
+            }
+            this._component.dispose();
+            this._component = null;
+        }
+
         try {
             this._component = this._package.createObject(name);
 
@@ -272,6 +319,8 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
                 this._root.addChild(this._component);
             }
 
+            this._version++;
+            this._onStateChange?.('updated');
             return this._component;
         } catch (e) {
             // Log full error with stack trace for debugging
@@ -339,6 +388,8 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
      * 释放和清理
      */
     public dispose(): void {
+        const hadContent = this._component !== null || this._root !== null;
+
         if (this._component) {
             this._component.dispose();
             this._component = null;
@@ -349,6 +400,10 @@ export class FGUIComponent extends Component implements IFGUIComponentData {
         }
         this._package = null;
         this._error = null;
+
+        if (hadContent) {
+            this._onStateChange?.('disposed');
+        }
     }
 
     // ============= ECS Lifecycle | ECS 生命周期 =============

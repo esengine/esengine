@@ -550,6 +550,12 @@ function fguiVirtualNodeProvider(
  * 提供 FairyGUI 集成的编辑器模块
  */
 export class FGUIEditorModule implements IEditorModuleLoader {
+    /** MessageHub subscription cleanup | MessageHub 订阅清理函数 */
+    private _unsubscribes: (() => void)[] = [];
+
+    /** Tracked FGUIComponents for state change callbacks | 跟踪的 FGUIComponent 用于状态变化回调 */
+    private _trackedComponents = new WeakSet<FGUIComponent>();
+
     /**
      * Install the module
      * 安装模块
@@ -580,6 +586,72 @@ export class FGUIEditorModule implements IEditorModuleLoader {
         // Register virtual node provider for FGUIComponent
         // 为 FGUIComponent 注册虚拟节点提供者
         VirtualNodeRegistry.register(FGUIComponent, fguiVirtualNodeProvider);
+
+        // Setup state change bridge for virtual node updates
+        // 设置状态变化桥接，用于虚拟节点更新
+        this._setupStateChangeBridge(services);
+    }
+
+    /**
+     * Setup bridge between FGUIComponent state changes and VirtualNodeRegistry
+     * 设置 FGUIComponent 状态变化与 VirtualNodeRegistry 之间的桥接
+     */
+    private _setupStateChangeBridge(services: ServiceContainer): void {
+        const messageHub = services.resolve(MessageHub);
+        if (!messageHub) return;
+
+        // Hook into FGUIComponent when components are added
+        // 当组件被添加时挂钩 FGUIComponent
+        const hookComponent = (comp: FGUIComponent, entity: Entity) => {
+            if (this._trackedComponents.has(comp)) return;
+            this._trackedComponents.add(comp);
+
+            comp.onStateChange = (type) => {
+                VirtualNodeRegistry.notifyChange(entity.id, type, comp);
+            };
+        };
+
+        // Scan existing entities for FGUIComponents
+        // 扫描现有实体中的 FGUIComponent
+        const scanExistingEntities = () => {
+            const scene = Core.scene;
+            if (!scene) return;
+
+            for (const entity of scene.entities.buffer) {
+                const fguiComp = entity.getComponent(FGUIComponent);
+                if (fguiComp) {
+                    hookComponent(fguiComp, entity);
+                }
+            }
+        };
+
+        // Subscribe to component:added events
+        // 订阅 component:added 事件
+        const unsubAdded = messageHub.subscribe('component:added', (event: { entityId: number; componentType: string }) => {
+            if (event.componentType !== 'FGUIComponent') return;
+
+            const scene = Core.scene;
+            if (!scene) return;
+
+            const entity = scene.findEntityById(event.entityId);
+            if (!entity) return;
+
+            const fguiComp = entity.getComponent(FGUIComponent);
+            if (fguiComp) {
+                hookComponent(fguiComp, entity);
+            }
+        });
+
+        // Subscribe to scene:loaded to scan existing components
+        // 订阅 scene:loaded 扫描现有组件
+        const unsubSceneLoaded = messageHub.subscribe('scene:loaded', () => {
+            scanExistingEntities();
+        });
+
+        // Initial scan
+        scanExistingEntities();
+
+        this._unsubscribes.push(unsubAdded, unsubSceneLoaded);
     }
 
     /**
@@ -587,6 +659,12 @@ export class FGUIEditorModule implements IEditorModuleLoader {
      * 卸载模块
      */
     async uninstall(): Promise<void> {
+        // Cleanup subscriptions
+        for (const unsub of this._unsubscribes) {
+            unsub();
+        }
+        this._unsubscribes = [];
+
         // Unregister gizmo provider
         GizmoRegistry.unregister(FGUIComponent);
         // Unregister virtual node provider

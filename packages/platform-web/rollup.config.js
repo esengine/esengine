@@ -22,11 +22,11 @@ const external = [
     '@esengine/ecs-components',
     '@esengine/ecs-engine-bindgen',
     '@esengine/tilemap',
-    '@esengine/ui',
+    '@esengine/fairygui',
     '@esengine/behavior-tree',
     // Editor packages (should never be in runtime)
     '@esengine/editor-core',
-    '@esengine/ui-editor',
+    '@esengine/fairygui-editor',
     '@esengine/tilemap-editor',
     '@esengine/behavior-tree-editor',
     '@esengine/blueprint-editor',

@@ -413,6 +413,20 @@ export function SceneHierarchy({ entityStore, messageHub, commandManager, isProf
         };
     }, [messageHub]);
 
+    // Subscribe to VirtualNodeRegistry changes (event-driven, no polling needed)
+    // 订阅 VirtualNodeRegistry 变化（事件驱动，无需轮询）
+    useEffect(() => {
+        const unsubscribe = VirtualNodeRegistry.onChange((event) => {
+            // Refresh if the changed entity is expanded
+            // 如果变化的实体是展开的，则刷新
+            if (expandedIds.has(event.entityId)) {
+                setVirtualNodeRefreshKey(prev => prev + 1);
+            }
+        });
+
+        return unsubscribe;
+    }, [expandedIds]);
+
     // 获取插件实体创建模板 | Get entity creation templates from plugins
     useEffect(() => {
         const updateTemplates = () => {
