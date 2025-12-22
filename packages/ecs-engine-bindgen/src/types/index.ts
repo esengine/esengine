@@ -88,8 +88,8 @@ export interface EngineStats {
 }
 
 /**
- * Camera configuration.
- * 相机配置。
+ * Camera configuration (2D).
+ * 相机配置（2D）。
  */
 export interface CameraConfig {
     /** Camera X position. | 相机X位置。 */
@@ -100,4 +100,52 @@ export interface CameraConfig {
     zoom: number;
     /** Rotation in radians. | 旋转角度（弧度）。 */
     rotation: number;
+}
+
+/**
+ * 3D Camera position.
+ * 3D 相机位置。
+ */
+export interface Camera3DPosition {
+    /** X coordinate. | X 坐标。 */
+    x: number;
+    /** Y coordinate. | Y 坐标。 */
+    y: number;
+    /** Z coordinate. | Z 坐标。 */
+    z: number;
+}
+
+/**
+ * 3D Camera rotation (Euler angles in degrees).
+ * 3D 相机旋转（欧拉角，角度制）。
+ */
+export interface Camera3DRotation {
+    /** Pitch angle in degrees. | 俯仰角（度）。 */
+    pitch: number;
+    /** Yaw angle in degrees. | 偏航角（度）。 */
+    yaw: number;
+    /** Roll angle in degrees. | 滚转角（度）。 */
+    roll: number;
+}
+
+/**
+ * Projection type for 3D camera.
+ * 3D 相机的投影类型。
+ */
+export enum ProjectionType {
+    /** Perspective projection. | 透视投影。 */
+    Perspective = 0,
+    /** Orthographic projection. | 正交投影。 */
+    Orthographic = 1,
+}
+
+/**
+ * Render mode.
+ * 渲染模式。
+ */
+export enum RenderMode {
+    /** 2D rendering mode. | 2D 渲染模式。 */
+    Mode2D = 0,
+    /** 3D rendering mode. | 3D 渲染模式。 */
+    Mode3D = 1,
 }

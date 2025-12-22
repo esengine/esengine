@@ -556,6 +556,21 @@ impl GameEngine {
         self.engine.set_transform_mode(mode);
     }
 
+    /// Render a 3D gizmo at the specified world position.
+    /// 在指定的世界位置渲染 3D Gizmo。
+    ///
+    /// Only works in 3D render mode. The gizmo will be rendered
+    /// with the current transform mode (move/rotate/scale).
+    /// 仅在 3D 渲染模式下有效。Gizmo 将使用当前的变换模式渲染。
+    ///
+    /// # Arguments | 参数
+    /// * `x`, `y`, `z` - World position | 世界位置
+    /// * `scale` - Gizmo scale multiplier | Gizmo 缩放倍数
+    #[wasm_bindgen(js_name = render3DGizmo)]
+    pub fn render_3d_gizmo(&mut self, x: f32, y: f32, z: f32, scale: f32) {
+        self.engine.render_3d_gizmo(x, y, z, scale);
+    }
+
     /// Set gizmo visibility.
     /// 设置辅助工具可见性。
     #[wasm_bindgen(js_name = setShowGizmos)]
@@ -908,5 +923,153 @@ impl GameEngine {
     #[wasm_bindgen(js_name = getMaxTextureSize)]
     pub fn get_max_texture_size(&self) -> u32 {
         self.engine.max_texture_size()
+    }
+
+    // ===== 3D Rendering API =====
+    // ===== 3D 渲染 API =====
+
+    /// Get current render mode.
+    /// 获取当前渲染模式。
+    ///
+    /// Returns 0 for 2D mode, 1 for 3D mode.
+    /// 返回 0 表示 2D 模式，1 表示 3D 模式。
+    #[wasm_bindgen(js_name = getRenderMode)]
+    pub fn get_render_mode(&self) -> u8 {
+        match self.engine.render_mode() {
+            crate::core::RenderMode::Mode2D => 0,
+            crate::core::RenderMode::Mode3D => 1,
+        }
+    }
+
+    /// Set render mode.
+    /// 设置渲染模式。
+    ///
+    /// # Arguments | 参数
+    /// * `mode` - 0 for 2D, 1 for 3D | 0 表示 2D，1 表示 3D
+    ///
+    /// When switching to 3D mode for the first time, the 3D renderer
+    /// will be lazily initialized.
+    /// 首次切换到 3D 模式时，3D 渲染器将被延迟初始化。
+    #[wasm_bindgen(js_name = setRenderMode)]
+    pub fn set_render_mode(&mut self, mode: u8) -> std::result::Result<(), JsValue> {
+        let render_mode = match mode {
+            0 => crate::core::RenderMode::Mode2D,
+            1 => crate::core::RenderMode::Mode3D,
+            _ => return Err(JsValue::from_str("Invalid render mode. Use 0 for 2D, 1 for 3D.")),
+        };
+        self.engine
+            .set_render_mode(render_mode)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Check if 3D renderer is initialized.
+    /// 检查 3D 渲染器是否已初始化。
+    #[wasm_bindgen(js_name = has3DRenderer)]
+    pub fn has_3d_renderer(&self) -> bool {
+        self.engine.has_3d_renderer()
+    }
+
+    /// Set 3D camera position.
+    /// 设置 3D 相机位置。
+    #[wasm_bindgen(js_name = setCamera3DPosition)]
+    pub fn set_camera_3d_position(&mut self, x: f32, y: f32, z: f32) {
+        self.engine.set_camera_3d_position(x, y, z);
+    }
+
+    /// Get 3D camera position.
+    /// 获取 3D 相机位置。
+    ///
+    /// Returns [x, y, z] or null if 3D renderer is not initialized.
+    /// 返回 [x, y, z]，如果 3D 渲染器未初始化则返回 null。
+    #[wasm_bindgen(js_name = getCamera3DPosition)]
+    pub fn get_camera_3d_position(&self) -> Option<Vec<f32>> {
+        self.engine
+            .get_camera_3d_position()
+            .map(|(x, y, z)| vec![x, y, z])
+    }
+
+    /// Set 3D camera rotation using Euler angles (in degrees).
+    /// 使用欧拉角设置 3D 相机旋转（角度制）。
+    ///
+    /// # Arguments | 参数
+    /// * `pitch` - Rotation around X axis (degrees) | X 轴旋转（角度）
+    /// * `yaw` - Rotation around Y axis (degrees) | Y 轴旋转（角度）
+    /// * `roll` - Rotation around Z axis (degrees) | Z 轴旋转（角度）
+    #[wasm_bindgen(js_name = setCamera3DRotation)]
+    pub fn set_camera_3d_rotation(&mut self, pitch: f32, yaw: f32, roll: f32) {
+        self.engine.set_camera_3d_rotation(pitch, yaw, roll);
+    }
+
+    /// Get 3D camera rotation as Euler angles (in degrees).
+    /// 获取 3D 相机旋转的欧拉角（角度制）。
+    ///
+    /// Returns [pitch, yaw, roll] or null if 3D renderer is not initialized.
+    /// 返回 [pitch, yaw, roll]，如果 3D 渲染器未初始化则返回 null。
+    #[wasm_bindgen(js_name = getCamera3DRotation)]
+    pub fn get_camera_3d_rotation(&self) -> Option<Vec<f32>> {
+        self.engine
+            .get_camera_3d_rotation()
+            .map(|(pitch, yaw, roll)| vec![pitch, yaw, roll])
+    }
+
+    /// Set 3D camera field of view (in degrees).
+    /// 设置 3D 相机视野角（角度制）。
+    ///
+    /// Only affects perspective projection mode.
+    /// 仅影响透视投影模式。
+    #[wasm_bindgen(js_name = setCamera3DFov)]
+    pub fn set_camera_3d_fov(&mut self, fov_degrees: f32) {
+        self.engine.set_camera_3d_fov(fov_degrees);
+    }
+
+    /// Get 3D camera field of view (in degrees).
+    /// 获取 3D 相机视野角（角度制）。
+    #[wasm_bindgen(js_name = getCamera3DFov)]
+    pub fn get_camera_3d_fov(&self) -> Option<f32> {
+        self.engine.get_camera_3d_fov()
+    }
+
+    /// Set 3D camera projection type.
+    /// 设置 3D 相机投影类型。
+    ///
+    /// # Arguments | 参数
+    /// * `projection_type` - 0 for Perspective, 1 for Orthographic
+    /// * `ortho_size` - Half-height of orthographic view (only used when projection_type = 1)
+    #[wasm_bindgen(js_name = setCamera3DProjection)]
+    pub fn set_camera_3d_projection(&mut self, projection_type: u8, ortho_size: f32) {
+        self.engine.set_camera_3d_projection(projection_type, ortho_size);
+    }
+
+    /// Make 3D camera look at a target position.
+    /// 使 3D 相机朝向目标位置。
+    #[wasm_bindgen(js_name = camera3DLookAt)]
+    pub fn camera_3d_look_at(&mut self, target_x: f32, target_y: f32, target_z: f32) {
+        self.engine.camera_3d_look_at(target_x, target_y, target_z);
+    }
+
+    /// Set 3D camera near and far clip planes.
+    /// 设置 3D 相机近裁剪面和远裁剪面。
+    #[wasm_bindgen(js_name = setCamera3DClipPlanes)]
+    pub fn set_camera_3d_clip_planes(&mut self, near: f32, far: f32) {
+        self.engine.set_camera_3d_clip_planes(near, far);
+    }
+
+    /// Resize 3D renderer viewport.
+    /// 调整 3D 渲染器视口大小。
+    #[wasm_bindgen(js_name = resize3D)]
+    pub fn resize_3d(&mut self, width: f32, height: f32) {
+        self.engine.resize_3d(width, height);
+    }
+
+    /// Render 3D content.
+    /// 渲染 3D 内容。
+    ///
+    /// Should be called after submitting 3D meshes.
+    /// 应在提交 3D 网格后调用。
+    #[wasm_bindgen(js_name = render3D)]
+    pub fn render_3d(&mut self) -> std::result::Result<(), JsValue> {
+        self.engine
+            .render_3d()
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 }

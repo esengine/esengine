@@ -653,6 +653,24 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
     }
 
     /**
+     * Render a 3D gizmo at the specified world position.
+     * 在指定的世界位置渲染 3D Gizmo。
+     *
+     * Only works in 3D render mode. The gizmo will be rendered
+     * with the current transform mode (move/rotate/scale).
+     * 仅在 3D 渲染模式下有效。Gizmo 将使用当前的变换模式渲染。
+     *
+     * @param x - World X position | 世界 X 坐标
+     * @param y - World Y position | 世界 Y 坐标
+     * @param z - World Z position | 世界 Z 坐标
+     * @param scale - Gizmo scale multiplier | Gizmo 缩放倍数
+     */
+    render3DGizmo(x: number, y: number, z: number, scale: number = 1.0): void {
+        if (!this.initialized) return;
+        this.getEngine().render3DGizmo(x, y, z, scale);
+    }
+
+    /**
      * Set gizmo visibility.
      * 设置辅助工具可见性。
      */
@@ -1332,6 +1350,195 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
                     break;
             }
         }
+    }
+
+    // ===== 3D Rendering API =====
+    // ===== 3D 渲染 API =====
+
+    /**
+     * Render mode enumeration.
+     * 渲染模式枚举。
+     */
+    static readonly RenderMode = {
+        Mode2D: 0,
+        Mode3D: 1,
+    } as const;
+
+    /**
+     * Get current render mode.
+     * 获取当前渲染模式。
+     *
+     * @returns 0 for 2D mode, 1 for 3D mode | 0 表示 2D 模式，1 表示 3D 模式
+     */
+    getRenderMode(): number {
+        if (!this.initialized) return 0;
+        return this.getEngine().getRenderMode();
+    }
+
+    /**
+     * Set render mode.
+     * 设置渲染模式。
+     *
+     * When switching to 3D mode for the first time, the 3D renderer
+     * will be lazily initialized.
+     * 首次切换到 3D 模式时，3D 渲染器将被延迟初始化。
+     *
+     * @param mode - 0 for 2D, 1 for 3D | 0 表示 2D，1 表示 3D
+     */
+    setRenderMode(mode: number): void {
+        if (!this.initialized) return;
+        this.getEngine().setRenderMode(mode);
+    }
+
+    /**
+     * Check if 3D renderer is initialized.
+     * 检查 3D 渲染器是否已初始化。
+     */
+    has3DRenderer(): boolean {
+        if (!this.initialized) return false;
+        return this.getEngine().has3DRenderer();
+    }
+
+    /**
+     * Get 3D camera position.
+     * 获取 3D 相机位置。
+     *
+     * @returns { x, y, z } or null if 3D renderer is not initialized
+     *          { x, y, z } 或 3D 渲染器未初始化则返回 null
+     */
+    getCamera3DPosition(): { x: number; y: number; z: number } | null {
+        if (!this.initialized) return null;
+        const result = this.getEngine().getCamera3DPosition();
+        if (!result) return null;
+        return { x: result[0], y: result[1], z: result[2] };
+    }
+
+    /**
+     * Set 3D camera position.
+     * 设置 3D 相机位置。
+     *
+     * @param x - X coordinate | X 坐标
+     * @param y - Y coordinate | Y 坐标
+     * @param z - Z coordinate | Z 坐标
+     */
+    setCamera3DPosition(x: number, y: number, z: number): void {
+        if (!this.initialized) return;
+        this.getEngine().setCamera3DPosition(x, y, z);
+    }
+
+    /**
+     * Get 3D camera rotation as Euler angles (in degrees).
+     * 获取 3D 相机旋转的欧拉角（角度制）。
+     *
+     * @returns { pitch, yaw, roll } in degrees or null
+     *          角度制的 { pitch, yaw, roll } 或 null
+     */
+    getCamera3DRotation(): { pitch: number; yaw: number; roll: number } | null {
+        if (!this.initialized) return null;
+        const result = this.getEngine().getCamera3DRotation();
+        if (!result) return null;
+        return { pitch: result[0], yaw: result[1], roll: result[2] };
+    }
+
+    /**
+     * Set 3D camera rotation from Euler angles (in degrees).
+     * 使用欧拉角设置 3D 相机旋转（角度制）。
+     *
+     * @param pitch - Pitch angle in degrees | 俯仰角（度）
+     * @param yaw - Yaw angle in degrees | 偏航角（度）
+     * @param roll - Roll angle in degrees | 滚转角（度）
+     */
+    setCamera3DRotation(pitch: number, yaw: number, roll: number): void {
+        if (!this.initialized) return;
+        this.getEngine().setCamera3DRotation(pitch, yaw, roll);
+    }
+
+    /**
+     * Get 3D camera field of view (in degrees).
+     * 获取 3D 相机视野角（角度制）。
+     *
+     * @returns FOV in degrees or null if 3D renderer not initialized
+     *          角度制的 FOV 或 null
+     */
+    getCamera3DFov(): number | null {
+        if (!this.initialized) return null;
+        const result = this.getEngine().getCamera3DFov();
+        return result ?? null;
+    }
+
+    /**
+     * Set 3D camera field of view (in degrees).
+     * 设置 3D 相机视野角（角度制）。
+     *
+     * @param fov - Field of view in degrees (typical: 45-90)
+     *              视野角（度，通常 45-90）
+     */
+    setCamera3DFov(fov: number): void {
+        if (!this.initialized) return;
+        this.getEngine().setCamera3DFov(fov);
+    }
+
+    /**
+     * Set 3D camera projection type.
+     * 设置 3D 相机投影类型。
+     *
+     * @param type - 0 for perspective, 1 for orthographic
+     *               0 表示透视投影，1 表示正交投影
+     * @param orthoSize - Half-height of orthographic view (only used when type = 1)
+     *                    正交视图的半高度（仅在 type = 1 时使用）
+     */
+    setCamera3DProjection(type: number, orthoSize: number = 5.0): void {
+        if (!this.initialized) return;
+        this.getEngine().setCamera3DProjection(type, orthoSize);
+    }
+
+    /**
+     * Make 3D camera look at a target position.
+     * 使 3D 相机朝向目标位置。
+     *
+     * @param targetX - Target X coordinate | 目标 X 坐标
+     * @param targetY - Target Y coordinate | 目标 Y 坐标
+     * @param targetZ - Target Z coordinate | 目标 Z 坐标
+     */
+    camera3DLookAt(targetX: number, targetY: number, targetZ: number): void {
+        if (!this.initialized) return;
+        this.getEngine().camera3DLookAt(targetX, targetY, targetZ);
+    }
+
+    /**
+     * Set 3D camera near and far clip planes.
+     * 设置 3D 相机近远裁剪面。
+     *
+     * @param near - Near clip plane distance | 近裁剪面距离
+     * @param far - Far clip plane distance | 远裁剪面距离
+     */
+    setCamera3DClipPlanes(near: number, far: number): void {
+        if (!this.initialized) return;
+        this.getEngine().setCamera3DClipPlanes(near, far);
+    }
+
+    /**
+     * Resize 3D viewport.
+     * 调整 3D 视口大小。
+     *
+     * @param width - New width | 新宽度
+     * @param height - New height | 新高度
+     */
+    resize3D(width: number, height: number): void {
+        if (!this.initialized) return;
+        this.getEngine().resize3D(width, height);
+    }
+
+    /**
+     * Render using 3D mode.
+     * 使用 3D 模式渲染。
+     *
+     * This renders all submitted 3D meshes with the current 3D camera.
+     * 使用当前 3D 相机渲染所有已提交的 3D 网格。
+     */
+    render3D(): void {
+        if (!this.initialized) return;
+        this.getEngine().render3D();
     }
 
     /**

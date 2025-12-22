@@ -5,6 +5,6 @@ pub mod error;
 pub mod context;
 mod engine;
 
-pub use engine::{Engine, EngineConfig};
+pub use engine::{Engine, EngineConfig, RenderMode};
 pub use context::WebGLContext;
 pub use error::{EngineError, Result};

@@ -1376,6 +1376,17 @@ export class EngineService {
         return this._runtime?.getTransformMode() ?? 'select';
     }
 
+    /**
+     * Render a 3D gizmo at the specified world position.
+     * 在指定的世界位置渲染 3D Gizmo。
+     *
+     * Only works in 3D render mode.
+     * 仅在 3D 渲染模式下有效。
+     */
+    render3DGizmo(x: number, y: number, z: number, scale: number = 1.0): void {
+        this._runtime?.bridge?.render3DGizmo(x, y, z, scale);
+    }
+
     // ===== Multi-viewport API =====
 
     /**
@@ -1447,6 +1458,122 @@ export class EngineService {
      */
     getRuntime(): GameRuntime | null {
         return this._runtime;
+    }
+
+    // ===== 3D Camera API =====
+
+    /**
+     * Get render mode (0 = 2D, 1 = 3D).
+     * 获取渲染模式（0 = 2D, 1 = 3D）。
+     */
+    getRenderMode(): number {
+        return this._runtime?.bridge?.getRenderMode() ?? 0;
+    }
+
+    /**
+     * Set render mode (0 = 2D, 1 = 3D).
+     * 设置渲染模式（0 = 2D, 1 = 3D）。
+     */
+    setRenderMode(mode: number): void {
+        this._runtime?.bridge?.setRenderMode(mode);
+    }
+
+    /**
+     * Check if 3D renderer is available.
+     * 检查 3D 渲染器是否可用。
+     */
+    has3DRenderer(): boolean {
+        return this._runtime?.bridge?.has3DRenderer() ?? false;
+    }
+
+    /**
+     * Get 3D camera position.
+     * 获取 3D 相机位置。
+     */
+    getCamera3DPosition(): { x: number; y: number; z: number } | null {
+        return this._runtime?.bridge?.getCamera3DPosition() ?? null;
+    }
+
+    /**
+     * Set 3D camera position.
+     * 设置 3D 相机位置。
+     */
+    setCamera3DPosition(x: number, y: number, z: number): void {
+        this._runtime?.bridge?.setCamera3DPosition(x, y, z);
+    }
+
+    /**
+     * Get 3D camera rotation (Euler angles in degrees).
+     * 获取 3D 相机旋转（欧拉角，度数）。
+     */
+    getCamera3DRotation(): { pitch: number; yaw: number; roll: number } | null {
+        return this._runtime?.bridge?.getCamera3DRotation() ?? null;
+    }
+
+    /**
+     * Set 3D camera rotation (Euler angles in degrees).
+     * 设置 3D 相机旋转（欧拉角，度数）。
+     */
+    setCamera3DRotation(pitch: number, yaw: number, roll: number): void {
+        this._runtime?.bridge?.setCamera3DRotation(pitch, yaw, roll);
+    }
+
+    /**
+     * Get 3D camera field of view.
+     * 获取 3D 相机视场角。
+     */
+    getCamera3DFov(): number | null {
+        return this._runtime?.bridge?.getCamera3DFov() ?? null;
+    }
+
+    /**
+     * Set 3D camera field of view.
+     * 设置 3D 相机视场角。
+     */
+    setCamera3DFov(fov: number): void {
+        this._runtime?.bridge?.setCamera3DFov(fov);
+    }
+
+    /**
+     * Set 3D camera projection type.
+     * 设置 3D 相机投影类型。
+     * @param type 0 = Perspective, 1 = Orthographic
+     * @param orthoSize Orthographic size (default 5.0)
+     */
+    setCamera3DProjection(type: number, orthoSize: number = 5.0): void {
+        this._runtime?.bridge?.setCamera3DProjection(type, orthoSize);
+    }
+
+    /**
+     * Make 3D camera look at a target point.
+     * 让 3D 相机看向目标点。
+     */
+    camera3DLookAt(targetX: number, targetY: number, targetZ: number): void {
+        this._runtime?.bridge?.camera3DLookAt(targetX, targetY, targetZ);
+    }
+
+    /**
+     * Set 3D camera clip planes.
+     * 设置 3D 相机裁剪平面。
+     */
+    setCamera3DClipPlanes(near: number, far: number): void {
+        this._runtime?.bridge?.setCamera3DClipPlanes(near, far);
+    }
+
+    /**
+     * Resize 3D renderer.
+     * 调整 3D 渲染器尺寸。
+     */
+    resize3D(width: number, height: number): void {
+        this._runtime?.bridge?.resize3D(width, height);
+    }
+
+    /**
+     * Render 3D frame (for editor manual rendering).
+     * 渲染 3D 帧（用于编辑器手动渲染）。
+     */
+    render3D(): void {
+        this._runtime?.bridge?.render3D();
     }
 
     /**

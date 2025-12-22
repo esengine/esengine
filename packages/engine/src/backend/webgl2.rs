@@ -723,12 +723,34 @@ impl GraphicsBackend for WebGL2Backend {
     // ==================== 渲染状态 | Render State ====================
 
     fn apply_render_state(&mut self, state: &RenderState) {
+        // Blend mode | 混合模式
         if self.current_render_state.blend_mode != state.blend_mode {
             self.set_blend_mode(state.blend_mode);
         }
 
+        // Scissor | 裁剪
         if self.current_render_state.scissor != state.scissor {
             self.set_scissor(state.scissor);
+        }
+
+        // Depth test | 深度测试
+        if self.current_render_state.depth_test != state.depth_test {
+            self.set_depth_test(state.depth_test);
+        }
+
+        // Depth write | 深度写入
+        if self.current_render_state.depth_write != state.depth_write {
+            self.set_depth_write(state.depth_write);
+        }
+
+        // Depth function | 深度比较函数
+        if self.current_render_state.depth_func != state.depth_func {
+            self.set_depth_func(state.depth_func);
+        }
+
+        // Cull mode | 裁剪模式
+        if self.current_render_state.cull_mode != state.cull_mode {
+            self.set_cull_mode(state.cull_mode);
         }
 
         self.current_render_state = state.clone();
@@ -931,6 +953,60 @@ impl WebGL2Backend {
     pub fn bind_texture_raw(&self, texture: Option<&WebGlTexture>, unit: u32) {
         self.gl.active_texture(GL::TEXTURE0 + unit);
         self.gl.bind_texture(GL::TEXTURE_2D, texture);
+    }
+
+    /// Set depth test enabled state.
+    /// 设置深度测试启用状态。
+    pub fn set_depth_test(&mut self, enabled: bool) {
+        if enabled {
+            self.gl.enable(GL::DEPTH_TEST);
+        } else {
+            self.gl.disable(GL::DEPTH_TEST);
+        }
+        self.current_render_state.depth_test = enabled;
+    }
+
+    /// Set depth write enabled state.
+    /// 设置深度写入启用状态。
+    pub fn set_depth_write(&mut self, enabled: bool) {
+        self.gl.depth_mask(enabled);
+        self.current_render_state.depth_write = enabled;
+    }
+
+    /// Set depth comparison function.
+    /// 设置深度比较函数。
+    pub fn set_depth_func(&mut self, func: CompareFunc) {
+        let gl_func = match func {
+            CompareFunc::Never => GL::NEVER,
+            CompareFunc::Less => GL::LESS,
+            CompareFunc::Equal => GL::EQUAL,
+            CompareFunc::LessEqual => GL::LEQUAL,
+            CompareFunc::Greater => GL::GREATER,
+            CompareFunc::NotEqual => GL::NOTEQUAL,
+            CompareFunc::GreaterEqual => GL::GEQUAL,
+            CompareFunc::Always => GL::ALWAYS,
+        };
+        self.gl.depth_func(gl_func);
+        self.current_render_state.depth_func = func;
+    }
+
+    /// Set face culling mode.
+    /// 设置面剔除模式。
+    pub fn set_cull_mode(&mut self, mode: CullMode) {
+        match mode {
+            CullMode::None => {
+                self.gl.disable(GL::CULL_FACE);
+            }
+            CullMode::Front => {
+                self.gl.enable(GL::CULL_FACE);
+                self.gl.cull_face(GL::FRONT);
+            }
+            CullMode::Back => {
+                self.gl.enable(GL::CULL_FACE);
+                self.gl.cull_face(GL::BACK);
+            }
+        }
+        self.current_render_state.cull_mode = mode;
     }
 }
 

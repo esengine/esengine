@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
     RotateCcw, Maximize2, Grid3x3, Eye, EyeOff, Activity,
     MousePointer2, Move, RotateCw, Scaling, Globe, QrCode, ChevronDown,
-    Magnet, ZoomIn, Save, X, PackageOpen
+    Magnet, ZoomIn, Save, X, PackageOpen, Box, Square
 } from 'lucide-react';
 import '../styles/Viewport.css';
 import { useEngine } from '../hooks/useEngine';
@@ -296,6 +296,24 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
     const isDraggingCameraRef = useRef(false);
     const isDraggingTransformRef = useRef(false);
     const lastMousePosRef = useRef({ x: 0, y: 0 });
+
+    // 3D Camera state (orbit camera)
+    // 3D 相机状态（轨道相机）
+    const [renderMode, setRenderMode] = useState<'2D' | '3D'>('2D');
+    const renderModeRef = useRef<'2D' | '3D'>('2D');
+    // Orbit camera parameters: distance from target, pitch (vertical), yaw (horizontal)
+    // 轨道相机参数：距目标距离、俯仰角（垂直）、偏航角（水平）
+    const [orbitCamera, setOrbitCamera] = useState({
+        distance: 10,      // Distance from target | 距目标距离
+        pitch: -30,        // Vertical angle in degrees (-90 to 90) | 垂直角度（度）
+        yaw: 45,           // Horizontal angle in degrees | 水平角度（度）
+        targetX: 0,        // Target point X | 目标点 X
+        targetY: 0,        // Target point Y | 目标点 Y
+        targetZ: 0         // Target point Z | 目标点 Z
+    });
+    const orbitCameraRef = useRef(orbitCamera);
+    const isOrbitingRef = useRef(false);
+    const isPanningRef = useRef(false);
     const selectedEntityRef = useRef<Entity | null>(null);
     const messageHubRef = useRef<MessageHub | null>(null);
     const commandManagerRef = useRef<CommandManager | null>(null);
@@ -319,7 +337,9 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         gridSnapRef.current = gridSnapValue;
         rotationSnapRef.current = rotationSnapValue;
         scaleSnapRef.current = scaleSnapValue;
-    }, [playState, camera2DZoom, camera2DOffset, transformMode, snapEnabled, gridSnapValue, rotationSnapValue, scaleSnapValue]);
+        renderModeRef.current = renderMode;
+        orbitCameraRef.current = orbitCamera;
+    }, [playState, camera2DZoom, camera2DOffset, transformMode, snapEnabled, gridSnapValue, rotationSnapValue, scaleSnapValue, renderMode, orbitCamera]);
 
     // 发布 Play 状态变化事件，用于层级面板实时同步
     // Publish play state change event for hierarchy panel real-time sync
@@ -347,6 +367,38 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         if (!snapEnabledRef.current || scaleSnapRef.current <= 0) return value;
         return Math.round(value / scaleSnapRef.current) * scaleSnapRef.current;
     }, []);
+
+    // Calculate 3D camera position from orbit parameters
+    // 从轨道参数计算 3D 相机位置
+    const calculateOrbitCameraPosition = useCallback((orbit: typeof orbitCamera) => {
+        const pitchRad = (orbit.pitch * Math.PI) / 180;
+        const yawRad = (orbit.yaw * Math.PI) / 180;
+
+        // Convert spherical to Cartesian coordinates
+        // 将球坐标转换为笛卡尔坐标
+        // Note: negative pitch means looking down, so camera should be above target
+        // 注意：负的 pitch 表示向下看，所以相机应该在目标上方
+        const x = orbit.targetX + orbit.distance * Math.cos(pitchRad) * Math.sin(yawRad);
+        const y = orbit.targetY - orbit.distance * Math.sin(pitchRad); // Negate for correct direction
+        const z = orbit.targetZ + orbit.distance * Math.cos(pitchRad) * Math.cos(yawRad);
+
+        return { x, y, z };
+    }, []);
+
+    // Sync orbit camera to engine
+    // 同步轨道相机到引擎
+    const syncOrbitCameraToEngine = useCallback((orbit: typeof orbitCamera) => {
+        const pos = calculateOrbitCameraPosition(orbit);
+        const engineService = EngineService.getInstance();
+
+        // Set camera position
+        // 设置相机位置
+        engineService.setCamera3DPosition(pos.x, pos.y, pos.z);
+
+        // Make camera look at target
+        // 让相机看向目标
+        engineService.camera3DLookAt(orbit.targetX, orbit.targetY, orbit.targetZ);
+    }, [calculateOrbitCameraPosition]);
 
     // Screen to world coordinate conversion - uses refs to avoid re-registering event handlers
     const screenToWorld = useCallback((screenX: number, screenY: number) => {
@@ -437,6 +489,30 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             if (playStateRef.current === 'playing') {
                 return;
             }
+
+            // 3D mode: orbit camera controls
+            // 3D 模式：轨道相机控制
+            if (renderModeRef.current === '3D') {
+                if (e.button === 0) {
+                    // Left button: orbit (rotate around target)
+                    // 左键：轨道旋转（围绕目标旋转）
+                    isOrbitingRef.current = true;
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                    canvas.style.cursor = 'grabbing';
+                    e.preventDefault();
+                } else if (e.button === 1 || e.button === 2) {
+                    // Middle/Right button: pan
+                    // 中键/右键：平移
+                    isPanningRef.current = true;
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                    canvas.style.cursor = 'move';
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            // 2D mode: original camera controls
+            // 2D 模式：原始相机控制
 
             // Middle mouse button (1) or right button (2) for camera pan
             if (e.button === 1 || e.button === 2) {
@@ -532,6 +608,54 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             const deltaX = e.clientX - lastMousePosRef.current.x;
             const deltaY = e.clientY - lastMousePosRef.current.y;
 
+            // 3D mode: orbit camera controls
+            // 3D 模式：轨道相机控制
+            if (renderModeRef.current === '3D') {
+                if (isOrbitingRef.current) {
+                    // Orbit: rotate around target
+                    // 轨道：围绕目标旋转
+                    const orbitSensitivity = 0.3;
+                    setOrbitCamera((prev) => {
+                        const newYaw = prev.yaw + deltaX * orbitSensitivity;
+                        const newPitch = Math.max(-89, Math.min(89, prev.pitch - deltaY * orbitSensitivity));
+                        const newOrbit = { ...prev, yaw: newYaw, pitch: newPitch };
+                        // Sync to engine in next tick
+                        // 在下一帧同步到引擎
+                        requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                        return newOrbit;
+                    });
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                } else if (isPanningRef.current) {
+                    // Pan: move target point
+                    // 平移：移动目标点
+                    const panSensitivity = 0.01;
+                    const orbit = orbitCameraRef.current;
+                    const yawRad = (orbit.yaw * Math.PI) / 180;
+
+                    // Calculate pan direction based on camera orientation
+                    // 根据相机朝向计算平移方向
+                    const rightX = Math.cos(yawRad);
+                    const rightZ = -Math.sin(yawRad);
+
+                    setOrbitCamera((prev) => {
+                        const panScale = prev.distance * panSensitivity;
+                        const newOrbit = {
+                            ...prev,
+                            targetX: prev.targetX - deltaX * rightX * panScale,
+                            targetY: prev.targetY + deltaY * panScale,
+                            targetZ: prev.targetZ - deltaX * rightZ * panScale
+                        };
+                        requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                        return newOrbit;
+                    });
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                }
+                return;
+            }
+
+            // 2D mode: original camera controls
+            // 2D 模式：原始相机控制
+
             if (isDraggingCameraRef.current) {
                 // Camera pan - use ref to avoid stale closure
                 const dpr = window.devicePixelRatio || 1;
@@ -625,6 +749,19 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         };
 
         const handleMouseUp = () => {
+            // 3D mode: reset orbit/pan flags
+            // 3D 模式：重置轨道/平移标志
+            if (isOrbitingRef.current) {
+                isOrbitingRef.current = false;
+                canvas.style.cursor = 'grab';
+            }
+            if (isPanningRef.current) {
+                isPanningRef.current = false;
+                canvas.style.cursor = 'grab';
+            }
+
+            // 2D mode: original mouse up handling
+            // 2D 模式：原始鼠标抬起处理
             if (isDraggingCameraRef.current) {
                 isDraggingCameraRef.current = false;
                 canvas.style.cursor = 'grab';
@@ -698,6 +835,22 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             if (playStateRef.current === 'playing') {
                 return;
             }
+
+            // 3D mode: zoom by changing distance
+            // 3D 模式：通过改变距离来缩放
+            if (renderModeRef.current === '3D') {
+                const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+                setOrbitCamera((prev) => {
+                    const newDistance = Math.max(1, Math.min(1000, prev.distance * zoomFactor));
+                    const newOrbit = { ...prev, distance: newDistance };
+                    requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                    return newOrbit;
+                });
+                return;
+            }
+
+            // 2D mode: original zoom handling
+            // 2D 模式：原始缩放处理
             // Use multiplicative zoom for consistent feel across all zoom levels
             // 使用乘法缩放，在所有缩放级别都有一致的感觉
             const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
@@ -748,13 +901,52 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         }
     }, [camera2DOffset, camera2DZoom, engine.state.initialized]);
 
+    // Sync render mode and 3D camera to engine
+    // 同步渲染模式和 3D 相机到引擎
+    useEffect(() => {
+        if (engine.state.initialized) {
+            const engineService = EngineService.getInstance();
+            const mode = renderMode === '3D' ? 1 : 0;
+
+            engineService.setRenderMode(mode);
+
+            if (renderMode === '3D') {
+                // Initialize 3D camera when switching to 3D mode
+                // 切换到 3D 模式时初始化 3D 相机
+                engineService.setCamera3DProjection(0); // Perspective
+                engineService.setCamera3DFov(60);
+                engineService.setCamera3DClipPlanes(0.1, 1000);
+                syncOrbitCameraToEngine(orbitCamera);
+
+                // Set a different background color for 3D mode
+                // 为 3D 模式设置不同的背景色
+                engineService.setClearColor(0.15, 0.15, 0.2, 1.0);
+            } else {
+                // Restore 2D mode background color
+                // 恢复 2D 模式背景色
+                engineService.setClearColor(0.1, 0.1, 0.12, 1.0);
+            }
+        }
+    }, [renderMode, engine.state.initialized, syncOrbitCameraToEngine, orbitCamera]);
+
+    // Toggle render mode handler
+    // 切换渲染模式处理函数
+    const handleToggleRenderMode = useCallback(() => {
+        setRenderMode((prev) => prev === '2D' ? '3D' : '2D');
+    }, []);
+
     // Sync grid and gizmo visibility
+    // Engine will use 2D or 3D grid/gizmo based on render mode
+    // 引擎会根据渲染模式使用 2D 或 3D 网格/gizmo
     useEffect(() => {
         if (engine.state.initialized) {
             EngineService.getInstance().setShowGrid(showGrid);
-            EngineService.getInstance().setShowGizmos(showGizmos);
+            // Gizmos are still 2D only for now
+            // Gizmo 目前仍然只有 2D 版本
+            const is2D = renderMode === '2D';
+            EngineService.getInstance().setShowGizmos(is2D && showGizmos);
         }
-    }, [showGrid, showGizmos, engine.state.initialized]);
+    }, [showGrid, showGizmos, renderMode, engine.state.initialized]);
 
     // Sync transform mode to engine
     useEffect(() => {
@@ -1030,8 +1222,24 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
     const handleReset = () => {
         // Reset camera to origin without stopping playback
-        setCamera2DOffset({ x: 0, y: 0 });
-        setCamera2DZoom(1);
+        // 重置相机到原点，不停止播放
+        if (renderMode === '3D') {
+            // Reset 3D orbit camera | 重置 3D 轨道相机
+            const defaultOrbit = {
+                distance: 10,
+                pitch: -30,
+                yaw: 45,
+                targetX: 0,
+                targetY: 0,
+                targetZ: 0
+            };
+            setOrbitCamera(defaultOrbit);
+            syncOrbitCameraToEngine(defaultOrbit);
+        } else {
+            // Reset 2D camera | 重置 2D 相机
+            setCamera2DOffset({ x: 0, y: 0 });
+            setCamera2DZoom(1);
+        }
     };
 
     // Store handlers in refs to avoid dependency issues
@@ -1957,10 +2165,26 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
 
                     <div className="viewport-divider" />
 
+                    {/* 2D/3D Mode Toggle | 2D/3D 模式切换 */}
+                    <button
+                        className={`viewport-btn ${renderMode === '3D' ? 'active' : ''}`}
+                        onClick={handleToggleRenderMode}
+                        title={renderMode === '2D' ? t('viewport.view.switchTo3D') || 'Switch to 3D' : t('viewport.view.switchTo2D') || 'Switch to 2D'}
+                    >
+                        {renderMode === '2D' ? <Square size={14} /> : <Box size={14} />}
+                        <span style={{ marginLeft: 4, fontSize: 10 }}>{renderMode}</span>
+                    </button>
+
+                    <div className="viewport-divider" />
+
                     {/* Zoom display */}
                     <div className="viewport-zoom-display">
                         <ZoomIn size={12} />
-                        <span>{Math.round(camera2DZoom * 100)}%</span>
+                        {renderMode === '2D' ? (
+                            <span>{Math.round(camera2DZoom * 100)}%</span>
+                        ) : (
+                            <span>{orbitCamera.distance.toFixed(1)}m</span>
+                        )}
                     </div>
 
                     <div className="viewport-divider" />

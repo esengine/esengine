@@ -7,9 +7,26 @@ use super::context::WebGLContext;
 use super::error::Result;
 use crate::backend::WebGL2Backend;
 use crate::input::InputManager;
-use crate::renderer::{Renderer2D, GridRenderer, GizmoRenderer, TransformMode, ViewportManager, TextBatch, MeshBatch};
+use crate::renderer::{
+    Renderer2D, Renderer3D, GridRenderer, Grid3DRenderer, GizmoRenderer, Gizmo3DRenderer, TransformMode,
+    ViewportManager, TextBatch, MeshBatch, Camera3D, ProjectionType,
+};
 use crate::resource::TextureManager;
 use es_engine_shared::traits::backend::GraphicsBackend;
+
+/// Render mode enumeration.
+/// 渲染模式枚举。
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RenderMode {
+    /// 2D rendering mode (orthographic camera, no depth test).
+    /// 2D渲染模式（正交相机，无深度测试）。
+    #[default]
+    Mode2D,
+    /// 3D rendering mode (perspective/orthographic camera, depth test enabled).
+    /// 3D渲染模式（透视/正交相机，启用深度测试）。
+    Mode3D,
+}
 
 /// Engine configuration options.
 /// 引擎配置选项。
@@ -104,6 +121,22 @@ pub struct Engine {
     /// Mesh batch renderer for arbitrary 2D geometry.
     /// 任意 2D 几何体的网格批处理渲染器。
     mesh_batch: MeshBatch,
+
+    /// 3D renderer (lazily initialized).
+    /// 3D渲染器（延迟初始化）。
+    renderer_3d: Option<Renderer3D>,
+
+    /// 3D grid renderer (lazily initialized with renderer_3d).
+    /// 3D网格渲染器（与renderer_3d一起延迟初始化）。
+    grid_3d_renderer: Option<Grid3DRenderer>,
+
+    /// 3D gizmo renderer (lazily initialized with renderer_3d).
+    /// 3D Gizmo渲染器（与renderer_3d一起延迟初始化）。
+    gizmo_3d_renderer: Option<Gizmo3DRenderer>,
+
+    /// Current render mode.
+    /// 当前渲染模式。
+    render_mode: RenderMode,
 }
 
 impl Engine {
@@ -167,6 +200,10 @@ impl Engine {
             is_editor: true,
             text_batch,
             mesh_batch,
+            renderer_3d: None, // Lazily initialized when switching to 3D mode
+            grid_3d_renderer: None, // Lazily initialized with renderer_3d
+            gizmo_3d_renderer: None, // Lazily initialized with renderer_3d
+            render_mode: RenderMode::Mode2D,
         })
     }
 
@@ -230,6 +267,10 @@ impl Engine {
             is_editor: true,
             text_batch,
             mesh_batch,
+            renderer_3d: None,
+            grid_3d_renderer: None,
+            gizmo_3d_renderer: None,
+            render_mode: RenderMode::Mode2D,
         })
     }
 
@@ -400,25 +441,53 @@ impl Engine {
         let [r, g, b, a] = self.renderer.get_clear_color();
         self.context.clear(r, g, b, a);
 
-        let camera = self.renderer.camera().clone();
+        // Render based on current mode | 根据当前模式渲染
+        match self.render_mode {
+            RenderMode::Mode2D => {
+                // 2D rendering | 2D 渲染
+                let camera = self.renderer.camera().clone();
 
-        if self.is_editor && self.show_grid {
-            self.grid_renderer.render(&mut self.backend, &camera);
-            self.grid_renderer.render_axes(&mut self.backend, &camera);
+                if self.is_editor && self.show_grid {
+                    self.grid_renderer.render(&mut self.backend, &camera);
+                    self.grid_renderer.render_axes(&mut self.backend, &camera);
+                }
+
+                self.renderer.render(&mut self.backend, &self.texture_manager)
+                    .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+
+                if self.is_editor && self.show_gizmos {
+                    self.gizmo_renderer.render(&mut self.backend, &camera);
+                    self.gizmo_renderer.render_axis_indicator(
+                        &mut self.backend,
+                        self.context.width() as f32,
+                        self.context.height() as f32,
+                    );
+                }
+                self.gizmo_renderer.clear();
+            }
+            RenderMode::Mode3D => {
+                // 3D rendering | 3D 渲染
+                if let Some(ref mut renderer_3d) = self.renderer_3d {
+                    let camera = renderer_3d.camera().clone();
+
+                    // Render 3D grid if in editor mode
+                    // 如果在编辑器模式下渲染 3D 网格
+                    if self.is_editor && self.show_grid {
+                        if let Some(ref mut grid_3d) = self.grid_3d_renderer {
+                            grid_3d.render(&mut self.backend, &camera);
+                            grid_3d.render_axes(&mut self.backend, &camera);
+                        }
+                    }
+
+                    // Render 3D content
+                    // 渲染 3D 内容
+                    renderer_3d.render(&mut self.backend, &self.texture_manager)
+                        .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+                } else {
+                    log::warn!("3D mode active but renderer not initialized | 3D 模式激活但渲染器未初始化");
+                }
+            }
         }
-
-        self.renderer.render(&mut self.backend, &self.texture_manager)
-            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
-
-        if self.is_editor && self.show_gizmos {
-            self.gizmo_renderer.render(&mut self.backend, &camera);
-            self.gizmo_renderer.render_axis_indicator(
-                &mut self.backend,
-                self.context.width() as f32,
-                self.context.height() as f32,
-            );
-        }
-        self.gizmo_renderer.clear();
 
         Ok(())
     }
@@ -521,6 +590,26 @@ impl Engine {
             _ => TransformMode::Select,
         };
         self.gizmo_renderer.set_transform_mode(transform_mode);
+
+        // Also update 3D gizmo if initialized
+        // 如果已初始化，也更新 3D Gizmo
+        if let Some(ref mut gizmo_3d) = self.gizmo_3d_renderer {
+            gizmo_3d.set_transform_mode(transform_mode);
+        }
+    }
+
+    /// Render a 3D gizmo at the specified world position.
+    /// 在指定的世界位置渲染 3D Gizmo。
+    pub fn render_3d_gizmo(&mut self, x: f32, y: f32, z: f32, scale: f32) {
+        if self.render_mode != RenderMode::Mode3D {
+            return;
+        }
+
+        if let (Some(ref mut gizmo_3d), Some(ref renderer_3d)) = (&mut self.gizmo_3d_renderer, &self.renderer_3d) {
+            let camera = renderer_3d.camera();
+            let position = glam::Vec3::new(x, y, z);
+            gizmo_3d.render(&mut self.backend, camera, position, scale);
+        }
     }
 
     /// Load a texture from URL.
@@ -810,25 +899,56 @@ impl Engine {
         viewport.bind();
         viewport.clear();
 
-        let renderer_camera = self.renderer.camera_mut();
-        renderer_camera.position = camera.position;
-        renderer_camera.set_zoom(camera.zoom);
-        renderer_camera.rotation = camera.rotation;
-        renderer_camera.set_viewport(camera.viewport_width(), camera.viewport_height());
+        // Render based on current mode | 根据当前模式渲染
+        match self.render_mode {
+            RenderMode::Mode2D => {
+                // 2D rendering | 2D 渲染
+                let renderer_camera = self.renderer.camera_mut();
+                renderer_camera.position = camera.position;
+                renderer_camera.set_zoom(camera.zoom);
+                renderer_camera.rotation = camera.rotation;
+                renderer_camera.set_viewport(camera.viewport_width(), camera.viewport_height());
 
-        if self.is_editor && show_grid {
-            self.grid_renderer.render(&mut self.backend, &camera);
-            self.grid_renderer.render_axes(&mut self.backend, &camera);
+                if self.is_editor && show_grid {
+                    self.grid_renderer.render(&mut self.backend, &camera);
+                    self.grid_renderer.render_axes(&mut self.backend, &camera);
+                }
+
+                self.renderer.render(&mut self.backend, &self.texture_manager)
+                    .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+
+                if self.is_editor && show_gizmos {
+                    self.gizmo_renderer.render(&mut self.backend, &camera);
+                    self.gizmo_renderer.render_axis_indicator(&mut self.backend, vp_width as f32, vp_height as f32);
+                }
+                self.gizmo_renderer.clear();
+            }
+            RenderMode::Mode3D => {
+                // 3D rendering | 3D 渲染
+                if let Some(ref mut renderer_3d) = self.renderer_3d {
+                    // Update 3D camera viewport
+                    // 更新 3D 相机视口
+                    renderer_3d.camera_mut().set_viewport(vp_width as f32, vp_height as f32);
+                    let camera_3d = renderer_3d.camera().clone();
+
+                    // Render 3D grid if in editor mode
+                    // 如果在编辑器模式下渲染 3D 网格
+                    if self.is_editor && show_grid {
+                        if let Some(ref mut grid_3d) = self.grid_3d_renderer {
+                            grid_3d.render(&mut self.backend, &camera_3d);
+                            grid_3d.render_axes(&mut self.backend, &camera_3d);
+                        }
+                    }
+
+                    // Render 3D content
+                    // 渲染 3D 内容
+                    renderer_3d.render(&mut self.backend, &self.texture_manager)
+                        .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+                } else {
+                    log::warn!("3D mode active but renderer not initialized | 3D 模式激活但渲染器未初始化");
+                }
+            }
         }
-
-        self.renderer.render(&mut self.backend, &self.texture_manager)
-            .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
-
-        if self.is_editor && show_gizmos {
-            self.gizmo_renderer.render(&mut self.backend, &camera);
-            self.gizmo_renderer.render_axis_indicator(&mut self.backend, vp_width as f32, vp_height as f32);
-        }
-        self.gizmo_renderer.clear();
 
         Ok(())
     }
@@ -1011,5 +1131,164 @@ impl Engine {
         } else {
             false
         }
+    }
+
+    // ===== 3D Rendering Mode =====
+    // ===== 3D 渲染模式 =====
+
+    /// Get current render mode.
+    /// 获取当前渲染模式。
+    pub fn render_mode(&self) -> RenderMode {
+        self.render_mode
+    }
+
+    /// Set render mode (2D or 3D).
+    /// 设置渲染模式（2D或3D）。
+    ///
+    /// When switching to 3D mode, the 3D renderer is lazily initialized if not already created.
+    /// 切换到3D模式时，如果3D渲染器尚未创建，则会延迟初始化。
+    pub fn set_render_mode(&mut self, mode: RenderMode) -> Result<()> {
+        if mode == RenderMode::Mode3D && self.renderer_3d.is_none() {
+            // Initialize 3D renderer on first use
+            // 首次使用时初始化3D渲染器
+            let renderer_3d = Renderer3D::new(&mut self.backend)
+                .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+            self.renderer_3d = Some(renderer_3d);
+
+            // Initialize 3D grid renderer
+            // 初始化3D网格渲染器
+            let grid_3d = Grid3DRenderer::new(&mut self.backend)
+                .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+            self.grid_3d_renderer = Some(grid_3d);
+
+            // Initialize 3D gizmo renderer
+            // 初始化3D Gizmo渲染器
+            let gizmo_3d = Gizmo3DRenderer::new(&mut self.backend)
+                .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+            self.gizmo_3d_renderer = Some(gizmo_3d);
+
+            log::info!("3D renderer, grid and gizmo initialized | 3D渲染器、网格和Gizmo已初始化");
+        }
+        self.render_mode = mode;
+        Ok(())
+    }
+
+    /// Check if 3D renderer is initialized.
+    /// 检查3D渲染器是否已初始化。
+    pub fn has_3d_renderer(&self) -> bool {
+        self.renderer_3d.is_some()
+    }
+
+    /// Get reference to 3D renderer (if initialized).
+    /// 获取3D渲染器的引用（如果已初始化）。
+    pub fn renderer_3d(&self) -> Option<&Renderer3D> {
+        self.renderer_3d.as_ref()
+    }
+
+    /// Get mutable reference to 3D renderer (if initialized).
+    /// 获取3D渲染器的可变引用（如果已初始化）。
+    pub fn renderer_3d_mut(&mut self) -> Option<&mut Renderer3D> {
+        self.renderer_3d.as_mut()
+    }
+
+    /// Set 3D camera position.
+    /// 设置3D相机位置。
+    pub fn set_camera_3d_position(&mut self, x: f32, y: f32, z: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.camera_mut().position = glam::Vec3::new(x, y, z);
+        }
+    }
+
+    /// Get 3D camera position.
+    /// 获取3D相机位置。
+    pub fn get_camera_3d_position(&self) -> Option<(f32, f32, f32)> {
+        self.renderer_3d.as_ref().map(|r| {
+            let pos = r.camera().position;
+            (pos.x, pos.y, pos.z)
+        })
+    }
+
+    /// Set 3D camera rotation using Euler angles (in degrees).
+    /// 使用欧拉角设置3D相机旋转（角度制）。
+    pub fn set_camera_3d_rotation(&mut self, pitch: f32, yaw: f32, roll: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            let pitch_rad = pitch.to_radians();
+            let yaw_rad = yaw.to_radians();
+            let roll_rad = roll.to_radians();
+            renderer.camera_mut().set_rotation_euler(pitch_rad, yaw_rad, roll_rad);
+        }
+    }
+
+    /// Get 3D camera rotation as Euler angles (in degrees).
+    /// 获取3D相机旋转的欧拉角（角度制）。
+    pub fn get_camera_3d_rotation(&self) -> Option<(f32, f32, f32)> {
+        self.renderer_3d.as_ref().map(|r| {
+            let (pitch, yaw, roll) = r.camera().get_rotation_euler();
+            (pitch.to_degrees(), yaw.to_degrees(), roll.to_degrees())
+        })
+    }
+
+    /// Set 3D camera field of view (in degrees).
+    /// 设置3D相机视野角（角度制）。
+    pub fn set_camera_3d_fov(&mut self, fov_degrees: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.camera_mut().fov = fov_degrees.to_radians();
+        }
+    }
+
+    /// Get 3D camera field of view (in degrees).
+    /// 获取3D相机视野角（角度制）。
+    pub fn get_camera_3d_fov(&self) -> Option<f32> {
+        self.renderer_3d.as_ref().map(|r| r.camera().fov.to_degrees())
+    }
+
+    /// Set 3D camera projection type.
+    /// 设置3D相机投影类型。
+    ///
+    /// 0 = Perspective, 1 = Orthographic (with size)
+    pub fn set_camera_3d_projection(&mut self, projection_type: u8, ortho_size: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.camera_mut().projection_type = match projection_type {
+                0 => ProjectionType::Perspective,
+                1 => ProjectionType::Orthographic { size: ortho_size },
+                _ => ProjectionType::Perspective,
+            };
+        }
+    }
+
+    /// Make 3D camera look at a target position.
+    /// 使3D相机朝向目标位置。
+    pub fn camera_3d_look_at(&mut self, target_x: f32, target_y: f32, target_z: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            let target = glam::Vec3::new(target_x, target_y, target_z);
+            renderer.camera_mut().look_at(target, glam::Vec3::Y);
+        }
+    }
+
+    /// Set 3D camera near and far clip planes.
+    /// 设置3D相机近裁剪面和远裁剪面。
+    pub fn set_camera_3d_clip_planes(&mut self, near: f32, far: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.camera_mut().near = near;
+            renderer.camera_mut().far = far;
+        }
+    }
+
+    /// Resize 3D renderer viewport.
+    /// 调整3D渲染器视口大小。
+    pub fn resize_3d(&mut self, width: f32, height: f32) {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.resize(width, height);
+        }
+    }
+
+    /// Render 3D content.
+    /// 渲染3D内容。
+    pub fn render_3d(&mut self) -> Result<()> {
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.render(&mut self.backend, &self.texture_manager)
+                .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
+        }
+        Ok(())
     }
 }

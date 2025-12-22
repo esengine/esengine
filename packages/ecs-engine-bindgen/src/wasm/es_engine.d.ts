@@ -6,6 +6,22 @@
  */
 export function init(): void;
 /**
+ * Render mode enumeration.
+ * 渲染模式枚举。
+ */
+export enum RenderMode {
+  /**
+   * 2D rendering mode (orthographic camera, no depth test).
+   * 2D渲染模式（正交相机，无深度测试）。
+   */
+  Mode2D = 0,
+  /**
+   * 3D rendering mode (perspective/orthographic camera, depth test enabled).
+   * 3D渲染模式（透视/正交相机，启用深度测试）。
+   */
+  Mode3D = 1,
+}
+/**
  * Game engine main interface exposed to JavaScript.
  * 暴露给JavaScript的游戏引擎主接口。
  *
@@ -144,10 +160,36 @@ export class GameEngine {
    */
   createMaterial(name: string, shader_id: number, blend_mode: number): number;
   /**
+   * Get current render mode.
+   * 获取当前渲染模式。
+   *
+   * Returns 0 for 2D mode, 1 for 3D mode.
+   * 返回 0 表示 2D 模式，1 表示 3D 模式。
+   */
+  getRenderMode(): number;
+  /**
+   * Check if 3D renderer is initialized.
+   * 检查 3D 渲染器是否已初始化。
+   */
+  has3DRenderer(): boolean;
+  /**
    * Remove a material.
    * 移除材质。
    */
   removeMaterial(material_id: number): boolean;
+  /**
+   * Render a 3D gizmo at the specified world position.
+   * 在指定的世界位置渲染 3D Gizmo。
+   *
+   * Only works in 3D render mode. The gizmo will be rendered
+   * with the current transform mode (move/rotate/scale).
+   * 仅在 3D 渲染模式下有效。Gizmo 将使用当前的变换模式渲染。
+   *
+   * # Arguments | 参数
+   * * `x`, `y`, `z` - World position | 世界位置
+   * * `scale` - Gizmo scale multiplier | Gizmo 缩放倍数
+   */
+  render3DGizmo(x: number, y: number, z: number, scale: number): void;
   /**
    * Resize a specific viewport.
    * 调整特定视口大小。
@@ -182,6 +224,18 @@ export class GameEngine {
    * 当为 false（运行时模式）时，编辑器专用 UI（如网格、gizmos、坐标轴指示器）会自动隐藏。
    */
   setEditorMode(is_editor: boolean): void;
+  /**
+   * Set render mode.
+   * 设置渲染模式。
+   *
+   * # Arguments | 参数
+   * * `mode` - 0 for 2D, 1 for 3D | 0 表示 2D，1 表示 3D
+   *
+   * When switching to 3D mode for the first time, the 3D renderer
+   * will be lazily initialized.
+   * 首次切换到 3D 模式时，3D 渲染器将被延迟初始化。
+   */
+  setRenderMode(mode: number): void;
   /**
    * Set gizmo visibility.
    * 设置辅助工具可见性。
@@ -242,6 +296,16 @@ export class GameEngine {
    */
   addGizmoCapsule(x: number, y: number, radius: number, half_height: number, rotation: number, r: number, g: number, b: number, a: number): void;
   /**
+   * Make 3D camera look at a target position.
+   * 使 3D 相机朝向目标位置。
+   */
+  camera3DLookAt(target_x: number, target_y: number, target_z: number): void;
+  /**
+   * Get 3D camera field of view (in degrees).
+   * 获取 3D 相机视野角（角度制）。
+   */
+  getCamera3DFov(): number | undefined;
+  /**
    * 获取纹理加载状态
    * Get texture loading state
    *
@@ -262,6 +326,14 @@ export class GameEngine {
    * * `canvas_id` - HTML canvas element ID | HTML canvas元素ID
    */
   registerViewport(id: string, canvas_id: string): void;
+  /**
+   * Set 3D camera field of view (in degrees).
+   * 设置 3D 相机视野角（角度制）。
+   *
+   * Only affects perspective projection mode.
+   * 仅影响透视投影模式。
+   */
+  setCamera3DFov(fov_degrees: number): void;
   /**
    * Set a material's vec2 uniform.
    * 设置材质的vec2 uniform。
@@ -448,6 +520,22 @@ export class GameEngine {
    */
   compileShaderWithId(shader_id: number, vertex_source: string, fragment_source: string): void;
   /**
+   * Get 3D camera position.
+   * 获取 3D 相机位置。
+   *
+   * Returns [x, y, z] or null if 3D renderer is not initialized.
+   * 返回 [x, y, z]，如果 3D 渲染器未初始化则返回 null。
+   */
+  getCamera3DPosition(): Float32Array | undefined;
+  /**
+   * Get 3D camera rotation as Euler angles (in degrees).
+   * 获取 3D 相机旋转的欧拉角（角度制）。
+   *
+   * Returns [pitch, yaw, roll] or null if 3D renderer is not initialized.
+   * 返回 [pitch, yaw, roll]，如果 3D 渲染器未初始化则返回 null。
+   */
+  getCamera3DRotation(): Float32Array | undefined;
+  /**
    * Get texture ID by path.
    * 按路径获取纹理ID。
    *
@@ -455,6 +543,21 @@ export class GameEngine {
    * * `path` - Image path to lookup | 要查找的图片路径
    */
   getTextureIdByPath(path: string): number | undefined;
+  /**
+   * Set 3D camera position.
+   * 设置 3D 相机位置。
+   */
+  setCamera3DPosition(x: number, y: number, z: number): void;
+  /**
+   * Set 3D camera rotation using Euler angles (in degrees).
+   * 使用欧拉角设置 3D 相机旋转（角度制）。
+   *
+   * # Arguments | 参数
+   * * `pitch` - Rotation around X axis (degrees) | X 轴旋转（角度）
+   * * `yaw` - Rotation around Y axis (degrees) | Y 轴旋转（角度）
+   * * `roll` - Rotation around Z axis (degrees) | Z 轴旋转（角度）
+   */
+  setCamera3DRotation(pitch: number, yaw: number, roll: number): void;
   /**
    * Create a material with a specific ID.
    * 使用特定ID创建材质。
@@ -489,10 +592,24 @@ export class GameEngine {
    */
   getTextureSizeByPath(path: string): Float32Array | undefined;
   /**
+   * Set 3D camera projection type.
+   * 设置 3D 相机投影类型。
+   *
+   * # Arguments | 参数
+   * * `projection_type` - 0 for Perspective, 1 for Orthographic
+   * * `ortho_size` - Half-height of orthographic view (only used when projection_type = 1)
+   */
+  setCamera3DProjection(projection_type: number, ortho_size: number): void;
+  /**
    * 获取正在加载中的纹理数量
    * Get the number of textures currently loading
    */
   getTextureLoadingCount(): number;
+  /**
+   * Set 3D camera near and far clip planes.
+   * 设置 3D 相机近裁剪面和远裁剪面。
+   */
+  setCamera3DClipPlanes(near: number, far: number): void;
   /**
    * Create a new game engine instance.
    * 创建新的游戏引擎实例。
@@ -530,6 +647,19 @@ export class GameEngine {
    */
   resize(width: number, height: number): void;
   /**
+   * Render 3D content.
+   * 渲染 3D 内容。
+   *
+   * Should be called after submitting 3D meshes.
+   * 应在提交 3D 网格后调用。
+   */
+  render3D(): void;
+  /**
+   * Resize 3D renderer viewport.
+   * 调整 3D 渲染器视口大小。
+   */
+  resize3D(width: number, height: number): void;
+  /**
    * Get canvas width.
    * 获取画布宽度。
    */
@@ -550,6 +680,7 @@ export interface InitOutput {
   readonly gameengine_addGizmoCircle: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
   readonly gameengine_addGizmoLine: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
   readonly gameengine_addGizmoRect: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
+  readonly gameengine_camera3DLookAt: (a: number, b: number, c: number, d: number) => void;
   readonly gameengine_clear: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_clearAllTextures: (a: number) => void;
   readonly gameengine_clearScissorRect: (a: number) => void;
@@ -563,14 +694,19 @@ export interface InitOutput {
   readonly gameengine_getBackendName: (a: number) => [number, number];
   readonly gameengine_getBackendVersion: (a: number) => [number, number];
   readonly gameengine_getCamera: (a: number) => [number, number];
+  readonly gameengine_getCamera3DFov: (a: number) => number;
+  readonly gameengine_getCamera3DPosition: (a: number) => [number, number];
+  readonly gameengine_getCamera3DRotation: (a: number) => [number, number];
   readonly gameengine_getMaxTextureSize: (a: number) => number;
   readonly gameengine_getOrLoadTextureByPath: (a: number, b: number, c: number) => [number, number, number];
+  readonly gameengine_getRenderMode: (a: number) => number;
   readonly gameengine_getTextureIdByPath: (a: number, b: number, c: number) => number;
   readonly gameengine_getTextureLoadingCount: (a: number) => number;
   readonly gameengine_getTextureSizeByPath: (a: number, b: number, c: number) => any;
   readonly gameengine_getTextureState: (a: number, b: number) => [number, number];
   readonly gameengine_getViewportCamera: (a: number, b: number, c: number) => [number, number];
   readonly gameengine_getViewportIds: (a: number) => [number, number];
+  readonly gameengine_has3DRenderer: (a: number) => number;
   readonly gameengine_hasMaterial: (a: number, b: number) => number;
   readonly gameengine_hasShader: (a: number, b: number) => number;
   readonly gameengine_height: (a: number) => number;
@@ -584,13 +720,21 @@ export interface InitOutput {
   readonly gameengine_removeMaterial: (a: number, b: number) => number;
   readonly gameengine_removeShader: (a: number, b: number) => number;
   readonly gameengine_render: (a: number) => [number, number];
+  readonly gameengine_render3D: (a: number) => [number, number];
+  readonly gameengine_render3DGizmo: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_renderOverlay: (a: number) => [number, number];
   readonly gameengine_renderToViewport: (a: number, b: number, c: number) => [number, number];
   readonly gameengine_resize: (a: number, b: number, c: number) => void;
+  readonly gameengine_resize3D: (a: number, b: number, c: number) => void;
   readonly gameengine_resizeViewport: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_screenToWorld: (a: number, b: number, c: number) => [number, number];
   readonly gameengine_setActiveViewport: (a: number, b: number, c: number) => number;
   readonly gameengine_setCamera: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly gameengine_setCamera3DClipPlanes: (a: number, b: number, c: number) => void;
+  readonly gameengine_setCamera3DFov: (a: number, b: number) => void;
+  readonly gameengine_setCamera3DPosition: (a: number, b: number, c: number, d: number) => void;
+  readonly gameengine_setCamera3DProjection: (a: number, b: number, c: number) => void;
+  readonly gameengine_setCamera3DRotation: (a: number, b: number, c: number, d: number) => void;
   readonly gameengine_setClearColor: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_setEditorMode: (a: number, b: number) => void;
   readonly gameengine_setMaterialBlendMode: (a: number, b: number, c: number) => number;
@@ -599,6 +743,7 @@ export interface InitOutput {
   readonly gameengine_setMaterialVec2: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
   readonly gameengine_setMaterialVec3: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
   readonly gameengine_setMaterialVec4: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => number;
+  readonly gameengine_setRenderMode: (a: number, b: number) => [number, number];
   readonly gameengine_setScissorRect: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly gameengine_setShowGizmos: (a: number, b: number) => void;
   readonly gameengine_setShowGrid: (a: number, b: number) => void;
@@ -614,8 +759,8 @@ export interface InitOutput {
   readonly gameengine_width: (a: number) => number;
   readonly gameengine_worldToScreen: (a: number, b: number, c: number) => [number, number];
   readonly init: () => void;
-  readonly wasm_bindgen__convert__closures_____invoke__h0cae3d4947da04cb: (a: number, b: number) => void;
-  readonly wasm_bindgen__closure__destroy__h0c01365f59f73f28: (a: number, b: number) => void;
+  readonly wasm_bindgen__convert__closures_____invoke__h256074d77f4ce876: (a: number, b: number) => void;
+  readonly wasm_bindgen__closure__destroy__h14ac3db10f717d1a: (a: number, b: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
