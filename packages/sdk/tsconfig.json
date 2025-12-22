@@ -12,7 +12,7 @@
         { "path": "../engine-core" },
         { "path": "../math" },
         { "path": "../sprite" },
-        { "path": "../ui" },
+        { "path": "../fairygui" },
         { "path": "../audio" },
         { "path": "../camera" },
         { "path": "../particle" },
