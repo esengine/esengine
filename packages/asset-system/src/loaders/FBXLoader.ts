@@ -1665,14 +1665,24 @@ export class FBXLoader implements IAssetLoader<IGLTFAsset> {
         const models: FBXModel[] = [];
         const materials: FBXMaterial[] = [];
 
-        // Find Geometry sections
-        // 查找 Geometry 部分
-        const geometryRegex = /Geometry:\s*(\d+),\s*"Geometry::([^"]*)",\s*"Mesh"\s*{([^}]*(?:{[^}]*}[^}]*)*)}/g;
+        // Find Geometry sections using a safer approach
+        // 使用更安全的方法查找 Geometry 部分
+        const geometryHeaderRegex = /Geometry:\s*(\d+),\s*"Geometry::([^"]*)",\s*"Mesh"\s*{/g;
         let match;
 
-        while ((match = geometryRegex.exec(text)) !== null) {
+        while ((match = geometryHeaderRegex.exec(text)) !== null) {
             const name = match[2] || 'Geometry';
-            const content = match[3];
+            // Find matching closing brace by counting braces
+            // 通过计数括号找到匹配的右括号
+            const startIdx = match.index + match[0].length;
+            let braceCount = 1;
+            let endIdx = startIdx;
+            for (let i = startIdx; i < text.length && braceCount > 0; i++) {
+                if (text[i] === '{') braceCount++;
+                else if (text[i] === '}') braceCount--;
+                endIdx = i;
+            }
+            const content = text.slice(startIdx, endIdx);
 
             // Extract vertices
             // 提取顶点

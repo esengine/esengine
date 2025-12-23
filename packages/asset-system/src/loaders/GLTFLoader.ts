@@ -366,7 +366,7 @@ export class GLTFLoader implements IAssetLoader<IGLTFAsset> {
      * Decode base64 data URI
      */
     private decodeDataUri(uri: string): ArrayBuffer {
-        const match = uri.match(/^data:.*?;base64,(.*)$/);
+        const match = uri.match(/^data:[^;]*;base64,(.*)$/);
         if (!match) {
             throw new Error('Invalid data URI format');
         }
