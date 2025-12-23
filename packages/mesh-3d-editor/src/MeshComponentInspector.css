@@ -1,0 +1,124 @@
+/**
+ * Mesh Component Inspector Styles.
+ * 网格组件检查器样式。
+ */
+
+.mesh-component-inspector {
+    margin-top: 8px;
+}
+
+/* Mesh Info Section */
+.mesh-info-section {
+    background: var(--panel-bg, #1e1e1e);
+    border: 1px solid var(--border-color, #3c3c3c);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.mesh-info-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--header-bg, #252526);
+    cursor: pointer;
+    user-select: none;
+}
+
+.mesh-info-header:hover {
+    background: var(--header-hover-bg, #2a2a2a);
+}
+
+.mesh-info-expand {
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary, #888);
+}
+
+.mesh-info-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary, #ccc);
+}
+
+.mesh-info-content {
+    padding: 8px 10px;
+}
+
+.mesh-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 11px;
+}
+
+.mesh-info-row label {
+    color: var(--text-secondary, #888);
+}
+
+.mesh-info-value {
+    color: var(--text-primary, #ccc);
+    font-family: monospace;
+}
+
+.mesh-info-vec3 {
+    font-size: 10px;
+}
+
+.mesh-info-divider {
+    height: 1px;
+    background: var(--border-color, #3c3c3c);
+    margin: 8px 0;
+}
+
+.mesh-info-subtitle {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary, #ccc);
+    margin-bottom: 6px;
+}
+
+/* Materials list */
+.mesh-info-materials {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mesh-info-material {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    background: var(--item-bg, #2d2d2d);
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.mesh-info-material-index {
+    min-width: 20px;
+    padding: 2px 4px;
+    background: var(--badge-bg, #3c3c3c);
+    border-radius: 2px;
+    text-align: center;
+    color: var(--text-secondary, #888);
+}
+
+.mesh-info-material-name {
+    color: var(--text-primary, #ccc);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Empty state */
+.mesh-info-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    color: var(--text-secondary, #888);
+    font-size: 11px;
+    font-style: italic;
+}

@@ -81,10 +81,27 @@ export interface IAssetLoaderFactory {
     createLoader(type: AssetType): IAssetLoader | null;
 
     /**
+     * Create loader for a specific file path (selects by extension)
+     * 为特定文件路径创建加载器（按扩展名选择）
+     *
+     * This method is preferred over createLoader() when multiple loaders
+     * support the same asset type (e.g., Model3D with GLTF/OBJ/FBX).
+     * 当多个加载器支持相同资产类型时（如 Model3D 的 GLTF/OBJ/FBX），
+     * 优先使用此方法而非 createLoader()。
+     */
+    createLoaderForPath(path: string): IAssetLoader | null;
+
+    /**
      * Register custom loader
      * 注册自定义加载器
      */
     registerLoader(type: AssetType, loader: IAssetLoader): void;
+
+    /**
+     * Register a loader for a specific file extension
+     * 为特定文件扩展名注册加载器
+     */
+    registerExtensionLoader(extension: string, loader: IAssetLoader): void;
 
     /**
      * Unregister loader
@@ -364,4 +381,236 @@ export interface IBinaryAsset {
     data: ArrayBuffer;
     /** MIME类型 / MIME type */
     mimeType?: string;
+}
+
+// ===== GLTF/GLB 3D Model Types =====
+// ===== GLTF/GLB 3D 模型类型 =====
+
+/**
+ * Bounding box interface
+ * 边界盒接口
+ */
+export interface IBoundingBox {
+    /** 最小坐标 [x, y, z] | Minimum coordinates */
+    min: [number, number, number];
+    /** 最大坐标 [x, y, z] | Maximum coordinates */
+    max: [number, number, number];
+}
+
+/**
+ * Extended mesh data with name and material reference
+ * 扩展的网格数据，包含名称和材质引用
+ */
+export interface IMeshData extends IMeshAsset {
+    /** 网格名称 | Mesh name */
+    name: string;
+    /** 引用的材质索引 | Referenced material index */
+    materialIndex: number;
+    /** 顶点颜色（如果有）| Vertex colors if available */
+    colors?: Float32Array;
+
+    // ===== Skinning data for skeletal animation =====
+    // ===== 骨骼动画蒙皮数据 =====
+
+    /**
+     * Joint indices per vertex (4 influences, GLTF JOINTS_0)
+     * 每顶点的关节索引（4 个影响，GLTF JOINTS_0）
+     * Format: [j0, j1, j2, j3] for each vertex
+     */
+    joints?: Uint8Array | Uint16Array;
+
+    /**
+     * Joint weights per vertex (4 influences, GLTF WEIGHTS_0)
+     * 每顶点的关节权重（4 个影响，GLTF WEIGHTS_0）
+     * Format: [w0, w1, w2, w3] for each vertex, should sum to 1.0
+     */
+    weights?: Float32Array;
+}
+
+/**
+ * GLTF material definition
+ * GLTF 材质定义
+ */
+export interface IGLTFMaterial {
+    /** 材质名称 | Material name */
+    name: string;
+    /** 基础颜色 [r, g, b, a] | Base color factor */
+    baseColorFactor: [number, number, number, number];
+    /** 基础颜色纹理索引 | Base color texture index (-1 if none) */
+    baseColorTextureIndex: number;
+    /** 金属度 (0-1) | Metallic factor */
+    metallicFactor: number;
+    /** 粗糙度 (0-1) | Roughness factor */
+    roughnessFactor: number;
+    /** 金属粗糙度纹理索引 | Metallic-roughness texture index */
+    metallicRoughnessTextureIndex: number;
+    /** 法线纹理索引 | Normal texture index */
+    normalTextureIndex: number;
+    /** 法线缩放 | Normal scale */
+    normalScale: number;
+    /** 遮挡纹理索引 | Occlusion texture index */
+    occlusionTextureIndex: number;
+    /** 遮挡强度 | Occlusion strength */
+    occlusionStrength: number;
+    /** 自发光因子 [r, g, b] | Emissive factor */
+    emissiveFactor: [number, number, number];
+    /** 自发光纹理索引 | Emissive texture index */
+    emissiveTextureIndex: number;
+    /** Alpha 模式 | Alpha mode */
+    alphaMode: 'OPAQUE' | 'MASK' | 'BLEND';
+    /** Alpha 剔除阈值 | Alpha cutoff */
+    alphaCutoff: number;
+    /** 是否双面 | Double sided */
+    doubleSided: boolean;
+}
+
+/**
+ * GLTF texture info
+ * GLTF 纹理信息
+ */
+export interface IGLTFTextureInfo {
+    /** 纹理名称 | Texture name */
+    name?: string;
+    /** 图像数据（嵌入式）| Image data (embedded) */
+    imageData?: ArrayBuffer;
+    /** 图像 MIME 类型 | Image MIME type */
+    mimeType?: string;
+    /** 外部 URI（非嵌入）| External URI (non-embedded) */
+    uri?: string;
+    /** 加载后的纹理资产 GUID | Loaded texture asset GUID */
+    textureGuid?: AssetGUID;
+}
+
+/**
+ * GLTF node (scene hierarchy)
+ * GLTF 节点（场景层级）
+ */
+export interface IGLTFNode {
+    /** 节点名称 | Node name */
+    name: string;
+    /** 网格索引（可选）| Mesh index (optional) */
+    meshIndex?: number;
+    /** 子节点索引列表 | Child node indices */
+    children: number[];
+    /** 变换信息 | Transform info */
+    transform: {
+        /** 位置 [x, y, z] | Position */
+        position: [number, number, number];
+        /** 旋转四元数 [x, y, z, w] | Rotation quaternion */
+        rotation: [number, number, number, number];
+        /** 缩放 [x, y, z] | Scale */
+        scale: [number, number, number];
+    };
+}
+
+/**
+ * Animation channel target
+ * 动画通道目标
+ */
+export interface IAnimationChannelTarget {
+    /** 目标节点索引 | Target node index */
+    nodeIndex: number;
+    /** 目标属性 | Target property */
+    path: 'translation' | 'rotation' | 'scale' | 'weights';
+}
+
+/**
+ * Animation sampler
+ * 动画采样器
+ */
+export interface IAnimationSampler {
+    /** 输入时间数组 | Input time array */
+    input: Float32Array;
+    /** 输出值数组 | Output values array */
+    output: Float32Array;
+    /** 插值类型 | Interpolation type */
+    interpolation: 'LINEAR' | 'STEP' | 'CUBICSPLINE';
+}
+
+/**
+ * Animation channel
+ * 动画通道
+ */
+export interface IAnimationChannel {
+    /** 采样器索引 | Sampler index */
+    samplerIndex: number;
+    /** 目标 | Target */
+    target: IAnimationChannelTarget;
+}
+
+/**
+ * Animation clip from GLTF
+ * GLTF 动画片段
+ */
+export interface IGLTFAnimationClip {
+    /** 动画名称 | Animation name */
+    name: string;
+    /** 动画时长（秒）| Duration in seconds */
+    duration: number;
+    /** 采样器列表 | Sampler list */
+    samplers: IAnimationSampler[];
+    /** 通道列表 | Channel list */
+    channels: IAnimationChannel[];
+}
+
+/**
+ * Skeleton joint
+ * 骨骼关节
+ */
+export interface ISkeletonJoint {
+    /** 关节名称 | Joint name */
+    name: string;
+    /** 节点索引 | Node index */
+    nodeIndex: number;
+    /** 父关节索引（-1 表示根）| Parent joint index (-1 for root) */
+    parentIndex: number;
+    /** 逆绑定矩阵 (4x4) | Inverse bind matrix */
+    inverseBindMatrix: Float32Array;
+}
+
+/**
+ * Skeleton data
+ * 骨骼数据
+ */
+export interface ISkeletonData {
+    /** 关节列表 | Joint list */
+    joints: ISkeletonJoint[];
+    /** 根关节索引 | Root joint index */
+    rootJointIndex: number;
+}
+
+/**
+ * GLTF/GLB 3D model asset interface
+ * GLTF/GLB 3D 模型资产接口
+ */
+export interface IGLTFAsset {
+    /** 模型名称 | Model name */
+    name: string;
+
+    /** 网格数据列表 | Mesh data list */
+    meshes: IMeshData[];
+
+    /** 材质列表 | Material list */
+    materials: IGLTFMaterial[];
+
+    /** 纹理信息列表 | Texture info list */
+    textures: IGLTFTextureInfo[];
+
+    /** 场景层级节点 | Scene hierarchy nodes */
+    nodes: IGLTFNode[];
+
+    /** 根节点索引列表 | Root node indices */
+    rootNodes: number[];
+
+    /** 动画片段列表（可选）| Animation clips (optional) */
+    animations?: IGLTFAnimationClip[];
+
+    /** 骨骼数据（可选）| Skeleton data (optional) */
+    skeleton?: ISkeletonData;
+
+    /** 整体边界盒 | Overall bounding box */
+    bounds: IBoundingBox;
+
+    /** 源文件路径 | Source file path */
+    sourcePath?: string;
 }

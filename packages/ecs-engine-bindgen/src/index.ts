@@ -9,6 +9,7 @@
 export {
     RenderSystemToken,
     EngineIntegrationToken,
+    EngineBridgeToken,
     // 新的单一职责服务令牌 | New single-responsibility service tokens
     TextureServiceToken,
     DynamicAtlasServiceToken,

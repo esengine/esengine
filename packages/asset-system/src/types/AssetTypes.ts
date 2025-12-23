@@ -52,6 +52,8 @@ export const AssetType = {
     Texture: 'texture',
     /** 网格 */
     Mesh: 'mesh',
+    /** 3D模型 (GLTF/GLB) | 3D Model */
+    Model3D: 'model3d',
     /** 材质 */
     Material: 'material',
     /** 着色器 */

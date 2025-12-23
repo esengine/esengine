@@ -23,6 +23,7 @@ import { QRCodeDialog } from './QRCodeDialog';
 import { collectAssetReferences } from '@esengine/asset-system';
 import { RuntimeSceneManager, type IRuntimeSceneManager } from '@esengine/runtime-core';
 import { ParticleSystemComponent } from '@esengine/particle';
+import { MeshComponent } from '@esengine/mesh-3d';
 
 import type { ModuleManifest } from '../services/RuntimeResolver';
 
@@ -314,6 +315,12 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
     const orbitCameraRef = useRef(orbitCamera);
     const isOrbitingRef = useRef(false);
     const isPanningRef = useRef(false);
+    const isZoomingRef = useRef(false);
+    // Fly mode (right-click + WASD) | 飞行模式（右键 + WASD）
+    const isFlyModeRef = useRef(false);
+    const flyKeysRef = useRef({ w: false, a: false, s: false, d: false, q: false, e: false });
+    const flySpeedRef = useRef(10); // units per second | 每秒单位数
+    const altKeyRef = useRef(false);
     const selectedEntityRef = useRef<Entity | null>(null);
     const messageHubRef = useRef<MessageHub | null>(null);
     const commandManagerRef = useRef<CommandManager | null>(null);
@@ -490,22 +497,42 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                 return;
             }
 
-            // 3D mode: orbit camera controls
-            // 3D 模式：轨道相机控制
+            // 3D mode: Scene view camera controls
+            // 3D 模式：场景视图相机控制
+            // - Alt + Left: Orbit | Alt + 左键：轨道旋转
+            // - Alt + Middle / Middle: Pan | Alt + 中键 / 中键：平移
+            // - Alt + Right: Zoom | Alt + 右键：缩放
+            // - Right: Fly mode (+ WASD) | 右键：飞行模式（+ WASD）
             if (renderModeRef.current === '3D') {
-                if (e.button === 0) {
-                    // Left button: orbit (rotate around target)
-                    // 左键：轨道旋转（围绕目标旋转）
+                const isAlt = e.altKey;
+
+                if (e.button === 0 && isAlt) {
+                    // Alt + Left button: orbit (rotate around target)
+                    // Alt + 左键：轨道旋转（围绕目标旋转）
                     isOrbitingRef.current = true;
                     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
                     canvas.style.cursor = 'grabbing';
                     e.preventDefault();
-                } else if (e.button === 1 || e.button === 2) {
-                    // Middle/Right button: pan
-                    // 中键/右键：平移
+                } else if (e.button === 1 || (e.button === 1 && isAlt)) {
+                    // Middle button (with or without Alt): pan
+                    // 中键（有无 Alt）：平移
                     isPanningRef.current = true;
                     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
                     canvas.style.cursor = 'move';
+                    e.preventDefault();
+                } else if (e.button === 2 && isAlt) {
+                    // Alt + Right button: zoom
+                    // Alt + 右键：缩放
+                    isZoomingRef.current = true;
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                    canvas.style.cursor = 'ns-resize';
+                    e.preventDefault();
+                } else if (e.button === 2 && !isAlt) {
+                    // Right button (without Alt): fly mode
+                    // 右键（无 Alt）：飞行模式
+                    isFlyModeRef.current = true;
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                    canvas.style.cursor = 'crosshair';
                     e.preventDefault();
                 }
                 return;
@@ -608,8 +635,8 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             const deltaX = e.clientX - lastMousePosRef.current.x;
             const deltaY = e.clientY - lastMousePosRef.current.y;
 
-            // 3D mode: orbit camera controls
-            // 3D 模式：轨道相机控制
+            // 3D mode: Scene view camera controls
+            // 3D 模式：场景视图相机控制
             if (renderModeRef.current === '3D') {
                 if (isOrbitingRef.current) {
                     // Orbit: rotate around target
@@ -619,31 +646,76 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                         const newYaw = prev.yaw + deltaX * orbitSensitivity;
                         const newPitch = Math.max(-89, Math.min(89, prev.pitch - deltaY * orbitSensitivity));
                         const newOrbit = { ...prev, yaw: newYaw, pitch: newPitch };
-                        // Sync to engine in next tick
-                        // 在下一帧同步到引擎
                         requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
                         return newOrbit;
                     });
                     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
                 } else if (isPanningRef.current) {
-                    // Pan: move target point
-                    // 平移：移动目标点
+                    // Pan: move target point (drag to move scene in same direction)
+                    // 平移：移动目标点（拖拽方向与场景移动方向相同）
                     const panSensitivity = 0.01;
                     const orbit = orbitCameraRef.current;
                     const yawRad = (orbit.yaw * Math.PI) / 180;
+                    const pitchRad = (orbit.pitch * Math.PI) / 180;
 
-                    // Calculate pan direction based on camera orientation
-                    // 根据相机朝向计算平移方向
+                    // Calculate camera right and up vectors
+                    // 计算相机的右向量和上向量
                     const rightX = Math.cos(yawRad);
                     const rightZ = -Math.sin(yawRad);
+                    // Up vector in world space (simplified)
+                    const upY = Math.cos(pitchRad);
 
                     setOrbitCamera((prev) => {
                         const panScale = prev.distance * panSensitivity;
+                        // 左右反转，上下保持原样
+                        // Invert horizontal, keep vertical as is
                         const newOrbit = {
                             ...prev,
-                            targetX: prev.targetX - deltaX * rightX * panScale,
-                            targetY: prev.targetY + deltaY * panScale,
-                            targetZ: prev.targetZ - deltaX * rightZ * panScale
+                            targetX: prev.targetX + deltaX * rightX * panScale,
+                            targetY: prev.targetY + deltaY * upY * panScale,
+                            targetZ: prev.targetZ + deltaX * rightZ * panScale
+                        };
+                        requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                        return newOrbit;
+                    });
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                } else if (isZoomingRef.current) {
+                    // Alt + Right: Zoom by moving distance
+                    // Alt + 右键：通过改变距离来缩放
+                    const zoomSensitivity = 0.02;
+                    setOrbitCamera((prev) => {
+                        const newDistance = Math.max(0.5, Math.min(1000, prev.distance * (1 + deltaY * zoomSensitivity)));
+                        const newOrbit = { ...prev, distance: newDistance };
+                        requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                        return newOrbit;
+                    });
+                    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+                } else if (isFlyModeRef.current) {
+                    // Fly mode: first-person camera look (like FPS)
+                    // 飞行模式：第一人称相机视角（类似 FPS）
+                    const lookSensitivity = 0.2;
+                    setOrbitCamera((prev) => {
+                        const newYaw = prev.yaw + deltaX * lookSensitivity;
+                        const newPitch = Math.max(-89, Math.min(89, prev.pitch - deltaY * lookSensitivity));
+                        // In fly mode, target moves with camera to maintain forward direction
+                        // 在飞行模式下，目标点随相机移动以保持前进方向
+                        const pos = calculateOrbitCameraPosition({ ...prev, yaw: newYaw, pitch: newPitch });
+
+                        // Calculate new target based on camera looking forward
+                        // 根据相机前方计算新目标点
+                        const pitchRad = (newPitch * Math.PI) / 180;
+                        const yawRad = (newYaw * Math.PI) / 180;
+                        const forwardX = -Math.cos(pitchRad) * Math.sin(yawRad);
+                        const forwardY = Math.sin(pitchRad);
+                        const forwardZ = -Math.cos(pitchRad) * Math.cos(yawRad);
+
+                        const newOrbit = {
+                            ...prev,
+                            yaw: newYaw,
+                            pitch: newPitch,
+                            targetX: pos.x + forwardX * prev.distance,
+                            targetY: pos.y + forwardY * prev.distance,
+                            targetZ: pos.z + forwardZ * prev.distance
                         };
                         requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
                         return newOrbit;
@@ -749,8 +821,8 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         };
 
         const handleMouseUp = () => {
-            // 3D mode: reset orbit/pan flags
-            // 3D 模式：重置轨道/平移标志
+            // 3D mode: reset all camera control flags
+            // 3D 模式：重置所有相机控制标志
             if (isOrbitingRef.current) {
                 isOrbitingRef.current = false;
                 canvas.style.cursor = 'grab';
@@ -758,6 +830,16 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             if (isPanningRef.current) {
                 isPanningRef.current = false;
                 canvas.style.cursor = 'grab';
+            }
+            if (isZoomingRef.current) {
+                isZoomingRef.current = false;
+                canvas.style.cursor = 'grab';
+            }
+            if (isFlyModeRef.current) {
+                isFlyModeRef.current = false;
+                canvas.style.cursor = 'grab';
+                // Reset fly keys | 重置飞行按键
+                flyKeysRef.current = { w: false, a: false, s: false, d: false, q: false, e: false };
             }
 
             // 2D mode: original mouse up handling
@@ -857,16 +939,146 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             setCamera2DZoom((prev) => Math.max(0.01, Math.min(100, prev * zoomFactor)));
         };
 
+        // Keyboard event handlers for fly mode and focus
+        // 飞行模式和聚焦的键盘事件处理
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (renderModeRef.current !== '3D') return;
+            if (playStateRef.current === 'playing') return;
+
+            // WASD + QE for fly mode movement
+            // WASD + QE 飞行模式移动
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'a' || key === 's' || key === 'd' || key === 'q' || key === 'e') {
+                flyKeysRef.current[key as keyof typeof flyKeysRef.current] = true;
+            }
+
+            // F key: Focus on selected entity
+            // F 键：聚焦到选中实体
+            if (key === 'f' && selectedEntityRef.current) {
+                const entity = selectedEntityRef.current;
+                const transform = entity.getComponent(TransformComponent);
+                if (transform) {
+                    // Focus camera on entity position
+                    // 聚焦相机到实体位置
+                    setOrbitCamera((prev) => {
+                        const newOrbit = {
+                            ...prev,
+                            targetX: transform.position.x,
+                            targetY: transform.position.y,
+                            targetZ: transform.position.z,
+                            distance: Math.max(5, prev.distance) // Ensure minimum distance
+                        };
+                        requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                        return newOrbit;
+                    });
+                }
+            }
+        };
+
+        const handleKeyUp = (e: KeyboardEvent) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'a' || key === 's' || key === 'd' || key === 'q' || key === 'e') {
+                flyKeysRef.current[key as keyof typeof flyKeysRef.current] = false;
+            }
+        };
+
+        // Fly mode animation loop
+        // 飞行模式动画循环
+        let flyAnimationId: number | null = null;
+        let lastFlyTime = 0;
+
+        const updateFlyMode = (timestamp: number) => {
+            if (!isFlyModeRef.current) {
+                flyAnimationId = null;
+                return;
+            }
+
+            const deltaTime = lastFlyTime > 0 ? (timestamp - lastFlyTime) / 1000 : 0.016;
+            lastFlyTime = timestamp;
+
+            const keys = flyKeysRef.current;
+            const speed = flySpeedRef.current * deltaTime;
+
+            // Check if any movement key is pressed
+            // 检查是否有移动键被按下
+            if (keys.w || keys.a || keys.s || keys.d || keys.q || keys.e) {
+                setOrbitCamera((prev) => {
+                    const pitchRad = (prev.pitch * Math.PI) / 180;
+                    const yawRad = (prev.yaw * Math.PI) / 180;
+
+                    // Calculate camera directions
+                    // 计算相机方向
+                    const forwardX = -Math.cos(pitchRad) * Math.sin(yawRad);
+                    const forwardY = Math.sin(pitchRad);
+                    const forwardZ = -Math.cos(pitchRad) * Math.cos(yawRad);
+                    const rightX = Math.cos(yawRad);
+                    const rightZ = -Math.sin(yawRad);
+
+                    let moveX = 0, moveY = 0, moveZ = 0;
+
+                    // WASD movement (reversed A/D for intuitive scene navigation)
+                    // WASD 移动（反转 A/D 以符合直觉的场景导航）
+                    if (keys.w) { moveX += forwardX; moveY += forwardY; moveZ += forwardZ; }
+                    if (keys.s) { moveX -= forwardX; moveY -= forwardY; moveZ -= forwardZ; }
+                    if (keys.a) { moveX += rightX; moveZ += rightZ; }  // Reversed: move scene right
+                    if (keys.d) { moveX -= rightX; moveZ -= rightZ; }  // Reversed: move scene left
+                    // QE for up/down
+                    if (keys.e) { moveY += 1; }
+                    if (keys.q) { moveY -= 1; }
+
+                    // Calculate current camera position
+                    const pos = calculateOrbitCameraPosition(prev);
+
+                    // Move both camera and target
+                    // 同时移动相机和目标点
+                    const newOrbit = {
+                        ...prev,
+                        targetX: prev.targetX + moveX * speed,
+                        targetY: prev.targetY + moveY * speed,
+                        targetZ: prev.targetZ + moveZ * speed
+                    };
+
+                    requestAnimationFrame(() => syncOrbitCameraToEngine(newOrbit));
+                    return newOrbit;
+                });
+            }
+
+            flyAnimationId = requestAnimationFrame(updateFlyMode);
+        };
+
+        // Start fly mode loop when entering fly mode
+        // 进入飞行模式时启动飞行循环
+        const startFlyLoop = () => {
+            if (flyAnimationId === null && isFlyModeRef.current) {
+                lastFlyTime = 0;
+                flyAnimationId = requestAnimationFrame(updateFlyMode);
+            }
+        };
+
+        // Check periodically if fly mode is active
+        // 定期检查飞行模式是否激活
+        const flyCheckInterval = setInterval(() => {
+            if (isFlyModeRef.current && flyAnimationId === null) {
+                startFlyLoop();
+            }
+        }, 100);
+
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('wheel', handleWheel, { passive: false });
         canvas.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
 
         return () => {
             if (rafId !== null) {
                 cancelAnimationFrame(rafId);
             }
+            if (flyAnimationId !== null) {
+                cancelAnimationFrame(flyAnimationId);
+            }
+            clearInterval(flyCheckInterval);
             window.removeEventListener('resize', resizeCanvas);
             resizeObserver.disconnect();
             canvas.removeEventListener('mousedown', handleMouseDown);
@@ -874,6 +1086,8 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
             canvas.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('keyup', handleKeyUp);
         };
     }, []);
 
@@ -1884,8 +2098,10 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
         // Check for supported asset types | 检查支持的资产类型
         const isPrefab = lowerPath.endsWith('.prefab');
         const isFui = lowerPath.endsWith('.fui');
+        const is3DModel = lowerPath.endsWith('.gltf') || lowerPath.endsWith('.glb') ||
+                          lowerPath.endsWith('.obj') || lowerPath.endsWith('.fbx');
 
-        if (!isPrefab && !isFui) {
+        if (!isPrefab && !isFui && !is3DModel) {
             return;
         }
 
@@ -1976,6 +2192,39 @@ export function Viewport({ locale = 'en', messageHub, commandManager }: Viewport
                 entityStore.selectEntity(entity);
 
                 console.log(`[Viewport] FGUI entity created at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}): ${finalName}`);
+            } else if (is3DModel) {
+                // 处理 3D 模型文件 | Handle 3D model file
+                const filename = assetPath.split(/[/\\]/).pop() || '3D Mesh';
+                const entityName = filename.replace(/\.(gltf|glb|obj|fbx)$/i, '');
+
+                // 生成唯一名称 | Generate unique name
+                const existingCount = entityStore.getAllEntities()
+                    .filter((ent: Entity) => ent.name.startsWith(entityName)).length;
+                const finalName = existingCount > 0 ? `${entityName} ${existingCount + 1}` : entityName;
+
+                // 创建实体 | Create entity
+                const entity = scene.createEntity(finalName);
+
+                // 添加 TransformComponent | Add TransformComponent
+                const transform = new TransformComponent();
+                transform.position.x = worldPos.x;
+                transform.position.y = worldPos.y;
+                entity.addComponent(transform);
+
+                // 添加 MeshComponent | Add MeshComponent
+                const meshComponent = new MeshComponent();
+                // 优先使用 GUID，如果没有则使用路径
+                // Prefer GUID, fallback to path
+                meshComponent.modelGuid = assetGuid || assetPath;
+                entity.addComponent(meshComponent);
+
+                // 注册并选中实体 | Register and select entity
+                entityStore.addEntity(entity);
+                messageHub.publish('entity:added', { entity });
+                messageHub.publish('scene:modified', {});
+                entityStore.selectEntity(entity);
+
+                console.log(`[Viewport] 3D Mesh entity created at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}): ${finalName}`);
             }
         } catch (error) {
             console.error('[Viewport] Failed to handle drop:', error);

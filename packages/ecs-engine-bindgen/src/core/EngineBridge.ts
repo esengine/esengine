@@ -1542,6 +1542,60 @@ export class EngineBridge implements ITextureEngineBridge, ITextureService, IDyn
     }
 
     /**
+     * Submit a 3D mesh for rendering (with normals).
+     * 提交 3D 网格进行渲染（包含法线）。
+     *
+     * The mesh will be rendered when render3D() or render() is called.
+     * 网格将在调用 render3D() 或 render() 时渲染。
+     *
+     * @param vertices - Interleaved vertex data Float32Array:
+     *                   [x, y, z, u, v, r, g, b, a, nx, ny, nz] per vertex (12 floats)
+     *                   交错顶点数据：每个顶点 12 个浮点数
+     * @param indices - Triangle indices Uint32Array | 三角形索引
+     * @param transform - 4x4 model transform matrix (column-major, 16 floats)
+     *                    4x4 模型变换矩阵（列优先，16 个浮点数）
+     * @param materialId - Material ID (0 for default) | 材质 ID（0 为默认）
+     * @param textureId - Texture ID (0 for white) | 纹理 ID（0 为白色）
+     */
+    submitMesh3D(
+        vertices: Float32Array,
+        indices: Uint32Array,
+        transform: Float32Array,
+        materialId: number,
+        textureId: number
+    ): void {
+        if (!this.initialized) return;
+        this.getEngine().submitMesh3D(vertices, indices, transform, materialId, textureId);
+    }
+
+    /**
+     * Submit a simplified 3D mesh (without normals).
+     * 提交简化的 3D 网格（无法线）。
+     *
+     * This is more efficient for meshes that don't need lighting calculations.
+     * 对于不需要光照计算的网格，这更高效。
+     *
+     * @param vertices - Interleaved vertex data Float32Array:
+     *                   [x, y, z, u, v, r, g, b, a] per vertex (9 floats)
+     *                   交错顶点数据：每个顶点 9 个浮点数
+     * @param indices - Triangle indices Uint32Array | 三角形索引
+     * @param transform - 4x4 model transform matrix (column-major, 16 floats)
+     *                    4x4 模型变换矩阵（列优先，16 个浮点数）
+     * @param materialId - Material ID (0 for default) | 材质 ID（0 为默认）
+     * @param textureId - Texture ID (0 for white) | 纹理 ID（0 为白色）
+     */
+    submitSimpleMesh3D(
+        vertices: Float32Array,
+        indices: Uint32Array,
+        transform: Float32Array,
+        materialId: number,
+        textureId: number
+    ): void {
+        if (!this.initialized) return;
+        this.getEngine().submitSimpleMesh3D(vertices, indices, transform, materialId, textureId);
+    }
+
+    /**
      * Dispose the bridge and release resources.
      * 销毁桥接并释放资源。
      */

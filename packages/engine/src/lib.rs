@@ -1072,4 +1072,56 @@ impl GameEngine {
             .render_3d()
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
+
+    /// Submit a 3D mesh for rendering.
+    /// 提交 3D 网格进行渲染。
+    ///
+    /// The mesh will be rendered in the current frame when `render3D` is called.
+    /// 当调用 `render3D` 时，网格将在当前帧渲染。
+    ///
+    /// # Arguments | 参数
+    /// * `vertices` - Interleaved vertex data: [x, y, z, u, v, r, g, b, a, nx, ny, nz] per vertex
+    ///                交错顶点数据：每个顶点 [x, y, z, u, v, r, g, b, a, nx, ny, nz]
+    /// * `indices` - Triangle indices | 三角形索引
+    /// * `transform` - 4x4 model transform matrix (column-major, 16 floats)
+    ///                 4x4 模型变换矩阵（列优先，16 个浮点数）
+    /// * `material_id` - Material ID (0 for default) | 材质 ID（0 为默认）
+    /// * `texture_id` - Texture ID (0 for white) | 纹理 ID（0 为白色）
+    #[wasm_bindgen(js_name = submitMesh3D)]
+    pub fn submit_mesh_3d(
+        &mut self,
+        vertices: &[f32],
+        indices: &[u32],
+        transform: &[f32],
+        material_id: u32,
+        texture_id: u32,
+    ) -> std::result::Result<(), JsValue> {
+        self.engine
+            .submit_mesh_3d(vertices, indices, transform, material_id, texture_id)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Submit a simplified 3D mesh (without normals).
+    /// 提交简化的 3D 网格（无法线）。
+    ///
+    /// # Arguments | 参数
+    /// * `vertices` - Interleaved vertex data: [x, y, z, u, v, r, g, b, a] per vertex
+    ///                交错顶点数据：每个顶点 [x, y, z, u, v, r, g, b, a]
+    /// * `indices` - Triangle indices | 三角形索引
+    /// * `transform` - 4x4 model transform matrix | 4x4 模型变换矩阵
+    /// * `material_id` - Material ID | 材质 ID
+    /// * `texture_id` - Texture ID | 纹理 ID
+    #[wasm_bindgen(js_name = submitSimpleMesh3D)]
+    pub fn submit_simple_mesh_3d(
+        &mut self,
+        vertices: &[f32],
+        indices: &[u32],
+        transform: &[f32],
+        material_id: u32,
+        texture_id: u32,
+    ) -> std::result::Result<(), JsValue> {
+        self.engine
+            .submit_simple_mesh_3d(vertices, indices, transform, material_id, texture_id)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
 }

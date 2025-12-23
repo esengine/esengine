@@ -736,6 +736,10 @@
     color: #ec407a;
 }
 
+.asset-thumbnail-icon.model3d {
+    color: #26a69a;
+}
+
 /* ==================== Status Bar ==================== */
 .cb-status-bar {
     display: flex;
@@ -877,4 +881,127 @@
 .cb-folder-tree::-webkit-scrollbar-thumb:hover,
 .cb-asset-grid::-webkit-scrollbar-thumb:hover {
     background: #4e4e4e;
+}
+
+/* ==================== 3D Model Sub-Asset Expansion ==================== */
+
+/* Expand button for expandable models */
+.cb-asset-expand-btn {
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    color: #888;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.cb-asset-expand-btn:hover {
+    background: #3c3c3c;
+    color: #fff;
+}
+
+.cb-asset-expand-btn.expanded {
+    color: #3b82f6;
+}
+
+/* Spinning animation for loading */
+.cb-asset-expand-btn .spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Grid view adjustments for expandable items */
+.cb-asset-grid.grid .cb-asset-item {
+    position: relative;
+}
+
+.cb-asset-grid.grid .cb-asset-item .cb-asset-expand-btn {
+    left: 2px;
+    top: 2px;
+    transform: none;
+}
+
+/* Sub-asset items in grid view */
+.cb-asset-grid.grid .cb-asset-item.sub-asset {
+    background: #252530;
+    border-left: 2px solid #3b82f6;
+    padding-left: 16px;
+}
+
+.cb-asset-grid.grid .cb-asset-item.sub-asset:hover {
+    background: #2d2d38;
+}
+
+.cb-asset-grid.grid .cb-asset-item.sub-asset.selected {
+    background: #0a4780;
+}
+
+.cb-asset-grid.grid .cb-asset-item.sub-asset .cb-asset-thumbnail {
+    width: 48px;
+    height: 48px;
+    background: #202028;
+}
+
+/* List view adjustments */
+.cb-asset-grid.list .cb-asset-item {
+    position: relative;
+}
+
+.cb-asset-grid.list .cb-asset-item .cb-asset-expand-btn {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
+/* Sub-asset items in list view */
+.cb-asset-grid.list .cb-asset-item.sub-asset {
+    padding-left: 32px;
+    background: #252530;
+    border-left: 2px solid #3b82f6;
+}
+
+.cb-asset-grid.list .cb-asset-item.sub-asset:hover {
+    background: #2d2d38;
+}
+
+.cb-asset-grid.list .cb-asset-item.sub-asset.selected {
+    background: #0a4780;
+}
+
+/* Sub-asset icon colors */
+.asset-thumbnail-icon.sub-asset.mesh {
+    color: #f59e0b;
+}
+
+.asset-thumbnail-icon.sub-asset.material {
+    color: #8b5cf6;
+}
+
+.asset-thumbnail-icon.sub-asset.animation {
+    color: #10b981;
+}
+
+.asset-thumbnail-icon.sub-asset.skeleton {
+    color: #ef4444;
+}
+
+/* Expanded model highlight */
+.cb-asset-item.expanded {
+    border-bottom: 1px solid #3b82f6;
 }

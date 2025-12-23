@@ -75,10 +75,28 @@ export class TauriAPI {
     }
 
     /**
-   * 读取文件内容
+   * 读取文件内容（文本）
    */
     static async readFileContent(path: string): Promise<string> {
         return await invoke<string>('read_file_content', { path });
+    }
+
+    /**
+     * 读取文件内容（二进制）
+     * Read file content as binary ArrayBuffer
+     */
+    static async readFileBinary(path: string): Promise<ArrayBuffer> {
+        // Use Tauri read_file_as_base64 command which returns base64 encoded data
+        // 使用 Tauri 的 read_file_as_base64 命令，返回 base64 编码的数据
+        const base64: string = await invoke<string>('read_file_as_base64', { filePath: path });
+        // Decode base64 to ArrayBuffer
+        // 将 base64 解码为 ArrayBuffer
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
     }
 
     /**

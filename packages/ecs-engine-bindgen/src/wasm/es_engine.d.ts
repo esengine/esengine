@@ -669,6 +669,28 @@ export class GameEngine {
    * 获取画布高度。
    */
   readonly height: number;
+  /**
+   * Submit a 3D mesh for rendering.
+   * 提交 3D 网格进行渲染。
+   *
+   * @param vertices - Interleaved vertex data [x,y,z, u,v, r,g,b,a, nx,ny,nz] * count
+   * @param indices - Triangle indices
+   * @param transform - 4x4 transformation matrix (column-major)
+   * @param material_id - Material ID
+   * @param texture_id - Texture ID
+   */
+  submitMesh3D(vertices: Float32Array, indices: Uint32Array, transform: Float32Array, material_id: number, texture_id: number): void;
+  /**
+   * Submit a simple 3D mesh for rendering (without normals).
+   * 提交简单 3D 网格进行渲染（不含法线）。
+   *
+   * @param vertices - Interleaved vertex data [x,y,z, u,v, r,g,b,a] * count
+   * @param indices - Triangle indices
+   * @param transform - 4x4 transformation matrix (column-major)
+   * @param material_id - Material ID
+   * @param texture_id - Texture ID
+   */
+  submitSimpleMesh3D(vertices: Float32Array, indices: Uint32Array, transform: Float32Array, material_id: number, texture_id: number): void;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
