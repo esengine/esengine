@@ -29,6 +29,8 @@
 
 ---
 
+> **Just need ECS?** The core ECS framework [`@esengine/ecs-framework`](./packages/core/) can be used standalone with Cocos Creator, Laya, or any JS engine. [View ECS Documentation](./packages/core/README.md)
+
 ## Overview
 
 ESEngine is a cross-platform 2D game engine built from the ground up with modern web technologies. It provides a comprehensive toolset that enables developers to focus on creating games rather than building infrastructure.
@@ -238,12 +240,23 @@ pnpm tauri:dev
 
 ```
 esengine/
-├── packages/           # Engine packages (runtime, editor, platform)
-├── docs/               # Documentation source
-├── examples/           # Example projects
-├── scripts/            # Build utilities
-└── thirdparty/         # Third-party dependencies
+├── packages/
+│   ├── core/                    # ECS Framework (@esengine/ecs-framework)
+│   ├── math/                    # Math library (@esengine/math)
+│   ├── engine-core/             # Engine lifecycle management
+│   ├── sprite/                  # 2D sprite rendering
+│   ├── tilemap/                 # Tilemap system
+│   ├── physics-rapier2d/        # Physics engine
+│   ├── behavior-tree/           # AI behavior trees
+│   ├── editor-app/              # Desktop editor (Tauri)
+│   └── ...                      # Other modules
+├── docs/                        # Documentation source
+├── examples/                    # Example projects
+├── scripts/                     # Build utilities
+└── thirdparty/                  # Third-party dependencies
 ```
+
+> **Looking for ECS source code?** The ECS framework is in `packages/core/`
 
 ## Documentation
 

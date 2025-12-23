@@ -114,6 +114,16 @@ export class PerformanceMonitor implements IService {
     constructor() {}
 
     /**
+     * @zh 更新FPS统计（可选功能，子类可重写）
+     * @en Update FPS statistics (optional, can be overridden by subclasses)
+     *
+     * @param _deltaTime - @zh 帧时间间隔（秒）@en Frame delta time in seconds
+     */
+    public updateFPS(_deltaTime: number): void {
+        // Base implementation does nothing - override in subclass for FPS tracking
+    }
+
+    /**
      * 启用性能监控
      */
     public enable(): void {

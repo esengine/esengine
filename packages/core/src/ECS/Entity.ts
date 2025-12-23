@@ -9,157 +9,156 @@ import type { IScene } from './IScene';
 import { EntityHandle, NULL_HANDLE } from './Core/EntityHandle';
 
 /**
- * 组件活跃状态变化接口
+ * @zh 组件活跃状态变化接口
+ * @en Interface for component active state change
  */
 interface IActiveChangeable {
     onActiveChanged(): void;
 }
 
 /**
- * 实体比较器
+ * @zh 比较两个实体的优先级
+ * @en Compare priority of two entities
  *
- * 用于比较两个实体的优先级，首先按更新顺序比较，然后按ID比较。
+ * @param a - @zh 第一个实体 @en First entity
+ * @param b - @zh 第二个实体 @en Second entity
+ * @returns @zh 比较结果：负数表示a优先级更高，正数表示b优先级更高，0表示相等
+ *          @en Comparison result: negative means a has higher priority, positive means b has higher priority, 0 means equal
  */
-export class EntityComparer {
-    /**
-     * 比较两个实体
-     *
-     * @param self - 第一个实体
-     * @param other - 第二个实体
-     * @returns 比较结果，负数表示self优先级更高，正数表示other优先级更高，0表示相等
-     */
-    public compare(self: Entity, other: Entity): number {
-        let compare = self.updateOrder - other.updateOrder;
-        if (compare == 0) compare = self.id - other.id;
-        return compare;
-    }
+export function compareEntities(a: Entity, b: Entity): number {
+    return a.updateOrder - b.updateOrder || a.id - b.id;
 }
 
 /**
- * 游戏实体类
+ * @zh 游戏实体类
+ * @en Game entity class
  *
- * ECS架构中的实体（Entity），作为组件的容器。
+ * @zh ECS架构中的实体（Entity），作为组件的容器。
  * 实体本身不包含游戏逻辑，所有功能都通过组件来实现。
- *
  * 层级关系通过 HierarchyComponent 和 HierarchySystem 管理，
  * 而非 Entity 内置属性，符合 ECS 组合原则。
+ * @en Entity in ECS architecture, serves as a container for components.
+ * Entity itself contains no game logic, all functionality is implemented through components.
+ * Hierarchy relationships are managed by HierarchyComponent and HierarchySystem,
+ * not built-in Entity properties, following ECS composition principles.
  *
  * @example
  * ```typescript
- * // 创建实体
+ * // @zh 创建实体 | @en Create entity
  * const entity = scene.createEntity("Player");
  *
- * // 添加组件
+ * // @zh 添加组件 | @en Add component
  * const healthComponent = entity.addComponent(new HealthComponent(100));
  *
- * // 获取组件
+ * // @zh 获取组件 | @en Get component
  * const health = entity.getComponent(HealthComponent);
  *
- * // 层级关系使用 HierarchySystem
+ * // @zh 层级关系使用 HierarchySystem | @en Use HierarchySystem for hierarchy
  * const hierarchySystem = scene.getSystem(HierarchySystem);
  * hierarchySystem.setParent(childEntity, parentEntity);
  * ```
  */
 export class Entity {
     /**
-     * Entity专用日志器
+     * @zh Entity专用日志器
+     * @en Entity logger
      */
     private static _logger = createLogger('Entity');
 
     /**
-     * 实体比较器实例
-     */
-    public static entityComparer: EntityComparer = new EntityComparer();
-
-    /**
-     * 实体名称
+     * @zh 实体名称
+     * @en Entity name
      */
     public name: string;
 
     /**
-     * 实体唯一标识符（运行时 ID）
-     *
-     * Runtime identifier for fast lookups.
+     * @zh 实体唯一标识符（运行时ID），用于快速查找
+     * @en Unique entity identifier (runtime ID) for fast lookups
      */
     public readonly id: number;
 
     /**
-     * 持久化唯一标识符（GUID）
+     * @zh 持久化唯一标识符（GUID）
+     * @en Persistent unique identifier (GUID)
      *
-     * 用于序列化/反序列化时保持实体引用一致性。
-     * 在场景保存和加载时保持不变。
-     *
-     * Persistent identifier for serialization.
-     * Remains stable across save/load cycles.
+     * @zh 用于序列化/反序列化时保持实体引用一致性，在场景保存和加载时保持不变
+     * @en Used to maintain entity reference consistency during serialization/deserialization, remains stable across save/load cycles
      */
     public readonly persistentId: string;
 
     /**
-     * 轻量级实体句柄
+     * @zh 轻量级实体句柄
+     * @en Lightweight entity handle
      *
-     * 数值类型的实体标识符，包含索引和代数信息。
+     * @zh 数值类型的实体标识符，包含索引和代数信息。
      * 用于高性能场景下替代对象引用，支持 Archetype 存储等优化。
-     *
-     * Lightweight entity handle.
-     * Numeric identifier containing index and generation.
+     * @en Numeric identifier containing index and generation.
      * Used for high-performance scenarios instead of object references,
      * supports Archetype storage optimizations.
      */
     private _handle: EntityHandle = NULL_HANDLE;
 
     /**
-     * 所属场景引用
+     * @zh 所属场景引用
+     * @en Reference to the owning scene
      */
     public scene: IScene | null = null;
 
     /**
-     * 销毁状态标志
+     * @zh 销毁状态标志
+     * @en Destroyed state flag
      */
     private _isDestroyed: boolean = false;
 
     /**
-     * 激活状态
+     * @zh 激活状态
+     * @en Active state
      */
     private _active: boolean = true;
 
     /**
-     * 实体标签
+     * @zh 实体标签，用于分类和查询
+     * @en Entity tag for categorization and querying
      */
     private _tag: number = 0;
 
     /**
-     * 启用状态
+     * @zh 启用状态
+     * @en Enabled state
      */
     private _enabled: boolean = true;
 
     /**
-     * 更新顺序
+     * @zh 更新顺序
+     * @en Update order
      */
     private _updateOrder: number = 0;
 
     /**
-     * 组件位掩码（用于快速 hasComponent 检查）
+     * @zh 组件位掩码，用于快速 hasComponent 检查
+     * @en Component bitmask for fast hasComponent checks
      */
     private _componentMask: BitMask64Data = BitMask64Utils.clone(BitMask64Utils.ZERO);
 
     /**
-     * 懒加载的组件数组缓存
+     * @zh 懒加载的组件数组缓存
+     * @en Lazy-loaded component array cache
      */
     private _componentCache: Component[] | null = null;
 
     /**
-     * 生命周期策略
-     *
-     * Lifecycle policy for scene transitions.
+     * @zh 生命周期策略，控制实体在场景切换时的行为
+     * @en Lifecycle policy controlling entity behavior during scene transitions
      */
     private _lifecyclePolicy: EEntityLifecyclePolicy = EEntityLifecyclePolicy.SceneLocal;
 
     /**
-     * 构造函数
+     * @zh 构造函数
+     * @en Constructor
      *
-     * @param name - 实体名称
-     * @param id - 实体唯一标识符（运行时 ID）
-     * @param persistentId - 持久化标识符（可选，用于反序列化时恢复）
+     * @param name - @zh 实体名称 @en Entity name
+     * @param id - @zh 实体唯一标识符（运行时ID）@en Unique entity identifier (runtime ID)
+     * @param persistentId - @zh 持久化标识符（可选，用于反序列化时恢复）@en Persistent identifier (optional, for deserialization)
      */
     constructor(name: string, id: number, persistentId?: string) {
         this.name = name;
@@ -168,44 +167,38 @@ export class Entity {
     }
 
     /**
-     * 获取生命周期策略
-     *
-     * Get lifecycle policy.
+     * @zh 获取生命周期策略
+     * @en Get lifecycle policy
      */
     public get lifecyclePolicy(): EEntityLifecyclePolicy {
         return this._lifecyclePolicy;
     }
 
     /**
-     * 检查实体是否为持久化实体
-     *
-     * Check if entity is persistent (survives scene transitions).
+     * @zh 检查实体是否为持久化实体（跨场景保留）
+     * @en Check if entity is persistent (survives scene transitions)
      */
     public get isPersistent(): boolean {
         return this._lifecyclePolicy === EEntityLifecyclePolicy.Persistent;
     }
 
     /**
-     * 获取实体句柄
+     * @zh 获取实体句柄
+     * @en Get entity handle
      *
-     * 返回轻量级数值句柄，用于高性能场景。
-     * 如果实体尚未分配句柄，返回 NULL_HANDLE。
-     *
-     * Get entity handle.
-     * Returns lightweight numeric handle for high-performance scenarios.
-     * Returns NULL_HANDLE if entity has no handle assigned.
+     * @zh 返回轻量级数值句柄，用于高性能场景。如果实体尚未分配句柄，返回 NULL_HANDLE。
+     * @en Returns lightweight numeric handle for high-performance scenarios. Returns NULL_HANDLE if entity has no handle assigned.
      */
     public get handle(): EntityHandle {
         return this._handle;
     }
 
     /**
-     * 设置实体句柄（内部使用）
+     * @zh 设置实体句柄（内部使用）
+     * @en Set entity handle (internal use)
      *
-     * 此方法供 Scene 在创建实体时调用。
-     *
-     * Set entity handle (internal use).
-     * Called by Scene when creating entities.
+     * @zh 此方法供 Scene 在创建实体时调用
+     * @en Called by Scene when creating entities
      *
      * @internal
      */
@@ -214,14 +207,13 @@ export class Entity {
     }
 
     /**
-     * 设置实体为持久化（跨场景保留）
+     * @zh 设置实体为持久化（跨场景保留）
+     * @en Mark entity as persistent (survives scene transitions)
      *
-     * 标记后的实体在场景切换时不会被销毁，会自动迁移到新场景。
+     * @zh 标记后的实体在场景切换时不会被销毁，会自动迁移到新场景
+     * @en Persistent entities are automatically migrated to the new scene
      *
-     * Mark entity as persistent (survives scene transitions).
-     * Persistent entities are automatically migrated to the new scene.
-     *
-     * @returns this，支持链式调用 | Returns this for chaining
+     * @returns @zh this，支持链式调用 @en Returns this for chaining
      *
      * @example
      * ```typescript
@@ -236,14 +228,10 @@ export class Entity {
     }
 
     /**
-     * 设置实体为场景本地（随场景销毁）
+     * @zh 设置实体为场景本地（随场景销毁），恢复默认行为
+     * @en Mark entity as scene-local (destroyed with scene), restores default behavior
      *
-     * 将实体恢复为默认行为。
-     *
-     * Mark entity as scene-local (destroyed with scene).
-     * Restores default behavior.
-     *
-     * @returns this，支持链式调用 | Returns this for chaining
+     * @returns @zh this，支持链式调用 @en Returns this for chaining
      */
     public setSceneLocal(): this {
         this._lifecyclePolicy = EEntityLifecyclePolicy.SceneLocal;
@@ -251,18 +239,21 @@ export class Entity {
     }
 
     /**
-     * 获取销毁状态
-     * @returns 如果实体已被销毁则返回true
+     * @zh 获取销毁状态
+     * @en Get destroyed state
+     *
+     * @returns @zh 如果实体已被销毁则返回true @en Returns true if entity has been destroyed
      */
     public get isDestroyed(): boolean {
         return this._isDestroyed;
     }
 
     /**
-     * 设置销毁状态（内部使用）
+     * @zh 设置销毁状态（内部使用）
+     * @en Set destroyed state (internal use)
      *
-     * 此方法供Scene和批量操作使用，以提高性能。
-     * 不应在普通业务逻辑中调用，应使用destroy()方法。
+     * @zh 此方法供Scene和批量操作使用，以提高性能。不应在普通业务逻辑中调用，应使用destroy()方法
+     * @en Used by Scene and batch operations for performance. Should not be called in normal business logic, use destroy() instead
      *
      * @internal
      */
@@ -271,8 +262,10 @@ export class Entity {
     }
 
     /**
-     * 获取组件数组（懒加载）
-     * @returns 只读的组件数组
+     * @zh 获取组件数组（懒加载）
+     * @en Get component array (lazy-loaded)
+     *
+     * @returns @zh 只读的组件数组 @en Readonly component array
      */
     public get components(): readonly Component[] {
         if (this._componentCache === null) {
@@ -282,7 +275,8 @@ export class Entity {
     }
 
     /**
-     * 从存储重建组件缓存
+     * @zh 从存储重建组件缓存
+     * @en Rebuild component cache from storage
      */
     private _rebuildComponentCache(): void {
         const components: Component[] = [];
@@ -334,74 +328,82 @@ export class Entity {
     }
 
     /**
-     * 获取实体标签
+     * @zh 获取实体标签
+     * @en Get entity tag
      *
-     * @returns 实体的数字标签
+     * @returns @zh 实体的数字标签 @en Entity's numeric tag
      */
     public get tag(): number {
         return this._tag;
     }
 
     /**
-     * 设置实体标签
+     * @zh 设置实体标签
+     * @en Set entity tag
      *
-     * @param value - 新的标签值
+     * @param value - @zh 新的标签值 @en New tag value
      */
     public set tag(value: number) {
         this._tag = value;
     }
 
     /**
-     * 获取启用状态
+     * @zh 获取启用状态
+     * @en Get enabled state
      *
-     * @returns 如果实体已启用则返回true
+     * @returns @zh 如果实体已启用则返回true @en Returns true if entity is enabled
      */
     public get enabled(): boolean {
         return this._enabled;
     }
 
     /**
-     * 设置启用状态
+     * @zh 设置启用状态
+     * @en Set enabled state
      *
-     * @param value - 新的启用状态
+     * @param value - @zh 新的启用状态 @en New enabled state
      */
     public set enabled(value: boolean) {
         this._enabled = value;
     }
 
     /**
-     * 获取更新顺序
+     * @zh 获取更新顺序
+     * @en Get update order
      *
-     * @returns 实体的更新顺序值
+     * @returns @zh 实体的更新顺序值 @en Entity's update order value
      */
     public get updateOrder(): number {
         return this._updateOrder;
     }
 
     /**
-     * 设置更新顺序
+     * @zh 设置更新顺序
+     * @en Set update order
      *
-     * @param value - 新的更新顺序值
+     * @param value - @zh 新的更新顺序值 @en New update order value
      */
     public set updateOrder(value: number) {
         this._updateOrder = value;
     }
 
     /**
-     * 获取组件位掩码
+     * @zh 获取组件位掩码
+     * @en Get component bitmask
      *
-     * @returns 实体的组件位掩码
+     * @returns @zh 实体的组件位掩码 @en Entity's component bitmask
      */
     public get componentMask(): BitMask64Data {
         return this._componentMask;
     }
 
     /**
-     * 创建并添加组件
+     * @zh 创建并添加组件
+     * @en Create and add component
      *
-     * @param componentType - 组件类型构造函数
-     * @param args - 组件构造函数参数
-     * @returns 创建的组件实例
+     * @param componentType - @zh 组件类型构造函数 @en Component type constructor
+     * @param args - @zh 组件构造函数参数 @en Component constructor arguments
+     * @returns @zh 创建的组件实例 @en Created component instance
      *
      * @example
      * ```typescript
@@ -418,51 +420,30 @@ export class Entity {
         return this.addComponent(component);
     }
 
-    /**
-     * 内部添加组件方法（不进行重复检查，用于初始化）
-     *
-     * @param component - 要添加的组件实例
-     * @returns 添加的组件实例
-     */
     private addComponentInternal<T extends Component>(component: T): T {
         const componentType = component.constructor as ComponentType<T>;
-
-        // 更新位掩码（组件已通过 @ECSComponent 装饰器自动注册）
-        // Update bitmask (component already registered via @ECSComponent decorator)
         const registry = this.scene?.componentRegistry ?? GlobalComponentRegistry;
         const componentMask = registry.getBitMask(componentType);
         BitMask64Utils.orInPlace(this._componentMask, componentMask);
-
-        // 使缓存失效
         this._componentCache = null;
-
         return component;
     }
 
-    /**
-     * 通知Scene中的QuerySystem实体组件发生变动
-     *
-     * Notify the QuerySystem in Scene that entity components have changed
-     *
-     * @param changedComponentType 变化的组件类型（可选，用于优化通知） | Changed component type (optional, for optimized notification)
-     */
     private notifyQuerySystems(changedComponentType?: ComponentType): void {
-        if (this.scene && this.scene.querySystem) {
-            this.scene.querySystem.updateEntity(this);
-            this.scene.clearSystemEntityCaches();
-            // 事件驱动：立即通知关心该组件的系统 | Event-driven: notify systems that care about this component
-            if (this.scene.notifyEntityComponentChanged) {
-                this.scene.notifyEntityComponentChanged(this, changedComponentType);
-            }
-        }
+        if (!this.scene?.querySystem) return;
+
+        this.scene.querySystem.updateEntity(this);
+        this.scene.clearSystemEntityCaches();
+        this.scene.notifyEntityComponentChanged?.(this, changedComponentType);
     }
 
     /**
-     * 添加组件到实体
+     * @zh 添加组件到实体
+     * @en Add component to entity
      *
-     * @param component - 要添加的组件实例
-     * @returns 添加的组件实例
-     * @throws {Error} 如果实体已存在该类型的组件
+     * @param component - @zh 要添加的组件实例 @en Component instance to add
+     * @returns @zh 添加的组件实例 @en Added component instance
+     * @throws @zh 如果实体已存在该类型的组件 @en If entity already has this component type
      *
      * @example
      * ```typescript
@@ -492,20 +473,15 @@ export class Entity {
         this.scene.componentStorageManager.addComponent(this.id, component);
 
         component.entityId = this.id;
-        if (this.scene.referenceTracker) {
-            this.scene.referenceTracker.registerEntityScene(this.id, this.scene);
-        }
+        this.scene.referenceTracker?.registerEntityScene(this.id, this.scene);
 
-        // 编辑器模式下延迟执行 onAddedToEntity | Defer onAddedToEntity in editor mode
         if (this.scene.isEditorMode) {
-            this.scene.queueDeferredComponentCallback(() => {
-                component.onAddedToEntity();
-            });
+            this.scene.queueDeferredComponentCallback(() => component.onAddedToEntity());
         } else {
             component.onAddedToEntity();
         }
 
-        if (this.scene && this.scene.eventSystem) {
+        if (this.scene.eventSystem) {
             this.scene.eventSystem.emitSync('component:added', {
                 timestamp: Date.now(),
                 source: 'Entity',
@@ -523,10 +499,11 @@ export class Entity {
     }
 
     /**
-     * 获取指定类型的组件
+     * @zh 获取指定类型的组件
+     * @en Get component of specified type
      *
-     * @param type - 组件类型构造函数
-     * @returns 组件实例，如果不存在则返回null
+     * @param type - @zh 组件类型构造函数 @en Component type constructor
+     * @returns @zh 组件实例，如果不存在则返回null @en Component instance, or null if not found
      *
      * @example
      * ```typescript
@@ -553,10 +530,11 @@ export class Entity {
     }
 
     /**
-     * 检查实体是否拥有指定类型的组件
+     * @zh 检查实体是否拥有指定类型的组件
+     * @en Check if entity has component of specified type
      *
-     * @param type - 组件类型构造函数
-     * @returns 如果实体拥有该组件返回true，否则返回false
+     * @param type - @zh 组件类型构造函数 @en Component type constructor
+     * @returns @zh 如果实体拥有该组件返回true @en Returns true if entity has the component
      *
      * @example
      * ```typescript
@@ -577,17 +555,19 @@ export class Entity {
     }
 
     /**
-     * 获取或创建指定类型的组件
+     * @zh 获取或创建指定类型的组件
+     * @en Get or create component of specified type
      *
-     * 如果组件已存在则返回现有组件，否则创建新组件并添加到实体
+     * @zh 如果组件已存在则返回现有组件，否则创建新组件并添加到实体
+     * @en Returns existing component if present, otherwise creates and adds new component
      *
-     * @param type - 组件类型构造函数
-     * @param args - 组件构造函数参数（仅在创建新组件时使用）
-     * @returns 组件实例
+     * @param type - @zh 组件类型构造函数 @en Component type constructor
+     * @param args - @zh 组件构造函数参数（仅在创建新组件时使用）@en Constructor arguments (only used when creating new component)
+     * @returns @zh 组件实例 @en Component instance
      *
      * @example
      * ```typescript
-     * // 确保实体拥有Position组件
+     * // @zh 确保实体拥有Position组件 | @en Ensure entity has Position component
      * const position = entity.getOrCreateComponent(Position, 0, 0);
      * position.x = 100;
      * ```
@@ -605,16 +585,13 @@ export class Entity {
     }
 
     /**
-     * 标记组件为已修改
+     * @zh 标记组件为已修改
+     * @en Mark component(s) as modified
      *
-     * 便捷方法，自动从场景获取当前 epoch 并标记组件。
-     * 用于帧级变更检测系统。
+     * @zh 便捷方法，自动从场景获取当前 epoch 并标记组件。用于帧级变更检测系统。
+     * @en Convenience method that auto-gets epoch from scene and marks components. Used for frame-level change detection system.
      *
-     * Mark component(s) as modified.
-     * Convenience method that auto-gets epoch from scene and marks components.
-     * Used for frame-level change detection system.
-     *
-     * @param components 要标记的组件 | Components to mark
+     * @param components - @zh 要标记的组件 @en Components to mark
      *
      * @example
      * ```typescript
@@ -622,7 +599,7 @@ export class Entity {
      * pos.x = 100;
      * entity.markDirty(pos);
      *
-     * // 或者标记多个组件
+     * // @zh 或者标记多个组件 | @en Or mark multiple components
      * entity.markDirty(pos, vel);
      * ```
      */
@@ -638,9 +615,10 @@ export class Entity {
     }
 
     /**
-     * 移除指定的组件
+     * @zh 移除指定的组件
+     * @en Remove specified component
      *
-     * @param component - 要移除的组件实例
+     * @param component - @zh 要移除的组件实例 @en Component instance to remove
      */
     public removeComponent(component: Component): void {
         const componentType = component.constructor as ComponentType;
@@ -651,29 +629,16 @@ export class Entity {
         }
 
         const bitIndex = registry.getBitIndex(componentType);
-
-        // 更新位掩码
         BitMask64Utils.clearBit(this._componentMask, bitIndex);
-
-        // 使缓存失效
         this._componentCache = null;
 
-        // 从Scene存储移除
-        if (this.scene?.componentStorageManager) {
-            this.scene.componentStorageManager.removeComponent(this.id, componentType);
-        }
+        this.scene?.componentStorageManager?.removeComponent(this.id, componentType);
+        this.scene?.referenceTracker?.clearComponentReferences(component);
 
-        if (this.scene?.referenceTracker) {
-            this.scene.referenceTracker.clearComponentReferences(component);
-        }
-
-        if (component.onRemovedFromEntity) {
-            component.onRemovedFromEntity();
-        }
-
+        component.onRemovedFromEntity?.();
         component.entityId = null;
 
-        if (this.scene && this.scene.eventSystem) {
+        if (this.scene?.eventSystem) {
             this.scene.eventSystem.emitSync('component:removed', {
                 timestamp: Date.now(),
                 source: 'Entity',
@@ -689,10 +654,11 @@ export class Entity {
     }
 
     /**
-     * 移除指定类型的组件
+     * @zh 移除指定类型的组件
+     * @en Remove component by type
      *
-     * @param type - 组件类型
-     * @returns 被移除的组件实例或null
+     * @param type - @zh 组件类型 @en Component type
+     * @returns @zh 被移除的组件实例或null @en Removed component instance or null
      */
     public removeComponentByType<T extends Component>(type: ComponentType<T>): T | null {
         const component = this.getComponent(type);
@@ -704,24 +670,17 @@ export class Entity {
     }
 
     /**
-     * 移除所有组件
+     * @zh 移除所有组件
+     * @en Remove all components
      */
     public removeAllComponents(): void {
         const componentsToRemove = [...this.components];
-
-        // 清除位掩码
         BitMask64Utils.clear(this._componentMask);
-
-        // 使缓存失效
         this._componentCache = null;
 
         for (const component of componentsToRemove) {
             const componentType = component.constructor as ComponentType;
-
-            if (this.scene?.componentStorageManager) {
-                this.scene.componentStorageManager.removeComponent(this.id, componentType);
-            }
-
+            this.scene?.componentStorageManager?.removeComponent(this.id, componentType);
             component.onRemovedFromEntity();
         }
 
@@ -729,10 +688,11 @@ export class Entity {
     }
 
     /**
-     * 批量添加组件
+     * @zh 批量添加组件
+     * @en Add multiple components
      *
-     * @param components - 要添加的组件数组
-     * @returns 添加的组件数组
+     * @param components - @zh 要添加的组件数组 @en Array of components to add
+     * @returns @zh 添加的组件数组 @en Array of added components
      */
     public addComponents<T extends Component>(components: T[]): T[] {
         const addedComponents: T[] = [];
@@ -828,10 +788,11 @@ export class Entity {
     }
 
     /**
-     * 销毁实体
+     * @zh 销毁实体
+     * @en Destroy entity
      *
-     * 移除所有组件并标记为已销毁。
-     * 层级关系的清理由 HierarchySystem 处理。
+     * @zh 移除所有组件并标记为已销毁。层级关系的清理由 HierarchySystem 处理。
+     * @en Removes all components and marks as destroyed. Hierarchy cleanup is handled by HierarchySystem.
      */
     public destroy(): void {
         if (this._isDestroyed) {
@@ -859,13 +820,14 @@ export class Entity {
     }
 
     /**
-     * 比较实体
+     * @zh 比较实体优先级
+     * @en Compare entity priority
      *
-     * @param other - 另一个实体
-     * @returns 比较结果
+     * @param other - @zh 另一个实体 @en Another entity
+     * @returns @zh 比较结果 @en Comparison result
      */
     public compareTo(other: Entity): number {
-        return EntityComparer.prototype.compare(this, other);
+        return compareEntities(this, other);
     }
 
     /**

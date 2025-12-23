@@ -212,11 +212,10 @@ export class Scene implements IScene {
     private _systemErrorCount: Map<EntitySystem, number> = new Map();
 
     /**
-     * 最大允许错误次数
-     *
-     * 系统错误次数超过此阈值后将被自动禁用
+     * @zh 最大允许错误次数，系统错误次数超过此阈值后将被自动禁用
+     * @en Maximum error count, systems exceeding this threshold will be auto-disabled
      */
-    private _maxErrorCount: number = 10;
+    private _maxErrorCount: number;
 
     /**
      * 系统添加计数器
@@ -295,12 +294,10 @@ export class Scene implements IScene {
         const systems = this._filterEntitySystems(allServices);
 
         try {
-            // 使用 SystemScheduler 进行依赖排序
             this._systemScheduler.markDirty();
             return this._systemScheduler.getAllSortedSystems(systems);
         } catch (error) {
             if (error instanceof CycleDependencyError) {
-                // 循环依赖错误，记录警告并回退到 updateOrder 排序
                 this.logger.error(
                     `[Scene] 系统存在循环依赖，回退到 updateOrder 排序 | Cycle dependency detected, falling back to updateOrder sort`,
                     error.involvedNodes
@@ -308,7 +305,6 @@ export class Scene implements IScene {
             } else {
                 this.logger.error(`[Scene] 系统排序失败 | System sorting failed`, error);
             }
-            // 回退到简单的 updateOrder 排序
             return this._sortSystemsByUpdateOrder(systems);
         }
     }
@@ -378,20 +374,18 @@ export class Scene implements IScene {
     }
 
     /**
-     * 创建场景实例
-     * Create scene instance
+     * @zh 创建场景实例
+     * @en Create scene instance
+     *
+     * @param config - @zh 场景配置 @en Scene configuration
      */
     constructor(config?: ISceneConfig) {
         this.entities = new EntityList(this);
         this.identifierPool = new IdentifierPool();
         this.componentStorageManager = new ComponentStorageManager();
 
-        // 创建场景级别的组件注册表
-        // Create scene-level component registry
         this.componentRegistry = new ComponentRegistry();
 
-        // 从全局注册表继承框架组件（默认启用）
-        // Inherit framework components from global registry (enabled by default)
         if (config?.inheritGlobalRegistry !== false) {
             this.componentRegistry.cloneFrom(GlobalComponentRegistry);
         }
@@ -402,6 +396,7 @@ export class Scene implements IScene {
         this.handleManager = new EntityHandleManager();
         this._services = new ServiceContainer();
         this.logger = createLogger('Scene');
+        this._maxErrorCount = config?.maxSystemErrorCount ?? 10;
 
         if (config?.name) {
             this.name = config.name;
@@ -465,10 +460,8 @@ export class Scene implements IScene {
      * In editor mode, this method also executes all deferred component lifecycle callbacks.
      */
     public begin() {
-        // 标记场景已开始运行
         this._didSceneBegin = true;
 
-        // 执行所有延迟的组件生命周期回调 | Execute all deferred component lifecycle callbacks
         if (this._deferredComponentCallbacks.length > 0) {
             for (const callback of this._deferredComponentCallbacks) {
                 try {
@@ -477,11 +470,9 @@ export class Scene implements IScene {
                     this.logger.error('Error executing deferred component callback:', error);
                 }
             }
-            // 清空队列 | Clear the queue
             this._deferredComponentCallbacks = [];
         }
 
-        // 调用onStart方法
         this.onStart();
     }
 
@@ -501,38 +492,18 @@ export class Scene implements IScene {
      * - 系统清理：在 System.onDestroy() 中处理（实体已被清理）
      */
     public end() {
-        // 标记场景已结束运行
         this._didSceneBegin = false;
-
-        // 先调用用户的卸载方法，此时用户可以访问实体和系统进行清理
         this.unload();
-
-        // 移除所有实体
         this.entities.removeAllEntities();
-
-        // 清理查询系统中的实体引用和缓存
         this.querySystem.setEntities([]);
-
-        // 清空组件存储
         this.componentStorageManager.clear();
-
-        // 清空服务容器（会调用所有服务的dispose方法，包括所有EntitySystem）
-        // 系统的 onDestroy 回调会在这里被触发
         this._services.clear();
-
-        // 清空系统缓存
         this._cachedSystems = null;
         this._systemsOrderDirty = true;
-
-        // 清空组件索引 | Clear component indices
         this._componentIdToSystems.clear();
         this._globalNotifySystems.clear();
-
-        // 清空句柄映射并重置句柄管理器 | Clear handle mapping and reset handle manager
         this._handleToEntity.clear();
         this.handleManager.reset();
-
-        // 重置 epoch 管理器 | Reset epoch manager
         this.epochManager.reset();
     }
 
@@ -540,92 +511,57 @@ export class Scene implements IScene {
      * 更新场景
      */
     public update() {
-        // 递增帧计数（用于变更检测） | Increment epoch (for change detection)
         this.epochManager.increment();
-
-        // 开始性能采样帧
         ProfilerSDK.beginFrame();
         const frameHandle = ProfilerSDK.beginSample('Scene.update', ProfileCategory.ECS);
 
         try {
             ComponentPoolManager.getInstance().update();
-
             this.entities.updateLists();
-
             const systems = this.systems;
 
-            // Update 阶段
-            const updateHandle = ProfilerSDK.beginSample('Systems.update', ProfileCategory.ECS);
-            try {
-                for (const system of systems) {
-                    if (this._shouldSystemRun(system)) {
-                        const systemHandle = ProfilerSDK.beginSample(system.systemName, ProfileCategory.ECS);
-                        try {
-                            system.update();
-                        } catch (error) {
-                            this._handleSystemError(system, 'update', error);
-                        } finally {
-                            ProfilerSDK.endSample(systemHandle);
-                        }
-                    }
-                }
-            } finally {
-                ProfilerSDK.endSample(updateHandle);
-            }
-
-            // LateUpdate 阶段
-            const lateUpdateHandle = ProfilerSDK.beginSample('Systems.lateUpdate', ProfileCategory.ECS);
-            try {
-                for (const system of systems) {
-                    if (this._shouldSystemRun(system)) {
-                        const systemHandle = ProfilerSDK.beginSample(`${system.systemName}.late`, ProfileCategory.ECS);
-                        try {
-                            system.lateUpdate();
-                        } catch (error) {
-                            this._handleSystemError(system, 'lateUpdate', error);
-                        } finally {
-                            ProfilerSDK.endSample(systemHandle);
-                        }
-                    }
-                }
-            } finally {
-                ProfilerSDK.endSample(lateUpdateHandle);
-            }
-
-            // 执行所有系统的延迟命令
-            // Flush all systems' deferred commands
+            this._runSystemPhase(systems, 'update', 'Systems.update');
+            this._runSystemPhase(systems, 'lateUpdate', 'Systems.lateUpdate');
             this.flushCommandBuffers(systems);
         } finally {
             ProfilerSDK.endSample(frameHandle);
-            // 结束性能采样帧
             ProfilerSDK.endFrame();
         }
     }
 
     /**
-     * 检查系统是否应该运行
-     * Check if a system should run
-     *
-     * @param system 要检查的系统 | System to check
-     * @returns 是否应该运行 | Whether it should run
+     * @zh 执行系统的指定阶段
+     * @en Run specified phase for all systems
      */
+    private _runSystemPhase(
+        systems: EntitySystem[],
+        phase: 'update' | 'lateUpdate',
+        profileName: string
+    ): void {
+        const phaseHandle = ProfilerSDK.beginSample(profileName, ProfileCategory.ECS);
+        try {
+            for (const system of systems) {
+                if (!this._shouldSystemRun(system)) continue;
+
+                const suffix = phase === 'lateUpdate' ? '.late' : '';
+                const systemHandle = ProfilerSDK.beginSample(`${system.systemName}${suffix}`, ProfileCategory.ECS);
+                try {
+                    system[phase]();
+                } catch (error) {
+                    this._handleSystemError(system, phase, error);
+                } finally {
+                    ProfilerSDK.endSample(systemHandle);
+                }
+            }
+        } finally {
+            ProfilerSDK.endSample(phaseHandle);
+        }
+    }
+
     private _shouldSystemRun(system: EntitySystem): boolean {
-        // 系统必须启用
-        // System must be enabled
-        if (!system.enabled) {
-            return false;
-        }
+        if (!system.enabled) return false;
+        if (!this.isEditorMode) return true;
 
-        // 非编辑模式下，所有启用的系统都运行
-        // In non-edit mode, all enabled systems run
-        if (!this.isEditorMode) {
-            return true;
-        }
-
-        // 编辑模式下，默认所有系统都运行
-        // 只有明确标记 runInEditMode: false 的系统不运行
-        // In edit mode, all systems run by default
-        // Only systems explicitly marked runInEditMode: false are skipped
         const metadata = getSystemInstanceMetadata(system);
         return metadata?.runInEditMode !== false;
     }
@@ -685,11 +621,8 @@ export class Scene implements IScene {
     public createEntity(name: string) {
         const entity = new Entity(name, this.identifierPool.checkOut());
 
-        // 分配轻量级句柄 | Assign lightweight handle
         const handle = this.handleManager.create();
         entity.setHandle(handle);
-
-        // 添加到句柄映射 | Add to handle mapping
         this._handleToEntity.set(handle, entity);
 
         this.eventSystem.emitSync('entity:created', { entityName: name, entity, scene: this });
@@ -722,10 +655,8 @@ export class Scene implements IScene {
      * @param changedComponentType 变化的组件类型（可选） | The changed component type (optional)
      */
     public notifyEntityComponentChanged(entity: Entity, changedComponentType?: ComponentType): void {
-        // 已通知的系统集合，避免重复通知 | Set of notified systems to avoid duplicates
         const notifiedSystems = new Set<EntitySystem>();
 
-        // 如果提供了组件类型，使用索引优化 | If component type provided, use index optimization
         if (changedComponentType && this.componentRegistry.isRegistered(changedComponentType)) {
             const componentId = this.componentRegistry.getBitIndex(changedComponentType);
             const interestedSystems = this._componentIdToSystems.get(componentId);
@@ -738,7 +669,6 @@ export class Scene implements IScene {
             }
         }
 
-        // 通知全局监听系统（none条件、tag/name查询等） | Notify global listener systems
         for (const system of this._globalNotifySystems) {
             if (!notifiedSystems.has(system)) {
                 system.handleEntityComponentChanged(entity);
@@ -746,7 +676,6 @@ export class Scene implements IScene {
             }
         }
 
-        // 如果没有提供组件类型，回退到遍历所有系统 | Fallback to all systems if no component type
         if (!changedComponentType) {
             for (const system of this.systems) {
                 if (!notifiedSystems.has(system)) {
@@ -772,35 +701,29 @@ export class Scene implements IScene {
             return;
         }
 
-        // nothing 匹配器不需要索引 | Nothing matcher doesn't need indexing
         if (matcher.isNothing()) {
             return;
         }
 
         const condition = matcher.getCondition();
 
-        // 有 none/tag/name 条件的系统加入全局通知 | Systems with none/tag/name go to global
         if (condition.none.length > 0 || condition.tag !== undefined || condition.name !== undefined) {
             this._globalNotifySystems.add(system);
         }
 
-        // 空匹配器（匹配所有实体）加入全局通知 | Empty matcher (matches all) goes to global
         if (matcher.isEmpty()) {
             this._globalNotifySystems.add(system);
             return;
         }
 
-        // 索引 all 条件中的组件 | Index components in all condition
         for (const componentType of condition.all) {
             this.addSystemToComponentIndex(componentType, system);
         }
 
-        // 索引 any 条件中的组件 | Index components in any condition
         for (const componentType of condition.any) {
             this.addSystemToComponentIndex(componentType, system);
         }
 
-        // 索引单组件查询 | Index single component query
         if (condition.component) {
             this.addSystemToComponentIndex(condition.component, system);
         }
@@ -834,10 +757,8 @@ export class Scene implements IScene {
      * @param system 要移除的系统 | The system to remove
      */
     private removeSystemFromIndex(system: EntitySystem): void {
-        // 从全局通知列表移除 | Remove from global notify list
         this._globalNotifySystems.delete(system);
 
-        // 从所有组件索引中移除 | Remove from all component indices
         for (const systems of this._componentIdToSystems.values()) {
             systems.delete(system);
         }
@@ -852,15 +773,12 @@ export class Scene implements IScene {
         this.entities.add(entity);
         entity.scene = this;
 
-        // 将实体添加到查询系统（可延迟缓存清理）
         this.querySystem.addEntity(entity, deferCacheClear);
 
-        // 清除系统缓存以确保系统能及时发现新实体
         if (!deferCacheClear) {
             this.clearSystemEntityCaches();
         }
 
-        // 触发实体添加事件
         this.eventSystem.emitSync('entity:added', { entity, scene: this });
 
         return entity;
@@ -875,30 +793,22 @@ export class Scene implements IScene {
     public createEntities(count: number, namePrefix: string = 'Entity'): Entity[] {
         const entities: Entity[] = [];
 
-        // 批量创建实体对象，不立即添加到系统
         for (let i = 0; i < count; i++) {
             const entity = new Entity(`${namePrefix}_${i}`, this.identifierPool.checkOut());
             entity.scene = this;
 
-            // 分配轻量级句柄 | Assign lightweight handle
             const handle = this.handleManager.create();
             entity.setHandle(handle);
-
-            // 添加到句柄映射 | Add to handle mapping
             this._handleToEntity.set(handle, entity);
 
             entities.push(entity);
         }
 
-        // 批量添加到实体列表
         for (const entity of entities) {
             this.entities.add(entity);
         }
 
-        // 批量添加到查询系统（无重复检查，性能最优）
         this.querySystem.addEntitiesUnchecked(entities);
-
-        // 批量触发事件（可选，减少事件开销）
         this.eventSystem.emitSync('entities:batch_added', { entities, scene: this, count });
 
         return entities;
@@ -922,7 +832,6 @@ export class Scene implements IScene {
             this.entities.remove(entity);
             this.querySystem.removeEntity(entity);
 
-            // 销毁句柄并从映射中移除 | Destroy handle and remove from mapping
             if (isValidHandle(entity.handle)) {
                 this._handleToEntity.delete(entity.handle);
                 this.handleManager.destroy(entity.handle);
@@ -1019,14 +928,9 @@ export class Scene implements IScene {
         const persistentEntities = this.findPersistentEntities();
 
         for (const entity of persistentEntities) {
-            // 从实体列表移除
             this.entities.remove(entity);
-
-            // 从查询系统移除
             this.querySystem.removeEntity(entity);
-
-            // 清除场景引用（但保留组件数据）
-            entity.scene = null;
+            entity.scene = null; // detach but preserve component data
         }
 
         return persistentEntities;
@@ -1045,23 +949,16 @@ export class Scene implements IScene {
      */
     public receiveMigratedEntities(entities: Entity[]): void {
         for (const entity of entities) {
-            // 设置新场景引用
             entity.scene = this;
-
-            // 添加到实体列表
             this.entities.add(entity);
-
-            // 添加到查询系统
             this.querySystem.addEntity(entity);
 
-            // 重新注册组件到新场景的存储
             for (const component of entity.components) {
                 this.componentStorageManager.addComponent(entity.id, component);
                 this.referenceTracker?.registerEntityScene(entity.id, this);
             }
         }
 
-        // 清除系统缓存
         if (entities.length > 0) {
             this.clearSystemEntityCaches();
         }
@@ -1218,10 +1115,7 @@ export class Scene implements IScene {
         }
 
         system.scene = this;
-
-        // 分配添加顺序，用于稳定排序 | Assign add order for stable sorting
-        system.addOrder = this._systemAddCounter++;
-
+        system.addOrder = this._systemAddCounter++; // for stable sorting
         system.setPerformanceMonitor(this.performanceMonitor);
 
         const metadata = getSystemMetadata(constructor);
@@ -1233,16 +1127,11 @@ export class Scene implements IScene {
         }
 
         this._services.registerInstance(constructor, system);
-
-        // 标记系统列表已变化
         this.markSystemsOrderDirty();
-
-        // 建立组件类型到系统的索引 | Build component type to system index
         this.indexSystemByComponents(system);
-
         injectProperties(system, this._services);
 
-        // 调试模式下自动包装系统方法以收集性能数据（ProfilerSDK 启用时表示调试模式）
+        // Auto-wrap system methods for profiling in debug mode
         if (ProfilerSDK.isEnabled()) {
             AutoProfiler.wrapInstance(system, system.systemName, ProfileCategory.ECS);
         }
@@ -1318,16 +1207,9 @@ export class Scene implements IScene {
     public removeEntityProcessor(processor: EntitySystem): void {
         const constructor = processor.constructor as ServiceType<EntitySystem>;
 
-        // 从ServiceContainer移除
         this._services.unregister(constructor);
-
-        // 标记系统列表已变化
         this.markSystemsOrderDirty();
-
-        // 从组件类型索引中移除 | Remove from component type index
         this.removeSystemFromIndex(processor);
-
-        // 重置System状态
         processor.reset();
     }
 
