@@ -1185,7 +1185,6 @@ export class FBXLoader implements IAssetLoader<IGLTFAsset> {
                 if (targetCurveNode) {
                     // Determine component index from property
                     // 从属性确定分量索引
-                    const oldIndex = curve.componentIndex;
                     if (conn.property) {
                         if (conn.property === 'd|X') curve.componentIndex = 0;
                         else if (conn.property === 'd|Y') curve.componentIndex = 1;
@@ -1590,22 +1589,6 @@ export class FBXLoader implements IAssetLoader<IGLTFAsset> {
     }
 
     /**
-     * Transpose a 4x4 matrix (convert row-major to column-major or vice versa)
-     * 转置 4x4 矩阵（行主序转列主序或反之）
-     *
-     * FBX uses row-major storage, WebGL uses column-major.
-     * FBX 使用行主序存储，WebGL 使用列主序。
-     */
-    private transposeMatrix4(m: Float32Array): Float32Array {
-        return new Float32Array([
-            m[0], m[4], m[8], m[12],
-            m[1], m[5], m[9], m[13],
-            m[2], m[6], m[10], m[14],
-            m[3], m[7], m[11], m[15]
-        ]);
-    }
-
-    /**
      * Create identity matrix
      * 创建单位矩阵
      */
@@ -1668,24 +1651,6 @@ export class FBXLoader implements IAssetLoader<IGLTFAsset> {
         out[14] = (m31 * b01 - m30 * b03 - m32 * b00) * det;
         out[15] = (m20 * b03 - m21 * b01 + m22 * b00) * det;
 
-        return out;
-    }
-
-    /**
-     * Multiply two 4x4 matrices
-     * 两个 4x4 矩阵相乘
-     */
-    private multiplyMatrix4(a: Float32Array, b: Float32Array): Float32Array {
-        const out = new Float32Array(16);
-        for (let row = 0; row < 4; row++) {
-            for (let col = 0; col < 4; col++) {
-                let sum = 0;
-                for (let k = 0; k < 4; k++) {
-                    sum += a[row + k * 4] * b[k + col * 4];
-                }
-                out[row + col * 4] = sum;
-            }
-        }
         return out;
     }
 
