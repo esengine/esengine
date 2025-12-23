@@ -7,93 +7,125 @@ import { ServiceContainer } from '../Core/ServiceContainer';
 const logger = createLogger('World');
 
 /**
- * 全局系统接口
- * 全局系统是在World级别运行的系统，不依赖特定Scene
+ * @zh 全局系统接口
+ * @en Global system interface
+ *
+ * @zh 全局系统是在World级别运行的系统，不依赖特定Scene
+ * @en Global systems run at World level and don't depend on specific Scene
  */
 export type IGlobalSystem = {
     /**
-     * 系统名称
+     * @zh 系统名称
+     * @en System name
      */
     readonly name: string;
 
     /**
-     * 初始化系统
+     * @zh 初始化系统
+     * @en Initialize system
      */
     initialize?(): void;
 
     /**
-     * 更新系统
+     * @zh 更新系统
+     * @en Update system
      */
     update(deltaTime?: number): void;
 
     /**
-     * 重置系统
+     * @zh 重置系统
+     * @en Reset system
      */
     reset?(): void;
 
     /**
-     * 销毁系统
+     * @zh 销毁系统
+     * @en Destroy system
      */
     destroy?(): void;
 }
 
 /**
- * World配置接口
+ * @zh World配置接口
+ * @en World configuration interface
  */
 export type IWorldConfig = {
     /**
-     * World名称
+     * @zh World名称
+     * @en World name
      */
     name?: string;
 
     /**
-     * 是否启用调试模式
+     * @zh 是否启用调试模式
+     * @en Enable debug mode
      */
     debug?: boolean;
 
     /**
-     * 最大Scene数量限制
+     * @zh 最大Scene数量限制
+     * @en Maximum number of scenes
      */
     maxScenes?: number;
 
     /**
-     * 是否自动清理空Scene
+     * @zh 是否自动清理空Scene
+     * @en Auto cleanup empty scenes
      */
     autoCleanup?: boolean;
+
+    /**
+     * @zh 自动清理阈值（毫秒），空Scene超过此时间后将被自动清理
+     * @en Auto cleanup threshold (ms), empty scenes exceeding this time will be auto-cleaned
+     *
+     * @default 300000 (5 minutes)
+     */
+    cleanupThresholdMs?: number;
 }
 
 /**
- * World类 - ECS世界管理器
+ * @zh World类 - ECS世界管理器
+ * @en World class - ECS world manager
  *
- * World是Scene的容器，每个World可以管理多个Scene。
+ * @zh World是Scene的容器，每个World可以管理多个Scene。
  * World拥有独立的服务容器，用于管理World级别的全局服务。
+ * @en World is a container for Scenes, each World can manage multiple Scenes.
+ * World has its own service container for managing World-level global services.
  *
- * 服务容器层级：
+ * @zh 服务容器层级：
  * - Core.services: 应用程序全局服务
  * - World.services: World级别服务（每个World独立）
  * - Scene.services: Scene级别服务（每个Scene独立）
+ * @en Service container hierarchy:
+ * - Core.services: Application-wide global services
+ * - World.services: World-level services (independent per World)
+ * - Scene.services: Scene-level services (independent per Scene)
  *
- * 这种设计允许创建独立的游戏世界，如：
+ * @zh 这种设计允许创建独立的游戏世界，如：
  * - 游戏房间（每个房间一个World）
  * - 不同的游戏模式
  * - 独立的模拟环境
+ * @en This design allows creating independent game worlds like:
+ * - Game rooms (one World per room)
+ * - Different game modes
+ * - Independent simulation environments
  *
  * @example
  * ```typescript
- * // 创建游戏房间的World
+ * // @zh 创建游戏房间的World | @en Create World for game room
  * const roomWorld = new World({ name: 'Room_001' });
  *
- * // 注册World级别的服务
+ * // @zh 注册World级别的服务 | @en Register World-level service
  * roomWorld.services.registerSingleton(RoomManager);
  *
- * // 在World中创建Scene
+ * // @zh 在World中创建Scene | @en Create Scene in World
  * const gameScene = roomWorld.createScene('game', new Scene());
  * const uiScene = roomWorld.createScene('ui', new Scene());
  *
- * // 在Scene中使用World级别的服务
+ * // @zh 在Scene中使用World级别的服务 | @en Use World-level service in Scene
  * const roomManager = roomWorld.services.resolve(RoomManager);
  *
- * // 更新整个World
+ * // @zh 更新整个World | @en Update entire World
  * roomWorld.update(deltaTime);
  * ```
  */
@@ -113,6 +145,7 @@ export class World {
             debug: false,
             maxScenes: 10,
             autoCleanup: true,
+            cleanupThresholdMs: 5 * 60 * 1000,
             ...config
         };
 
@@ -122,15 +155,20 @@ export class World {
     }
 
     /**
-     * World级别的服务容器
-     * 用于管理World范围内的全局服务
+     * @zh World级别的服务容器，用于管理World范围内的全局服务
+     * @en World-level service container for managing World-scoped global services
      */
     public get services(): ServiceContainer {
         return this._services;
     }
 
     /**
-     * 创建并添加Scene到World
+     * @zh 创建并添加Scene到World
+     * @en Create and add Scene to World
+     *
+     * @param sceneName - @zh Scene名称 @en Scene name
+     * @param sceneInstance - @zh Scene实例（可选）@en Scene instance (optional)
+     * @returns @zh 创建的Scene实例 @en Created Scene instance
      */
     public createScene<T extends IScene>(sceneName: string, sceneInstance?: T): T {
         if (!sceneName || typeof sceneName !== 'string' || sceneName.trim() === '') {
@@ -145,34 +183,31 @@ export class World {
             throw new Error(`World '${this.name}' 已达到最大Scene数量限制: ${this._config.maxScenes}`);
         }
 
-        // 如果没有提供Scene实例，创建默认Scene
         const scene = sceneInstance || (new Scene() as unknown as T);
 
-        // 如果配置了 debug，为 Scene 注册并启用 PerformanceMonitor
         if (this._config.debug) {
             const performanceMonitor = new PerformanceMonitor();
             performanceMonitor.enable();
             scene.services.registerInstance(PerformanceMonitor, performanceMonitor);
         }
 
-        // 设置Scene的标识
-        if ('id' in scene) {
-            (scene as any).id = sceneName;
-        }
-        if ('name' in scene && !scene.name) {
+        (scene as { id?: string }).id = sceneName;
+        if (!scene.name) {
             scene.name = sceneName;
         }
 
         this._scenes.set(sceneName, scene);
-
-        // 初始化Scene
         scene.initialize();
 
         return scene;
     }
 
     /**
-     * 移除Scene
+     * @zh 移除Scene
+     * @en Remove Scene
+     *
+     * @param sceneName - @zh Scene名称 @en Scene name
+     * @returns @zh 是否成功移除 @en Whether removal was successful
      */
     public removeScene(sceneName: string): boolean {
         const scene = this._scenes.get(sceneName);
@@ -180,12 +215,10 @@ export class World {
             return false;
         }
 
-        // 如果Scene正在运行，先停止它
         if (this._activeScenes.has(sceneName)) {
             this.setSceneActive(sceneName, false);
         }
 
-        // 清理Scene资源
         scene.end();
         this._scenes.delete(sceneName);
 
@@ -194,7 +227,11 @@ export class World {
     }
 
     /**
-     * 获取Scene
+     * @zh 获取Scene
+     * @en Get Scene
+     *
+     * @param sceneName - @zh Scene名称 @en Scene name
+     * @returns @zh Scene实例或null @en Scene instance or null
      */
     public getScene<T extends IScene>(sceneName: string): T | null {
         return this._scenes.get(sceneName) as T || null;
@@ -237,14 +274,10 @@ export class World {
 
         if (active) {
             this._activeScenes.add(sceneName);
-            // 启动Scene
-            if (scene.begin) {
-                scene.begin();
-            }
+            scene.begin?.();
             logger.debug(`在World '${this.name}' 中激活Scene: ${sceneName}`);
         } else {
             this._activeScenes.delete(sceneName);
-            // 可选择性地停止Scene，或者让它继续运行但不更新
             logger.debug(`在World '${this.name}' 中停用Scene: ${sceneName}`);
         }
     }
@@ -273,9 +306,7 @@ export class World {
         }
 
         this._globalSystems.push(system);
-        if (system.initialize) {
-            system.initialize();
-        }
+        system.initialize?.();
 
         logger.debug(`在World '${this.name}' 中添加全局System: ${system.name}`);
         return system;
@@ -291,9 +322,7 @@ export class World {
         }
 
         this._globalSystems.splice(index, 1);
-        if (system.reset) {
-            system.reset();
-        }
+        system.reset?.();
 
         logger.debug(`从World '${this.name}' 中移除全局System: ${system.name}`);
         return true;
@@ -321,11 +350,8 @@ export class World {
 
         this._isActive = true;
 
-        // 启动所有全局System
         for (const system of this._globalSystems) {
-            if (system.initialize) {
-                system.initialize();
-            }
+            system.initialize?.();
         }
 
         logger.info(`启动World: ${this.name}`);
@@ -339,16 +365,12 @@ export class World {
             return;
         }
 
-        // 停止所有Scene
         for (const sceneName of this._activeScenes) {
             this.setSceneActive(sceneName, false);
         }
 
-        // 重置所有全局System
         for (const system of this._globalSystems) {
-            if (system.reset) {
-                system.reset();
-            }
+            system.reset?.();
         }
 
         this._isActive = false;
@@ -356,41 +378,38 @@ export class World {
     }
 
     /**
-     * 更新World中的全局System
-     * 注意：此方法由Core.update()调用，不应直接调用
+     * @zh 更新World中的全局System
+     * @en Update global systems in World
+     *
+     * @internal Called by Core.update()
      */
     public updateGlobalSystems(): void {
         if (!this._isActive) {
             return;
         }
 
-        // 更新全局System
         for (const system of this._globalSystems) {
-            if (system.update) {
-                system.update();
-            }
+            system.update?.();
         }
     }
 
     /**
-     * 更新World中的所有激活Scene
-     * 注意：此方法由Core.update()调用，不应直接调用
+     * @zh 更新World中的所有激活Scene
+     * @en Update all active scenes in World
+     *
+     * @internal Called by Core.update()
      */
     public updateScenes(): void {
         if (!this._isActive) {
             return;
         }
 
-        // 更新所有激活的Scene
         for (const sceneName of this._activeScenes) {
             const scene = this._scenes.get(sceneName);
-            if (scene && scene.update) {
-                scene.update();
-            }
+            scene?.update?.();
         }
 
-        // 自动清理（如果启用）
-        if (this._config.autoCleanup && this.shouldAutoCleanup()) {
+        if (this._config.autoCleanup) {
             this.cleanup();
         }
     }
@@ -401,28 +420,22 @@ export class World {
     public destroy(): void {
         logger.info(`销毁World: ${this.name}`);
 
-        // 停止World
         this.stop();
 
-        // 销毁所有Scene
-        const sceneNames = Array.from(this._scenes.keys());
-        for (const sceneName of sceneNames) {
+        for (const sceneName of Array.from(this._scenes.keys())) {
             this.removeScene(sceneName);
         }
 
-        // 清理全局System
         for (const system of this._globalSystems) {
             if (system.destroy) {
                 system.destroy();
-            } else if (system.reset) {
-                system.reset();
+            } else {
+                system.reset?.();
             }
         }
         this._globalSystems.length = 0;
 
-        // 清空服务容器
         this._services.clear();
-
         this._scenes.clear();
         this._activeScenes.clear();
     }
@@ -461,58 +474,37 @@ export class World {
             }
         };
 
-        // 统计所有Scene的实体数量
         for (const scene of this._scenes.values()) {
-            if (scene.entities) {
-                stats.totalEntities += scene.entities.count;
-            }
-            if (scene.systems) {
-                stats.totalSystems += scene.systems.length;
-            }
+            stats.totalEntities += scene.entities?.count ?? 0;
+            stats.totalSystems += scene.systems?.length ?? 0;
         }
 
         return stats;
     }
 
     /**
-     * 检查是否应该执行自动清理
+     * @zh 检查Scene是否可以被自动清理
+     * @en Check if a scene is eligible for auto cleanup
      */
-    private shouldAutoCleanup(): boolean {
-        // 简单的清理策略：如果有空Scene且超过5分钟没有实体
-        const currentTime = Date.now();
-        const cleanupThreshold = 5 * 60 * 1000; // 5分钟
-
-        for (const [sceneName, scene] of this._scenes) {
-            if (!this._activeScenes.has(sceneName) &&
-                scene.entities &&
-                scene.entities.count === 0 &&
-                (currentTime - this._createdAt) > cleanupThreshold) {
-                return true;
-            }
-        }
-
-        return false;
+    private _isSceneCleanupCandidate(sceneName: string, scene: IScene): boolean {
+        const elapsed = Date.now() - this._createdAt;
+        return !this._activeScenes.has(sceneName) &&
+            scene.entities != null &&
+            scene.entities.count === 0 &&
+            elapsed > this._config.cleanupThresholdMs!;
     }
 
     /**
-     * 执行清理操作
+     * @zh 执行自动清理操作
+     * @en Execute auto cleanup operation
      */
     private cleanup(): void {
-        const sceneNames = Array.from(this._scenes.keys());
-        const currentTime = Date.now();
-        const cleanupThreshold = 5 * 60 * 1000; // 5分钟
+        const candidates = [...this._scenes.entries()]
+            .filter(([name, scene]) => this._isSceneCleanupCandidate(name, scene));
 
-        for (const sceneName of sceneNames) {
-            const scene = this._scenes.get(sceneName);
-            if (scene &&
-                !this._activeScenes.has(sceneName) &&
-                scene.entities &&
-                scene.entities.count === 0 &&
-                (currentTime - this._createdAt) > cleanupThreshold) {
-
-                this.removeScene(sceneName);
-                logger.debug(`自动清理空Scene: ${sceneName} from World ${this.name}`);
-            }
+        for (const [sceneName] of candidates) {
+            this.removeScene(sceneName);
+            logger.debug(`自动清理空Scene: ${sceneName} from World ${this.name}`);
         }
     }
 

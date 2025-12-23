@@ -18,69 +18,72 @@ import { DebugConfigService } from './Utils/Debug/DebugConfigService';
 import { createInstance } from './Core/DI/Decorators';
 
 /**
- * 游戏引擎核心类
+ * @zh 游戏引擎核心类
+ * @en Game engine core class
  *
- * 职责：
+ * @zh 职责：
  * - 提供全局服务（Timer、Performance、Pool等）
  * - 管理场景生命周期（内置SceneManager）
  * - 管理全局管理器的生命周期
  * - 提供统一的游戏循环更新入口
+ * @en Responsibilities:
+ * - Provide global services (Timer, Performance, Pool, etc.)
+ * - Manage scene lifecycle (built-in SceneManager)
+ * - Manage global manager lifecycles
+ * - Provide unified game loop update entry
  *
  * @example
  * ```typescript
- * // 初始化并设置场景
+ * // @zh 初始化并设置场景 | @en Initialize and set scene
  * Core.create({ debug: true });
  * Core.setScene(new GameScene());
  *
- * // 游戏循环（自动更新全局服务和场景）
+ * // @zh 游戏循环（自动更新全局服务和场景）| @en Game loop (auto-updates global services and scene)
  * function gameLoop(deltaTime: number) {
  *     Core.update(deltaTime);
  * }
  *
- * // 使用定时器
+ * // @zh 使用定时器 | @en Use timer
  * Core.schedule(1.0, false, null, (timer) => {
- *     console.log("1秒后执行");
+ *     console.log("Executed after 1 second");
  * });
  *
- * // 切换场景
- * Core.loadScene(new MenuScene());  // 延迟切换
- * Core.setScene(new GameScene());   // 立即切换
+ * // @zh 切换场景 | @en Switch scene
+ * Core.loadScene(new MenuScene());  // @zh 延迟切换 | @en Deferred switch
+ * Core.setScene(new GameScene());   // @zh 立即切换 | @en Immediate switch
  *
- * // 获取当前场景
+ * // @zh 获取当前场景 | @en Get current scene
  * const currentScene = Core.scene;
  * ```
  */
 export class Core {
     /**
-     * 游戏暂停状态
-     *
-     * 当设置为true时，游戏循环将暂停执行。
+     * @zh 游戏暂停状态，当设置为true时，游戏循环将暂停执行
+     * @en Game paused state, when set to true, game loop will pause execution
      */
     public static paused = false;
 
     /**
-     * 全局核心实例
-     *
-     * 可能为null表示Core尚未初始化或已被销毁
+     * @zh 全局核心实例，可能为null表示Core尚未初始化或已被销毁
+     * @en Global core instance, null means Core is not initialized or destroyed
      */
     private static _instance: Core | null = null;
 
     /**
-     * Core专用日志器
+     * @zh Core专用日志器
+     * @en Core logger
      */
     private static _logger = createLogger('Core');
 
     /**
-     * 调试模式标志
-     *
-     * 在调试模式下会启用额外的性能监控和错误检查。
+     * @zh 调试模式标志，在调试模式下会启用额外的性能监控和错误检查
+     * @en Debug mode flag, enables additional performance monitoring and error checking in debug mode
      */
     public readonly debug: boolean;
 
     /**
-     * 服务容器
-     *
-     * 管理所有服务的注册、解析和生命周期。
+     * @zh 服务容器，管理所有服务的注册、解析和生命周期
+     * @en Service container for managing registration, resolution, and lifecycle of all services
      */
     private _serviceContainer: ServiceContainer;
 
@@ -90,110 +93,79 @@ export class Core {
     private _debugManager?: DebugManager;
 
     /**
-     * 场景管理器
-     *
-     * 管理当前场景的生命周期。
+     * @zh 场景管理器，管理当前场景的生命周期
+     * @en Scene manager for managing current scene lifecycle
      */
     private _sceneManager: SceneManager;
 
     /**
-     * World管理器
-     *
-     * 管理多个独立的World实例（可选）。
+     * @zh World管理器，管理多个独立的World实例（可选）
+     * @en World manager for managing multiple independent World instances (optional)
      */
     private _worldManager: WorldManager;
 
     /**
-     * 插件管理器
-     *
-     * 管理所有插件的生命周期。
+     * @zh 插件管理器，管理所有插件的生命周期
+     * @en Plugin manager for managing all plugin lifecycles
      */
     private _pluginManager: PluginManager;
 
     /**
-     * 插件服务注册表
-     *
-     * 基于 ServiceToken 的类型安全服务注册表。
-     * Type-safe service registry based on ServiceToken.
+     * @zh 插件服务注册表，基于 ServiceToken 的类型安全服务注册表
+     * @en Plugin service registry, type-safe service registry based on ServiceToken
      */
     private _pluginServiceRegistry: PluginServiceRegistry;
 
     /**
-     * Core配置
+     * @zh Core配置
+     * @en Core configuration
      */
     private _config: ICoreConfig;
 
     /**
-     * 创建核心实例
+     * @zh 创建核心实例
+     * @en Create core instance
      *
-     * @param config - Core配置对象
+     * @param config - @zh Core配置对象 @en Core configuration object
      */
     private constructor(config: ICoreConfig = {}) {
         Core._instance = this;
-
-        // 保存配置
-        this._config = {
-            debug: true,
-            ...config
-        };
-
-        // 初始化服务容器
+        this._config = { debug: true, ...config };
         this._serviceContainer = new ServiceContainer();
 
-        // 初始化定时器管理器
         this._timerManager = new TimerManager();
         this._serviceContainer.registerInstance(TimerManager, this._timerManager);
 
-        // 初始化性能监控器
         this._performanceMonitor = new PerformanceMonitor();
         this._serviceContainer.registerInstance(PerformanceMonitor, this._performanceMonitor);
-
-        // 在调试模式下启用性能监控
         if (this._config.debug) {
             this._performanceMonitor.enable();
         }
 
-        // 初始化对象池管理器
         this._poolManager = new PoolManager();
         this._serviceContainer.registerInstance(PoolManager, this._poolManager);
 
-        // 初始化场景管理器
         this._sceneManager = new SceneManager(this._performanceMonitor);
         this._serviceContainer.registerInstance(SceneManager, this._sceneManager);
+        this._sceneManager.setSceneChangedCallback(() => this._debugManager?.onSceneChanged());
 
-        // 设置场景切换回调，通知调试管理器
-        this._sceneManager.setSceneChangedCallback(() => {
-            if (this._debugManager) {
-                this._debugManager.onSceneChanged();
-            }
-        });
-
-        // 初始化World管理器
         this._worldManager = new WorldManager({ debug: !!this._config.debug, ...this._config.worldManagerConfig });
         this._serviceContainer.registerInstance(WorldManager, this._worldManager);
 
-        // 初始化插件管理器
         this._pluginManager = new PluginManager();
         this._pluginManager.initialize(this, this._serviceContainer);
         this._serviceContainer.registerInstance(PluginManager, this._pluginManager);
 
-        // 初始化插件服务注册表
-        // Initialize plugin service registry
         this._pluginServiceRegistry = new PluginServiceRegistry();
         this._serviceContainer.registerInstance(PluginServiceRegistry, this._pluginServiceRegistry);
 
         this.debug = this._config.debug ?? true;
 
-        // 初始化调试管理器
         if (this._config.debugConfig?.enabled) {
             const configService = new DebugConfigService();
             configService.setConfig(this._config.debugConfig);
             this._serviceContainer.registerInstance(DebugConfigService, configService);
-
-            this._serviceContainer.registerSingleton(DebugManager, (c) =>
-                createInstance(DebugManager, c)
-            );
-
+            this._serviceContainer.registerSingleton(DebugManager, (c) => createInstance(DebugManager, c));
             this._debugManager = this._serviceContainer.resolve(DebugManager);
             this._debugManager.onInitialize();
         }
@@ -202,28 +174,31 @@ export class Core {
     }
 
     /**
-     * 获取核心实例
+     * @zh 获取核心实例
+     * @en Get core instance
      *
-     * @returns 全局核心实例
+     * @returns @zh 全局核心实例 @en Global core instance
      */
     public static get Instance() {
         return this._instance;
     }
 
     /**
-     * 获取服务容器
+     * @zh 获取服务容器
+     * @en Get service container
      *
-     * 用于注册和解析自定义服务。
+     * @zh 用于注册和解析自定义服务。
+     * @en Used for registering and resolving custom services.
      *
-     * @returns 服务容器实例
-     * @throws 如果Core实例未创建
+     * @returns @zh 服务容器实例 @en Service container instance
+     * @throws @zh 如果Core实例未创建 @en If Core instance is not created
      *
      * @example
      * ```typescript
-     * // 注册自定义服务
+     * // @zh 注册自定义服务 | @en Register custom service
      * Core.services.registerSingleton(MyService);
      *
-     * // 解析服务
+     * // @zh 解析服务 | @en Resolve service
      * const myService = Core.services.resolve(MyService);
      * ```
      */
@@ -235,28 +210,29 @@ export class Core {
     }
 
     /**
-     * 获取插件服务注册表
+     * @zh 获取插件服务注册表
+     * @en Get plugin service registry
      *
-     * 用于基于 ServiceToken 的类型安全服务注册和获取。
-     * For type-safe service registration and retrieval based on ServiceToken.
+     * @zh 用于基于 ServiceToken 的类型安全服务注册和获取。
+     * @en For type-safe service registration and retrieval based on ServiceToken.
      *
-     * @returns PluginServiceRegistry 实例
-     * @throws 如果 Core 实例未创建
+     * @returns @zh PluginServiceRegistry 实例 @en PluginServiceRegistry instance
+     * @throws @zh 如果 Core 实例未创建 @en If Core instance is not created
      *
      * @example
      * ```typescript
      * import { createServiceToken } from '@esengine/ecs-framework';
      *
-     * // 定义服务令牌
+     * // @zh 定义服务令牌 | @en Define service token
      * const MyServiceToken = createServiceToken<IMyService>('myService');
      *
-     * // 注册服务
+     * // @zh 注册服务 | @en Register service
      * Core.pluginServices.register(MyServiceToken, myServiceInstance);
      *
-     * // 获取服务（可选）
+     * // @zh 获取服务（可选）| @en Get service (optional)
      * const service = Core.pluginServices.get(MyServiceToken);
      *
-     * // 获取服务（必需，不存在则抛异常）
+     * // @zh 获取服务（必需，不存在则抛异常）| @en Get service (required, throws if not found)
      * const service = Core.pluginServices.require(MyServiceToken);
      * ```
      */
@@ -268,16 +244,18 @@ export class Core {
     }
 
     /**
-     * 获取World管理器
+     * @zh 获取World管理器
+     * @en Get World manager
      *
-     * 用于管理多个独立的World实例（高级用户）。
+     * @zh 用于管理多个独立的World实例（高级用户）。
+     * @en For managing multiple independent World instances (advanced users).
      *
-     * @returns WorldManager实例
-     * @throws 如果Core实例未创建
+     * @returns @zh WorldManager实例 @en WorldManager instance
+     * @throws @zh 如果Core实例未创建 @en If Core instance is not created
      *
      * @example
      * ```typescript
-     * // 创建多个游戏房间
+     * // @zh 创建多个游戏房间 | @en Create multiple game rooms
      * const wm = Core.worldManager;
      * const room1 = wm.createWorld('room_001');
      * room1.createScene('game', new GameScene());
@@ -292,16 +270,18 @@ export class Core {
     }
 
     /**
-     * 创建Core实例
+     * @zh 创建Core实例
+     * @en Create Core instance
      *
-     * 如果实例已存在，则返回现有实例。
+     * @zh 如果实例已存在，则返回现有实例。
+     * @en If instance already exists, returns the existing instance.
      *
-     * @param config - Core配置，也可以直接传入boolean表示debug模式（向后兼容）
-     * @returns Core实例
+     * @param config - @zh Core配置，也可以直接传入boolean表示debug模式（向后兼容） @en Core config, can also pass boolean for debug mode (backward compatible)
+     * @returns @zh Core实例 @en Core instance
      *
      * @example
      * ```typescript
-     * // 方式1：使用配置对象
+     * // @zh 方式1：使用配置对象 | @en Method 1: Use config object
      * Core.create({
      *     debug: true,
      *     debugConfig: {
@@ -310,7 +290,7 @@ export class Core {
      *     }
      * });
      *
-     * // 方式2：简单模式（向后兼容）
+     * // @zh 方式2：简单模式（向后兼容）| @en Method 2: Simple mode (backward compatible)
      * Core.create(true);  // debug = true
      * ```
      */
@@ -328,16 +308,17 @@ export class Core {
     }
 
     /**
-     * 设置当前场景
+     * @zh 设置当前场景
+     * @en Set current scene
      *
-     * @param scene - 要设置的场景
-     * @returns 设置的场景实例
+     * @param scene - @zh 要设置的场景 @en The scene to set
+     * @returns @zh 设置的场景实例 @en The scene instance that was set
      *
      * @example
      * ```typescript
      * Core.create({ debug: true });
      *
-     * // 创建并设置场景
+     * // @zh 创建并设置场景 | @en Create and set scene
      * const gameScene = new GameScene();
      * Core.setScene(gameScene);
      * ```
@@ -352,9 +333,10 @@ export class Core {
     }
 
     /**
-     * 获取当前场景
+     * @zh 获取当前场景
+     * @en Get current scene
      *
-     * @returns 当前场景，如果没有场景则返回null
+     * @returns @zh 当前场景，如果没有场景则返回null @en Current scene, or null if no scene
      */
     public static get scene(): IScene | null {
         if (!this._instance) {
@@ -364,21 +346,22 @@ export class Core {
     }
 
     /**
-     * 获取ECS流式API
+     * @zh 获取ECS流式API
+     * @en Get ECS fluent API
      *
-     * @returns ECS API实例，如果当前没有场景则返回null
+     * @returns @zh ECS API实例，如果当前没有场景则返回null @en ECS API instance, or null if no scene
      *
      * @example
      * ```typescript
-     * // 使用流式API创建实体
+     * // @zh 使用流式API创建实体 | @en Create entity with fluent API
      * const player = Core.ecsAPI?.createEntity('Player')
      *     .addComponent(Position, 100, 100)
      *     .addComponent(Velocity, 50, 0);
      *
-     * // 查询实体
+     * // @zh 查询实体 | @en Query entities
      * const enemies = Core.ecsAPI?.query(Enemy, Transform);
      *
-     * // 发射事件
+     * // @zh 发射事件 | @en Emit event
      * Core.ecsAPI?.emit('game:start', { level: 1 });
      * ```
      */
@@ -390,13 +373,14 @@ export class Core {
     }
 
     /**
-     * 延迟加载场景（下一帧切换）
+     * @zh 延迟加载场景（下一帧切换）
+     * @en Load scene with delay (switch on next frame)
      *
-     * @param scene - 要加载的场景
+     * @param scene - @zh 要加载的场景 @en The scene to load
      *
      * @example
      * ```typescript
-     * // 延迟切换场景（在下一帧生效）
+     * // @zh 延迟切换场景（在下一帧生效）| @en Deferred scene switch (takes effect next frame)
      * Core.loadScene(new MenuScene());
      * ```
      */
@@ -410,28 +394,29 @@ export class Core {
     }
 
     /**
-     * 更新游戏逻辑
+     * @zh 更新游戏逻辑
+     * @en Update game logic
      *
-     * 此方法应该在游戏引擎的更新循环中调用。
-     * 会自动更新全局服务和当前场景。
+     * @zh 此方法应该在游戏引擎的更新循环中调用。会自动更新全局服务和当前场景。
+     * @en This method should be called in the game engine's update loop. Automatically updates global services and current scene.
      *
-     * @param deltaTime - 外部引擎提供的帧时间间隔（秒）
+     * @param deltaTime - @zh 外部引擎提供的帧时间间隔（秒）@en Frame delta time in seconds from external engine
      *
      * @example
      * ```typescript
-     * // 初始化
+     * // @zh 初始化 | @en Initialize
      * Core.create({ debug: true });
      * Core.setScene(new GameScene());
      *
-     * // Laya引擎集成
+     * // @zh Laya引擎集成 | @en Laya engine integration
      * Laya.timer.frameLoop(1, this, () => {
      *     const deltaTime = Laya.timer.delta / 1000;
-     *     Core.update(deltaTime);  // 自动更新全局服务和场景
+     *     Core.update(deltaTime);
      * });
      *
-     * // Cocos Creator集成
+     * // @zh Cocos Creator集成 | @en Cocos Creator integration
      * update(deltaTime: number) {
-     *     Core.update(deltaTime);  // 自动更新全局服务和场景
+     *     Core.update(deltaTime);
      * }
      * ```
      */
@@ -446,27 +431,29 @@ export class Core {
 
 
     /**
-     * 调度定时器
+     * @zh 调度定时器
+     * @en Schedule a timer
      *
-     * 创建一个定时器，在指定时间后执行回调函数。
+     * @zh 创建一个定时器，在指定时间后执行回调函数。
+     * @en Create a timer that executes a callback after the specified time.
      *
-     * @param timeInSeconds - 延迟时间（秒）
-     * @param repeats - 是否重复执行，默认为false
-     * @param context - 回调函数的上下文，默认为null
-     * @param onTime - 定时器触发时的回调函数
-     * @returns 创建的定时器实例
-     * @throws 如果Core实例未创建或onTime回调未提供
+     * @param timeInSeconds - @zh 延迟时间（秒）@en Delay time in seconds
+     * @param repeats - @zh 是否重复执行，默认为false @en Whether to repeat, defaults to false
+     * @param context - @zh 回调函数的上下文 @en Context for the callback
+     * @param onTime - @zh 定时器触发时的回调函数 @en Callback when timer fires
+     * @returns @zh 创建的定时器实例 @en The created timer instance
+     * @throws @zh 如果Core实例未创建或onTime回调未提供 @en If Core instance not created or onTime not provided
      *
      * @example
      * ```typescript
-     * // 一次性定时器
+     * // @zh 一次性定时器 | @en One-time timer
      * Core.schedule(1.0, false, null, (timer) => {
-     *     console.log("1秒后执行一次");
+     *     console.log("Executed after 1 second");
      * });
      *
-     * // 重复定时器
+     * // @zh 重复定时器 | @en Repeating timer
      * Core.schedule(0.5, true, null, (timer) => {
-     *     console.log("每0.5秒执行一次");
+     *     console.log("Executed every 0.5 seconds");
      * });
      * ```
      */
@@ -481,9 +468,10 @@ export class Core {
     }
 
     /**
-     * 启用调试功能
+     * @zh 启用调试功能
+     * @en Enable debug features
      *
-     * @param config 调试配置
+     * @param config - @zh 调试配置 @en Debug configuration
      */
     public static enableDebug(config: IECSDebugConfig): void {
         if (!this._instance) {
@@ -511,7 +499,8 @@ export class Core {
     }
 
     /**
-     * 禁用调试功能
+     * @zh 禁用调试功能
+     * @en Disable debug features
      */
     public static disableDebug(): void {
         if (!this._instance) return;
@@ -528,9 +517,10 @@ export class Core {
     }
 
     /**
-     * 获取调试数据
+     * @zh 获取调试数据
+     * @en Get debug data
      *
-     * @returns 当前调试数据，如果调试未启用则返回null
+     * @returns @zh 当前调试数据，如果调试未启用则返回null @en Current debug data, or null if debug is disabled
      */
     public static getDebugData(): unknown {
         if (!this._instance?._debugManager) {
@@ -541,34 +531,37 @@ export class Core {
     }
 
     /**
-     * 检查调试是否启用
+     * @zh 检查调试是否启用
+     * @en Check if debug is enabled
      *
-     * @returns 调试状态
+     * @returns @zh 调试状态 @en Debug status
      */
     public static get isDebugEnabled(): boolean {
         return this._instance?._config.debugConfig?.enabled || false;
     }
 
     /**
-     * 获取性能监视器实例
+     * @zh 获取性能监视器实例
+     * @en Get performance monitor instance
      *
-     * @returns 性能监视器，如果Core未初始化则返回null
+     * @returns @zh 性能监视器，如果Core未初始化则返回null @en Performance monitor, or null if Core not initialized
      */
     public static get performanceMonitor(): PerformanceMonitor | null {
         return this._instance?._performanceMonitor || null;
     }
 
     /**
-     * 安装插件
+     * @zh 安装插件
+     * @en Install plugin
      *
-     * @param plugin - 插件实例
-     * @throws 如果Core实例未创建或插件安装失败
+     * @param plugin - @zh 插件实例 @en Plugin instance
+     * @throws @zh 如果Core实例未创建或插件安装失败 @en If Core instance not created or plugin installation fails
      *
      * @example
      * ```typescript
      * Core.create({ debug: true });
      *
-     * // 安装插件
+     * // @zh 安装插件 | @en Install plugin
      * await Core.installPlugin(new MyPlugin());
      * ```
      */
@@ -581,10 +574,11 @@ export class Core {
     }
 
     /**
-     * 卸载插件
+     * @zh 卸载插件
+     * @en Uninstall plugin
      *
-     * @param name - 插件名称
-     * @throws 如果Core实例未创建或插件卸载失败
+     * @param name - @zh 插件名称 @en Plugin name
+     * @throws @zh 如果Core实例未创建或插件卸载失败 @en If Core instance not created or plugin uninstallation fails
      *
      * @example
      * ```typescript
@@ -600,10 +594,11 @@ export class Core {
     }
 
     /**
-     * 获取插件实例
+     * @zh 获取插件实例
+     * @en Get plugin instance
      *
-     * @param name - 插件名称
-     * @returns 插件实例，如果未安装则返回undefined
+     * @param name - @zh 插件名称 @en Plugin name
+     * @returns @zh 插件实例，如果未安装则返回undefined @en Plugin instance, or undefined if not installed
      *
      * @example
      * ```typescript
@@ -622,10 +617,11 @@ export class Core {
     }
 
     /**
-     * 检查插件是否已安装
+     * @zh 检查插件是否已安装
+     * @en Check if plugin is installed
      *
-     * @param name - 插件名称
-     * @returns 是否已安装
+     * @param name - @zh 插件名称 @en Plugin name
+     * @returns @zh 是否已安装 @en Whether installed
      *
      * @example
      * ```typescript
@@ -643,9 +639,11 @@ export class Core {
     }
 
     /**
-     * 初始化核心系统
+     * @zh 初始化核心系统
+     * @en Initialize core system
      *
-     * 执行核心系统的初始化逻辑。
+     * @zh 执行核心系统的初始化逻辑。
+     * @en Execute core system initialization logic.
      */
     protected initialize() {
         // 核心系统初始化
@@ -656,61 +654,43 @@ export class Core {
     }
 
     /**
-     * 内部更新方法
+     * @zh 内部更新方法
+     * @en Internal update method
      *
-     * @param deltaTime - 帧时间间隔（秒）
+     * @param deltaTime - @zh 帧时间间隔（秒）@en Frame delta time in seconds
      */
     private updateInternal(deltaTime: number): void {
         if (Core.paused) return;
 
-        // 开始性能监控
         const frameStartTime = this._performanceMonitor.startMonitoring('Core.update');
 
-        // 更新时间系统
         Time.update(deltaTime);
+        this._performanceMonitor.updateFPS?.(Time.deltaTime);
 
-        // 更新FPS监控（如果性能监控器支持）
-        if ('updateFPS' in this._performanceMonitor && typeof this._performanceMonitor.updateFPS === 'function') {
-            this._performanceMonitor.updateFPS(Time.deltaTime);
-        }
-
-        // 更新所有可更新的服务
         const servicesStartTime = this._performanceMonitor.startMonitoring('Services.update');
         this._serviceContainer.updateAll(deltaTime);
         this._performanceMonitor.endMonitoring('Services.update', servicesStartTime, this._serviceContainer.getUpdatableCount());
 
-        // 更新对象池管理器
         this._poolManager.update();
-
-        // 更新默认场景（通过 SceneManager）
         this._sceneManager.update();
-
-        // 更新额外的 WorldManager
         this._worldManager.updateAll();
 
-        // 结束性能监控
         this._performanceMonitor.endMonitoring('Core.update', frameStartTime);
     }
 
     /**
-     * 销毁Core实例
+     * @zh 销毁Core实例
+     * @en Destroy Core instance
      *
-     * 清理所有资源，通常在应用程序关闭时调用。
+     * @zh 清理所有资源，通常在应用程序关闭时调用。
+     * @en Clean up all resources, typically called when the application closes.
      */
     public static destroy(): void {
         if (!this._instance) return;
 
-        // 停止调试管理器
-        if (this._instance._debugManager) {
-            this._instance._debugManager.stop();
-        }
-
-        // 清理所有服务
+        this._instance._debugManager?.stop();
         this._instance._serviceContainer.clear();
-
         Core._logger.info('Core destroyed');
-
-        // 清空实例引用，允许重新创建Core实例
         this._instance = null;
     }
 }

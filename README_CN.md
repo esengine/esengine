@@ -29,6 +29,8 @@
 
 ---
 
+> **只需要 ECS？** 核心 ECS 框架 [`@esengine/ecs-framework`](./packages/core/) 可独立使用，支持 Cocos Creator、Laya 或任何 JS 引擎。[查看 ECS 文档](./packages/core/README_CN.md)
+
 ## 概述
 
 ESEngine 是一款基于现代 Web 技术从零构建的跨平台 2D 游戏引擎。它提供完整的工具集，让开发者专注于游戏创作而非基础设施搭建。
@@ -238,12 +240,23 @@ pnpm tauri:dev
 
 ```
 esengine/
-├── packages/           # 引擎包（运行时、编辑器、平台）
-├── docs/               # 文档源码
-├── examples/           # 示例项目
-├── scripts/            # 构建工具
-└── thirdparty/         # 第三方依赖
+├── packages/
+│   ├── core/                    # ECS 框架 (@esengine/ecs-framework)
+│   ├── math/                    # 数学库 (@esengine/math)
+│   ├── engine-core/             # 引擎生命周期管理
+│   ├── sprite/                  # 2D 精灵渲染
+│   ├── tilemap/                 # Tilemap 系统
+│   ├── physics-rapier2d/        # 物理引擎
+│   ├── behavior-tree/           # AI 行为树
+│   ├── editor-app/              # 桌面编辑器 (Tauri)
+│   └── ...                      # 其他模块
+├── docs/                        # 文档源码
+├── examples/                    # 示例项目
+├── scripts/                     # 构建工具
+└── thirdparty/                  # 第三方依赖
 ```
+
+> **寻找 ECS 源码？** ECS 框架位于 `packages/core/`
 
 ## 文档
 

@@ -370,21 +370,29 @@ export type ISceneFactory<T extends IScene> = {
 }
 
 /**
- * 场景配置接口
- * Scene configuration interface
+ * @zh 场景配置接口
+ * @en Scene configuration interface
  */
 export type ISceneConfig = {
     /**
-     * 场景名称
-     * Scene name
+     * @zh 场景名称
+     * @en Scene name
      */
     name?: string;
 
     /**
-     * 是否从全局注册表继承组件类型
-     * Whether to inherit component types from global registry
+     * @zh 是否从全局注册表继承组件类型
+     * @en Whether to inherit component types from global registry
      *
      * @default true
      */
     inheritGlobalRegistry?: boolean;
+
+    /**
+     * @zh 系统最大错误次数，超过此阈值后系统将被自动禁用
+     * @en Maximum error count for systems, systems exceeding this threshold will be auto-disabled
+     *
+     * @default 10
+     */
+    maxSystemErrorCount?: number;
 }
