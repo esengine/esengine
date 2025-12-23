@@ -91,6 +91,9 @@ export const STANDARD_EXTERNALS = [
     'zustand',
     'immer',
 
+    // Tauri (由宿主应用提供) | Provided by host app
+    /^@tauri-apps\//,
+
     // 所有 @esengine 包
     /^@esengine\//,
 ] as const;

@@ -15,7 +15,8 @@ import {
     TextureServiceToken,
     DynamicAtlasServiceToken,
     CoordinateServiceToken,
-    RenderConfigServiceToken
+    RenderConfigServiceToken,
+    EngineBridgeToken
 } from '@esengine/ecs-engine-bindgen';
 import { TransformComponent, TransformTypeToken, CanvasElementToken } from '@esengine/engine-core';
 import { SpriteComponent, SpriteAnimatorComponent, SpriteAnimatorSystemToken } from '@esengine/sprite';
@@ -259,6 +260,9 @@ export class EngineService {
         // 创建服务注册表并注册核心服务
         // Create service registry and register core services
         const services = new PluginServiceRegistry();
+        // 注册 EngineBridge（供 MeshRenderSystem 等系统使用）
+        // Register EngineBridge (for systems like MeshRenderSystem)
+        services.register(EngineBridgeToken, this._runtime.bridge);
         // 使用单一职责接口注册 EngineBridge | Register EngineBridge with single-responsibility interfaces
         services.register(TextureServiceToken, this._runtime.bridge);
         services.register(DynamicAtlasServiceToken, this._runtime.bridge);

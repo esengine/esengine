@@ -176,7 +176,11 @@ export class AssetManager implements IAssetManager {
         }
 
         // 创建加载器 / Create loader
-        let loader = this._loaderFactory.createLoader(metadata.type);
+        // 优先使用基于路径的加载器选择，支持多个加载器对应同一资产类型
+        // 例如 Model3D 类型支持 GLTF/FBX/OBJ，根据扩展名选择正确的加载器
+        // Prefer path-based loader selection, supports multiple loaders for same asset type
+        // e.g., Model3D type supports GLTF/FBX/OBJ, selects correct loader by extension
+        let loader = this._loaderFactory.createLoaderForPath(metadata.path);
 
         // 如果没有找到 loader 且类型是 Custom，尝试重新解析类型
         // If no loader found and type is Custom, try to re-resolve the type

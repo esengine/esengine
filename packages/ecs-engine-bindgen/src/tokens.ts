@@ -54,3 +54,8 @@ export interface IEngineIntegration {
 
 export const RenderSystemToken = createServiceToken<IRenderSystem>('renderSystem');
 export const EngineIntegrationToken = createServiceToken<IEngineIntegration>('engineIntegration');
+
+// EngineBridge token - used by systems that need direct engine access
+// EngineBridge 令牌 - 供需要直接访问引擎的系统使用
+import type { EngineBridge } from './core/EngineBridge';
+export const EngineBridgeToken = createServiceToken<EngineBridge>('engineBridge');

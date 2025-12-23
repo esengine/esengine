@@ -57,6 +57,11 @@ export { BinaryLoader } from './loaders/BinaryLoader';
 export { AudioLoader } from './loaders/AudioLoader';
 export { PrefabLoader } from './loaders/PrefabLoader';
 
+// 3D Model Loaders | 3D 模型加载器
+export { GLTFLoader } from './loaders/GLTFLoader';
+export { OBJLoader } from './loaders/OBJLoader';
+export { FBXLoader } from './loaders/FBXLoader';
+
 // Integration
 export { EngineIntegration } from './integration/EngineIntegration';
 export type { ITextureEngineBridge, TextureLoadCallback } from './integration/EngineIntegration';

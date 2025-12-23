@@ -41,10 +41,17 @@ import {
     AlertTriangle,
     X,
     FolderPlus,
-    Inbox
+    Inbox,
+    Box,
+    Bone,
+    Film,
+    Palette,
+    Loader2
 } from 'lucide-react';
 import { Core, Entity, HierarchySystem, PrefabSerializer } from '@esengine/ecs-framework';
 import { MessageHub, FileActionRegistry, AssetRegistryService, MANAGED_ASSET_DIRECTORIES, type FileCreationTemplate, EntityStoreService, SceneManagerService } from '@esengine/editor-core';
+import type { IGLTFAsset, IMeshData, IGLTFMaterial, IGLTFAnimationClip, IAssetContent, IAssetParseContext } from '@esengine/asset-system';
+import { FBXLoader, GLTFLoader } from '@esengine/asset-system';
 import { TauriAPI, DirectoryEntry } from '../api/tauri';
 import { SettingsService } from '../services/SettingsService';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
@@ -54,10 +61,25 @@ import '../styles/ContentBrowser.css';
 interface AssetItem {
     name: string;
     path: string;
-    type: 'file' | 'folder';
+    type: 'file' | 'folder' | 'sub-asset';
     extension?: string;
     size?: number;
     modified?: number;
+    // Sub-asset specific fields
+    // 子资产特定字段
+    parentPath?: string;            // Path to parent model file | 父模型文件路径
+    subAssetType?: 'mesh' | 'material' | 'animation' | 'skeleton';
+    subAssetIndex?: number;         // Index within parent asset | 在父资产中的索引
+}
+
+/**
+ * Check if file extension is an expandable 3D model
+ * 检查文件扩展名是否是可展开的3D模型
+ */
+function isExpandableModel(extension: string | undefined): boolean {
+    if (!extension) return false;
+    const ext = extension.toLowerCase();
+    return ['fbx', 'gltf', 'glb', 'obj'].includes(ext);
 }
 
 interface FolderNode {
@@ -159,6 +181,17 @@ function highlightSearchText(text: string, query: string): React.ReactNode {
 function getAssetTypeName(asset: AssetItem): string {
     if (asset.type === 'folder') return 'Folder';
 
+    // Handle sub-assets | 处理子资产
+    if (asset.type === 'sub-asset') {
+        switch (asset.subAssetType) {
+            case 'mesh': return 'Mesh';
+            case 'material': return 'Material';
+            case 'animation': return 'Animation';
+            case 'skeleton': return 'Skeleton';
+            default: return 'Sub-Asset';
+        }
+    }
+
     // Check for compound extensions first
     const name = asset.name.toLowerCase();
     if (name.endsWith('.tilemap.json') || name.endsWith('.tilemap')) return 'Tilemap';
@@ -180,6 +213,10 @@ function getAssetTypeName(asset: AssetItem): string {
         case 'prefab': return 'Prefab';
         case 'mat': return 'Material';
         case 'anim': return 'Animation';
+        case 'fbx':
+        case 'gltf':
+        case 'glb':
+        case 'obj': return '3D Model';
         default: return ext?.toUpperCase() || 'File';
     }
 }
@@ -250,6 +287,12 @@ export function ContentBrowser({
 
     // Drag and drop state for file moving
     const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+
+    // Expanded model assets (for viewing sub-assets)
+    // 展开的模型资产（用于查看子资产）
+    const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+    const [modelSubAssets, setModelSubAssets] = useState<Map<string, AssetItem[]>>(new Map());
+    const [loadingModels, setLoadingModels] = useState<Set<string>>(new Set());
 
     // 初始化和监听插件安装事件以更新模板列表
     // Initialize and listen for plugin installation events to update template list
@@ -636,6 +679,172 @@ export class ${className} {
             buildFolderTree(projectPath).then(setFolderTree);
         }
     }, [currentPath, projectPath, loadAssets, buildFolderTree]);
+
+    /**
+     * Load sub-assets from a 3D model file
+     * 从3D模型文件加载子资产
+     */
+    const loadModelSubAssets = useCallback(async (modelPath: string): Promise<AssetItem[]> => {
+        try {
+            const modelName = modelPath.split(/[\\/]/).pop() || 'Model';
+            const ext = modelName.split('.').pop()?.toLowerCase() || '';
+
+            // Read file binary content
+            // 读取文件二进制内容
+            const binaryData = await TauriAPI.readFileBinary(modelPath);
+            if (!binaryData || binaryData.byteLength === 0) {
+                console.warn('[ContentBrowser] Cannot read file:', modelPath);
+                return [];
+            }
+
+            // Create minimal parse context (loaders don't need full metadata for basic parsing)
+            // 创建最小解析上下文（加载器只需要基本解析的路径信息）
+            const parseContext = {
+                metadata: {
+                    path: modelPath,
+                    name: modelName,
+                    type: ext === 'fbx' ? 'model/fbx' : 'model/gltf',
+                    guid: '',
+                    size: binaryData.byteLength,
+                    hash: '',
+                    dependencies: [],
+                    lastModified: Date.now(),
+                    importerVersion: '1.0.0',
+                    labels: [],
+                    tags: [],
+                    version: 1
+                },
+                loadDependency: async () => null
+            } as unknown as IAssetParseContext;
+
+            // Create content object
+            // 创建内容对象
+            const content: IAssetContent = {
+                type: 'binary',
+                binary: binaryData
+            };
+
+            // Select appropriate loader and parse
+            // 选择合适的加载器并解析
+            let asset: IGLTFAsset;
+            if (ext === 'fbx') {
+                const loader = new FBXLoader();
+                asset = await loader.parse(content, parseContext);
+            } else if (ext === 'gltf' || ext === 'glb') {
+                const loader = new GLTFLoader();
+                asset = await loader.parse(content, parseContext);
+            } else {
+                console.warn('[ContentBrowser] Unsupported model format:', ext);
+                return [];
+            }
+
+            const subAssets: AssetItem[] = [];
+
+            // Add meshes
+            // 添加网格
+            if (asset.meshes && asset.meshes.length > 0) {
+                asset.meshes.forEach((mesh: IMeshData, index: number) => {
+                    subAssets.push({
+                        name: mesh.name || `Mesh_${index}`,
+                        path: `${modelPath}#mesh:${index}`,
+                        type: 'sub-asset',
+                        parentPath: modelPath,
+                        subAssetType: 'mesh',
+                        subAssetIndex: index
+                    });
+                });
+            }
+
+            // Add materials
+            // 添加材质
+            if (asset.materials && asset.materials.length > 0) {
+                asset.materials.forEach((material: IGLTFMaterial, index: number) => {
+                    subAssets.push({
+                        name: material.name || `Material_${index}`,
+                        path: `${modelPath}#material:${index}`,
+                        type: 'sub-asset',
+                        parentPath: modelPath,
+                        subAssetType: 'material',
+                        subAssetIndex: index
+                    });
+                });
+            }
+
+            // Add animations
+            // 添加动画
+            if (asset.animations && asset.animations.length > 0) {
+                asset.animations.forEach((anim: IGLTFAnimationClip, index: number) => {
+                    subAssets.push({
+                        name: anim.name || `Animation_${index}`,
+                        path: `${modelPath}#animation:${index}`,
+                        type: 'sub-asset',
+                        parentPath: modelPath,
+                        subAssetType: 'animation',
+                        subAssetIndex: index
+                    });
+                });
+            }
+
+            // Add skeleton if present
+            // 添加骨骼（如果存在）
+            if (asset.skeleton) {
+                subAssets.push({
+                    name: `Skeleton (${asset.skeleton.joints.length} joints)`,
+                    path: `${modelPath}#skeleton:0`,
+                    type: 'sub-asset',
+                    parentPath: modelPath,
+                    subAssetType: 'skeleton',
+                    subAssetIndex: 0
+                });
+            }
+
+            console.log(`[ContentBrowser] Loaded sub-assets for ${modelName}:`);
+            console.log(`  - Meshes: ${asset.meshes?.length ?? 0}`);
+            console.log(`  - Materials: ${asset.materials?.length ?? 0}`);
+            console.log(`  - Animations: ${asset.animations?.length ?? 0}`);
+            console.log(`  - Skeleton: ${asset.skeleton ? 'yes' : 'no'}`);
+            console.log(`  - Sub-assets total: ${subAssets.length}`);
+            return subAssets;
+        } catch (error) {
+            console.error('[ContentBrowser] Failed to load model sub-assets:', error);
+            return [];
+        }
+    }, []);
+
+    /**
+     * Toggle model expansion
+     * 切换模型展开状态
+     */
+    const toggleModelExpand = useCallback(async (modelPath: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        const isExpanded = expandedModels.has(modelPath);
+
+        if (isExpanded) {
+            // Collapse
+            // 折叠
+            setExpandedModels(prev => {
+                const next = new Set(prev);
+                next.delete(modelPath);
+                return next;
+            });
+        } else {
+            // Expand - load sub-assets if not already loaded
+            // 展开 - 如果尚未加载则加载子资产
+            if (!modelSubAssets.has(modelPath)) {
+                setLoadingModels(prev => new Set(prev).add(modelPath));
+                const subAssets = await loadModelSubAssets(modelPath);
+                setModelSubAssets(prev => new Map(prev).set(modelPath, subAssets));
+                setLoadingModels(prev => {
+                    const next = new Set(prev);
+                    next.delete(modelPath);
+                    return next;
+                });
+            }
+
+            setExpandedModels(prev => new Set(prev).add(modelPath));
+        }
+    }, [expandedModels, modelSubAssets, loadModelSubAssets]);
 
     // 点击外部关闭过滤器下拉菜单 | Close filter dropdown when clicking outside
     useEffect(() => {
@@ -1031,6 +1240,21 @@ export class ${className} {
             setCurrentPath(asset.path);
             loadAssets(asset.path);
             setExpandedFolders(prev => new Set([...prev, asset.path]));
+        } else if (asset.type === 'sub-asset') {
+            // Handle sub-asset double click
+            // 处理子资产双击
+            if (asset.subAssetType === 'animation' && asset.parentPath) {
+                // Open animation preview panel
+                // 打开动画预览面板
+                messageHub?.publish('animation:preview', {
+                    filePath: asset.parentPath,
+                    animationIndex: asset.subAssetIndex ?? 0
+                });
+                console.log('[ContentBrowser] Opening animation preview:', asset.parentPath, 'index:', asset.subAssetIndex);
+            }
+            // Other sub-asset types can be handled here
+            // 其他子资产类型可以在这里处理
+            return;
         } else {
             const ext = asset.extension?.toLowerCase();
             console.log('[ContentBrowser] File ext:', ext, 'onOpenScene:', !!onOpenScene);
@@ -1088,7 +1312,7 @@ export class ${className} {
                 console.error('Failed to open file:', error);
             }
         }
-    }, [loadAssets, onOpenScene, fileActionRegistry, projectPath]);
+    }, [loadAssets, onOpenScene, fileActionRegistry, projectPath, messageHub]);
 
     // Handle context menu
     const handleContextMenu = useCallback((e: React.MouseEvent, asset?: AssetItem) => {
@@ -1194,6 +1418,23 @@ export class ${className} {
             return <Folder size={size} className="asset-thumbnail-icon folder" />;
         }
 
+        // Handle sub-assets
+        // 处理子资产
+        if (asset.type === 'sub-asset') {
+            switch (asset.subAssetType) {
+                case 'mesh':
+                    return <Box size={size} className="asset-thumbnail-icon sub-asset mesh" />;
+                case 'material':
+                    return <Palette size={size} className="asset-thumbnail-icon sub-asset material" />;
+                case 'animation':
+                    return <Film size={size} className="asset-thumbnail-icon sub-asset animation" />;
+                case 'skeleton':
+                    return <Bone size={size} className="asset-thumbnail-icon sub-asset skeleton" />;
+                default:
+                    return <File size={size} className="asset-thumbnail-icon sub-asset" />;
+            }
+        }
+
         const ext = asset.extension?.toLowerCase();
         switch (ext) {
             case 'ecs':
@@ -1213,6 +1454,13 @@ export class ${className} {
             case 'gif':
             case 'webp':
                 return <FileImage size={size} className="asset-thumbnail-icon image" />;
+            // 3D Model files | 3D 模型文件
+            case 'fbx':
+            case 'obj':
+            case 'gltf':
+            case 'glb':
+            case 'dae':
+                return <Box size={size} className="asset-thumbnail-icon model3d" />;
             default:
                 return <File size={size} className="asset-thumbnail-icon" />;
         }
@@ -1698,8 +1946,8 @@ export class ${className} {
         });
     }, []);
 
-    // Filter assets by search and hidden extensions
-    // 按搜索词和隐藏扩展名过滤资产
+    // Filter assets by search and hidden extensions, and inject sub-assets for expanded models
+    // 按搜索词和隐藏扩展名过滤资产，并为展开的模型注入子资产
     const filteredAssets = useMemo(() => {
         let result = assets;
 
@@ -1717,8 +1965,24 @@ export class ${className} {
             result = result.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
         }
 
+        // Inject sub-assets for expanded models
+        // 为展开的模型注入子资产
+        if (expandedModels.size > 0) {
+            const resultWithSubAssets: AssetItem[] = [];
+            for (const asset of result) {
+                resultWithSubAssets.push(asset);
+                // If this is an expanded model, add its sub-assets after it
+                // 如果这是一个展开的模型，在其后添加子资产
+                if (asset.type === 'file' && isExpandableModel(asset.extension) && expandedModels.has(asset.path)) {
+                    const subAssets = modelSubAssets.get(asset.path) || [];
+                    resultWithSubAssets.push(...subAssets);
+                }
+            }
+            result = resultWithSubAssets;
+        }
+
         return result;
-    }, [assets, hiddenExtensions, searchQuery]);
+    }, [assets, hiddenExtensions, searchQuery, expandedModels, modelSubAssets]);
 
     const breadcrumbs = getBreadcrumbs();
 
@@ -1994,18 +2258,26 @@ export class ${className} {
                     ) : (
                         filteredAssets.map(asset => {
                             const isDragOverAsset = asset.type === 'folder' && dragOverFolder === asset.path;
+                            const isSubAsset = asset.type === 'sub-asset';
+                            const isExpandableFile = asset.type === 'file' && isExpandableModel(asset.extension);
+                            const isModelExpanded = isExpandableFile && expandedModels.has(asset.path);
+                            const isModelLoading = isExpandableFile && loadingModels.has(asset.path);
                             return (
                                 <div
                                     key={asset.path}
-                                    className={`cb-asset-item ${selectedPaths.has(asset.path) ? 'selected' : ''} ${isDragOverAsset ? 'drag-over' : ''}`}
+                                    className={`cb-asset-item ${selectedPaths.has(asset.path) ? 'selected' : ''} ${isDragOverAsset ? 'drag-over' : ''} ${isSubAsset ? 'sub-asset' : ''} ${isModelExpanded ? 'expanded' : ''}`}
                                     onClick={(e) => handleAssetClick(asset, e)}
                                     onDoubleClick={() => handleAssetDoubleClick(asset)}
                                     onContextMenu={(e) => {
                                         e.stopPropagation();
                                         handleContextMenu(e, asset);
                                     }}
-                                    draggable
+                                    draggable={!isSubAsset}
                                     onDragStart={(e) => {
+                                        if (isSubAsset) {
+                                            e.preventDefault();
+                                            return;
+                                        }
                                         e.dataTransfer.setData('asset-path', asset.path);
                                         e.dataTransfer.setData('text/plain', asset.path);
                                         // Add GUID for files
@@ -2038,6 +2310,22 @@ export class ${className} {
                                         }
                                     }}
                                 >
+                                    {/* Expand button for 3D models | 3D模型的展开按钮 */}
+                                    {isExpandableFile && (
+                                        <button
+                                            className={`cb-asset-expand-btn ${isModelExpanded ? 'expanded' : ''}`}
+                                            onClick={(e) => toggleModelExpand(asset.path, e)}
+                                            title={isModelExpanded ? 'Collapse' : 'Expand'}
+                                        >
+                                            {isModelLoading ? (
+                                                <Loader2 size={12} className="spinning" />
+                                            ) : isModelExpanded ? (
+                                                <ChevronDown size={12} />
+                                            ) : (
+                                                <ChevronRight size={12} />
+                                            )}
+                                        </button>
+                                    )}
                                     <div className="cb-asset-thumbnail">
                                         {getFileIcon(asset)}
                                     </div>

@@ -32,6 +32,8 @@
     "@esengine/engine-core": "workspace:*",
     "@esengine/material-editor": "workspace:*",
     "@esengine/material-system": "workspace:*",
+    "@esengine/mesh-3d": "workspace:*",
+    "@esengine/mesh-3d-editor": "workspace:*",
     "@esengine/particle": "workspace:*",
     "@esengine/particle-editor": "workspace:*",
     "@esengine/physics-rapier2d": "workspace:*",

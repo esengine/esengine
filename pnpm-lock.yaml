@@ -149,6 +149,13 @@ importers:
         version: 1.6.4(@algolia/client-search@5.44.0)(@types/node@20.19.25)(@types/react@18.3.27)(axios@1.13.2)(postcss@8.5.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(terser@5.44.1)(typescript@5.9.3)
 
   packages/asset-system:
+    dependencies:
+      '@types/pako':
+        specifier: ^2.0.4
+        version: 2.0.4
+      pako:
+        specifier: ^2.1.0
+        version: 2.1.0
     devDependencies:
       '@esengine/build-config':
         specifier: workspace:*
@@ -604,6 +611,12 @@ importers:
       '@esengine/material-system':
         specifier: workspace:*
         version: link:../material-system
+      '@esengine/mesh-3d':
+        specifier: workspace:*
+        version: link:../mesh-3d
+      '@esengine/mesh-3d-editor':
+        specifier: workspace:*
+        version: link:../mesh-3d-editor
       '@esengine/particle':
         specifier: workspace:*
         version: link:../particle
@@ -1111,6 +1124,75 @@ importers:
         version: 29.4.5(@babel/core@7.28.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.5))(jest-util@29.7.0)(jest@29.7.0(@types/node@20.19.25))(typescript@5.9.3)
       typescript:
         specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/mesh-3d:
+    devDependencies:
+      '@esengine/asset-system':
+        specifier: workspace:*
+        version: link:../asset-system
+      '@esengine/build-config':
+        specifier: workspace:*
+        version: link:../build-config
+      '@esengine/ecs-engine-bindgen':
+        specifier: workspace:*
+        version: link:../ecs-engine-bindgen
+      '@esengine/ecs-framework':
+        specifier: workspace:*
+        version: link:../core
+      '@esengine/engine-core':
+        specifier: workspace:*
+        version: link:../engine-core
+      rimraf:
+        specifier: ^5.0.5
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.1(@types/node@20.19.25))(@swc/core@1.15.3)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  packages/mesh-3d-editor:
+    devDependencies:
+      '@esengine/asset-system':
+        specifier: workspace:*
+        version: link:../asset-system
+      '@esengine/build-config':
+        specifier: workspace:*
+        version: link:../build-config
+      '@esengine/ecs-framework':
+        specifier: workspace:*
+        version: link:../core
+      '@esengine/editor-core':
+        specifier: workspace:*
+        version: link:../editor-core
+      '@esengine/engine-core':
+        specifier: workspace:*
+        version: link:../engine-core
+      '@esengine/mesh-3d':
+        specifier: workspace:*
+        version: link:../mesh-3d
+      '@tauri-apps/api':
+        specifier: ^2.5.0
+        version: 2.9.0
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.3.27
+      lucide-react:
+        specifier: ^0.453.0
+        version: 0.453.0(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      rimraf:
+        specifier: ^5.0.5
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.1(@types/node@20.19.25))(@swc/core@1.15.3)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5.3.3
         version: 5.9.3
 
   packages/node-editor:
@@ -4361,6 +4443,9 @@ packages:
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
 
+  '@types/pako@2.0.4':
+    resolution: {integrity: sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw==}
+
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
 
@@ -7541,6 +7626,9 @@ packages:
 
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
+
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -12189,6 +12277,8 @@ snapshots:
 
   '@types/normalize-package-data@2.4.4': {}
 
+  '@types/pako@2.0.4': {}
+
   '@types/prop-types@15.7.15': {}
 
   '@types/qs@6.14.0': {}
@@ -16108,6 +16198,8 @@ snapshots:
       - supports-color
 
   pako@1.0.11: {}
+
+  pako@2.1.0: {}
 
   parent-module@1.0.1:
     dependencies:

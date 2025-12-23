@@ -27,6 +27,7 @@ import { BlueprintPlugin } from '@esengine/blueprint-editor';
 import { MaterialPlugin } from '@esengine/material-editor';
 import { SpritePlugin } from '@esengine/sprite-editor';
 import { ShaderEditorPlugin } from '@esengine/shader-editor';
+import { Mesh3DPlugin } from '@esengine/mesh-3d-editor';
 
 // 纯运行时插件 | Runtime-only plugins
 import { CameraPlugin } from '@esengine/camera';
@@ -70,6 +71,7 @@ export class PluginInstaller {
             { name: 'BlueprintPlugin', plugin: BlueprintPlugin },
             { name: 'MaterialPlugin', plugin: MaterialPlugin },
             { name: 'ShaderEditorPlugin', plugin: ShaderEditorPlugin },
+            { name: 'Mesh3DPlugin', plugin: Mesh3DPlugin },
         ];
 
         for (const { name, plugin } of modulePlugins) {

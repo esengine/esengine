@@ -9,7 +9,7 @@ use crate::backend::WebGL2Backend;
 use crate::input::InputManager;
 use crate::renderer::{
     Renderer2D, Renderer3D, GridRenderer, Grid3DRenderer, GizmoRenderer, Gizmo3DRenderer, TransformMode,
-    ViewportManager, TextBatch, MeshBatch, Camera3D, ProjectionType,
+    ViewportManager, TextBatch, MeshBatch, ProjectionType,
 };
 use crate::resource::TextureManager;
 use es_engine_shared::traits::backend::GraphicsBackend;
@@ -1289,6 +1289,146 @@ impl Engine {
             renderer.render(&mut self.backend, &self.texture_manager)
                 .map_err(|e| crate::core::error::EngineError::WebGLError(e))?;
         }
+        Ok(())
+    }
+
+    /// Submit a 3D mesh for rendering (with normals).
+    /// 提交 3D 网格进行渲染（包含法线）。
+    ///
+    /// # Arguments | 参数
+    /// * `vertices` - Interleaved vertex data: [x, y, z, u, v, r, g, b, a, nx, ny, nz] per vertex
+    /// * `indices` - Triangle indices
+    /// * `transform` - 4x4 model transform matrix (column-major)
+    /// * `material_id` - Material ID (0 for default)
+    /// * `texture_id` - Texture ID
+    pub fn submit_mesh_3d(
+        &mut self,
+        vertices: &[f32],
+        indices: &[u32],
+        transform: &[f32],
+        material_id: u32,
+        texture_id: u32,
+    ) -> Result<()> {
+        use crate::renderer::batch::SimpleVertex3D;
+
+        if self.renderer_3d.is_none() {
+            return Err(crate::core::error::EngineError::WebGLError(
+                "3D renderer not initialized. Call setRenderMode(1) first.".to_string()
+            ));
+        }
+
+        // Parse transform matrix (column-major 4x4)
+        // 解析变换矩阵（列优先 4x4）
+        if transform.len() < 16 {
+            return Err(crate::core::error::EngineError::WebGLError(
+                "Transform matrix must have 16 elements".to_string()
+            ));
+        }
+        let mat = glam::Mat4::from_cols_array_2d(&[
+            [transform[0], transform[1], transform[2], transform[3]],
+            [transform[4], transform[5], transform[6], transform[7]],
+            [transform[8], transform[9], transform[10], transform[11]],
+            [transform[12], transform[13], transform[14], transform[15]],
+        ]);
+
+        // Parse vertices (12 floats per vertex: x,y,z, u,v, r,g,b,a, nx,ny,nz)
+        // 解析顶点（每个顶点 12 个浮点数）
+        // Note: We use SimpleVertex3D which doesn't have normals, so we skip nx,ny,nz
+        // 注意：我们使用 SimpleVertex3D 没有法线，所以跳过 nx,ny,nz
+        let vertex_stride = 12;
+        let vertex_count = vertices.len() / vertex_stride;
+        let mut simple_vertices = Vec::with_capacity(vertex_count);
+
+        for i in 0..vertex_count {
+            let base = i * vertex_stride;
+            simple_vertices.push(SimpleVertex3D::new(
+                [vertices[base], vertices[base + 1], vertices[base + 2]],     // position
+                [vertices[base + 3], vertices[base + 4]],                      // uv
+                [vertices[base + 5], vertices[base + 6], vertices[base + 7], vertices[base + 8]], // color
+            ));
+        }
+
+        let submission = crate::renderer::MeshSubmission {
+            vertices: simple_vertices,
+            indices: indices.to_vec(),
+            transform: mat,
+            material_id,
+            texture_id,
+        };
+
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.submit_mesh(submission);
+        }
+
+        Ok(())
+    }
+
+    /// Submit a simplified 3D mesh (without normals).
+    /// 提交简化的 3D 网格（无法线）。
+    ///
+    /// # Arguments | 参数
+    /// * `vertices` - Interleaved vertex data: [x, y, z, u, v, r, g, b, a] per vertex
+    /// * `indices` - Triangle indices
+    /// * `transform` - 4x4 model transform matrix
+    /// * `material_id` - Material ID
+    /// * `texture_id` - Texture ID
+    pub fn submit_simple_mesh_3d(
+        &mut self,
+        vertices: &[f32],
+        indices: &[u32],
+        transform: &[f32],
+        material_id: u32,
+        texture_id: u32,
+    ) -> Result<()> {
+        use crate::renderer::batch::SimpleVertex3D;
+
+        if self.renderer_3d.is_none() {
+            return Err(crate::core::error::EngineError::WebGLError(
+                "3D renderer not initialized. Call setRenderMode(1) first.".to_string()
+            ));
+        }
+
+        // Parse transform matrix
+        // 解析变换矩阵
+        if transform.len() < 16 {
+            return Err(crate::core::error::EngineError::WebGLError(
+                "Transform matrix must have 16 elements".to_string()
+            ));
+        }
+        let mat = glam::Mat4::from_cols_array_2d(&[
+            [transform[0], transform[1], transform[2], transform[3]],
+            [transform[4], transform[5], transform[6], transform[7]],
+            [transform[8], transform[9], transform[10], transform[11]],
+            [transform[12], transform[13], transform[14], transform[15]],
+        ]);
+
+        // Parse vertices (9 floats per vertex: x,y,z, u,v, r,g,b,a)
+        // 解析顶点（每个顶点 9 个浮点数）
+        let vertex_stride = 9;
+        let vertex_count = vertices.len() / vertex_stride;
+        let mut simple_vertices = Vec::with_capacity(vertex_count);
+
+        for i in 0..vertex_count {
+            let base = i * vertex_stride;
+            simple_vertices.push(SimpleVertex3D::new(
+                [vertices[base], vertices[base + 1], vertices[base + 2]],     // position
+                [vertices[base + 3], vertices[base + 4]],                      // uv
+                [vertices[base + 5], vertices[base + 6], vertices[base + 7], vertices[base + 8]], // color
+            ));
+        }
+
+        let submission = crate::renderer::MeshSubmission {
+            vertices: simple_vertices,
+            indices: indices.to_vec(),
+            transform: mat,
+            material_id,
+            texture_id,
+        };
+
+        if let Some(ref mut renderer) = self.renderer_3d {
+            renderer.submit_mesh(submission);
+        }
+
         Ok(())
     }
 }
