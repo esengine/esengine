@@ -136,6 +136,19 @@ export abstract class EntitySystem implements ISystemBase, IService {
     private _lastProcessEpoch: number = 0;
 
     /**
+     * 当前帧是否应该处理
+     * Whether this frame should be processed
+     *
+     * 由 update() 中的 onCheckProcessing() 决定，lateUpdate() 复用此结果。
+     * 避免 onCheckProcessing() 被多次调用导致副作用重复执行（如 IntervalSystem 的时间累加）。
+     *
+     * Determined by onCheckProcessing() in update(), reused by lateUpdate().
+     * Prevents onCheckProcessing() being called multiple times causing side effects
+     * to execute repeatedly (e.g., IntervalSystem's time accumulation).
+     */
+    private _shouldProcessThisFrame: boolean = false;
+
+    /**
      * 获取系统处理的实体列表
      */
     public get entities(): readonly Entity[] {
@@ -774,7 +787,11 @@ export abstract class EntitySystem implements ISystemBase, IService {
      * 更新系统
      */
     public update(): void {
-        if (!this._enabled || !this.onCheckProcessing()) {
+        // 检查是否应该处理，并缓存结果供 lateUpdate 使用
+        // Check if should process and cache result for lateUpdate
+        this._shouldProcessThisFrame = this._enabled && this.onCheckProcessing();
+
+        if (!this._shouldProcessThisFrame) {
             return;
         }
 
@@ -799,9 +816,17 @@ export abstract class EntitySystem implements ISystemBase, IService {
 
     /**
      * 后期更新系统
+     *
+     * lateUpdate 复用 update 中 onCheckProcessing() 的结果，
+     * 避免 IntervalSystem 等子类的副作用被重复执行。
+     *
+     * lateUpdate reuses the onCheckProcessing() result from update,
+     * preventing side effects in subclasses like IntervalSystem from executing repeatedly.
      */
     public lateUpdate(): void {
-        if (!this._enabled || !this.onCheckProcessing()) {
+        // 复用 update() 中的检查结果，不再调用 onCheckProcessing()
+        // Reuse check result from update(), don't call onCheckProcessing() again
+        if (!this._shouldProcessThisFrame) {
             return;
         }
 

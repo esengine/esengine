@@ -30,6 +30,64 @@ class GameSystem extends EntitySystem {
 }
 ```
 
+### 游戏暂停
+
+框架提供两种暂停方式，适用于不同场景：
+
+#### Core.paused（推荐）
+
+`Core.paused` 是**真正的暂停**，设置后整个游戏循环停止：
+
+```typescript
+import { Core } from '@esengine/ecs-framework';
+
+class PauseMenuSystem extends EntitySystem {
+  public pauseGame(): void {
+    // 真正暂停 - 所有系统停止执行
+    Core.paused = true;
+    console.log('游戏已暂停');
+  }
+
+  public resumeGame(): void {
+    // 恢复游戏
+    Core.paused = false;
+    console.log('游戏已恢复');
+  }
+
+  public togglePause(): void {
+    Core.paused = !Core.paused;
+    console.log(Core.paused ? '游戏已暂停' : '游戏已恢复');
+  }
+}
+```
+
+#### Time.timeScale = 0
+
+`Time.timeScale = 0` 只是让 `deltaTime` 变为 0，**系统仍然在执行**：
+
+```typescript
+class SlowMotionSystem extends EntitySystem {
+  public freezeTime(): void {
+    // 时间冻结 - 系统仍在执行，只是 deltaTime = 0
+    Time.timeScale = 0;
+  }
+}
+```
+
+#### 两种方式对比
+
+| 特性 | `Core.paused = true` | `Time.timeScale = 0` |
+|------|---------------------|---------------------|
+| 系统执行 | ❌ 完全停止 | ✅ 仍在执行 |
+| CPU 开销 | 零 | 正常开销 |
+| Time 更新 | ❌ 停止 | ✅ 继续（deltaTime=0） |
+| 定时器 | ❌ 停止 | ✅ 继续（但时间不走） |
+| 适用场景 | 暂停菜单、游戏暂停 | 慢动作、时间冻结特效 |
+
+**推荐**：
+- 暂停菜单、真正的游戏暂停 → 使用 `Core.paused = true`
+- 慢动作、子弹时间等特效 → 使用 `Time.timeScale`
+
 ### 时间缩放
 
 Time 类支持时间缩放功能，可以实现慢动作、快进等效果：
@@ -48,10 +106,10 @@ class TimeControlSystem extends EntitySystem {
     console.log('快进模式启用');
   }
 
-  public pauseGame(): void {
-    // 暂停游戏（时间静止）
-    Time.timeScale = 0;
-    console.log('游戏暂停');
+  public enableBulletTime(): void {
+    // 子弹时间效果（10%速度）
+    Time.timeScale = 0.1;
+    console.log('子弹时间启用');
   }
 
   public resumeNormalSpeed(): void {

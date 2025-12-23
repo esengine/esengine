@@ -60,6 +60,32 @@ class ConcreteIntervalSystem extends IntervalSystem {
     }
 }
 
+// 用于独立测试的间隔系统（避免 Scene 的类型去重）
+class IndependentIntervalSystem extends IntervalSystem {
+    public processCallCount = 0;
+
+    constructor(interval: number) {
+        super(interval, Matcher.all(TestComponent));
+    }
+
+    protected override process(entities: Entity[]): void {
+        this.processCallCount++;
+    }
+}
+
+// 用于长时间运行测试的间隔系统
+class LongRunIntervalSystem extends IntervalSystem {
+    public processCallCount = 0;
+
+    constructor(interval: number) {
+        super(interval, Matcher.all(TestComponent));
+    }
+
+    protected override process(entities: Entity[]): void {
+        this.processCallCount++;
+    }
+}
+
 // 具体的处理系统实现
 class ConcreteProcessingSystem extends ProcessingSystem {
     public processSystemCallCount = 0;
@@ -207,15 +233,107 @@ describe('System Types - 系统类型测试', () => {
             Time.update(testInterval);
             intervalSystem.update();
             expect(intervalSystem.processCallCount).toBe(1);
-            
+
             // 再次触发需要等待完整间隔
             Time.update(testInterval / 2);
             intervalSystem.update();
             expect(intervalSystem.processCallCount).toBe(1);
-            
+
             Time.update(testInterval / 2);
             intervalSystem.update();
             expect(intervalSystem.processCallCount).toBe(2);
+        });
+
+        test('update和lateUpdate同时调用时，onCheckProcessing只应执行一次副作用', () => {
+            // 这个测试验证修复：onCheckProcessing() 的副作用（时间累加）不应该在 lateUpdate 中重复执行
+            // 模拟一帧内的完整调用流程
+
+            const initialProcessCount = intervalSystem.processCallCount;
+
+            // 第一帧：时间不足，不应触发
+            Time.update(testInterval / 2);
+            intervalSystem.update();
+            intervalSystem.lateUpdate();
+            expect(intervalSystem.processCallCount).toBe(initialProcessCount);
+
+            // 第二帧：累计时间刚好达到间隔，应该触发一次
+            Time.update(testInterval / 2);
+            intervalSystem.update();
+            intervalSystem.lateUpdate();
+            expect(intervalSystem.processCallCount).toBe(initialProcessCount + 1);
+
+            // 第三帧：需要再等待完整间隔
+            Time.update(testInterval / 2);
+            intervalSystem.update();
+            intervalSystem.lateUpdate();
+            expect(intervalSystem.processCallCount).toBe(initialProcessCount + 1);
+
+            // 第四帧：再次达到间隔
+            Time.update(testInterval / 2);
+            intervalSystem.update();
+            intervalSystem.lateUpdate();
+            expect(intervalSystem.processCallCount).toBe(initialProcessCount + 2);
+        });
+
+        test('lateUpdate应复用update的检查结果，不重复累加时间', () => {
+            // 这是用户报告的 bug 场景：5秒间隔，但实际触发不规律
+            // 原因是 onCheckProcessing() 在 update 和 lateUpdate 中都被调用，导致时间累加了两次
+
+            // 核心验证：在 N*interval 时间内，触发次数应该接近 N 次
+            // 如果 bug 存在（时间累加两次），触发次数会接近 2N 次
+
+            const initialCount = intervalSystem.processCallCount;
+
+            // 模拟 50 帧，每帧 testInterval/5 (总共 10*testInterval)
+            for (let frame = 0; frame < 50; frame++) {
+                Time.update(testInterval / 5);
+                intervalSystem.update();
+                intervalSystem.lateUpdate();
+            }
+
+            // 50帧 * (testInterval/5) = 10*testInterval，应该触发约 10 次
+            // 如果 bug 存在（时间累加两次），会触发约 20 次
+            const triggers = intervalSystem.processCallCount - initialCount;
+
+            // 正常情况：触发 9-11 次
+            // Bug 情况：触发 18-22 次
+            expect(triggers).toBeGreaterThanOrEqual(9);
+            expect(triggers).toBeLessThanOrEqual(12);
+        });
+
+        test('精确间隔测试 - 验证触发间隔的一致性', () => {
+            // 验证触发间隔是稳定的，而不是忽大忽小
+
+            const initialCount = intervalSystem.processCallCount;
+            const frameTimes: number[] = [];
+            let framesSinceLastTrigger = 0;
+
+            // 模拟 100 帧，每帧 testInterval/5
+            for (let frame = 0; frame < 100; frame++) {
+                Time.update(testInterval / 5);
+                framesSinceLastTrigger++;
+
+                const beforeCount = intervalSystem.processCallCount;
+                intervalSystem.update();
+                intervalSystem.lateUpdate();
+
+                if (intervalSystem.processCallCount > beforeCount) {
+                    frameTimes.push(framesSinceLastTrigger);
+                    framesSinceLastTrigger = 0;
+                }
+            }
+
+            // 100帧 * (testInterval/5) = 20*testInterval，应该触发约 20 次
+            const totalTriggers = intervalSystem.processCallCount - initialCount;
+            expect(totalTriggers).toBeGreaterThanOrEqual(19);
+            expect(totalTriggers).toBeLessThanOrEqual(21);
+
+            // 验证每次触发的帧间隔都接近 5 帧（因为 5 * testInterval/5 = testInterval）
+            // 如果 bug 存在，帧间隔会不稳定（有的 2-3 帧，有的 7-8 帧）
+            for (const frames of frameTimes) {
+                expect(frames).toBeGreaterThanOrEqual(4);
+                expect(frames).toBeLessThanOrEqual(6);
+            }
         });
     });
 
