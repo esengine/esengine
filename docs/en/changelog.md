@@ -4,6 +4,19 @@ This document records the version update history of the `@esengine/ecs-framework
 
 ---
 
+## v2.4.1 (2025-12-23)
+
+### Bug Fixes
+
+- Fix `IntervalSystem` time accumulation bug, interval timing is now more accurate
+- Fix Cocos Creator compatibility issue, more complete type exports
+
+### Documentation
+
+- Add `Core.paused` property documentation
+
+---
+
 ## v2.4.0 (2025-12-15)
 
 ### Features

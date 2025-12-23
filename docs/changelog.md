@@ -4,6 +4,19 @@
 
 ---
 
+## v2.4.1 (2025-12-23)
+
+### Bug Fixes
+
+- 修复 `IntervalSystem` 时间累加 bug，间隔计时更加准确
+- 修复 Cocos Creator 兼容性问题，类型导出更完整
+
+### Documentation
+
+- 新增 `Core.paused` 属性文档说明
+
+---
+
 ## v2.4.0 (2025-12-15)
 
 ### Features
