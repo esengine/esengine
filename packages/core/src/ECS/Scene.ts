@@ -601,15 +601,16 @@ export class Scene implements IScene {
         const errorCount = (this._systemErrorCount.get(system) || 0) + 1;
         this._systemErrorCount.set(system, errorCount);
 
+        const name = system.systemName;
         this.logger.error(
-            `Error in system ${system.constructor.name}.${phase}() [${errorCount}/${this._maxErrorCount}]:`,
+            `Error in system ${name}.${phase}() [${errorCount}/${this._maxErrorCount}]:`,
             error
         );
 
         if (errorCount >= this._maxErrorCount) {
             system.enabled = false;
             this.logger.error(
-                `System ${system.constructor.name} has been disabled due to excessive errors (${errorCount} errors)`
+                `System ${name} has been disabled due to excessive errors (${errorCount} errors)`
             );
         }
     }
