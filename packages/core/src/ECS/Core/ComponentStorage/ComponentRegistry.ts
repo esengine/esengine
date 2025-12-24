@@ -53,10 +53,11 @@ export class ComponentRegistry implements IComponentRegistry {
         // 检查是否使用了 @ECSComponent 装饰器
         if (!hasECSComponentDecorator(componentType) && !this._warnedComponents.has(componentType)) {
             this._warnedComponents.add(componentType);
-            console.warn(
-                `[ComponentRegistry] Component "${typeName}" is missing @ECSComponent decorator. ` +
+            logger.warn(
+                `Component "${typeName}" is missing @ECSComponent decorator. ` +
                 `This may cause issues with serialization and code minification. ` +
-                `Please add: @ECSComponent('${typeName}')`
+                `Please add: @ECSComponent('${typeName}') | ` +
+                `组件 "${typeName}" 缺少 @ECSComponent 装饰器，可能导致序列化和代码压缩问题`
             );
         }
 

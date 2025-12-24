@@ -27,7 +27,10 @@
  */
 
 import { SystemDependencyGraph, CycleDependencyError, type SystemDependencyInfo } from './SystemDependencyGraph';
+import { createLogger } from '../../Utils/Logger';
 import type { EntitySystem } from '../Systems/EntitySystem';
+
+const logger = createLogger('SystemScheduler');
 
 export { CycleDependencyError };
 
@@ -293,7 +296,7 @@ export class SystemScheduler {
                 throw error;
             }
             // 其他错误回退到 updateOrder 排序
-            console.warn('[SystemScheduler] 拓扑排序失败，回退到 updateOrder 排序', error);
+            logger.warn('Topological sort failed, falling back to updateOrder | 拓扑排序失败，回退到 updateOrder 排序', error);
             return this.fallbackSort(systems);
         }
     }

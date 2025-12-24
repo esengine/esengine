@@ -15,6 +15,9 @@ import { HierarchySystem } from '../Systems/HierarchySystem';
 import { HierarchyComponent } from '../Components/HierarchyComponent';
 import { SerializationContext } from './SerializationContext';
 import { ValueSerializer, SerializableValue } from './ValueSerializer';
+import { createLogger } from '../../Utils/Logger';
+
+const logger = createLogger('SceneSerializer');
 
 /**
  * 场景序列化格式
@@ -309,9 +312,10 @@ export class SceneSerializer {
         const unresolvedCount = context.getUnresolvedCount();
 
         if (unresolvedCount > 0) {
-            console.warn(
-                `[SceneSerializer] ${unresolvedCount} EntityRef(s) could not be resolved. ` +
-                `Resolved: ${resolvedCount}, Total pending: ${context.getPendingCount()}`
+            logger.warn(
+                `${unresolvedCount} EntityRef(s) could not be resolved. ` +
+                `Resolved: ${resolvedCount}, Total pending: ${context.getPendingCount()} | ` +
+                `${unresolvedCount} 个实体引用无法解析`
             );
         }
 
@@ -330,7 +334,7 @@ export class SceneSerializer {
         // 如果有异步的 onDeserialized，在后台执行
         if (deserializedPromises.length > 0) {
             Promise.all(deserializedPromises).catch(error => {
-                console.error('Error in onDeserialized:', error);
+                logger.error('Error in onDeserialized | onDeserialized 执行错误:', error);
             });
         }
     }
@@ -349,7 +353,8 @@ export class SceneSerializer {
                     promises.push(result);
                 }
             } catch (error) {
-                console.error(`Error calling onDeserialized on component ${component.constructor.name}:`, error);
+                const typeName = getComponentTypeName(component.constructor as ComponentType);
+                logger.error(`Error calling onDeserialized on component ${typeName} | 调用组件 ${typeName} 的 onDeserialized 时出错:`, error);
             }
         }
     }

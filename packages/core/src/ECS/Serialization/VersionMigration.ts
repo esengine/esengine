@@ -6,6 +6,9 @@
 
 import { SerializedComponent } from './ComponentSerializer';
 import { SerializedScene } from './SceneSerializer';
+import { createLogger } from '../../Utils/Logger';
+
+const logger = createLogger('VersionMigration');
 
 /**
  * 组件迁移函数
@@ -123,7 +126,7 @@ export class VersionMigrationManager {
 
         const migrations = this.componentMigrations.get(component.type);
         if (!migrations) {
-            console.warn(`No migration path found for component ${component.type}`);
+            logger.warn(`No migration path found for component ${component.type} | 未找到组件 ${component.type} 的迁移路径`);
             return component;
         }
 
@@ -135,8 +138,9 @@ export class VersionMigrationManager {
             const migration = migrations.get(version);
 
             if (!migration) {
-                console.warn(
-                    `Missing migration from version ${version} to ${version + 1} for ${component.type}`
+                logger.warn(
+                    `Missing migration from version ${version} to ${version + 1} for ${component.type} | ` +
+                    `缺少组件 ${component.type} 从版本 ${version} 到 ${version + 1} 的迁移`
                 );
                 break;
             }
@@ -171,7 +175,7 @@ export class VersionMigrationManager {
             const migration = this.sceneMigrations.get(version);
 
             if (!migration) {
-                console.warn(`Missing scene migration from version ${version} to ${version + 1}`);
+                logger.warn(`Missing scene migration from version ${version} to ${version + 1} | 缺少场景从版本 ${version} 到 ${version + 1} 的迁移`);
                 break;
             }
 

@@ -30,6 +30,7 @@
  */
 
 import { createServiceToken } from './PluginServiceRegistry';
+import { createLogger } from '../Utils/Logger';
 
 // ============================================================================
 // 接口定义 | Interface Definitions
@@ -236,16 +237,18 @@ export class RuntimeModeService implements IRuntimeMode {
         }
     }
 
+    private static readonly _logger = createLogger('RuntimeModeService');
+
     /**
-     * 通知模式变化
-     * Notify mode change
+     * @zh 通知模式变化
+     * @en Notify mode change
      */
     private _notifyChange(): void {
         for (const callback of this._callbacks) {
             try {
                 callback(this);
             } catch (error) {
-                console.error('[RuntimeModeService] Callback error:', error);
+                RuntimeModeService._logger.error('Callback error:', error);
             }
         }
     }
