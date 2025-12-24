@@ -142,24 +142,25 @@ interface ComponentUsageTracker {
  * 全局组件池管理器
  */
 export class ComponentPoolManager {
-    private static instance: ComponentPoolManager;
-    private pools = new Map<string, ComponentPool<Component>>();
-    private usageTracker = new Map<string, ComponentUsageTracker>();
+    private static _instance: ComponentPoolManager;
+    private _pools = new Map<string, ComponentPool<Component>>();
+    private _usageTracker = new Map<string, ComponentUsageTracker>();
 
-    private autoCleanupInterval = 60000;
-    private lastCleanupTime = 0;
+    private _autoCleanupInterval = 60000;
+    private _lastCleanupTime = 0;
 
     private constructor() {}
 
     static getInstance(): ComponentPoolManager {
-        if (!ComponentPoolManager.instance) {
-            ComponentPoolManager.instance = new ComponentPoolManager();
+        if (!ComponentPoolManager._instance) {
+            ComponentPoolManager._instance = new ComponentPoolManager();
         }
-        return ComponentPoolManager.instance;
+        return ComponentPoolManager._instance;
     }
 
     /**
-     * 注册组件池
+     * @zh 注册组件池
+     * @en Register component pool
      */
     registerPool<T extends Component>(
         componentName: string,
@@ -168,9 +169,9 @@ export class ComponentPoolManager {
         maxSize?: number,
         minSize?: number
     ): void {
-        this.pools.set(componentName, new ComponentPool(createFn, resetFn, maxSize, minSize) as unknown as ComponentPool<Component>);
+        this._pools.set(componentName, new ComponentPool(createFn, resetFn, maxSize, minSize) as unknown as ComponentPool<Component>);
 
-        this.usageTracker.set(componentName, {
+        this._usageTracker.set(componentName, {
             createCount: 0,
             releaseCount: 0,
             lastAccessTime: Date.now()
@@ -178,23 +179,25 @@ export class ComponentPoolManager {
     }
 
     /**
-     * 获取组件实例
+     * @zh 获取组件实例
+     * @en Acquire component instance
      */
     acquireComponent<T extends Component>(componentName: string): T | null {
-        const pool = this.pools.get(componentName);
+        const pool = this._pools.get(componentName);
 
-        this.trackUsage(componentName, 'create');
+        this._trackUsage(componentName, 'create');
 
         return pool ? (pool.acquire() as T) : null;
     }
 
     /**
-     * 释放组件实例
+     * @zh 释放组件实例
+     * @en Release component instance
      */
     releaseComponent<T extends Component>(componentName: string, component: T): void {
-        const pool = this.pools.get(componentName);
+        const pool = this._pools.get(componentName);
 
-        this.trackUsage(componentName, 'release');
+        this._trackUsage(componentName, 'release');
 
         if (pool) {
             pool.release(component);
@@ -202,10 +205,11 @@ export class ComponentPoolManager {
     }
 
     /**
-     * 追踪使用情况
+     * @zh 追踪使用情况
+     * @en Track usage
      */
-    private trackUsage(componentName: string, action: 'create' | 'release'): void {
-        let tracker = this.usageTracker.get(componentName);
+    private _trackUsage(componentName: string, action: 'create' | 'release'): void {
+        let tracker = this._usageTracker.get(componentName);
 
         if (!tracker) {
             tracker = {
@@ -213,7 +217,7 @@ export class ComponentPoolManager {
                 releaseCount: 0,
                 lastAccessTime: Date.now()
             };
-            this.usageTracker.set(componentName, tracker);
+            this._usageTracker.set(componentName, tracker);
         }
 
         if (action === 'create') {
@@ -226,66 +230,72 @@ export class ComponentPoolManager {
     }
 
     /**
-     * 自动清理(定期调用)
+     * @zh 自动清理(定期调用)
+     * @en Auto cleanup (called periodically)
      */
     public update(): void {
         const now = Date.now();
 
-        if (now - this.lastCleanupTime < this.autoCleanupInterval) {
+        if (now - this._lastCleanupTime < this._autoCleanupInterval) {
             return;
         }
 
-        for (const [name, tracker] of this.usageTracker.entries()) {
+        for (const [name, tracker] of this._usageTracker.entries()) {
             const inactive = now - tracker.lastAccessTime > 120000;
 
             if (inactive) {
-                const pool = this.pools.get(name);
+                const pool = this._pools.get(name);
                 if (pool) {
                     pool.shrink();
                 }
             }
         }
 
-        this.lastCleanupTime = now;
+        this._lastCleanupTime = now;
     }
 
     /**
-     * 获取热点组件列表
+     * @zh 获取热点组件列表
+     * @en Get hot components list
      */
     public getHotComponents(threshold: number = 100): string[] {
-        return Array.from(this.usageTracker.entries())
+        return Array.from(this._usageTracker.entries())
             .filter(([_, tracker]) => tracker.createCount > threshold)
             .map(([name]) => name);
     }
 
     /**
-     * 预热所有池
+     * @zh 预热所有池
+     * @en Prewarm all pools
      */
     prewarmAll(count: number = 100): void {
-        for (const pool of this.pools.values()) {
+        for (const pool of this._pools.values()) {
             pool.prewarm(count);
         }
     }
 
     /**
-     * 清空所有池
+     * @zh 清空所有池
+     * @en Clear all pools
      */
     clearAll(): void {
-        for (const pool of this.pools.values()) {
+        for (const pool of this._pools.values()) {
             pool.clear();
         }
     }
 
     /**
-     * 重置管理器
+     * @zh 重置管理器
+     * @en Reset manager
      */
     reset(): void {
-        this.pools.clear();
-        this.usageTracker.clear();
+        this._pools.clear();
+        this._usageTracker.clear();
     }
 
     /**
-     * 获取全局统计信息
+     * @zh 获取全局统计信息
+     * @en Get global stats
      */
     getGlobalStats(): Array<{
         componentName: string;
@@ -298,11 +308,11 @@ export class ComponentPoolManager {
             usage: ComponentUsageTracker | undefined;
         }> = [];
 
-        for (const [name, pool] of this.pools.entries()) {
+        for (const [name, pool] of this._pools.entries()) {
             stats.push({
                 componentName: name,
                 poolStats: pool.getStats(),
-                usage: this.usageTracker.get(name)
+                usage: this._usageTracker.get(name)
             });
         }
 
@@ -310,11 +320,12 @@ export class ComponentPoolManager {
     }
 
     /**
-     * 获取池统计信息
+     * @zh 获取池统计信息
+     * @en Get pool stats
      */
     getPoolStats(): Map<string, { available: number; maxSize: number }> {
         const stats = new Map();
-        for (const [name, pool] of this.pools) {
+        for (const [name, pool] of this._pools) {
             stats.set(name, {
                 available: pool.getAvailableCount(),
                 maxSize: pool.getMaxSize()
@@ -324,11 +335,12 @@ export class ComponentPoolManager {
     }
 
     /**
-     * 获取池利用率信息
+     * @zh 获取池利用率信息
+     * @en Get pool utilization info
      */
     getPoolUtilization(): Map<string, { used: number; total: number; utilization: number }> {
         const utilization = new Map();
-        for (const [name, pool] of this.pools) {
+        for (const [name, pool] of this._pools) {
             const available = pool.getAvailableCount();
             const maxSize = pool.getMaxSize();
             const used = maxSize - available;
@@ -344,10 +356,11 @@ export class ComponentPoolManager {
     }
 
     /**
-     * 获取指定组件的池利用率
+     * @zh 获取指定组件的池利用率
+     * @en Get component pool utilization
      */
     getComponentUtilization(componentName: string): number {
-        const pool = this.pools.get(componentName);
+        const pool = this._pools.get(componentName);
         if (!pool) return 0;
 
         const available = pool.getAvailableCount();
