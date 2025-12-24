@@ -1,0 +1,43 @@
+{
+    "name": "@esengine/network-protocols",
+    "version": "1.0.0",
+    "description": "Shared network protocols for client and server",
+    "main": "dist/index.js",
+    "module": "dist/index.mjs",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "proto": "tsrpc proto --input src/shared/protocols --output src/shared/protocols/serviceProto.ts",
+        "build": "tsup",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "devDependencies": {
+        "@esengine/build-config": "workspace:*",
+        "rimraf": "^5.0.5",
+        "tsrpc-cli": "^2.4.5",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.3"
+    },
+    "keywords": [
+        "ecs",
+        "network",
+        "protocols",
+        "tsrpc"
+    ],
+    "author": "yhh",
+    "license": "MIT",
+    "dependencies": {
+        "tsrpc-proto": "^1.4.3"
+    }
+}

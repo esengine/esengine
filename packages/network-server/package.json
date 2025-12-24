@@ -1,0 +1,40 @@
+{
+    "name": "@esengine/network-server",
+    "version": "1.0.0",
+    "description": "TSRPC-based network server for ESEngine",
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsx src/main.ts",
+        "start": "node dist/main.js"
+    },
+    "dependencies": {
+        "@esengine/network-protocols": "workspace:*",
+        "tsrpc": "^3.4.15"
+    },
+    "devDependencies": {
+        "tsup": "^8.5.1",
+        "tsx": "^4.19.0"
+    },
+    "keywords": [
+        "esengine",
+        "network",
+        "server",
+        "tsrpc",
+        "websocket"
+    ],
+    "author": "",
+    "license": "MIT"
+}

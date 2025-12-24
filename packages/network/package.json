@@ -1,0 +1,50 @@
+{
+    "name": "@esengine/network",
+    "version": "1.0.0",
+    "description": "Network synchronization for multiplayer games based on TSRPC",
+    "esengine": {
+        "plugin": true,
+        "pluginExport": "NetworkPlugin",
+        "category": "network",
+        "isEnginePlugin": true
+    },
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup && tsc --project tsconfig.build.json --declaration --emitDeclarationOnly --outDir dist",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@esengine/network-protocols": "workspace:*",
+        "tsrpc-browser": "^3.4.16"
+    },
+    "devDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/build-config": "workspace:*",
+        "rimraf": "^5.0.5",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.3"
+    },
+    "keywords": [
+        "ecs",
+        "network",
+        "multiplayer",
+        "websocket",
+        "sync"
+    ],
+    "author": "yhh",
+    "license": "MIT"
+}

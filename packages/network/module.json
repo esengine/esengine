@@ -1,0 +1,34 @@
+{
+    "name": "@esengine/network",
+    "displayName": "Network",
+    "description": "TSRPC-based network synchronization for multiplayer games",
+    "version": "1.0.0",
+    "category": "network",
+    "dependencies": [],
+    "components": [
+        {
+            "name": "NetworkIdentity",
+            "displayName": "Network Identity",
+            "description": "Identifies an entity on the network"
+        },
+        {
+            "name": "NetworkTransform",
+            "displayName": "Network Transform",
+            "description": "Syncs entity position and rotation"
+        }
+    ],
+    "systems": [
+        {
+            "name": "NetworkSyncSystem",
+            "description": "Handles state synchronization"
+        },
+        {
+            "name": "NetworkSpawnSystem",
+            "description": "Handles entity spawning/despawning"
+        },
+        {
+            "name": "NetworkInputSystem",
+            "description": "Handles input collection and sending"
+        }
+    ]
+}
