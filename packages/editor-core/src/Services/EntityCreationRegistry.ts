@@ -31,7 +31,7 @@ export class EntityCreationRegistry extends BaseRegistry<EntityCreationTemplate>
      * @en Get all templates sorted by order
      */
     getAllSorted(): EntityCreationTemplate[] {
-        return this.getAll().sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+        return this.sortByOrder(this.getAll(), 100);
     }
 
     /**
@@ -39,8 +39,7 @@ export class EntityCreationRegistry extends BaseRegistry<EntityCreationTemplate>
      * @en Get templates by category
      */
     getByCategory(category: string): EntityCreationTemplate[] {
-        return this.filter(t => t.category === category)
-            .sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+        return this.sortByOrder(this.filter(t => t.category === category), 100);
     }
 }
 

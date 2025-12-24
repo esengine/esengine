@@ -42,6 +42,15 @@ export interface IPrioritized {
 }
 
 /**
+ * @zh 带顺序的可注册项
+ * @en Registrable item with order
+ */
+export interface IOrdered {
+    /** @zh 排序权重（越小越靠前） @en Sort order (lower = first) */
+    readonly order?: number;
+}
+
+/**
  * @zh 注册表配置
  * @en Registry configuration
  */
@@ -213,6 +222,16 @@ export abstract class BaseRegistry<T, K extends string = string> implements ISer
             }
         }
         return undefined;
+    }
+
+    // ========== 排序操作 | Sorting Operations ==========
+
+    /**
+     * @zh 按 order 字段排序（越小越靠前）
+     * @en Sort items by order field (lower = first)
+     */
+    protected sortByOrder<U extends IOrdered>(items: U[], defaultOrder = 0): U[] {
+        return items.sort((a, b) => (a.order ?? defaultOrder) - (b.order ?? defaultOrder));
     }
 
     // ========== 生命周期 | Lifecycle ==========

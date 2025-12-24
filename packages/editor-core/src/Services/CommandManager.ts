@@ -1,23 +1,19 @@
 import { ICommand } from './ICommand';
 
 /**
- * 命令历史记录配置
+ * @zh 命令历史记录配置
+ * @en Command history configuration
  */
 export interface CommandManagerConfig {
-    /**
-     * 最大历史记录数量
-     */
+    /** @zh 最大历史记录数量 @en Maximum history size */
     maxHistorySize?: number;
-
-    /**
-     * 是否自动合并相似命令
-     */
+    /** @zh 是否自动合并相似命令 @en Auto merge similar commands */
     autoMerge?: boolean;
 }
 
 /**
- * 命令管理器
- * 管理命令的执行、撤销、重做以及历史记录
+ * @zh 命令管理器 - 管理命令的执行、撤销、重做以及历史记录
+ * @en Command Manager - Manages command execution, undo, redo and history
  */
 export class CommandManager {
     private undoStack: ICommand[] = [];
@@ -33,51 +29,71 @@ export class CommandManager {
     }
 
     /**
-     * 执行命令
+     * @zh 尝试将命令与栈顶命令合并
+     * @en Try to merge command with the top of stack
+     */
+    private tryMergeWithLast(command: ICommand): boolean {
+        if (!this.config.autoMerge || this.undoStack.length === 0) {
+            return false;
+        }
+
+        const lastCommand = this.undoStack[this.undoStack.length - 1];
+        if (lastCommand?.canMergeWith(command)) {
+            this.undoStack[this.undoStack.length - 1] = lastCommand.mergeWith(command);
+            this.redoStack = [];
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @zh 将命令推入撤销栈
+     * @en Push command to undo stack
+     */
+    private pushToUndoStack(command: ICommand): void {
+        if (this.tryMergeWithLast(command)) {
+            return;
+        }
+
+        this.undoStack.push(command);
+        this.redoStack = [];
+
+        if (this.undoStack.length > this.config.maxHistorySize) {
+            this.undoStack.shift();
+        }
+    }
+
+    /**
+     * @zh 执行命令
+     * @en Execute command
      */
     execute(command: ICommand): void {
         if (this.isExecuting) {
-            throw new Error('不能在命令执行过程中执行新命令');
+            throw new Error('Cannot execute command while another is executing');
         }
 
         this.isExecuting = true;
 
         try {
             command.execute();
-
-            if (this.config.autoMerge && this.undoStack.length > 0) {
-                const lastCommand = this.undoStack[this.undoStack.length - 1];
-                if (lastCommand && lastCommand.canMergeWith(command)) {
-                    const mergedCommand = lastCommand.mergeWith(command);
-                    this.undoStack[this.undoStack.length - 1] = mergedCommand;
-                    this.redoStack = [];
-                    return;
-                }
-            }
-
-            this.undoStack.push(command);
-            this.redoStack = [];
-
-            if (this.undoStack.length > this.config.maxHistorySize) {
-                this.undoStack.shift();
-            }
+            this.pushToUndoStack(command);
         } finally {
             this.isExecuting = false;
         }
     }
 
     /**
-     * 撤销上一个命令
+     * @zh 撤销上一个命令
+     * @en Undo last command
      */
     undo(): void {
         if (this.isExecuting) {
-            throw new Error('不能在命令执行过程中撤销');
+            throw new Error('Cannot undo while executing');
         }
 
         const command = this.undoStack.pop();
-        if (!command) {
-            return;
-        }
+        if (!command) return;
 
         this.isExecuting = true;
 
@@ -93,17 +109,16 @@ export class CommandManager {
     }
 
     /**
-     * 重做上一个被撤销的命令
+     * @zh 重做上一个被撤销的命令
+     * @en Redo last undone command
      */
     redo(): void {
         if (this.isExecuting) {
-            throw new Error('不能在命令执行过程中重做');
+            throw new Error('Cannot redo while executing');
         }
 
         const command = this.redoStack.pop();
-        if (!command) {
-            return;
-        }
+        if (!command) return;
 
         this.isExecuting = true;
 
@@ -118,85 +133,53 @@ export class CommandManager {
         }
     }
 
-    /**
-     * 检查是否可以撤销
-     */
+    /** @zh 检查是否可以撤销 @en Check if can undo */
     canUndo(): boolean {
         return this.undoStack.length > 0;
     }
 
-    /**
-     * 检查是否可以重做
-     */
+    /** @zh 检查是否可以重做 @en Check if can redo */
     canRedo(): boolean {
         return this.redoStack.length > 0;
     }
 
-    /**
-     * 获取撤销栈的描述列表
-     */
+    /** @zh 获取撤销栈的描述列表 @en Get undo history descriptions */
     getUndoHistory(): string[] {
-        return this.undoStack.map((cmd) => cmd.getDescription());
+        return this.undoStack.map(cmd => cmd.getDescription());
     }
 
-    /**
-     * 获取重做栈的描述列表
-     */
+    /** @zh 获取重做栈的描述列表 @en Get redo history descriptions */
     getRedoHistory(): string[] {
-        return this.redoStack.map((cmd) => cmd.getDescription());
+        return this.redoStack.map(cmd => cmd.getDescription());
     }
 
-    /**
-     * 清空所有历史记录
-     */
+    /** @zh 清空所有历史记录 @en Clear all history */
     clear(): void {
         this.undoStack = [];
         this.redoStack = [];
     }
 
     /**
-     * 批量执行命令（作为单一操作，可以一次撤销）
+     * @zh 批量执行命令（作为单一操作，可以一次撤销）
+     * @en Execute batch commands (as single operation, can be undone at once)
      */
     executeBatch(commands: ICommand[]): void {
-        if (commands.length === 0) {
-            return;
-        }
-
-        const batchCommand = new BatchCommand(commands);
-        this.execute(batchCommand);
+        if (commands.length === 0) return;
+        this.execute(new BatchCommand(commands));
     }
 
     /**
-     * 将命令推入撤销栈但不执行
-     * Push command to undo stack without executing
-     *
-     * 用于已经执行过的操作（如拖动变换），只需要记录到历史
-     * Used for operations that have already been performed (like drag transforms),
-     * only need to record to history
+     * @zh 将命令推入撤销栈但不执行（用于已执行的操作如拖动变换）
+     * @en Push command to undo stack without executing (for already performed operations)
      */
     pushWithoutExecute(command: ICommand): void {
-        if (this.config.autoMerge && this.undoStack.length > 0) {
-            const lastCommand = this.undoStack[this.undoStack.length - 1];
-            if (lastCommand && lastCommand.canMergeWith(command)) {
-                const mergedCommand = lastCommand.mergeWith(command);
-                this.undoStack[this.undoStack.length - 1] = mergedCommand;
-                this.redoStack = [];
-                return;
-            }
-        }
-
-        this.undoStack.push(command);
-        this.redoStack = [];
-
-        if (this.undoStack.length > this.config.maxHistorySize) {
-            this.undoStack.shift();
-        }
+        this.pushToUndoStack(command);
     }
 }
 
 /**
- * 批量命令
- * 将多个命令组合为一个命令
+ * @zh 批量命令 - 将多个命令组合为一个命令
+ * @en Batch Command - Combines multiple commands into one
  */
 class BatchCommand implements ICommand {
     constructor(private readonly commands: ICommand[]) {}
@@ -209,15 +192,12 @@ class BatchCommand implements ICommand {
 
     undo(): void {
         for (let i = this.commands.length - 1; i >= 0; i--) {
-            const command = this.commands[i];
-            if (command) {
-                command.undo();
-            }
+            this.commands[i]?.undo();
         }
     }
 
     getDescription(): string {
-        return `批量操作 (${this.commands.length} 个命令)`;
+        return `Batch (${this.commands.length} commands)`;
     }
 
     canMergeWith(): boolean {
@@ -225,6 +205,6 @@ class BatchCommand implements ICommand {
     }
 
     mergeWith(): ICommand {
-        throw new Error('批量命令不支持合并');
+        throw new Error('Batch commands cannot be merged');
     }
 }
