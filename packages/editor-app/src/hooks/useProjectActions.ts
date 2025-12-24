@@ -24,7 +24,7 @@ import { useLocale } from './useLocale';
 interface UseProjectActionsParams {
     pluginLoader: PluginLoader;
     pluginManagerRef: React.RefObject<PluginManager | null>;
-    projectServiceRef: React.RefObject<ProjectService | null>;
+    projectServiceRef: React.MutableRefObject<ProjectService | null>;
     showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 

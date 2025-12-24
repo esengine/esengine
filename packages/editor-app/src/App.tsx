@@ -37,7 +37,6 @@ import { ProjectCreationWizard } from './components/ProjectCreationWizard';
 import { SceneHierarchy } from './components/SceneHierarchy';
 import { ContentBrowser } from './components/ContentBrowser';
 import { Inspector } from './components/inspectors/Inspector';
-import { AssetBrowser } from './components/AssetBrowser';
 import { Viewport } from './components/Viewport';
 import { AdvancedProfilerWindow } from './components/AdvancedProfilerWindow';
 import { RenderDebugPanel } from './components/debug/RenderDebugPanel';
