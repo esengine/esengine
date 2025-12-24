@@ -122,7 +122,7 @@ export class SettingsRegistry implements IService {
      * @en Register setting section
      */
     registerSection(categoryId: string, section: SettingSection): void {
-        const category = this.ensureCategory(categoryId);
+        const category = this._ensureCategory(categoryId);
 
         const existingIndex = category.sections.findIndex(s => s.id === section.id);
         if (existingIndex >= 0) {
@@ -139,8 +139,8 @@ export class SettingsRegistry implements IService {
      * @en Register single setting
      */
     registerSetting(categoryId: string, sectionId: string, setting: SettingDescriptor): void {
-        const category = this.ensureCategory(categoryId);
-        const section = this.ensureSection(category, sectionId);
+        const category = this._ensureCategory(categoryId);
+        const section = this._ensureSection(category, sectionId);
 
         const existingIndex = section.settings.findIndex(s => s.key === setting.key);
         if (existingIndex >= 0) {
@@ -156,7 +156,7 @@ export class SettingsRegistry implements IService {
      * @zh 确保分类存在
      * @en Ensure category exists
      */
-    private ensureCategory(categoryId: string): SettingCategory {
+    private _ensureCategory(categoryId: string): SettingCategory {
         let category = this._categories.get(categoryId);
         if (!category) {
             category = { id: categoryId, title: categoryId, sections: [] };
@@ -169,7 +169,7 @@ export class SettingsRegistry implements IService {
      * @zh 确保分区存在
      * @en Ensure section exists
      */
-    private ensureSection(category: SettingCategory, sectionId: string): SettingSection {
+    private _ensureSection(category: SettingCategory, sectionId: string): SettingSection {
         let section = category.sections.find(s => s.id === sectionId);
         if (!section) {
             section = { id: sectionId, title: sectionId, settings: [] };

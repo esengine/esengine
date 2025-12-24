@@ -1,4 +1,4 @@
-import { IService } from '@esengine/ecs-framework';
+import { IService, createLogger, type ILogger } from '@esengine/ecs-framework';
 import type { FileActionHandler, FileCreationTemplate } from '../Plugin/EditorModule';
 import { createRegistryToken } from './BaseRegistry';
 
@@ -28,12 +28,17 @@ export class FileActionRegistry implements IService {
     private readonly _actionHandlers = new Map<string, FileActionHandler[]>();
     private readonly _creationTemplates: FileCreationTemplate[] = [];
     private readonly _assetCreationMappings = new Map<string, AssetCreationMapping>();
+    private readonly _logger: ILogger;
+
+    constructor() {
+        this._logger = createLogger('FileActionRegistry');
+    }
 
     /**
      * @zh 规范化扩展名（确保以 . 开头且小写）
      * @en Normalize extension (ensure starts with . and lowercase)
      */
-    private normalizeExtension(ext: string): string {
+    private _normalizeExtension(ext: string): string {
         const lower = ext.toLowerCase();
         return lower.startsWith('.') ? lower : `.${lower}`;
     }
@@ -77,7 +82,7 @@ export class FileActionRegistry implements IService {
 
     /** @zh 获取文件的处理器 @en Get handlers for file */
     getHandlersForFile(filePath: string): FileActionHandler[] {
-        const ext = this.extractFileExtension(filePath);
+        const ext = this._extractFileExtension(filePath);
         return ext ? this.getHandlersForExtension(ext) : [];
     }
 
@@ -110,18 +115,22 @@ export class FileActionRegistry implements IService {
 
     /** @zh 注册资产创建消息映射 @en Register asset creation mapping */
     registerAssetCreationMapping(mapping: AssetCreationMapping): void {
-        const ext = this.normalizeExtension(mapping.extension);
+        const ext = this._normalizeExtension(mapping.extension);
         this._assetCreationMappings.set(ext, { ...mapping, extension: ext });
+        this._logger.debug(`Registered asset creation mapping: ${ext}`);
     }
 
     /** @zh 注销资产创建消息映射 @en Unregister asset creation mapping */
     unregisterAssetCreationMapping(extension: string): void {
-        this._assetCreationMappings.delete(this.normalizeExtension(extension));
+        const ext = this._normalizeExtension(extension);
+        if (this._assetCreationMappings.delete(ext)) {
+            this._logger.debug(`Unregistered asset creation mapping: ${ext}`);
+        }
     }
 
     /** @zh 获取扩展名对应的资产创建消息映射 @en Get asset creation mapping for extension */
     getAssetCreationMapping(extension: string): AssetCreationMapping | undefined {
-        return this._assetCreationMappings.get(this.normalizeExtension(extension));
+        return this._assetCreationMappings.get(this._normalizeExtension(extension));
     }
 
     /** @zh 检查扩展名是否支持创建资产 @en Check if extension supports asset creation */
@@ -147,7 +156,7 @@ export class FileActionRegistry implements IService {
     }
 
     /** @zh 提取文件扩展名 @en Extract file extension */
-    private extractFileExtension(filePath: string): string | null {
+    private _extractFileExtension(filePath: string): string | null {
         const lastDot = filePath.lastIndexOf('.');
         return lastDot === -1 ? null : filePath.substring(lastDot + 1).toLowerCase();
     }
