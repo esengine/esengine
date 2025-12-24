@@ -49,4 +49,4 @@ export class FieldEditorRegistry
 }
 
 /** @zh 字段编辑器注册表服务标识符 @en Field editor registry service identifier */
-export const IFieldEditorRegistryToken = createRegistryToken<FieldEditorRegistry>('FieldEditorRegistry');
+export const FieldEditorRegistryToken = createRegistryToken<FieldEditorRegistry>('FieldEditorRegistry');

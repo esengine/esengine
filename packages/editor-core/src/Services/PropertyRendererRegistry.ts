@@ -84,4 +84,4 @@ export class PropertyRendererRegistry
 }
 
 /** @zh 属性渲染器注册表服务标识符 @en Property renderer registry service identifier */
-export const IPropertyRendererRegistryToken = createRegistryToken<PropertyRendererRegistry>('PropertyRendererRegistry');
+export const PropertyRendererRegistryToken = createRegistryToken<PropertyRendererRegistry>('PropertyRendererRegistry');
