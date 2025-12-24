@@ -1,0 +1,15 @@
+{
+  "id": "material-editor",
+  "name": "@esengine/material-editor",
+  "displayName": "Material Editor",
+  "description": "Editor support for material system | 材质系统编辑器支持",
+  "version": "1.0.0",
+  "category": "Editor",
+  "icon": "Palette",
+  "isEditorPlugin": true,
+  "runtimeModule": "@esengine/material-system",
+  "exports": {
+    "inspectors": ["MaterialInspector"],
+    "panels": ["MaterialEditorPanel"]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "particle-editor",
+  "name": "@esengine/particle-editor",
+  "displayName": "Particle Editor",
+  "description": "Editor support for particle system | 粒子系统编辑器支持",
+  "version": "1.0.0",
+  "category": "Editor",
+  "icon": "Sparkles",
+  "isEditorPlugin": true,
+  "runtimeModule": "@esengine/particle",
+  "exports": {
+    "inspectors": ["ParticleEmitterInspector"],
+    "panels": ["ParticlePreviewPanel"]
+  }
+}

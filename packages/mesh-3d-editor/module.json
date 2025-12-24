@@ -1,0 +1,15 @@
+{
+  "id": "mesh-3d-editor",
+  "name": "@esengine/mesh-3d-editor",
+  "displayName": "3D Mesh Editor",
+  "description": "Editor support for 3D mesh system | 3D 网格编辑器支持",
+  "version": "1.0.0",
+  "category": "Editor",
+  "icon": "Box",
+  "isEditorPlugin": true,
+  "runtimeModule": "@esengine/mesh-3d",
+  "exports": {
+    "inspectors": ["MeshComponentInspector", "Animation3DInspector"],
+    "importers": ["GLTFImporter", "FBXImporter", "OBJImporter"]
+  }
+}
