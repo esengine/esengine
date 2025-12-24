@@ -16,13 +16,13 @@ export interface CommandManagerConfig {
  * @en Command Manager - Manages command execution, undo, redo and history
  */
 export class CommandManager {
-    private undoStack: ICommand[] = [];
-    private redoStack: ICommand[] = [];
-    private readonly config: Required<CommandManagerConfig>;
-    private isExecuting = false;
+    private _undoStack: ICommand[] = [];
+    private _redoStack: ICommand[] = [];
+    private readonly _config: Required<CommandManagerConfig>;
+    private _isExecuting = false;
 
     constructor(config: CommandManagerConfig = {}) {
-        this.config = {
+        this._config = {
             maxHistorySize: config.maxHistorySize ?? 100,
             autoMerge: config.autoMerge ?? true
         };
@@ -32,15 +32,15 @@ export class CommandManager {
      * @zh 尝试将命令与栈顶命令合并
      * @en Try to merge command with the top of stack
      */
-    private tryMergeWithLast(command: ICommand): boolean {
-        if (!this.config.autoMerge || this.undoStack.length === 0) {
+    private _tryMergeWithLast(command: ICommand): boolean {
+        if (!this._config.autoMerge || this._undoStack.length === 0) {
             return false;
         }
 
-        const lastCommand = this.undoStack[this.undoStack.length - 1];
+        const lastCommand = this._undoStack[this._undoStack.length - 1];
         if (lastCommand?.canMergeWith(command)) {
-            this.undoStack[this.undoStack.length - 1] = lastCommand.mergeWith(command);
-            this.redoStack = [];
+            this._undoStack[this._undoStack.length - 1] = lastCommand.mergeWith(command);
+            this._redoStack = [];
             return true;
         }
 
@@ -51,16 +51,16 @@ export class CommandManager {
      * @zh 将命令推入撤销栈
      * @en Push command to undo stack
      */
-    private pushToUndoStack(command: ICommand): void {
-        if (this.tryMergeWithLast(command)) {
+    private _pushToUndoStack(command: ICommand): void {
+        if (this._tryMergeWithLast(command)) {
             return;
         }
 
-        this.undoStack.push(command);
-        this.redoStack = [];
+        this._undoStack.push(command);
+        this._redoStack = [];
 
-        if (this.undoStack.length > this.config.maxHistorySize) {
-            this.undoStack.shift();
+        if (this._undoStack.length > this._config.maxHistorySize) {
+            this._undoStack.shift();
         }
     }
 
@@ -69,17 +69,17 @@ export class CommandManager {
      * @en Execute command
      */
     execute(command: ICommand): void {
-        if (this.isExecuting) {
+        if (this._isExecuting) {
             throw new Error('Cannot execute command while another is executing');
         }
 
-        this.isExecuting = true;
+        this._isExecuting = true;
 
         try {
             command.execute();
-            this.pushToUndoStack(command);
+            this._pushToUndoStack(command);
         } finally {
-            this.isExecuting = false;
+            this._isExecuting = false;
         }
     }
 
@@ -88,23 +88,23 @@ export class CommandManager {
      * @en Undo last command
      */
     undo(): void {
-        if (this.isExecuting) {
+        if (this._isExecuting) {
             throw new Error('Cannot undo while executing');
         }
 
-        const command = this.undoStack.pop();
+        const command = this._undoStack.pop();
         if (!command) return;
 
-        this.isExecuting = true;
+        this._isExecuting = true;
 
         try {
             command.undo();
-            this.redoStack.push(command);
+            this._redoStack.push(command);
         } catch (error) {
-            this.undoStack.push(command);
+            this._undoStack.push(command);
             throw error;
         } finally {
-            this.isExecuting = false;
+            this._isExecuting = false;
         }
     }
 
@@ -113,50 +113,50 @@ export class CommandManager {
      * @en Redo last undone command
      */
     redo(): void {
-        if (this.isExecuting) {
+        if (this._isExecuting) {
             throw new Error('Cannot redo while executing');
         }
 
-        const command = this.redoStack.pop();
+        const command = this._redoStack.pop();
         if (!command) return;
 
-        this.isExecuting = true;
+        this._isExecuting = true;
 
         try {
             command.execute();
-            this.undoStack.push(command);
+            this._undoStack.push(command);
         } catch (error) {
-            this.redoStack.push(command);
+            this._redoStack.push(command);
             throw error;
         } finally {
-            this.isExecuting = false;
+            this._isExecuting = false;
         }
     }
 
     /** @zh 检查是否可以撤销 @en Check if can undo */
     canUndo(): boolean {
-        return this.undoStack.length > 0;
+        return this._undoStack.length > 0;
     }
 
     /** @zh 检查是否可以重做 @en Check if can redo */
     canRedo(): boolean {
-        return this.redoStack.length > 0;
+        return this._redoStack.length > 0;
     }
 
     /** @zh 获取撤销栈的描述列表 @en Get undo history descriptions */
     getUndoHistory(): string[] {
-        return this.undoStack.map(cmd => cmd.getDescription());
+        return this._undoStack.map(cmd => cmd.getDescription());
     }
 
     /** @zh 获取重做栈的描述列表 @en Get redo history descriptions */
     getRedoHistory(): string[] {
-        return this.redoStack.map(cmd => cmd.getDescription());
+        return this._redoStack.map(cmd => cmd.getDescription());
     }
 
     /** @zh 清空所有历史记录 @en Clear all history */
     clear(): void {
-        this.undoStack = [];
-        this.redoStack = [];
+        this._undoStack = [];
+        this._redoStack = [];
     }
 
     /**
@@ -173,7 +173,7 @@ export class CommandManager {
      * @en Push command to undo stack without executing (for already performed operations)
      */
     pushWithoutExecute(command: ICommand): void {
-        this.pushToUndoStack(command);
+        this._pushToUndoStack(command);
     }
 }
 
