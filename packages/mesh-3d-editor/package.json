@@ -21,10 +21,15 @@
         "type-check": "tsc --noEmit",
         "clean": "rimraf dist"
     },
+    "dependencies": {
+        "@esengine/mesh-3d": "workspace:*"
+    },
+    "peerDependencies": {
+        "@esengine/editor-core": "workspace:*"
+    },
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/engine-core": "workspace:*",
-        "@esengine/mesh-3d": "workspace:*",
         "@esengine/editor-core": "workspace:*",
         "@esengine/asset-system": "workspace:*",
         "@esengine/build-config": "workspace:*",

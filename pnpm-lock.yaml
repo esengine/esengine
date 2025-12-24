@@ -416,13 +416,14 @@ importers:
         version: 5.9.3
 
   packages/camera-editor:
+    dependencies:
+      '@esengine/camera':
+        specifier: workspace:*
+        version: link:../camera
     devDependencies:
       '@esengine/build-config':
         specifier: workspace:*
         version: link:../build-config
-      '@esengine/camera':
-        specifier: workspace:*
-        version: link:../camera
       '@esengine/ecs-framework':
         specifier: workspace:*
         version: link:../core
@@ -519,13 +520,10 @@ importers:
         version: 8.47.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
 
   packages/ecs-engine-bindgen:
-    devDependencies:
+    dependencies:
       '@esengine/asset-system':
         specifier: workspace:*
         version: link:../asset-system
-      '@esengine/camera':
-        specifier: workspace:*
-        version: link:../camera
       '@esengine/ecs-framework':
         specifier: workspace:*
         version: link:../core
@@ -538,6 +536,10 @@ importers:
       '@esengine/material-system':
         specifier: workspace:*
         version: link:../material-system
+    devDependencies:
+      '@esengine/camera':
+        specifier: workspace:*
+        version: link:../camera
       '@esengine/sprite':
         specifier: workspace:*
         version: link:../sprite
@@ -1154,6 +1156,10 @@ importers:
         version: 5.9.3
 
   packages/mesh-3d-editor:
+    dependencies:
+      '@esengine/mesh-3d':
+        specifier: workspace:*
+        version: link:../mesh-3d
     devDependencies:
       '@esengine/asset-system':
         specifier: workspace:*
@@ -1170,9 +1176,6 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
-      '@esengine/mesh-3d':
-        specifier: workspace:*
-        version: link:../mesh-3d
       '@tauri-apps/api':
         specifier: ^2.5.0
         version: 2.9.0
@@ -1580,6 +1583,10 @@ importers:
         version: 5.9.3
 
   packages/shader-editor:
+    dependencies:
+      '@esengine/material-system':
+        specifier: workspace:*
+        version: link:../material-system
     devDependencies:
       '@esengine/build-config':
         specifier: workspace:*
@@ -1593,9 +1600,6 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
-      '@esengine/material-system':
-        specifier: workspace:*
-        version: link:../material-system
       '@types/react':
         specifier: ^18.2.0
         version: 18.3.27
@@ -1646,6 +1650,10 @@ importers:
         version: 5.9.3
 
   packages/sprite-editor:
+    dependencies:
+      '@esengine/sprite':
+        specifier: workspace:*
+        version: link:../sprite
     devDependencies:
       '@esengine/build-config':
         specifier: workspace:*
@@ -1662,9 +1670,6 @@ importers:
       '@esengine/material-system':
         specifier: workspace:*
         version: link:../material-system
-      '@esengine/sprite':
-        specifier: workspace:*
-        version: link:../sprite
       '@types/react':
         specifier: ^18.2.0
         version: 18.3.27
