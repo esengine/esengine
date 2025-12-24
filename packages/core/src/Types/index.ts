@@ -7,6 +7,7 @@ import type { IWorldManagerConfig } from '../ECS';
 // 导出TypeScript类型增强工具
 export * from './TypeHelpers';
 export * from './IUpdatable';
+export * from './GlobalTypes';
 
 /**
  * 组件接口
