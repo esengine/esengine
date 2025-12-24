@@ -1,76 +1,48 @@
 /**
- * Entity Creation Registry Service
+ * @zh 实体创建模板注册表
+ * @en Entity Creation Registry Service
  *
- * Manages entity creation templates for the scene hierarchy context menu
+ * @zh 管理场景层级右键菜单中的实体创建模板
+ * @en Manages entity creation templates for the scene hierarchy context menu
  */
 
-import { injectable } from 'tsyringe';
-import type { IService } from '@esengine/ecs-framework';
+import { BaseRegistry, createRegistryToken } from './BaseRegistry';
 import type { EntityCreationTemplate } from '../Types/UITypes';
 
-@injectable()
-export class EntityCreationRegistry implements IService {
-    private templates: Map<string, EntityCreationTemplate> = new Map();
+/**
+ * @zh 实体创建模板注册表
+ * @en Entity Creation Registry
+ */
+export class EntityCreationRegistry extends BaseRegistry<EntityCreationTemplate> {
+    constructor() {
+        super('EntityCreationRegistry');
+    }
 
-    /**
-     * Register an entity creation template
-     */
-    register(template: EntityCreationTemplate): void {
-        if (this.templates.has(template.id)) {
-            console.warn(`[EntityCreationRegistry] Template '${template.id}' already exists, overwriting`);
-        }
-        this.templates.set(template.id, template);
+    protected getItemKey(item: EntityCreationTemplate): string {
+        return item.id;
+    }
+
+    protected override getItemDisplayName(item: EntityCreationTemplate): string {
+        return `${item.label} (${item.id})`;
     }
 
     /**
-     * Register multiple templates
+     * @zh 获取所有模板（按 order 排序）
+     * @en Get all templates sorted by order
      */
-    registerMany(templates: EntityCreationTemplate[]): void {
-        for (const template of templates) {
-            this.register(template);
-        }
+    getAllSorted(): EntityCreationTemplate[] {
+        return this.getAll().sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
     }
 
     /**
-     * Unregister a template by ID
+     * @zh 获取指定分类的模板
+     * @en Get templates by category
      */
-    unregister(id: string): void {
-        this.templates.delete(id);
-    }
-
-    /**
-     * Get all registered templates sorted by order
-     */
-    getAll(): EntityCreationTemplate[] {
-        return Array.from(this.templates.values())
+    getByCategory(category: string): EntityCreationTemplate[] {
+        return this.filter(t => t.category === category)
             .sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
     }
-
-    /**
-     * Get a template by ID
-     */
-    get(id: string): EntityCreationTemplate | undefined {
-        return this.templates.get(id);
-    }
-
-    /**
-     * Check if a template exists
-     */
-    has(id: string): boolean {
-        return this.templates.has(id);
-    }
-
-    /**
-     * Clear all templates
-     */
-    clear(): void {
-        this.templates.clear();
-    }
-
-    /**
-     * Dispose resources
-     */
-    dispose(): void {
-        this.templates.clear();
-    }
 }
+
+/** @zh 实体创建模板注册表服务标识符 @en Entity creation registry service identifier */
+export const IEntityCreationRegistry = createRegistryToken<EntityCreationRegistry>('EntityCreationRegistry');

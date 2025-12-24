@@ -1,56 +1,63 @@
+/**
+ * @zh 属性渲染器注册表
+ * @en Property Renderer Registry
+ */
+
 import React from 'react';
-import { IService, createLogger } from '@esengine/ecs-framework';
-import { IPropertyRenderer, IPropertyRendererRegistry, PropertyContext } from './IPropertyRenderer';
+import { PrioritizedRegistry, createRegistryToken } from './BaseRegistry';
+import type { IPropertyRenderer, IPropertyRendererRegistry, PropertyContext } from './IPropertyRenderer';
 
-const logger = createLogger('PropertyRendererRegistry');
+/**
+ * @zh 属性渲染器注册表
+ * @en Property Renderer Registry
+ */
+export class PropertyRendererRegistry
+    extends PrioritizedRegistry<IPropertyRenderer>
+    implements IPropertyRendererRegistry {
 
-export class PropertyRendererRegistry implements IPropertyRendererRegistry, IService {
-    private renderers: Map<string, IPropertyRenderer> = new Map();
-
-    register(renderer: IPropertyRenderer): void {
-        if (this.renderers.has(renderer.id)) {
-            logger.warn(`Overwriting existing property renderer: ${renderer.id}`);
-        }
-
-        this.renderers.set(renderer.id, renderer);
-        logger.debug(`Registered property renderer: ${renderer.name} (${renderer.id})`);
+    constructor() {
+        super('PropertyRendererRegistry');
     }
 
-    unregister(rendererId: string): void {
-        if (this.renderers.delete(rendererId)) {
-            logger.debug(`Unregistered property renderer: ${rendererId}`);
-        }
+    protected getItemKey(item: IPropertyRenderer): string {
+        return item.id;
     }
 
-    findRenderer(value: any, context: PropertyContext): IPropertyRenderer | undefined {
-        const renderers = Array.from(this.renderers.values())
-            .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    protected override getItemDisplayName(item: IPropertyRenderer): string {
+        return `${item.name} (${item.id})`;
+    }
 
-        for (const renderer of renderers) {
+    /**
+     * @zh 查找渲染器
+     * @en Find renderer
+     */
+    findRenderer(value: unknown, context: PropertyContext): IPropertyRenderer | undefined {
+        return this.findByPriority(renderer => {
             try {
-                if (renderer.canHandle(value, context)) {
-                    return renderer;
-                }
+                return renderer.canHandle(value, context);
             } catch (error) {
-                logger.error(`Error in canHandle for renderer ${renderer.id}:`, error);
+                this._logger.error(`Error in canHandle for ${renderer.id}:`, error);
+                return false;
             }
-        }
-
-        return undefined;
+        });
     }
 
-    render(value: any, context: PropertyContext): React.ReactElement | null {
+    /**
+     * @zh 渲染属性
+     * @en Render property
+     */
+    render(value: unknown, context: PropertyContext): React.ReactElement | null {
         const renderer = this.findRenderer(value, context);
 
         if (!renderer) {
-            logger.debug(`No renderer found for value type: ${typeof value}`);
+            this._logger.debug(`No renderer found for value type: ${typeof value}`);
             return null;
         }
 
         try {
             return renderer.render(value, context);
         } catch (error) {
-            logger.error(`Error rendering with ${renderer.id}:`, error);
+            this._logger.error(`Error rendering with ${renderer.id}:`, error);
             return React.createElement(
                 'span',
                 { style: { color: '#f87171', fontStyle: 'italic' } },
@@ -59,16 +66,22 @@ export class PropertyRendererRegistry implements IPropertyRendererRegistry, ISer
         }
     }
 
+    /**
+     * @zh 获取所有渲染器
+     * @en Get all renderers
+     */
     getAllRenderers(): IPropertyRenderer[] {
-        return Array.from(this.renderers.values());
+        return this.getAll();
     }
 
-    hasRenderer(value: any, context: PropertyContext): boolean {
+    /**
+     * @zh 检查是否有可用渲染器
+     * @en Check if renderer is available
+     */
+    hasRenderer(value: unknown, context: PropertyContext): boolean {
         return this.findRenderer(value, context) !== undefined;
     }
-
-    dispose(): void {
-        this.renderers.clear();
-        logger.debug('PropertyRendererRegistry disposed');
-    }
 }
+
+/** @zh 属性渲染器注册表服务标识符 @en Property renderer registry service identifier */
+export const IPropertyRendererRegistryToken = createRegistryToken<PropertyRendererRegistry>('PropertyRendererRegistry');
