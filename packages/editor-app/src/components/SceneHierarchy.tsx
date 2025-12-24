@@ -96,6 +96,13 @@ type ViewMode = 'local' | 'remote';
 type SortColumn = 'name' | 'type';
 type SortDirection = 'asc' | 'desc';
 
+/**
+ * @zh SceneHierarchy Props
+ * @en SceneHierarchy Props
+ *
+ * @zh 注意：后续版本将移除这些 props，改用 useEditorServices() Context
+ * @en Note: These props will be removed in future versions, use useEditorServices() Context instead
+ */
 interface SceneHierarchyProps {
     entityStore: EntityStoreService;
     messageHub: MessageHub;
@@ -155,7 +162,12 @@ function isEntityVisible(entity: Entity): boolean {
     return entity.enabled;
 }
 
-export function SceneHierarchy({ entityStore, messageHub, commandManager, isProfilerMode = false }: SceneHierarchyProps) {
+export function SceneHierarchy({
+    entityStore,
+    messageHub,
+    commandManager,
+    isProfilerMode = false
+}: SceneHierarchyProps) {
     // ===== 从 HierarchyStore 获取状态 | Get state from HierarchyStore =====
     const {
         sceneInfo,
