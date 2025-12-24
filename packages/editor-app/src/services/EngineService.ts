@@ -50,6 +50,7 @@ import {
     GameRuntime,
     createGameRuntime,
     EditorPlatformAdapter,
+    RuntimeMode,
     type GameRuntimeConfig
 } from '@esengine/runtime-core';
 import { BehaviorTreeSystemToken } from '@esengine/behavior-tree';

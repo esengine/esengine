@@ -36,6 +36,7 @@ qrcode = "0.14"
 image = "0.25"
 notify = "7.0"
 notify-debouncer-mini = "0.5"
+regex = "1"
 
 [profile.dev]
 incremental = true

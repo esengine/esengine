@@ -792,6 +792,9 @@ importers:
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
+      '@esengine/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
       '@eslint/js':
         specifier: ^9.37.0
         version: 9.39.1

@@ -1104,6 +1104,7 @@ dependencies = [
  "notify-debouncer-mini",
  "once_cell",
  "qrcode",
+ "regex",
  "serde",
  "serde_json",
  "tauri",
