@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as ReactDOM from 'react-dom';
 import * as ReactJSXRuntime from 'react/jsx-runtime';
 import { Core, createLogger, Scene } from '@esengine/ecs-framework';
@@ -7,9 +7,9 @@ import { getProfilerService } from './services/getService';
 
 // 将 React 暴露到全局，供动态加载的插件使用
 // editor-runtime.js 将 React 设为 external，需要从全局获取
-(window as any).React = React;
-(window as any).ReactDOM = ReactDOM;
-(window as any).ReactJSXRuntime = ReactJSXRuntime;
+window.React = React;
+window.ReactDOM = ReactDOM;
+window.ReactJSXRuntime = ReactJSXRuntime;
 import {
     PluginManager,
     UIRegistry,
@@ -37,7 +37,6 @@ import { ProjectCreationWizard } from './components/ProjectCreationWizard';
 import { SceneHierarchy } from './components/SceneHierarchy';
 import { ContentBrowser } from './components/ContentBrowser';
 import { Inspector } from './components/inspectors/Inspector';
-import { AssetBrowser } from './components/AssetBrowser';
 import { Viewport } from './components/Viewport';
 import { AdvancedProfilerWindow } from './components/AdvancedProfilerWindow';
 import { RenderDebugPanel } from './components/debug/RenderDebugPanel';
@@ -66,6 +65,7 @@ import { CompilerConfigDialog } from './components/CompilerConfigDialog';
 import { checkForUpdatesOnStartup } from './utils/updater';
 import { useLocale } from './hooks/useLocale';
 import { useStoreSubscriptions } from './hooks/useStoreSubscriptions';
+import { EditorServicesProvider, type EditorServices } from './contexts';
 import { en, zh, es } from './locales';
 import type { Locale } from '@esengine/editor-core';
 import { UserCodeService } from '@esengine/editor-core';
@@ -162,6 +162,29 @@ function App() {
 
     const [commandManager] = useState(() => new CommandManager());
     const { t, locale, changeLocale } = useLocale();
+
+    // 编辑器服务对象（用于 Context 传递）| Editor services object (for Context)
+    const editorServices = useMemo<EditorServices>(() => ({
+        entityStore: entityStoreRef.current,
+        messageHub: messageHubRef.current,
+        commandManager,
+        sceneManager: sceneManagerRef.current,
+        projectService: projectServiceRef.current,
+        pluginManager: pluginManagerRef.current,
+        inspectorRegistry: inspectorRegistryRef.current,
+        uiRegistry: uiRegistryRef.current,
+        settingsRegistry: settingsRegistryRef.current,
+        buildService: buildServiceRef.current,
+        logService: logServiceRef.current,
+        notification: notificationRef.current,
+        dialog: dialogRef.current,
+        projectPath: currentProjectPath,
+    }), [
+        commandManager,
+        currentProjectPath,
+        // 注意: refs 不会变化，但为了初始化后更新需要依赖 initialized
+        initialized,
+    ]);
 
     // Play 模式状态（用于层级面板实时同步）
     // Play mode state (for hierarchy panel real-time sync)
@@ -1322,6 +1345,7 @@ function App() {
     const projectName = currentProjectPath ? currentProjectPath.split(/[\\/]/).pop() : 'Untitled';
 
     return (
+        <EditorServicesProvider services={editorServices}>
         <div className="editor-container">
             {!isEditorFullscreen && (
                 <>
@@ -1511,6 +1535,7 @@ function App() {
                 />
             )}
         </div>
+        </EditorServicesProvider>
     );
 }
 

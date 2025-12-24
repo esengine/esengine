@@ -1,68 +1,68 @@
 export class SettingsService {
-    private static instance: SettingsService;
-    private settings: Map<string, any> = new Map();
-    private storageKey = 'editor-settings';
+    private static _instance: SettingsService;
+    private _settings: Map<string, any> = new Map();
+    private _storageKey = 'editor-settings';
 
     private constructor() {
-        this.loadSettings();
+        this._loadSettings();
     }
 
     public static getInstance(): SettingsService {
-        if (!SettingsService.instance) {
-            SettingsService.instance = new SettingsService();
+        if (!SettingsService._instance) {
+            SettingsService._instance = new SettingsService();
         }
-        return SettingsService.instance;
+        return SettingsService._instance;
     }
 
-    private loadSettings(): void {
+    private _loadSettings(): void {
         try {
-            const stored = localStorage.getItem(this.storageKey);
+            const stored = localStorage.getItem(this._storageKey);
             if (stored) {
                 const data = JSON.parse(stored);
-                this.settings = new Map(Object.entries(data));
+                this._settings = new Map(Object.entries(data));
             }
         } catch (error) {
             console.error('[SettingsService] Failed to load settings:', error);
         }
     }
 
-    private saveSettings(): void {
+    private _saveSettings(): void {
         try {
-            const data = Object.fromEntries(this.settings);
-            localStorage.setItem(this.storageKey, JSON.stringify(data));
+            const data = Object.fromEntries(this._settings);
+            localStorage.setItem(this._storageKey, JSON.stringify(data));
         } catch (error) {
             console.error('[SettingsService] Failed to save settings:', error);
         }
     }
 
     public get<T>(key: string, defaultValue: T): T {
-        if (this.settings.has(key)) {
-            return this.settings.get(key) as T;
+        if (this._settings.has(key)) {
+            return this._settings.get(key) as T;
         }
         return defaultValue;
     }
 
     public set<T>(key: string, value: T): void {
-        this.settings.set(key, value);
-        this.saveSettings();
+        this._settings.set(key, value);
+        this._saveSettings();
     }
 
     public has(key: string): boolean {
-        return this.settings.has(key);
+        return this._settings.has(key);
     }
 
     public delete(key: string): void {
-        this.settings.delete(key);
-        this.saveSettings();
+        this._settings.delete(key);
+        this._saveSettings();
     }
 
     public clear(): void {
-        this.settings.clear();
-        this.saveSettings();
+        this._settings.clear();
+        this._saveSettings();
     }
 
     public getAll(): Record<string, any> {
-        return Object.fromEntries(this.settings);
+        return Object.fromEntries(this._settings);
     }
 
     public getRecentProjects(): string[] {

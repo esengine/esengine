@@ -443,29 +443,33 @@ export class EventBus implements IEventBus {
  * 提供全局访问的事件总线
  */
 export class GlobalEventBus {
-    private static instance: EventBus;
+    private static _instance: EventBus;
 
     /**
-     * 获取全局事件总线实例
-     * @param debugMode 是否启用调试模式
+     * @zh 获取全局事件总线实例
+     * @en Get global event bus instance
+     *
+     * @param debugMode - @zh 是否启用调试模式 @en Whether to enable debug mode
      */
     public static getInstance(debugMode: boolean = false): EventBus {
-        if (!this.instance) {
-            this.instance = new EventBus(debugMode);
+        if (!this._instance) {
+            this._instance = new EventBus(debugMode);
         }
-        return this.instance;
+        return this._instance;
     }
 
     /**
-     * 重置全局事件总线实例
-     * @param debugMode 是否启用调试模式
+     * @zh 重置全局事件总线实例
+     * @en Reset global event bus instance
+     *
+     * @param debugMode - @zh 是否启用调试模式 @en Whether to enable debug mode
      */
     public static reset(debugMode: boolean = false): EventBus {
-        if (this.instance) {
-            this.instance.clear();
+        if (this._instance) {
+            this._instance.clear();
         }
-        this.instance = new EventBus(debugMode);
-        return this.instance;
+        this._instance = new EventBus(debugMode);
+        return this._instance;
     }
 }
 

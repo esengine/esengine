@@ -1,81 +1,58 @@
-import { IInspectorProvider, InspectorContext } from './IInspectorProvider';
-import { IService } from '@esengine/ecs-framework';
+/**
+ * @zh Inspector 注册表
+ * @en Inspector Registry
+ */
+
 import React from 'react';
+import { PrioritizedRegistry, createRegistryToken } from './BaseRegistry';
+import type { IInspectorProvider, InspectorContext } from './IInspectorProvider';
 
-export class InspectorRegistry implements IService {
-    private providers: Map<string, IInspectorProvider> = new Map();
+/**
+ * @zh Inspector 注册表
+ * @en Inspector Registry
+ */
+export class InspectorRegistry extends PrioritizedRegistry<IInspectorProvider> {
+    constructor() {
+        super('InspectorRegistry');
+    }
 
-    /**
-     * 注册Inspector提供器
-     */
-    register(provider: IInspectorProvider): void {
-        if (this.providers.has(provider.id)) {
-            console.warn(`Inspector provider with id "${provider.id}" is already registered`);
-            return;
-        }
-        this.providers.set(provider.id, provider);
+    protected getItemKey(item: IInspectorProvider): string {
+        return item.id;
     }
 
     /**
-     * 注销Inspector提供器
-     */
-    unregister(providerId: string): void {
-        this.providers.delete(providerId);
-    }
-
-    /**
-     * 获取指定ID的提供器
+     * @zh 获取指定 ID 的提供器
+     * @en Get provider by ID
      */
     getProvider(providerId: string): IInspectorProvider | undefined {
-        return this.providers.get(providerId);
+        return this.get(providerId);
     }
 
     /**
-     * 获取所有提供器
+     * @zh 获取所有提供器
+     * @en Get all providers
      */
     getAllProviders(): IInspectorProvider[] {
-        return Array.from(this.providers.values());
+        return this.getAll();
     }
 
     /**
-     * 查找可以处理指定目标的提供器
-     * 按优先级排序，返回第一个可以处理的提供器
+     * @zh 查找可以处理指定目标的提供器
+     * @en Find provider that can handle the target
      */
     findProvider(target: unknown): IInspectorProvider | undefined {
-        const providers = Array.from(this.providers.values())
-            .sort((a, b) => (b.priority || 0) - (a.priority || 0));
-
-        for (const provider of providers) {
-            if (provider.canHandle(target)) {
-                return provider;
-            }
-        }
-
-        return undefined;
+        return this.findByPriority(provider => provider.canHandle(target));
     }
 
     /**
-     * 渲染Inspector内容
-     * 自动查找合适的提供器并渲染
+     * @zh 渲染 Inspector 内容
+     * @en Render inspector content
      */
     render(target: unknown, context: InspectorContext): React.ReactElement | null {
         const provider = this.findProvider(target);
-        if (!provider) {
-            return null;
-        }
-
-        return provider.render(target, context);
-    }
-
-    clear(): void {
-        this.providers.clear();
-    }
-
-    dispose(): void {
-        this.clear();
+        return provider?.render(target, context) ?? null;
     }
 }
 
-// Service identifier for DI registration (用于跨包插件访问)
-// 使用 Symbol.for 确保跨包共享同一个 Symbol
-export const IInspectorRegistry = Symbol.for('IInspectorRegistry');
+/** @zh Inspector 注册表服务标识符 @en Inspector registry service identifier */
+export const IInspectorRegistry = createRegistryToken<InspectorRegistry>('InspectorRegistry');

@@ -73,7 +73,7 @@ export class Core {
      * @zh Core专用日志器
      * @en Core logger
      */
-    private static _logger = createLogger('Core');
+    private static readonly _logger = createLogger('Core');
 
     /**
      * @zh 调试模式标志，在调试模式下会启用额外的性能监控和错误检查
@@ -204,7 +204,7 @@ export class Core {
      */
     public static get services(): ServiceContainer {
         if (!this._instance) {
-            throw new Error('Core实例未创建，请先调用Core.create()');
+            throw new Error('Core instance not created, call Core.create() first | Core实例未创建，请先调用Core.create()');
         }
         return this._instance._serviceContainer;
     }
@@ -238,7 +238,7 @@ export class Core {
      */
     public static get pluginServices(): PluginServiceRegistry {
         if (!this._instance) {
-            throw new Error('Core实例未创建，请先调用Core.create()');
+            throw new Error('Core instance not created, call Core.create() first | Core实例未创建，请先调用Core.create()');
         }
         return this._instance._pluginServiceRegistry;
     }
@@ -264,7 +264,7 @@ export class Core {
      */
     public static get worldManager(): WorldManager {
         if (!this._instance) {
-            throw new Error('Core实例未创建，请先调用Core.create()');
+            throw new Error('Core instance not created, call Core.create() first | Core实例未创建，请先调用Core.create()');
         }
         return this._instance._worldManager;
     }

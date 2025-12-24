@@ -94,6 +94,7 @@ fn main() {
             commands::generate_qrcode,
             // User code compilation | 用户代码编译
             commands::compile_typescript,
+            commands::check_types,
             commands::watch_scripts,
             commands::watch_assets,
             commands::stop_watch_scripts,

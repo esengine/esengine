@@ -6,10 +6,13 @@
  * 管理带有预览场景支持和覆盖层渲染的编辑器视口。
  */
 
+import { createLogger } from '@esengine/ecs-framework';
 import type { IViewportService, ViewportCameraConfig } from './IViewportService';
 import type { IPreviewScene } from './PreviewSceneService';
 import { PreviewSceneService } from './PreviewSceneService';
 import type { IViewportOverlay, OverlayRenderContext } from '../Rendering/IViewportOverlay';
+
+const logger = createLogger('EditorViewportService');
 
 /**
  * Configuration for an editor viewport
@@ -201,7 +204,7 @@ export class EditorViewportService implements IEditorViewportService {
 
     registerViewport(config: EditorViewportConfig): void {
         if (this._viewports.has(config.id)) {
-            console.warn(`[EditorViewportService] Viewport "${config.id}" already registered`);
+            logger.warn(`Viewport already registered: ${config.id}`);
             return;
         }
 
@@ -266,16 +269,17 @@ export class EditorViewportService implements IEditorViewportService {
     addOverlay(viewportId: string, overlay: IViewportOverlay): void {
         const state = this._viewports.get(viewportId);
         if (!state) {
-            console.warn(`[EditorViewportService] Viewport "${viewportId}" not found`);
+            logger.warn(`Viewport not found: ${viewportId}`);
             return;
         }
 
         if (state.overlays.has(overlay.id)) {
-            console.warn(`[EditorViewportService] Overlay "${overlay.id}" already exists in viewport "${viewportId}"`);
+            logger.warn(`Overlay already exists: ${overlay.id} in ${viewportId}`);
             return;
         }
 
         state.overlays.set(overlay.id, overlay);
+        logger.debug(`Added overlay: ${overlay.id} to ${viewportId}`);
     }
 
     removeOverlay(viewportId: string, overlayId: string): void {

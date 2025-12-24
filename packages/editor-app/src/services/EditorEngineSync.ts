@@ -13,22 +13,22 @@ import { SpriteComponent, SpriteAnimatorComponent } from '@esengine/sprite';
 import { EngineService } from './EngineService';
 
 export class EditorEngineSync {
-    private static instance: EditorEngineSync | null = null;
+    private static _instance: EditorEngineSync | null = null;
 
-    private engineService: EngineService;
-    private messageHub: MessageHub | null = null;
-    private entityStore: EntityStoreService | null = null;
+    private _engineService: EngineService;
+    private _messageHub: MessageHub | null = null;
+    private _entityStore: EntityStoreService | null = null;
 
     // Track synced entities: editor entity id -> engine entity id
-    private syncedEntities: Map<number, Entity> = new Map();
+    private _syncedEntities: Map<number, Entity> = new Map();
 
     // Subscription IDs
-    private subscriptions: Array<() => void> = [];
+    private _subscriptions: Array<() => void> = [];
 
-    private initialized = false;
+    private _initialized = false;
 
     private constructor() {
-        this.engineService = EngineService.getInstance();
+        this._engineService = EngineService.getInstance();
     }
 
     /**
@@ -36,10 +36,10 @@ export class EditorEngineSync {
      * 获取单例实例。
      */
     static getInstance(): EditorEngineSync {
-        if (!EditorEngineSync.instance) {
-            EditorEngineSync.instance = new EditorEngineSync();
+        if (!EditorEngineSync._instance) {
+            EditorEngineSync._instance = new EditorEngineSync();
         }
-        return EditorEngineSync.instance;
+        return EditorEngineSync._instance;
     }
 
     /**
@@ -47,75 +47,75 @@ export class EditorEngineSync {
      * 初始化同步服务。
      */
     initialize(messageHub: MessageHub, entityStore: EntityStoreService): void {
-        if (this.initialized) {
+        if (this._initialized) {
             return;
         }
 
-        this.messageHub = messageHub;
-        this.entityStore = entityStore;
+        this._messageHub = messageHub;
+        this._entityStore = entityStore;
 
         // Subscribe to entity events
-        this.subscribeToEvents();
+        this._subscribeToEvents();
 
         // Sync existing entities
-        this.syncAllEntities();
+        this._syncAllEntities();
 
-        this.initialized = true;
+        this._initialized = true;
     }
 
     /**
      * Subscribe to MessageHub events.
      * 订阅MessageHub事件。
      */
-    private subscribeToEvents(): void {
-        if (!this.messageHub) return;
+    private _subscribeToEvents(): void {
+        if (!this._messageHub) return;
 
         // Entity added
-        const unsubAdd = this.messageHub.subscribe('entity:added', (data: { entity: Entity }) => {
-            this.syncEntity(data.entity);
+        const unsubAdd = this._messageHub.subscribe('entity:added', (data: { entity: Entity }) => {
+            this._syncEntity(data.entity);
         });
-        this.subscriptions.push(unsubAdd);
+        this._subscriptions.push(unsubAdd);
 
         // Entity removed
-        const unsubRemove = this.messageHub.subscribe('entity:removed', (data: { entity: Entity }) => {
-            this.removeEntityFromEngine(data.entity);
+        const unsubRemove = this._messageHub.subscribe('entity:removed', (data: { entity: Entity }) => {
+            this._removeEntityFromEngine(data.entity);
         });
-        this.subscriptions.push(unsubRemove);
+        this._subscriptions.push(unsubRemove);
 
         // Component property changed - need to re-sync entity
-        const unsubComponent = this.messageHub.subscribe('component:property:changed', (data: { entity: Entity; component: Component; propertyName: string; value: any }) => {
-            this.updateEntityInEngine(data.entity, data.component, data.propertyName, data.value);
+        const unsubComponent = this._messageHub.subscribe('component:property:changed', (data: { entity: Entity; component: Component; propertyName: string; value: any }) => {
+            this._updateEntityInEngine(data.entity, data.component, data.propertyName, data.value);
         });
-        this.subscriptions.push(unsubComponent);
+        this._subscriptions.push(unsubComponent);
 
         // Component added - sync entity if it has sprite
-        const unsubComponentAdded = this.messageHub.subscribe('component:added', (data: { entity: Entity; component: Component }) => {
-            this.syncEntity(data.entity);
+        const unsubComponentAdded = this._messageHub.subscribe('component:added', (data: { entity: Entity; component: Component }) => {
+            this._syncEntity(data.entity);
         });
-        this.subscriptions.push(unsubComponentAdded);
+        this._subscriptions.push(unsubComponentAdded);
 
         // Entities cleared
-        const unsubClear = this.messageHub.subscribe('entities:cleared', () => {
-            this.clearAllFromEngine();
+        const unsubClear = this._messageHub.subscribe('entities:cleared', () => {
+            this._clearAllFromEngine();
         });
-        this.subscriptions.push(unsubClear);
+        this._subscriptions.push(unsubClear);
 
         // Entity selected - update gizmo display
-        const unsubSelected = this.messageHub.subscribe('entity:selected', (data: { entity: Entity | null }) => {
-            this.updateSelectedEntity(data.entity);
+        const unsubSelected = this._messageHub.subscribe('entity:selected', (data: { entity: Entity | null }) => {
+            this._updateSelectedEntity(data.entity);
         });
-        this.subscriptions.push(unsubSelected);
+        this._subscriptions.push(unsubSelected);
     }
 
     /**
      * Update selected entity for gizmo display.
      * 更新选中的实体用于Gizmo显示。
      */
-    private updateSelectedEntity(entity: Entity | null): void {
+    private _updateSelectedEntity(entity: Entity | null): void {
         if (entity) {
-            this.engineService.setSelectedEntityIds([entity.id]);
+            this._engineService.setSelectedEntityIds([entity.id]);
         } else {
-            this.engineService.setSelectedEntityIds([]);
+            this._engineService.setSelectedEntityIds([]);
         }
     }
 
@@ -123,12 +123,12 @@ export class EditorEngineSync {
      * Sync all existing entities.
      * 同步所有现有实体。
      */
-    private syncAllEntities(): void {
-        if (!this.entityStore) return;
+    private _syncAllEntities(): void {
+        if (!this._entityStore) return;
 
-        const entities = this.entityStore.getAllEntities();
+        const entities = this._entityStore.getAllEntities();
         for (const entity of entities) {
-            this.syncEntity(entity);
+            this._syncEntity(entity);
         }
     }
 
@@ -140,7 +140,7 @@ export class EditorEngineSync {
      * via Rust engine's path-based texture loading.
      * 注意：纹理加载现在由EngineRenderSystem通过Rust引擎的路径加载自动处理。
      */
-    private syncEntity(entity: Entity): void {
+    private _syncEntity(entity: Entity): void {
         // Check if entity has sprite component
         const spriteComponent = entity.getComponent(SpriteComponent);
         if (!spriteComponent) {
@@ -151,7 +151,7 @@ export class EditorEngineSync {
         // 预加载动画纹理并设置第一帧
         const animator = entity.getComponent(SpriteAnimatorComponent);
         if (animator && animator.clips) {
-            const bridge = this.engineService.getBridge();
+            const bridge = this._engineService.getBridge();
             if (bridge) {
                 for (const clip of animator.clips) {
                     for (const frame of clip.frames) {
@@ -177,40 +177,40 @@ export class EditorEngineSync {
         }
 
         // Track synced entity
-        this.syncedEntities.set(entity.id, entity);
+        this._syncedEntities.set(entity.id, entity);
     }
 
     /**
      * Remove entity from tracking.
      * 从跟踪中移除实体。
      */
-    private removeEntityFromEngine(entity: Entity): void {
+    private _removeEntityFromEngine(entity: Entity): void {
         if (!entity) {
             return;
         }
         // Just remove from tracking, entity destruction is handled by the command
-        this.syncedEntities.delete(entity.id);
+        this._syncedEntities.delete(entity.id);
     }
 
     /**
      * Update entity in engine when component changes.
      * 当组件变化时更新引擎中的实体。
      */
-    private updateEntityInEngine(entity: Entity, component: Component, propertyName: string, value: any): void {
-        const engineEntity = this.syncedEntities.get(entity.id);
+    private _updateEntityInEngine(entity: Entity, component: Component, propertyName: string, value: any): void {
+        const engineEntity = this._syncedEntities.get(entity.id);
         if (!engineEntity) {
             // Entity not synced yet, try to sync it
-            this.syncEntity(entity);
+            this._syncEntity(entity);
             return;
         }
 
         // Update based on component type
         if (component instanceof TransformComponent) {
-            this.updateTransform(engineEntity, component);
+            this._updateTransform(engineEntity, component);
         } else if (component instanceof SpriteComponent) {
-            this.updateSprite(engineEntity, component, propertyName, value);
+            this._updateSprite(engineEntity, component, propertyName, value);
         } else if (component instanceof SpriteAnimatorComponent) {
-            this.updateAnimator(engineEntity, component, propertyName);
+            this._updateAnimator(engineEntity, component, propertyName);
         }
     }
 
@@ -218,10 +218,10 @@ export class EditorEngineSync {
      * Update animator - preload textures and set initial frame.
      * 更新动画器 - 预加载纹理并设置初始帧。
      */
-    private updateAnimator(entity: Entity, animator: SpriteAnimatorComponent, propertyName: string): void {
+    private _updateAnimator(entity: Entity, animator: SpriteAnimatorComponent, propertyName: string): void {
         // In editor mode, only preload textures and show first frame (no animation playback)
         // 编辑模式下只预加载纹理并显示第一帧（不播放动画）
-        const bridge = this.engineService.getBridge();
+        const bridge = this._engineService.getBridge();
         const sprite = entity.getComponent(SpriteComponent);
 
         if (bridge && animator.clips) {
@@ -252,7 +252,7 @@ export class EditorEngineSync {
      * Update transform in engine entity.
      * 更新引擎实体的变换。
      */
-    private updateTransform(engineEntity: Entity, transform: TransformComponent): void {
+    private _updateTransform(engineEntity: Entity, transform: TransformComponent): void {
         // Get engine transform component (same type as editor)
         const engineTransform = engineEntity.getComponent(TransformComponent);
         if (engineTransform) {
@@ -281,11 +281,11 @@ export class EditorEngineSync {
      * Preloads textures when textureGuid changes to ensure they're available for rendering.
      * 当 textureGuid 变更时预加载纹理以确保渲染时可用。
      */
-    private updateSprite(entity: Entity, sprite: SpriteComponent, property: string, value: any): void {
+    private _updateSprite(entity: Entity, sprite: SpriteComponent, property: string, value: any): void {
         // When textureGuid changes, trigger texture preload
         // 当 textureGuid 变更时，触发纹理预加载
         if (property === 'textureGuid' && value) {
-            const bridge = this.engineService.getBridge();
+            const bridge = this._engineService.getBridge();
             if (bridge) {
                 // Preload the texture so it's ready for the next render frame
                 // 预加载纹理以便下一渲染帧时可用
@@ -298,9 +298,9 @@ export class EditorEngineSync {
      * Clear all synced entities from tracking.
      * 清除所有已同步实体的跟踪。
      */
-    private clearAllFromEngine(): void {
+    private _clearAllFromEngine(): void {
         // Just clear tracking, entity destruction is handled elsewhere
-        this.syncedEntities.clear();
+        this._syncedEntities.clear();
     }
 
     /**
@@ -308,7 +308,7 @@ export class EditorEngineSync {
      * 检查是否已初始化。
      */
     isInitialized(): boolean {
-        return this.initialized;
+        return this._initialized;
     }
 
     /**
@@ -316,7 +316,7 @@ export class EditorEngineSync {
      * 获取已同步实体数量。
      */
     getSyncedCount(): number {
-        return this.syncedEntities.size;
+        return this._syncedEntities.size;
     }
 
     /**
@@ -325,15 +325,15 @@ export class EditorEngineSync {
      */
     dispose(): void {
         // Unsubscribe from all events
-        for (const unsub of this.subscriptions) {
+        for (const unsub of this._subscriptions) {
             unsub();
         }
-        this.subscriptions = [];
+        this._subscriptions = [];
 
         // Clear synced entities
-        this.syncedEntities.clear();
+        this._syncedEntities.clear();
 
-        this.initialized = false;
+        this._initialized = false;
     }
 }
 

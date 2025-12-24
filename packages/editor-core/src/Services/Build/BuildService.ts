@@ -7,6 +7,7 @@
  */
 
 import type { IService } from '@esengine/ecs-framework';
+import { createLogger } from '@esengine/ecs-framework';
 import type {
     IBuildPipeline,
     IBuildPipelineRegistry,
@@ -16,6 +17,8 @@ import type {
     BuildProgress
 } from './IBuildPipeline';
 import { BuildStatus } from './IBuildPipeline';
+
+const logger = createLogger('BuildService');
 
 /**
  * Build task.
@@ -88,10 +91,10 @@ export class BuildService implements IService, IBuildPipelineRegistry {
      */
     register(pipeline: IBuildPipeline): void {
         if (this._pipelines.has(pipeline.platform)) {
-            console.warn(`[BuildService] Overwriting existing pipeline: ${pipeline.platform} | 覆盖已存在的构建管线: ${pipeline.platform}`);
+            logger.warn(`Overwriting existing pipeline: ${pipeline.platform} | 覆盖已存在的构建管线: ${pipeline.platform}`);
         }
         this._pipelines.set(pipeline.platform, pipeline);
-        console.log(`[BuildService] Registered pipeline: ${pipeline.displayName} | 注册构建管线: ${pipeline.displayName}`);
+        logger.info(`Registered pipeline: ${pipeline.displayName} | 注册构建管线: ${pipeline.displayName}`);
     }
 
     /**
@@ -256,7 +259,7 @@ export class BuildService implements IService, IBuildPipelineRegistry {
         if (this._currentTask) {
             this._currentTask.abortController.abort();
             this._currentTask.progress.status = BuildStatus.Cancelled;
-            console.log('[BuildService] Build cancelled | 构建已取消');
+            logger.info('Build cancelled | 构建已取消');
         }
     }
 

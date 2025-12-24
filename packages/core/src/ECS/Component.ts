@@ -41,7 +41,7 @@ export abstract class Component implements IComponent {
      * @zh 组件ID生成器，用于为每个组件分配唯一的ID
      * @en Component ID generator, used to assign unique IDs to each component
      */
-    private static idGenerator: number = 0;
+    private static _idGenerator: number = 0;
 
     /**
      * @zh 组件唯一标识符，在整个游戏生命周期中唯一
@@ -81,7 +81,7 @@ export abstract class Component implements IComponent {
      * @en Create component instance, automatically assigns unique ID
      */
     constructor() {
-        this.id = Component.idGenerator++;
+        this.id = Component._idGenerator++;
     }
 
     /**

@@ -32,9 +32,9 @@ function generateId(): string {
  * 性能分析器 SDK
  */
 export class ProfilerSDK {
-    private static instance: ProfilerSDK | null = null;
+    private static _instance: ProfilerSDK | null = null;
 
-    private config: ProfilerConfig;
+    private _config: ProfilerConfig;
     private currentFrame: ProfileFrame | null = null;
     private frameHistory: ProfileFrame[] = [];
     private frameNumber = 0;
@@ -48,29 +48,31 @@ export class ProfilerSDK {
     private performanceObserver: PerformanceObserver | null = null;
 
     private constructor(config?: Partial<ProfilerConfig>) {
-        this.config = { ...DEFAULT_PROFILER_CONFIG, ...config };
-        if (this.config.detectLongTasks) {
-            this.setupLongTaskObserver();
+        this._config = { ...DEFAULT_PROFILER_CONFIG, ...config };
+        if (this._config.detectLongTasks) {
+            this._setupLongTaskObserver();
         }
     }
 
     /**
-     * 获取单例实例
+     * @zh 获取单例实例
+     * @en Get singleton instance
      */
     public static getInstance(config?: Partial<ProfilerConfig>): ProfilerSDK {
-        if (!ProfilerSDK.instance) {
-            ProfilerSDK.instance = new ProfilerSDK(config);
+        if (!ProfilerSDK._instance) {
+            ProfilerSDK._instance = new ProfilerSDK(config);
         }
-        return ProfilerSDK.instance;
+        return ProfilerSDK._instance;
     }
 
     /**
-     * 重置实例（测试用）
+     * @zh 重置实例（测试用）
+     * @en Reset instance (for testing)
      */
     public static resetInstance(): void {
-        if (ProfilerSDK.instance) {
-            ProfilerSDK.instance.dispose();
-            ProfilerSDK.instance = null;
+        if (ProfilerSDK._instance) {
+            ProfilerSDK._instance.dispose();
+            ProfilerSDK._instance = null;
         }
     }
 
@@ -152,10 +154,11 @@ export class ProfilerSDK {
     }
 
     /**
-     * 检查是否启用
+     * @zh 检查是否启用
+     * @en Check if enabled
      */
     public static isEnabled(): boolean {
-        return ProfilerSDK.getInstance().config.enabled;
+        return ProfilerSDK.getInstance()._config.enabled;
     }
 
     /**
@@ -187,10 +190,11 @@ export class ProfilerSDK {
     }
 
     /**
-     * 开始采样
+     * @zh 开始采样
+     * @en Begin sample
      */
     public beginSample(name: string, category: ProfileCategory = ProfileCategory.Custom): SampleHandle | null {
-        if (!this.config.enabled || !this.config.enabledCategories.has(category)) {
+        if (!this._config.enabled || !this._config.enabledCategories.has(category)) {
             return null;
         }
 
@@ -198,7 +202,7 @@ export class ProfilerSDK {
             ? this.sampleStack[this.sampleStack.length - 1]
             : undefined;
 
-        if (parentHandle && this.sampleStack.length >= this.config.maxSampleDepth) {
+        if (parentHandle && this.sampleStack.length >= this._config.maxSampleDepth) {
             return null;
         }
 
@@ -218,10 +222,11 @@ export class ProfilerSDK {
     }
 
     /**
-     * 结束采样
+     * @zh 结束采样
+     * @en End sample
      */
     public endSample(handle: SampleHandle): void {
-        if (!this.config.enabled || !this.activeSamples.has(handle.id)) {
+        if (!this._config.enabled || !this.activeSamples.has(handle.id)) {
             return;
         }
 
@@ -249,7 +254,7 @@ export class ProfilerSDK {
             this.currentFrame.samples.push(sample);
         }
 
-        this.updateCallGraph(handle.name, handle.category, duration, parentHandle);
+        this._updateCallGraph(handle.name, handle.category, duration, parentHandle);
 
         this.activeSamples.delete(handle.id);
         const stackIndex = this.sampleStack.indexOf(handle);
@@ -291,10 +296,11 @@ export class ProfilerSDK {
     }
 
     /**
-     * 开始帧
+     * @zh 开始帧
+     * @en Begin frame
      */
     public beginFrame(): void {
-        if (!this.config.enabled) return;
+        if (!this._config.enabled) return;
 
         this.frameNumber++;
         this.currentFrame = {
@@ -305,28 +311,29 @@ export class ProfilerSDK {
             samples: [],
             sampleStats: [],
             counters: new Map(this.counters),
-            memory: this.captureMemory(),
+            memory: this._captureMemory(),
             categoryStats: new Map()
         };
 
-        this.resetFrameCounters();
+        this._resetFrameCounters();
     }
 
     /**
-     * 结束帧
+     * @zh 结束帧
+     * @en End frame
      */
     public endFrame(): void {
-        if (!this.config.enabled || !this.currentFrame) return;
+        if (!this._config.enabled || !this.currentFrame) return;
 
         this.currentFrame.endTime = performance.now();
         this.currentFrame.duration = this.currentFrame.endTime - this.currentFrame.startTime;
 
-        this.calculateSampleStats();
-        this.calculateCategoryStats();
+        this._calculateSampleStats();
+        this._calculateCategoryStats();
 
         this.frameHistory.push(this.currentFrame);
 
-        while (this.frameHistory.length > this.config.maxFrameHistory) {
+        while (this.frameHistory.length > this._config.maxFrameHistory) {
             this.frameHistory.shift();
         }
 
@@ -335,14 +342,15 @@ export class ProfilerSDK {
     }
 
     /**
-     * 递增计数器
+     * @zh 递增计数器
+     * @en Increment counter
      */
     public incrementCounter(
         name: string,
         value: number = 1,
         category: ProfileCategory = ProfileCategory.Custom
     ): void {
-        if (!this.config.enabled) return;
+        if (!this._config.enabled) return;
 
         let counter = this.counters.get(name);
         if (!counter) {
@@ -365,14 +373,15 @@ export class ProfilerSDK {
     }
 
     /**
-     * 设置仪表值
+     * @zh 设置仪表值
+     * @en Set gauge value
      */
     public setGauge(
         name: string,
         value: number,
         category: ProfileCategory = ProfileCategory.Custom
     ): void {
-        if (!this.config.enabled) return;
+        if (!this._config.enabled) return;
 
         let counter = this.counters.get(name);
         if (!counter) {
@@ -395,12 +404,13 @@ export class ProfilerSDK {
     }
 
     /**
-     * 设置启用状态
+     * @zh 设置启用状态
+     * @en Set enabled state
      */
     public setEnabled(enabled: boolean): void {
-        this.config.enabled = enabled;
-        if (enabled && this.config.detectLongTasks && !this.performanceObserver) {
-            this.setupLongTaskObserver();
+        this._config.enabled = enabled;
+        if (enabled && this._config.detectLongTasks && !this.performanceObserver) {
+            this._setupLongTaskObserver();
         }
     }
 
@@ -428,21 +438,20 @@ export class ProfilerSDK {
             : this.frameHistory;
 
         if (frames.length === 0) {
-            return this.createEmptyReport();
+            return this._createEmptyReport();
         }
 
         const frameTimes = frames.map((f) => f.duration);
         const sortedTimes = [...frameTimes].sort((a, b) => a - b);
 
-        const aggregatedStats = this.aggregateSampleStats(frames);
+        const aggregatedStats = this._aggregateSampleStats(frames);
         const hotspots = aggregatedStats
             .sort((a, b) => b.inclusiveTime - a.inclusiveTime)
             .slice(0, 20);
 
-        const categoryBreakdown = this.aggregateCategoryStats(frames);
+        const categoryBreakdown = this._aggregateCategoryStats(frames);
 
-        // 根据帧历史重新计算 callGraph（不使用全局累积的数据）
-        const callGraph = this.buildCallGraphFromFrames(frames);
+        const callGraph = this._buildCallGraphFromFrames(frames);
 
         const firstFrame = frames[0];
         const lastFrame = frames[frames.length - 1];
@@ -465,10 +474,13 @@ export class ProfilerSDK {
     }
 
     /**
-     * 从帧历史构建调用图
-     * 注意：totalTime 存储的是平均耗时（总耗时/调用次数），而不是累计总耗时
+     * @zh 从帧历史构建调用图
+     * @en Build call graph from frame history
+     *
+     * @zh 注意：totalTime 存储的是平均耗时（总耗时/调用次数），而不是累计总耗时
+     * @en Note: totalTime stores average time (total/count), not cumulative total
      */
-    private buildCallGraphFromFrames(frames: ProfileFrame[]): Map<string, CallGraphNode> {
+    private _buildCallGraphFromFrames(frames: ProfileFrame[]): Map<string, CallGraphNode> {
         // 临时存储累计数据
         const tempData = new Map<string, {
             category: ProfileCategory;
@@ -597,7 +609,7 @@ export class ProfilerSDK {
         this.reset();
     }
 
-    private captureMemory(): MemorySnapshot {
+    private _captureMemory(): MemorySnapshot {
         const now = performance.now();
         let usedHeapSize = 0;
         let totalHeapSize = 0;
@@ -632,7 +644,7 @@ export class ProfilerSDK {
         };
     }
 
-    private resetFrameCounters(): void {
+    private _resetFrameCounters(): void {
         for (const counter of this.counters.values()) {
             if (counter.type === 'counter') {
                 counter.value = 0;
@@ -640,7 +652,7 @@ export class ProfilerSDK {
         }
     }
 
-    private calculateSampleStats(): void {
+    private _calculateSampleStats(): void {
         if (!this.currentFrame) return;
 
         const sampleMap = new Map<string, ProfileSampleStats>();
@@ -701,7 +713,7 @@ export class ProfilerSDK {
             .sort((a, b) => b.inclusiveTime - a.inclusiveTime);
     }
 
-    private calculateCategoryStats(): void {
+    private _calculateCategoryStats(): void {
         if (!this.currentFrame) return;
 
         const categoryMap = new Map<ProfileCategory, { totalTime: number; sampleCount: number }>();
@@ -727,7 +739,7 @@ export class ProfilerSDK {
         }
     }
 
-    private updateCallGraph(
+    private _updateCallGraph(
         name: string,
         category: ProfileCategory,
         duration: number,
@@ -779,7 +791,7 @@ export class ProfilerSDK {
         }
     }
 
-    private aggregateSampleStats(frames: ProfileFrame[]): ProfileSampleStats[] {
+    private _aggregateSampleStats(frames: ProfileFrame[]): ProfileSampleStats[] {
         const aggregated = new Map<string, ProfileSampleStats>();
 
         for (const frame of frames) {
@@ -810,7 +822,7 @@ export class ProfilerSDK {
         return Array.from(aggregated.values());
     }
 
-    private aggregateCategoryStats(frames: ProfileFrame[]): Map<ProfileCategory, {
+    private _aggregateCategoryStats(frames: ProfileFrame[]): Map<ProfileCategory, {
         totalTime: number;
         averageTime: number;
         percentOfTotal: number;
@@ -843,13 +855,13 @@ export class ProfilerSDK {
         return result;
     }
 
-    private setupLongTaskObserver(): void {
+    private _setupLongTaskObserver(): void {
         if (typeof PerformanceObserver === 'undefined') return;
 
         try {
             this.performanceObserver = new PerformanceObserver((list) => {
                 for (const entry of list.getEntries()) {
-                    if (entry.duration > this.config.longTaskThreshold) {
+                    if (entry.duration > this._config.longTaskThreshold) {
                         this.longTasks.push({
                             startTime: entry.startTime,
                             duration: entry.duration,
@@ -869,7 +881,7 @@ export class ProfilerSDK {
         }
     }
 
-    private createEmptyReport(): ProfileReport {
+    private _createEmptyReport(): ProfileReport {
         return {
             startTime: 0,
             endTime: 0,

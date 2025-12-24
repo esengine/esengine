@@ -153,18 +153,26 @@ export type { MessageHandler, RequestHandler } from './Services/MessageHub';
 export type { EntityTreeNode } from './Services/EntityStoreService';
 
 // ============================================================================
-// PrefabService Token
-// 预制体服务令牌
+// EditorPrefabService Token
+// 编辑器预制体服务令牌
 // ============================================================================
 
 /**
- * PrefabService 接口
- * PrefabService interface
+ * EditorPrefabService 接口
+ * EditorPrefabService interface
  *
- * 提供类型安全的预制体服务访问接口。
- * Provides type-safe prefab service access interface.
+ * 编辑器侧的预制体实例管理服务。
+ * Editor-side prefab instance management service.
+ *
+ * 注意：这与 asset-system 的 IPrefabService 不同！
+ * - asset-system.IPrefabService: 运行时预制体资源加载/实例化
+ * - editor-core.IEditorPrefabService: 编辑器预制体实例状态管理
+ *
+ * Note: This is different from asset-system's IPrefabService!
+ * - asset-system.IPrefabService: Runtime prefab asset loading/instantiation
+ * - editor-core.IEditorPrefabService: Editor prefab instance state management
  */
-export interface IPrefabService {
+export interface IEditorPrefabService {
     /** 设置文件 API | Set file API */
     setFileAPI(fileAPI: IPrefabFileAPI): void;
     /** 检查是否为预制体实例 | Check if prefab instance */
@@ -192,13 +200,13 @@ export interface IPrefabService {
 }
 
 /**
- * 预制体服务令牌
- * Prefab service token
+ * 编辑器预制体服务令牌
+ * Editor prefab service token
  *
- * 用于注册和获取预制体服务。
- * For registering and getting prefab service.
+ * 用于注册和获取编辑器预制体服务。
+ * For registering and getting editor prefab service.
  */
-export const PrefabServiceToken = createServiceToken<IPrefabService>('prefabService');
+export const EditorPrefabServiceToken = createServiceToken<IEditorPrefabService>('editorPrefabService');
 
 // Re-export types for convenience
 // 重新导出类型方便使用

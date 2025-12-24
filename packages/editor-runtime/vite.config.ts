@@ -43,6 +43,7 @@ export default defineConfig({
                 '@esengine/sprite',           // SpriteComponent
                 '@esengine/camera',           // CameraComponent
                 '@esengine/material-system',
+                '@esengine/editor-core',      // 编辑器核心（避免 runtime-core → ecs-engine-bindgen 传递依赖）
             ],
             output: {
                 exports: 'named',

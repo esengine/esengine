@@ -7,6 +7,19 @@ export {
     type IRuntimePlugin
 } from './PluginManager';
 
+// Plugin Lifecycle State
+export {
+    PluginLifecycleState,
+    VALID_STATE_TRANSITIONS,
+    isValidStateTransition,
+    isPluginOperable,
+    isPluginLoading,
+    isPluginAvailable,
+    type PluginState,
+    type PluginStateChangeEvent,
+    type PluginStateChangeListener
+} from './PluginState';
+
 export {
     createPlugin,
     registerPlugin,
@@ -16,15 +29,22 @@ export {
     type RuntimeConfig
 } from './RuntimeBootstrap';
 
+// Plugin Loader
 export {
+    PluginLoader,
     loadPlugin,
     loadEnabledPlugins,
     registerStaticPlugin,
     getLoadedPlugins,
     resetPluginLoader,
+    type PluginLoadState,
+    type PluginSourceType,
     type PluginPackageInfo,
     type PluginConfig,
-    type ProjectPluginConfig
+    type ProjectPluginConfig,
+    type PluginLoadConfig,
+    type PluginLoadInfo,
+    type PluginLoaderConfig
 } from './PluginLoader';
 
 export {
@@ -32,7 +52,9 @@ export {
     createDefaultProjectConfig,
     mergeProjectConfig,
     createProjectConfigFromEnabledList,
-    type ProjectConfig
+    convertToPluginLoadConfigs,
+    type ProjectConfig,
+    type ExtendedPluginPackageInfo
 } from './ProjectConfig';
 
 // Platform Adapter
@@ -51,6 +73,38 @@ export {
     type GameRuntimeConfig,
     type RuntimeState
 } from './GameRuntime';
+
+// Runtime Mode
+export {
+    RuntimeMode,
+    getRuntimeModeConfig,
+    isEditorMode,
+    shouldEnableGameLogic,
+    type RuntimeModeConfig
+} from './RuntimeMode';
+
+// User Code Realm
+export {
+    UserCodeRealm,
+    UserCodeRealmToken,
+    type UserCodeRealmConfig,
+    type UserSystemInfo,
+    type UserComponentInfo
+} from './UserCodeRealm';
+
+// ImportMap Generator
+export {
+    generateImportMap,
+    generateImportMapEntries,
+    generateImportMapScript,
+    extractModuleId,
+    getPackageName,
+    collectExternalDependencies,
+    sortModulesByDependencies,
+    type ImportMapMode,
+    type ImportMapConfig,
+    type ImportMapEntry
+} from './ImportMapGenerator';
 
 // Platform Adapters
 export {
@@ -80,16 +134,14 @@ export {
     type SceneLoader
 } from './services/RuntimeSceneManager';
 
-// Re-export catalog types from asset-system (canonical source)
-// 从 asset-system 重新导出目录类型（规范来源）
-export type {
-    IAssetCatalog,
-    IAssetCatalogEntry,
-    IAssetBundleInfo,
-    AssetLoadStrategy
-} from '@esengine/asset-system';
+// ============================================================================
+// 便捷 Re-exports | Convenience Re-exports
+// ============================================================================
+// 以下是常用类型的便捷 re-export，让运行时消费者无需添加额外依赖
+// These are convenience re-exports for common types, so runtime consumers
+// don't need to add extra dependencies
 
-// Re-export Input System from engine-core for convenience
+// 输入系统（运行时常用）| Input System (commonly used in runtime)
 export {
     Input,
     InputManager,
@@ -105,40 +157,48 @@ export {
     type TouchEvent
 } from '@esengine/engine-core';
 
-// Re-export vector interfaces from math
+// 向量接口（运行时常用）| Vector interfaces (commonly used in runtime)
 export type { IVector2, IVector3 } from '@esengine/ecs-framework-math';
 
-// Re-export Plugin Service Registry from ecs-framework (canonical source)
+// 服务注册基础设施（创建和使用 Token 必需）
+// Service registry infrastructure (required for creating and using tokens)
 export {
     PluginServiceRegistry,
     createServiceToken,
     type ServiceToken
 } from '@esengine/ecs-framework';
 
-// Re-export engine-specific tokens from engine-core
-export { TransformTypeToken } from '@esengine/engine-core';
+// ============================================================================
+// 注意：服务 Token 应从其定义模块导入
+// Note: Service tokens should be imported from their defining modules
+// ============================================================================
+// 以下 Token 已移除，请直接从源模块导入：
+// The following tokens have been removed, import from source:
+//
+// - TransformTypeToken     -> @esengine/engine-core
+// - RenderSystemToken      -> @esengine/ecs-engine-bindgen
+// - EngineIntegrationToken -> @esengine/ecs-engine-bindgen
+// - TextureServiceToken    -> @esengine/ecs-engine-bindgen
+// - AssetManagerToken      -> @esengine/asset-system
+//
+// 这遵循 "谁定义接口，谁导出 Token" 原则
+// This follows the "whoever defines the interface, exports the token" principle
 
-// Re-export service tokens from their respective modules
+// Dependency Utils
 export {
-    RenderSystemToken,
-    EngineIntegrationToken,
-    // 新的单一职责服务令牌 | New single-responsibility service tokens
-    TextureServiceToken,
-    DynamicAtlasServiceToken,
-    CoordinateServiceToken,
-    RenderConfigServiceToken,
     // 类型 | Types
-    type IRenderSystem,
-    type IRenderDataProvider,
-    type IEngineIntegration,
-    type ITextureService,
-    type IDynamicAtlasService,
-    type ICoordinateService,
-    type IRenderConfigService
-} from '@esengine/ecs-engine-bindgen';
-
-export {
-    AssetManagerToken,
-    type IAssetManager,
-    type IAssetLoadResult
-} from '@esengine/asset-system';
+    type IDependable,
+    type TopologicalSortOptions,
+    type TopologicalSortResult,
+    type DependencyValidationResult,
+    // 依赖 ID 解析 | Dependency ID Resolution
+    resolveDependencyId,
+    extractShortId,
+    getPackageName as getPackageNameFromId,
+    // 拓扑排序 | Topological Sort
+    topologicalSort,
+    // 依赖验证 | Dependency Validation
+    validateDependencies as validateItemDependencies,
+    getAllDependencies,
+    getReverseDependencies
+} from './utils/DependencyUtils';

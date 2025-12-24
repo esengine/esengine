@@ -21,10 +21,15 @@
         "type-check": "tsc --noEmit",
         "clean": "rimraf dist"
     },
+    "dependencies": {
+        "@esengine/camera": "workspace:*"
+    },
+    "peerDependencies": {
+        "@esengine/editor-core": "workspace:*"
+    },
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/engine-core": "workspace:*",
-        "@esengine/camera": "workspace:*",
         "@esengine/editor-core": "workspace:*",
         "@esengine/build-config": "workspace:*",
         "react": "^18.3.1",

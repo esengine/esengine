@@ -24,6 +24,9 @@
     "dependencies": {
         "@esengine/material-system": "workspace:*"
     },
+    "peerDependencies": {
+        "@esengine/editor-core": "workspace:*"
+    },
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/engine-core": "workspace:*",

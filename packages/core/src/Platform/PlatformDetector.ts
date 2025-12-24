@@ -1,10 +1,12 @@
 import type { PlatformDetectionResult } from './IPlatformAdapter';
+import { getGlobalWithMiniGame, type IGlobalThisWithMiniGame } from '../Types';
 
 /**
- * 平台检测器
- * 自动检测当前运行环境并返回对应的平台信息
+ * @zh 平台检测器 - 自动检测当前运行环境并返回对应的平台信息
+ * @en Platform Detector - Automatically detect the current runtime environment
  */
 export class PlatformDetector {
+    private static readonly miniGameGlobals: IGlobalThisWithMiniGame = getGlobalWithMiniGame();
     /**
      * 检测当前平台
      */
@@ -104,26 +106,24 @@ export class PlatformDetector {
     }
 
     /**
-     * 检测是否为微信小游戏环境
+     * @zh 检测是否为微信小游戏环境
+     * @en Check if running in WeChat Mini Game environment
      */
     private static isWeChatMiniGame(): boolean {
-        // 检查wx全局对象
-        if (typeof (globalThis as any).wx !== 'undefined') {
-            const wx = (globalThis as any).wx;
-            // 检查微信小游戏特有的API
+        const wx = this.miniGameGlobals.wx;
+        if (wx) {
             return !!(wx.getSystemInfo && wx.createCanvas && wx.createImage);
         }
         return false;
     }
 
     /**
-     * 检测是否为字节跳动小游戏环境
+     * @zh 检测是否为字节跳动小游戏环境
+     * @en Check if running in ByteDance Mini Game environment
      */
     private static isByteDanceMiniGame(): boolean {
-        // 检查tt全局对象
-        if (typeof (globalThis as any).tt !== 'undefined') {
-            const tt = (globalThis as any).tt;
-            // 检查字节跳动小游戏特有的API
+        const tt = this.miniGameGlobals.tt;
+        if (tt) {
             return !!(tt.getSystemInfo && tt.createCanvas && tt.createImage);
         }
         return false;
@@ -152,26 +152,24 @@ export class PlatformDetector {
     }
 
     /**
-     * 检测是否为支付宝小游戏环境
+     * @zh 检测是否为支付宝小游戏环境
+     * @en Check if running in Alipay Mini Game environment
      */
     private static isAlipayMiniGame(): boolean {
-        // 检查my全局对象
-        if (typeof (globalThis as any).my !== 'undefined') {
-            const my = (globalThis as any).my;
-            // 检查支付宝小游戏特有的API
+        const my = this.miniGameGlobals.my;
+        if (my) {
             return !!(my.getSystemInfo && my.createCanvas);
         }
         return false;
     }
 
     /**
-     * 检测是否为百度小游戏环境
+     * @zh 检测是否为百度小游戏环境
+     * @en Check if running in Baidu Mini Game environment
      */
     private static isBaiduMiniGame(): boolean {
-        // 检查swan全局对象
-        if (typeof (globalThis as any).swan !== 'undefined') {
-            const swan = (globalThis as any).swan;
-            // 检查百度小游戏特有的API
+        const swan = this.miniGameGlobals.swan;
+        if (swan) {
             return !!(swan.getSystemInfo && swan.createCanvas);
         }
         return false;
@@ -229,27 +227,26 @@ export class PlatformDetector {
     }
 
     /**
-     * 获取详细的环境信息（用于调试）
+     * @zh 获取详细的环境信息（用于调试）
+     * @en Get detailed environment information for debugging
      */
-    public static getDetailedInfo(): Record<string, any> {
-        const info: Record<string, any> = {};
+    public static getDetailedInfo(): Record<string, unknown> {
+        const info: Record<string, unknown> = {};
+        const globals = this.miniGameGlobals;
 
-        // 基础检测
         info['userAgent'] = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
         info['platform'] = typeof navigator !== 'undefined' ? navigator.platform : 'unknown';
 
-        // 全局对象检测
         info['globalObjects'] = {
             window: typeof window !== 'undefined',
             document: typeof document !== 'undefined',
             navigator: typeof navigator !== 'undefined',
-            wx: typeof (globalThis as any).wx !== 'undefined',
-            tt: typeof (globalThis as any).tt !== 'undefined',
-            my: typeof (globalThis as any).my !== 'undefined',
-            swan: typeof (globalThis as any).swan !== 'undefined'
+            wx: globals.wx !== undefined,
+            tt: globals.tt !== undefined,
+            my: globals.my !== undefined,
+            swan: globals.swan !== undefined
         };
 
-        // Worker相关检测
         info['workerSupport'] = {
             Worker: typeof Worker !== 'undefined',
             SharedWorker: typeof SharedWorker !== 'undefined',
@@ -258,13 +255,11 @@ export class PlatformDetector {
             crossOriginIsolated: typeof self !== 'undefined' ? self.crossOriginIsolated : false
         };
 
-        // 性能相关检测
         info['performance'] = {
             performanceNow: typeof performance !== 'undefined' && typeof performance.now === 'function',
             hardwareConcurrency: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : undefined
         };
 
-        // 其他API检测
         info['apiSupport'] = {
             Blob: typeof Blob !== 'undefined',
             URL: typeof URL !== 'undefined',

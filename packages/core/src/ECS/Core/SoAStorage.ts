@@ -6,6 +6,7 @@ import {
     TypedArrayTypeName
 } from './SoATypeRegistry';
 import { SoASerializer } from './SoASerializer';
+import type { IComponentTypeMetadata, ComponentTypeWithMetadata } from '../../Types';
 
 // 重新导出类型，保持向后兼容
 export type { SupportedTypedArray, TypedArrayTypeName } from './SoATypeRegistry';
@@ -13,170 +14,174 @@ export { SoATypeRegistry } from './SoATypeRegistry';
 export { SoASerializer } from './SoASerializer';
 
 /**
- * 启用SoA优化装饰器
- * 默认关闭SoA，只有在大规模批量操作场景下才建议开启
+ * @zh SoA 字段统计信息
+ * @en SoA field statistics
+ */
+export interface ISoAFieldStats {
+    size: number;
+    capacity: number;
+    type: string;
+    memory: number;
+}
+
+/**
+ * @zh SoA 存储统计信息
+ * @en SoA storage statistics
+ */
+export interface ISoAStorageStats {
+    size: number;
+    capacity: number;
+    totalSlots: number;
+    usedSlots: number;
+    freeSlots: number;
+    fragmentation: number;
+    memoryUsage: number;
+    fieldStats: Map<string, ISoAFieldStats>;
+}
+
+/**
+ * @zh 启用 SoA 优化装饰器 - 默认关闭，只在大规模批量操作场景下建议开启
+ * @en Enable SoA optimization decorator - disabled by default, recommended only for large-scale batch operations
  */
 export function EnableSoA<T extends ComponentType>(target: T): T {
-    (target as any).__enableSoA = true;
+    (target as ComponentType & IComponentTypeMetadata).__enableSoA = true;
     return target;
 }
 
 
 /**
- * 64位浮点数装饰器
- * 标记字段使用Float64Array存储（更高精度但更多内存）
+ * @zh 组件字段元数据键（仅 Set<string> 类型的字段）
+ * @en Component field metadata keys (only Set<string> type fields)
  */
-export function Float64(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__float64Fields) {
-        target.constructor.__float64Fields = new Set();
-    }
-    target.constructor.__float64Fields.add(key);
+type ComponentFieldMetadataKey = Exclude<keyof IComponentTypeMetadata, '__enableSoA'>;
+
+/**
+ * @zh 装饰器目标原型接口
+ * @en Decorator target prototype interface
+ */
+interface IDecoratorTarget {
+    constructor: IComponentTypeMetadata & Function;
 }
 
 /**
- * 32位浮点数装饰器
- * 标记字段使用Float32Array存储（默认类型，平衡性能和精度）
+ * @zh 辅助函数：获取或创建字段集合
+ * @en Helper function: get or create field set
  */
-export function Float32(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__float32Fields) {
-        target.constructor.__float32Fields = new Set();
+function getOrCreateFieldSet(
+    target: IDecoratorTarget,
+    fieldName: ComponentFieldMetadataKey
+): Set<string> {
+    const ctor = target.constructor as IComponentTypeMetadata;
+    let fieldSet = ctor[fieldName];
+    if (!fieldSet) {
+        fieldSet = new Set<string>();
+        ctor[fieldName] = fieldSet;
     }
-    target.constructor.__float32Fields.add(key);
+    return fieldSet;
 }
 
 /**
- * 32位整数装饰器
- * 标记字段使用Int32Array存储（适用于整数值）
+ * @zh 64位浮点数装饰器 - 标记字段使用 Float64Array 存储（更高精度但更多内存）
+ * @en Float64 decorator - marks field to use Float64Array storage (higher precision but more memory)
  */
-export function Int32(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__int32Fields) {
-        target.constructor.__int32Fields = new Set();
-    }
-    target.constructor.__int32Fields.add(key);
+export function Float64(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__float64Fields').add(String(propertyKey));
 }
 
 /**
- * 32位无符号整数装饰器
- * 标记字段使用Uint32Array存储（适用于无符号整数，如ID、标志位等）
+ * @zh 32位浮点数装饰器 - 标记字段使用 Float32Array 存储（默认类型，平衡性能和精度）
+ * @en Float32 decorator - marks field to use Float32Array storage (default, balanced performance and precision)
  */
-export function Uint32(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__uint32Fields) {
-        target.constructor.__uint32Fields = new Set();
-    }
-    target.constructor.__uint32Fields.add(key);
+export function Float32(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__float32Fields').add(String(propertyKey));
 }
 
 /**
- * 16位整数装饰器
- * 标记字段使用Int16Array存储（适用于小范围整数）
+ * @zh 32位整数装饰器 - 标记字段使用 Int32Array 存储（适用于整数值）
+ * @en Int32 decorator - marks field to use Int32Array storage (for integer values)
  */
-export function Int16(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__int16Fields) {
-        target.constructor.__int16Fields = new Set();
-    }
-    target.constructor.__int16Fields.add(key);
+export function Int32(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__int32Fields').add(String(propertyKey));
 }
 
 /**
- * 16位无符号整数装饰器
- * 标记字段使用Uint16Array存储（适用于小范围无符号整数）
+ * @zh 32位无符号整数装饰器 - 标记字段使用 Uint32Array 存储
+ * @en Uint32 decorator - marks field to use Uint32Array storage
  */
-export function Uint16(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__uint16Fields) {
-        target.constructor.__uint16Fields = new Set();
-    }
-    target.constructor.__uint16Fields.add(key);
+export function Uint32(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__uint32Fields').add(String(propertyKey));
 }
 
 /**
- * 8位整数装饰器
- * 标记字段使用Int8Array存储（适用于很小的整数值）
+ * @zh 16位整数装饰器 - 标记字段使用 Int16Array 存储
+ * @en Int16 decorator - marks field to use Int16Array storage
  */
-export function Int8(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__int8Fields) {
-        target.constructor.__int8Fields = new Set();
-    }
-    target.constructor.__int8Fields.add(key);
+export function Int16(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__int16Fields').add(String(propertyKey));
 }
 
 /**
- * 8位无符号整数装饰器
- * 标记字段使用Uint8Array存储（适用于字节值、布尔标志等）
+ * @zh 16位无符号整数装饰器 - 标记字段使用 Uint16Array 存储
+ * @en Uint16 decorator - marks field to use Uint16Array storage
  */
-export function Uint8(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__uint8Fields) {
-        target.constructor.__uint8Fields = new Set();
-    }
-    target.constructor.__uint8Fields.add(key);
+export function Uint16(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__uint16Fields').add(String(propertyKey));
 }
 
 /**
- * 8位夹紧整数装饰器
- * 标记字段使用Uint8ClampedArray存储（适用于颜色值等需要夹紧的数据）
+ * @zh 8位整数装饰器 - 标记字段使用 Int8Array 存储
+ * @en Int8 decorator - marks field to use Int8Array storage
  */
-export function Uint8Clamped(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__uint8ClampedFields) {
-        target.constructor.__uint8ClampedFields = new Set();
-    }
-    target.constructor.__uint8ClampedFields.add(key);
-}
-
-
-/**
- * 序列化Map装饰器
- * 标记Map字段需要序列化/反序列化存储
- */
-export function SerializeMap(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__serializeMapFields) {
-        target.constructor.__serializeMapFields = new Set();
-    }
-    target.constructor.__serializeMapFields.add(key);
+export function Int8(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__int8Fields').add(String(propertyKey));
 }
 
 /**
- * 序列化Set装饰器
- * 标记Set字段需要序列化/反序列化存储
+ * @zh 8位无符号整数装饰器 - 标记字段使用 Uint8Array 存储
+ * @en Uint8 decorator - marks field to use Uint8Array storage
  */
-export function SerializeSet(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__serializeSetFields) {
-        target.constructor.__serializeSetFields = new Set();
-    }
-    target.constructor.__serializeSetFields.add(key);
+export function Uint8(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__uint8Fields').add(String(propertyKey));
 }
 
 /**
- * 序列化Array装饰器
- * 标记Array字段需要序列化/反序列化存储
+ * @zh 8位夹紧整数装饰器 - 标记字段使用 Uint8ClampedArray 存储（适用于颜色值）
+ * @en Uint8Clamped decorator - marks field to use Uint8ClampedArray storage (for color values)
  */
-export function SerializeArray(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__serializeArrayFields) {
-        target.constructor.__serializeArrayFields = new Set();
-    }
-    target.constructor.__serializeArrayFields.add(key);
+export function Uint8Clamped(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__uint8ClampedFields').add(String(propertyKey));
 }
 
 /**
- * 深拷贝装饰器
- * 标记字段需要深拷贝处理（适用于嵌套对象）
+ * @zh 序列化 Map 装饰器 - 标记 Map 字段需要序列化/反序列化存储
+ * @en SerializeMap decorator - marks Map field for serialization/deserialization
  */
-export function DeepCopy(target: any, propertyKey: string | symbol): void {
-    const key = String(propertyKey);
-    if (!target.constructor.__deepCopyFields) {
-        target.constructor.__deepCopyFields = new Set();
-    }
-    target.constructor.__deepCopyFields.add(key);
+export function SerializeMap(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__serializeMapFields').add(String(propertyKey));
+}
+
+/**
+ * @zh 序列化 Set 装饰器 - 标记 Set 字段需要序列化/反序列化存储
+ * @en SerializeSet decorator - marks Set field for serialization/deserialization
+ */
+export function SerializeSet(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__serializeSetFields').add(String(propertyKey));
+}
+
+/**
+ * @zh 序列化 Array 装饰器 - 标记 Array 字段需要序列化/反序列化存储
+ * @en SerializeArray decorator - marks Array field for serialization/deserialization
+ */
+export function SerializeArray(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__serializeArrayFields').add(String(propertyKey));
+}
+
+/**
+ * @zh 深拷贝装饰器 - 标记字段需要深拷贝处理（适用于嵌套对象）
+ * @en DeepCopy decorator - marks field for deep copy handling (for nested objects)
+ */
+export function DeepCopy(target: object, propertyKey: string | symbol): void {
+    getOrCreateFieldSet(target as IDecoratorTarget, '__deepCopyFields').add(String(propertyKey));
 }
 
 
@@ -186,8 +191,8 @@ export function DeepCopy(target: any, propertyKey: string | symbol): void {
  */
 export class SoAStorage<T extends Component> {
     private fields = new Map<string, SupportedTypedArray>();
-    private stringFields = new Map<string, string[]>();
-    private serializedFields = new Map<string, string[]>();
+    private stringFields = new Map<string, Array<string | undefined>>();
+    private serializedFields = new Map<string, Array<string | undefined>>();
     private complexFields = new Map<number, Map<string, unknown>>();
     private entityToIndex = new Map<number, number>();
     private indexToEntity: number[] = [];
@@ -318,30 +323,29 @@ export class SoAStorage<T extends Component> {
 
     private updateComponentAtIndex(index: number, component: T): void {
         const entityId = this.indexToEntity[index]!;
-        const complexFieldMap = new Map<string, any>();
-        const highPrecisionFields = (this.type as any).__highPrecisionFields || new Set();
-        const serializeMapFields = (this.type as any).__serializeMapFields || new Set();
-        const serializeSetFields = (this.type as any).__serializeSetFields || new Set();
-        const serializeArrayFields = (this.type as any).__serializeArrayFields || new Set();
-        const deepCopyFields = (this.type as any).__deepCopyFields || new Set();
+        const complexFieldMap = new Map<string, unknown>();
+        const typeWithMeta = this.type as ComponentTypeWithMetadata<T>;
+        const highPrecisionFields = typeWithMeta.__highPrecisionFields || new Set<string>();
+        const serializeMapFields = typeWithMeta.__serializeMapFields || new Set<string>();
+        const serializeSetFields = typeWithMeta.__serializeSetFields || new Set<string>();
+        const serializeArrayFields = typeWithMeta.__serializeArrayFields || new Set<string>();
+        const deepCopyFields = typeWithMeta.__deepCopyFields || new Set<string>();
 
-        // 处理所有字段
+        const componentRecord = component as Record<string, unknown>;
         for (const key in component) {
-            if (component.hasOwnProperty(key) && key !== 'id') {
-                const value = (component as any)[key];
+            if (Object.prototype.hasOwnProperty.call(component, key) && key !== 'id') {
+                const value = componentRecord[key];
                 const type = typeof value;
 
                 if (type === 'number') {
+                    const numValue = value as number;
                     if (highPrecisionFields.has(key) || !this.fields.has(key)) {
-                        // 标记为高精度或未在TypedArray中的数值作为复杂对象存储
-                        complexFieldMap.set(key, value);
+                        complexFieldMap.set(key, numValue);
                     } else {
-                        // 存储到TypedArray
                         const array = this.fields.get(key)!;
-                        array[index] = value;
+                        array[index] = numValue;
                     }
                 } else if (type === 'boolean' && this.fields.has(key)) {
-                    // 布尔值存储到TypedArray
                     const array = this.fields.get(key)!;
                     array[index] = value ? 1 : 0;
                 } else if (this.stringFields.has(key)) {
@@ -526,7 +530,8 @@ export class SoAStorage<T extends Component> {
     }
 
     /**
-     * 获取组件的快照副本（用于序列化等需要独立副本的场景）
+     * @zh 获取组件的快照副本（用于序列化等需要独立副本的场景）
+     * @en Get a snapshot copy of the component (for serialization scenarios)
      */
     public getComponentSnapshot(entityId: number): T | null {
         const index = this.entityToIndex.get(entityId);
@@ -534,32 +539,26 @@ export class SoAStorage<T extends Component> {
             return null;
         }
 
-        // 需要 any 因为要动态写入泛型 T 的属性
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const component = new this.type() as any;
+        const component = new this.type();
+        const componentRecord = component as unknown as Record<string, unknown>;
 
         // 恢复数值字段
         for (const [fieldName, array] of this.fields.entries()) {
             const value = array[index];
             const fieldType = this.getFieldType(fieldName);
-
-            if (fieldType === 'boolean') {
-                component[fieldName] = value === 1;
-            } else {
-                component[fieldName] = value;
-            }
+            componentRecord[fieldName] = fieldType === 'boolean' ? value === 1 : value;
         }
 
         // 恢复字符串字段
         for (const [fieldName, stringArray] of this.stringFields.entries()) {
-            component[fieldName] = stringArray[index];
+            componentRecord[fieldName] = stringArray[index];
         }
 
         // 恢复序列化字段
         for (const [fieldName, serializedArray] of this.serializedFields.entries()) {
             const serialized = serializedArray[index];
             if (serialized) {
-                component[fieldName] = SoASerializer.deserialize(serialized, fieldName, {
+                componentRecord[fieldName] = SoASerializer.deserialize(serialized, fieldName, {
                     isMap: this.serializeMapFields.has(fieldName),
                     isSet: this.serializeSetFields.has(fieldName),
                     isArray: this.serializeArrayFields.has(fieldName)
@@ -571,11 +570,11 @@ export class SoAStorage<T extends Component> {
         const complexFieldMap = this.complexFields.get(entityId);
         if (complexFieldMap) {
             for (const [fieldName, value] of complexFieldMap.entries()) {
-                component[fieldName] = value;
+                componentRecord[fieldName] = value;
             }
         }
 
-        return component as T;
+        return component;
     }
 
     private getFieldType(fieldName: string): string {
@@ -673,14 +672,14 @@ export class SoAStorage<T extends Component> {
         // 重置字符串字段数组
         for (const stringArray of this.stringFields.values()) {
             for (let i = 0; i < stringArray.length; i++) {
-                stringArray[i] = undefined as any;
+                stringArray[i] = undefined;
             }
         }
 
         // 重置序列化字段数组
         for (const serializedArray of this.serializedFields.values()) {
             for (let i = 0; i < serializedArray.length; i++) {
-                serializedArray[i] = undefined as any;
+                serializedArray[i] = undefined;
             }
         }
     }
@@ -740,9 +739,13 @@ export class SoAStorage<T extends Component> {
         this._size = activeEntries.length;
     }
 
-    public getStats(): any {
+    /**
+     * @zh 获取 SoA 存储统计信息
+     * @en Get SoA storage statistics
+     */
+    public getStats(): ISoAStorageStats {
         let totalMemory = 0;
-        const fieldStats = new Map<string, any>();
+        const fieldStats = new Map<string, ISoAFieldStats>();
 
         for (const [fieldName, array] of this.fields.entries()) {
             const typeName = SoATypeRegistry.getTypeName(array);
@@ -761,7 +764,9 @@ export class SoAStorage<T extends Component> {
         return {
             size: this._size,
             capacity: this._capacity,
-            usedSlots: this._size, // 兼容原测试
+            totalSlots: this._capacity,
+            usedSlots: this._size,
+            freeSlots: this._capacity - this._size,
             fragmentation: this.freeIndices.length / this._capacity,
             memoryUsage: totalMemory,
             fieldStats: fieldStats

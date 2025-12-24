@@ -171,30 +171,145 @@ pub async fn check_environment() -> Result<EnvironmentCheckResult, String> {
 /// Check esbuild availability and get its status.
 /// 检查 esbuild 可用性并获取其状态。
 ///
-/// Only checks for globally installed esbuild (via npm -g).
-/// 只检测通过 npm 全局安装的 esbuild。
+/// Checks multiple sources: bundled, local node_modules, pnpm, npx, global.
+/// 检查多个来源：内置、本地 node_modules、pnpm、npx、全局。
 fn check_esbuild_status() -> ToolStatus {
-    let global_esbuild = if cfg!(windows) { "esbuild.cmd" } else { "esbuild" };
-
-    match get_esbuild_version(global_esbuild) {
-        Ok(version) => {
+    // Try to find esbuild from any available source
+    // 尝试从任何可用来源查找 esbuild
+    match find_esbuild_with_source(None) {
+        Ok(info) => {
+            let display_path = if info.prefix_args.is_empty() {
+                info.cmd.clone()
+            } else {
+                format!("{} {}", info.cmd, info.prefix_args.join(" "))
+            };
             ToolStatus {
                 available: true,
-                version: Some(version),
-                path: Some(global_esbuild.to_string()),
-                source: Some("global".to_string()),
+                version: Some(info.version),
+                path: Some(display_path),
+                source: Some(info.source),
                 error: None,
             }
         }
-        Err(_) => {
+        Err(e) => {
             ToolStatus {
                 available: false,
                 version: None,
                 path: None,
                 source: None,
-                error: Some("esbuild not installed globally. Please install: npm install -g esbuild | 未全局安装 esbuild，请安装: npm install -g esbuild".to_string()),
+                error: Some(e),
             }
         }
+    }
+}
+
+/// Esbuild execution info.
+/// Esbuild 执行信息。
+#[derive(Debug, Clone)]
+struct EsbuildInfo {
+    /// Command to run (e.g., "esbuild.cmd", "pnpm.cmd")
+    /// 要运行的命令
+    cmd: String,
+    /// Prefix args before esbuild args (e.g., ["exec", "esbuild"] for pnpm)
+    /// esbuild 参数前的前缀参数
+    prefix_args: Vec<String>,
+    /// Source of esbuild: "local", "pnpm", "npx", "global"
+    /// esbuild 来源
+    source: String,
+    /// Version string
+    /// 版本字符串
+    version: String,
+}
+
+/// Find esbuild with source information.
+/// 查找 esbuild 并返回来源信息。
+///
+/// Returns EsbuildInfo on success.
+/// 成功时返回 EsbuildInfo。
+fn find_esbuild_with_source(project_root: Option<&str>) -> Result<EsbuildInfo, String> {
+    // 1. Check local node_modules/.bin/esbuild (project-specific)
+    // 1. 检查本地 node_modules/.bin/esbuild（项目特定）
+    if let Some(root) = project_root {
+        let local_esbuild = if cfg!(windows) {
+            Path::new(root).join("node_modules").join(".bin").join("esbuild.cmd")
+        } else {
+            Path::new(root).join("node_modules").join(".bin").join("esbuild")
+        };
+
+        if local_esbuild.exists() {
+            let path_str = local_esbuild.to_string_lossy().to_string();
+            if let Ok(version) = get_esbuild_version(&path_str) {
+                println!("[Compiler] Found local esbuild: {}", path_str);
+                return Ok(EsbuildInfo {
+                    cmd: path_str,
+                    prefix_args: vec![],
+                    source: "local".to_string(),
+                    version,
+                });
+            }
+        }
+    }
+
+    // 2. Try pnpm exec esbuild (works with pnpm workspaces)
+    // 2. 尝试 pnpm exec esbuild（支持 pnpm 工作区）
+    if let Ok(version) = try_package_manager_esbuild("pnpm", &["exec", "esbuild", "--version"], project_root) {
+        let cmd = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
+        println!("[Compiler] Found esbuild via pnpm");
+        return Ok(EsbuildInfo {
+            cmd: cmd.to_string(),
+            prefix_args: vec!["exec".to_string(), "esbuild".to_string()],
+            source: "pnpm".to_string(),
+            version,
+        });
+    }
+
+    // 3. Try npx esbuild (works with npm projects)
+    // 3. 尝试 npx esbuild（支持 npm 项目）
+    if let Ok(version) = try_package_manager_esbuild("npx", &["esbuild", "--version"], project_root) {
+        let cmd = if cfg!(windows) { "npx.cmd" } else { "npx" };
+        println!("[Compiler] Found esbuild via npx");
+        return Ok(EsbuildInfo {
+            cmd: cmd.to_string(),
+            prefix_args: vec!["esbuild".to_string()],
+            source: "npx".to_string(),
+            version,
+        });
+    }
+
+    // 4. Fall back to global esbuild
+    // 4. 回退到全局 esbuild
+    let global_esbuild = if cfg!(windows) { "esbuild.cmd" } else { "esbuild" };
+    if let Ok(version) = get_esbuild_version(global_esbuild) {
+        println!("[Compiler] Found global esbuild");
+        return Ok(EsbuildInfo {
+            cmd: global_esbuild.to_string(),
+            prefix_args: vec![],
+            source: "global".to_string(),
+            version,
+        });
+    }
+
+    Err("esbuild not found. Install locally (pnpm add -D esbuild) or globally (npm i -g esbuild) | 未找到 esbuild，请本地安装 (pnpm add -D esbuild) 或全局安装 (npm i -g esbuild)".to_string())
+}
+
+/// Try to get esbuild version via package manager (pnpm/npx).
+/// 尝试通过包管理器获取 esbuild 版本。
+fn try_package_manager_esbuild(cmd: &str, args: &[&str], project_root: Option<&str>) -> Result<String, String> {
+    let cmd_name = if cfg!(windows) { format!("{}.cmd", cmd) } else { cmd.to_string() };
+
+    let mut command = Command::new(&cmd_name);
+    command.args(args);
+
+    if let Some(root) = project_root {
+        command.current_dir(root);
+    }
+
+    match command.output() {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(version)
+        }
+        _ => Err(format!("{} esbuild not available", cmd))
     }
 }
 
@@ -224,11 +339,11 @@ fn get_esbuild_version(esbuild_path: &str) -> Result<String, String> {
 /// Compilation result | 编译结果
 #[command]
 pub async fn compile_typescript(options: CompileOptions) -> Result<CompileResult, String> {
-    // Check if esbuild is available | 检查 esbuild 是否可用
-    let esbuild_path = find_esbuild(&options.project_root)?;
+    // Find esbuild with execution info | 查找 esbuild 并获取执行信息
+    let esbuild_info = find_esbuild_with_source(Some(&options.project_root))?;
 
     // Build esbuild arguments | 构建 esbuild 参数
-    let mut args = vec![
+    let mut esbuild_args = vec![
         options.entry_path.clone(),
         "--bundle".to_string(),
         format!("--outfile={}", options.output_path),
@@ -239,38 +354,42 @@ pub async fn compile_typescript(options: CompileOptions) -> Result<CompileResult
 
     // Add source map option | 添加 source map 选项
     if options.source_map {
-        args.push("--sourcemap".to_string());
+        esbuild_args.push("--sourcemap".to_string());
     }
 
     // Add minify option | 添加压缩选项
     if options.minify {
-        args.push("--minify".to_string());
+        esbuild_args.push("--minify".to_string());
     }
 
     // Add global name for IIFE format | 添加 IIFE 格式的全局名称
     if let Some(ref global_name) = options.global_name {
-        args.push(format!("--global-name={}", global_name));
+        esbuild_args.push(format!("--global-name={}", global_name));
     }
 
     // Add external dependencies | 添加外部依赖
     for external in &options.external {
-        args.push(format!("--external:{}", external));
+        esbuild_args.push(format!("--external:{}", external));
     }
 
     // Add module aliases | 添加模块别名
     if let Some(ref aliases) = options.alias {
         for (from, to) in aliases {
-            args.push(format!("--alias:{}={}", from, to));
+            esbuild_args.push(format!("--alias:{}={}", from, to));
         }
     }
 
+    // Combine prefix args with esbuild args | 合并前缀参数和 esbuild 参数
+    let mut all_args: Vec<String> = esbuild_info.prefix_args.clone();
+    all_args.extend(esbuild_args);
+
     // Build full command string for error reporting | 构建完整命令字符串用于错误报告
-    let cmd_str = format!("{} {}", esbuild_path, args.join(" "));
-    println!("[Compiler] Running: {}", cmd_str);
+    let cmd_str = format!("{} {}", esbuild_info.cmd, all_args.join(" "));
+    println!("[Compiler] Running: {} (source: {})", cmd_str, esbuild_info.source);
 
     // Run esbuild | 运行 esbuild
-    let output = Command::new(&esbuild_path)
-        .args(&args)
+    let output = Command::new(&esbuild_info.cmd)
+        .args(&all_args)
         .current_dir(&options.project_root)
         .output()
         .map_err(|e| format!("Failed to run esbuild | 运行 esbuild 失败: {}", e))?;
@@ -322,6 +441,229 @@ pub async fn compile_typescript(options: CompileOptions) -> Result<CompileResult
             output_path: None,
         })
     }
+}
+
+/// Type check options.
+/// 类型检查选项。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypeCheckOptions {
+    /// Project root directory | 项目根目录
+    pub project_root: String,
+    /// TypeScript config path (optional) | TypeScript 配置路径（可选）
+    pub tsconfig_path: Option<String>,
+    /// Files to check (optional, if not set checks whole project)
+    /// 要检查的文件（可选，如果未设置则检查整个项目）
+    pub files: Option<Vec<String>>,
+}
+
+/// Type check result.
+/// 类型检查结果。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypeCheckResult {
+    /// Whether type check passed | 类型检查是否通过
+    pub success: bool,
+    /// Type errors | 类型错误
+    pub errors: Vec<CompileError>,
+    /// Duration in milliseconds | 耗时（毫秒）
+    pub duration_ms: u64,
+}
+
+/// Check TypeScript types using tsc.
+/// 使用 tsc 检查 TypeScript 类型。
+///
+/// Runs tsc --noEmit to check types without generating output files.
+/// 运行 tsc --noEmit 检查类型但不生成输出文件。
+#[command]
+pub async fn check_types(options: TypeCheckOptions) -> Result<TypeCheckResult, String> {
+    let start = std::time::Instant::now();
+
+    // Find tsc executable | 查找 tsc 可执行文件
+    let tsc_info = find_tsc_with_source(Some(&options.project_root))?;
+
+    // Build tsc arguments | 构建 tsc 参数
+    let mut tsc_args: Vec<String> = tsc_info.prefix_args.clone();
+    tsc_args.push("--noEmit".to_string());
+    tsc_args.push("--pretty".to_string());
+    tsc_args.push("false".to_string());
+
+    // Use project tsconfig if specified | 使用项目 tsconfig（如果指定）
+    if let Some(ref tsconfig) = options.tsconfig_path {
+        tsc_args.push("--project".to_string());
+        tsc_args.push(tsconfig.clone());
+    }
+
+    // Add specific files if provided | 添加特定文件（如果提供）
+    if let Some(ref files) = options.files {
+        for file in files {
+            tsc_args.push(file.clone());
+        }
+    }
+
+    let cmd_str = format!("{} {}", tsc_info.cmd, tsc_args.join(" "));
+    println!("[TypeCheck] Running: {} (source: {})", cmd_str, tsc_info.source);
+
+    // Run tsc | 运行 tsc
+    let output = Command::new(&tsc_info.cmd)
+        .args(&tsc_args)
+        .current_dir(&options.project_root)
+        .output()
+        .map_err(|e| format!("Failed to run tsc | 运行 tsc 失败: {}", e))?;
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    if output.status.success() {
+        println!("[TypeCheck] Type check passed in {}ms", duration_ms);
+        Ok(TypeCheckResult {
+            success: true,
+            errors: vec![],
+            duration_ms,
+        })
+    } else {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        println!("[TypeCheck] Type check failed in {}ms", duration_ms);
+
+        // Parse tsc output | 解析 tsc 输出
+        let errors = parse_tsc_errors(&stdout, &stderr);
+
+        Ok(TypeCheckResult {
+            success: false,
+            errors,
+            duration_ms,
+        })
+    }
+}
+
+/// TSC execution info (similar to EsbuildInfo).
+/// TSC 执行信息。
+#[derive(Debug, Clone)]
+struct TscInfo {
+    cmd: String,
+    prefix_args: Vec<String>,
+    source: String,
+}
+
+/// Find tsc executable.
+/// 查找 tsc 可执行文件。
+fn find_tsc_with_source(project_root: Option<&str>) -> Result<TscInfo, String> {
+    // 1. Check local node_modules/.bin/tsc
+    if let Some(root) = project_root {
+        let local_tsc = if cfg!(windows) {
+            Path::new(root).join("node_modules").join(".bin").join("tsc.cmd")
+        } else {
+            Path::new(root).join("node_modules").join(".bin").join("tsc")
+        };
+
+        if local_tsc.exists() {
+            let path_str = local_tsc.to_string_lossy().to_string();
+            println!("[TypeCheck] Found local tsc: {}", path_str);
+            return Ok(TscInfo {
+                cmd: path_str,
+                prefix_args: vec![],
+                source: "local".to_string(),
+            });
+        }
+    }
+
+    // 2. Try pnpm exec tsc
+    if try_tsc_via_package_manager("pnpm", &["exec", "tsc", "--version"], project_root).is_ok() {
+        let cmd = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
+        println!("[TypeCheck] Found tsc via pnpm");
+        return Ok(TscInfo {
+            cmd: cmd.to_string(),
+            prefix_args: vec!["exec".to_string(), "tsc".to_string()],
+            source: "pnpm".to_string(),
+        });
+    }
+
+    // 3. Try npx tsc
+    if try_tsc_via_package_manager("npx", &["tsc", "--version"], project_root).is_ok() {
+        let cmd = if cfg!(windows) { "npx.cmd" } else { "npx" };
+        println!("[TypeCheck] Found tsc via npx");
+        return Ok(TscInfo {
+            cmd: cmd.to_string(),
+            prefix_args: vec!["tsc".to_string()],
+            source: "npx".to_string(),
+        });
+    }
+
+    // 4. Try global tsc
+    let global_tsc = if cfg!(windows) { "tsc.cmd" } else { "tsc" };
+    if Command::new(global_tsc).arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
+        println!("[TypeCheck] Found global tsc");
+        return Ok(TscInfo {
+            cmd: global_tsc.to_string(),
+            prefix_args: vec![],
+            source: "global".to_string(),
+        });
+    }
+
+    Err("TypeScript not found. Install locally (pnpm add -D typescript) or globally (npm i -g typescript) | 未找到 TypeScript，请本地安装 (pnpm add -D typescript) 或全局安装 (npm i -g typescript)".to_string())
+}
+
+/// Try to run tsc via package manager.
+/// 尝试通过包管理器运行 tsc。
+fn try_tsc_via_package_manager(cmd: &str, args: &[&str], project_root: Option<&str>) -> Result<(), String> {
+    let cmd_name = if cfg!(windows) { format!("{}.cmd", cmd) } else { cmd.to_string() };
+
+    let mut command = Command::new(&cmd_name);
+    command.args(args);
+
+    if let Some(root) = project_root {
+        command.current_dir(root);
+    }
+
+    match command.output() {
+        Ok(output) if output.status.success() => Ok(()),
+        _ => Err(format!("{} tsc not available", cmd))
+    }
+}
+
+/// Parse tsc error output.
+/// 解析 tsc 错误输出。
+fn parse_tsc_errors(stdout: &str, stderr: &str) -> Vec<CompileError> {
+    let mut errors = Vec::new();
+    let combined = format!("{}\n{}", stdout, stderr);
+
+    // tsc output format: file(line,col): error TSxxxx: message
+    // tsc 输出格式: 文件(行,列): error TSxxxx: 消息
+    let re = regex::Regex::new(r"(.+?)\((\d+),(\d+)\):\s*error\s+TS\d+:\s*(.+)").ok();
+
+    for line in combined.lines() {
+        if let Some(ref regex) = re {
+            if let Some(caps) = regex.captures(line) {
+                errors.push(CompileError {
+                    file: Some(caps.get(1).map_or("", |m| m.as_str()).to_string()),
+                    line: caps.get(2).and_then(|m| m.as_str().parse().ok()),
+                    column: caps.get(3).and_then(|m| m.as_str().parse().ok()),
+                    message: caps.get(4).map_or("", |m| m.as_str()).to_string(),
+                });
+            }
+        } else if line.contains("error TS") {
+            // Fallback: just capture the error line
+            errors.push(CompileError {
+                message: line.to_string(),
+                file: None,
+                line: None,
+                column: None,
+            });
+        }
+    }
+
+    // If no errors parsed but output is not empty, add raw output
+    if errors.is_empty() && !combined.trim().is_empty() {
+        errors.push(CompileError {
+            message: combined.trim().to_string(),
+            file: None,
+            line: None,
+            column: None,
+        });
+    }
+
+    errors
 }
 
 /// Watch for file changes in scripts directory.
@@ -695,26 +1037,13 @@ pub async fn stop_watch_scripts(
     Ok(())
 }
 
-/// Find esbuild executable path.
-/// 查找 esbuild 可执行文件路径。
+/// Find esbuild executable path (deprecated, use find_esbuild_with_source).
+/// 查找 esbuild 可执行文件路径（已弃用，使用 find_esbuild_with_source）。
 ///
-/// Only uses globally installed esbuild (npm -g).
-/// 只使用全局安装的 esbuild (npm -g)。
-fn find_esbuild(_project_root: &str) -> Result<String, String> {
-    let global_esbuild = if cfg!(windows) { "esbuild.cmd" } else { "esbuild" };
-
-    // Check if global esbuild exists | 检查全局 esbuild 是否存在
-    let check = Command::new(global_esbuild)
-        .arg("--version")
-        .output();
-
-    match check {
-        Ok(output) if output.status.success() => {
-            println!("[Compiler] Using global esbuild");
-            Ok(global_esbuild.to_string())
-        },
-        _ => Err("esbuild not installed globally. Please install: npm install -g esbuild | 未全局安装 esbuild，请安装: npm install -g esbuild".to_string())
-    }
+/// Kept for backward compatibility - returns just the command string.
+/// 保留用于向后兼容 - 仅返回命令字符串。
+fn find_esbuild(project_root: &str) -> Result<EsbuildInfo, String> {
+    find_esbuild_with_source(Some(project_root))
 }
 
 /// Parse esbuild error output.

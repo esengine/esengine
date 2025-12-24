@@ -68,33 +68,35 @@ interface WrapInfo {
  * 自动性能分析器
  */
 export class AutoProfiler {
-    private static instance: AutoProfiler | null = null;
-    private config: AutoProfilerConfig;
+    private static _instance: AutoProfiler | null = null;
+    private _config: AutoProfilerConfig;
     private wrappedObjects: WeakMap<object, Map<string, WrapInfo>> = new WeakMap();
     private samplingProfiler: SamplingProfiler | null = null;
     private registeredClasses: Map<string, { constructor: Function; category: ProfileCategory }> = new Map();
 
     private constructor(config?: Partial<AutoProfilerConfig>) {
-        this.config = { ...DEFAULT_CONFIG, ...config };
+        this._config = { ...DEFAULT_CONFIG, ...config };
     }
 
     /**
-     * 获取单例实例
+     * @zh 获取单例实例
+     * @en Get singleton instance
      */
     public static getInstance(config?: Partial<AutoProfilerConfig>): AutoProfiler {
-        if (!AutoProfiler.instance) {
-            AutoProfiler.instance = new AutoProfiler(config);
+        if (!AutoProfiler._instance) {
+            AutoProfiler._instance = new AutoProfiler(config);
         }
-        return AutoProfiler.instance;
+        return AutoProfiler._instance;
     }
 
     /**
-     * 重置实例
+     * @zh 重置实例
+     * @en Reset instance
      */
     public static resetInstance(): void {
-        if (AutoProfiler.instance) {
-            AutoProfiler.instance.dispose();
-            AutoProfiler.instance = null;
+        if (AutoProfiler._instance) {
+            AutoProfiler._instance.dispose();
+            AutoProfiler._instance = null;
         }
     }
 
@@ -154,17 +156,19 @@ export class AutoProfiler {
     }
 
     /**
-     * 设置启用状态
+     * @zh 设置启用状态
+     * @en Set enabled state
      */
     public setEnabled(enabled: boolean): void {
-        this.config.enabled = enabled;
+        this._config.enabled = enabled;
         if (!enabled && this.samplingProfiler) {
             this.samplingProfiler.stop();
         }
     }
 
     /**
-     * 注册类以进行自动分析
+     * @zh 注册类以进行自动分析
+     * @en Register class for automatic profiling
      */
     public registerClass<T extends new (...args: any[]) => any>(
         constructor: T,
@@ -177,11 +181,10 @@ export class AutoProfiler {
         // eslint-disable-next-line @typescript-eslint/no-this-alias -- Required for Proxy construct handler
         const self = this;
 
-        // 创建代理类
         const ProxiedClass = new Proxy(constructor, {
             construct(target, args, newTarget) {
                 const instance = Reflect.construct(target, args, newTarget);
-                if (self.config.enabled) {
+                if (self._config.enabled) {
                     self.wrapInstance(instance, name, category);
                 }
                 return instance;
@@ -192,14 +195,15 @@ export class AutoProfiler {
     }
 
     /**
-     * 包装对象实例的所有方法
+     * @zh 包装对象实例的所有方法
+     * @en Wrap all methods of an object instance
      */
     public wrapInstance<T extends object>(
         instance: T,
         className: string,
         category: ProfileCategory = ProfileCategory.Custom
     ): T {
-        if (!this.config.enabled) {
+        if (!this._config.enabled) {
             return instance;
         }
 
@@ -211,21 +215,20 @@ export class AutoProfiler {
         const wrapInfoMap = new Map<string, WrapInfo>();
         this.wrappedObjects.set(instance, wrapInfoMap);
 
-        // 获取所有方法（包括原型链上的）
-        const methodNames = this.getAllMethodNames(instance);
+        const methodNames = this._getAllMethodNames(instance);
 
         for (const methodName of methodNames) {
-            if (this.shouldExcludeMethod(methodName)) {
+            if (this._shouldExcludeMethod(methodName)) {
                 continue;
             }
 
-            const descriptor = this.getPropertyDescriptor(instance, methodName);
+            const descriptor = this._getPropertyDescriptor(instance, methodName);
             if (!descriptor || typeof descriptor.value !== 'function') {
                 continue;
             }
 
             const original = descriptor.value as Function;
-            const wrapped = this.createWrappedMethod(original, className, methodName, category);
+            const wrapped = this._createWrappedMethod(original, className, methodName, category);
 
             wrapInfoMap.set(methodName, {
                 className,
@@ -245,14 +248,15 @@ export class AutoProfiler {
     }
 
     /**
-     * 包装单个函数
+     * @zh 包装单个函数
+     * @en Wrap a single function
      */
     public wrapFunction<T extends (...args: any[]) => any>(
         fn: T,
         name: string,
         category: ProfileCategory = ProfileCategory.Custom
     ): T {
-        if (!this.config.enabled) return fn;
+        if (!this._config.enabled) return fn;
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias -- Required for wrapped function closure
         const self = this;
@@ -262,24 +266,20 @@ export class AutoProfiler {
             try {
                 const result = fn.apply(this, args);
 
-                // 处理 Promise
-                if (self.config.trackAsync && result instanceof Promise) {
+                if (self._config.trackAsync && result instanceof Promise) {
                     return result.finally(() => {
                         ProfilerSDK.endSample(handle);
                     });
                 }
 
-                // 同步函数，立即结束采样
                 ProfilerSDK.endSample(handle);
                 return result;
             } catch (error) {
-                // 发生错误时也要结束采样
                 ProfilerSDK.endSample(handle);
                 throw error;
             }
         } as T;
 
-        // 保留原函数的属性
         Object.defineProperty(wrapped, 'name', { value: fn.name || name });
         Object.defineProperty(wrapped, 'length', { value: fn.length });
 
@@ -287,11 +287,12 @@ export class AutoProfiler {
     }
 
     /**
-     * 启动采样分析器
+     * @zh 启动采样分析器
+     * @en Start sampling profiler
      */
     public startSampling(): void {
         if (!this.samplingProfiler) {
-            this.samplingProfiler = new SamplingProfiler(this.config);
+            this.samplingProfiler = new SamplingProfiler(this._config);
         }
         this.samplingProfiler.start();
     }
@@ -318,9 +319,10 @@ export class AutoProfiler {
     }
 
     /**
-     * 创建包装后的方法
+     * @zh 创建包装后的方法
+     * @en Create wrapped method
      */
-    private createWrappedMethod(
+    private _createWrappedMethod(
         original: Function,
         className: string,
         methodName: string,
@@ -329,10 +331,10 @@ export class AutoProfiler {
         // eslint-disable-next-line @typescript-eslint/no-this-alias -- Required for wrapped method closure
         const self = this;
         const fullName = `${className}.${methodName}`;
-        const minDuration = this.config.minDuration;
+        const minDuration = this._config.minDuration;
 
         return function(this: any, ...args: any[]): any {
-            if (!self.config.enabled || !ProfilerSDK.isEnabled()) {
+            if (!self._config.enabled || !ProfilerSDK.isEnabled()) {
                 return original.apply(this, args);
             }
 
@@ -342,8 +344,7 @@ export class AutoProfiler {
             try {
                 const result = original.apply(this, args);
 
-                // 处理异步方法
-                if (self.config.trackAsync && result instanceof Promise) {
+                if (self._config.trackAsync && result instanceof Promise) {
                     return result.then(
                         (value) => {
                             const duration = performance.now() - startTime;
@@ -359,14 +360,12 @@ export class AutoProfiler {
                     );
                 }
 
-                // 同步方法，检查最小耗时后结束采样
                 const duration = performance.now() - startTime;
                 if (duration >= minDuration) {
                     ProfilerSDK.endSample(handle);
                 }
                 return result;
             } catch (error) {
-                // 发生错误时也要结束采样
                 ProfilerSDK.endSample(handle);
                 throw error;
             }
@@ -374,9 +373,10 @@ export class AutoProfiler {
     }
 
     /**
-     * 获取对象的所有方法名
+     * @zh 获取对象的所有方法名
+     * @en Get all method names of an object
      */
-    private getAllMethodNames(obj: object): string[] {
+    private _getAllMethodNames(obj: object): string[] {
         const methods = new Set<string>();
         let current = obj;
 
@@ -393,9 +393,10 @@ export class AutoProfiler {
     }
 
     /**
-     * 获取属性描述符
+     * @zh 获取属性描述符
+     * @en Get property descriptor
      */
-    private getPropertyDescriptor(obj: object, name: string): PropertyDescriptor | undefined {
+    private _getPropertyDescriptor(obj: object, name: string): PropertyDescriptor | undefined {
         let current = obj;
         while (current && current !== Object.prototype) {
             const descriptor = Object.getOwnPropertyDescriptor(current, name);
@@ -406,16 +407,15 @@ export class AutoProfiler {
     }
 
     /**
-     * 判断是否应该排除该方法
+     * @zh 判断是否应该排除该方法
+     * @en Check if method should be excluded
      */
-    private shouldExcludeMethod(methodName: string): boolean {
-        // 排除构造函数和内置方法
+    private _shouldExcludeMethod(methodName: string): boolean {
         if (methodName === 'constructor' || methodName.startsWith('__')) {
             return true;
         }
 
-        // 检查排除模式
-        for (const pattern of this.config.excludePatterns) {
+        for (const pattern of this._config.excludePatterns) {
             if (pattern.test(methodName)) {
                 return true;
             }

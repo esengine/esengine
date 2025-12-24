@@ -1,50 +1,52 @@
-import { IService, createLogger } from '@esengine/ecs-framework';
-import { IFieldEditor, IFieldEditorRegistry, FieldEditorContext } from './IFieldEditor';
+/**
+ * @zh 字段编辑器注册表
+ * @en Field Editor Registry
+ */
 
-const logger = createLogger('FieldEditorRegistry');
+import { PrioritizedRegistry, createRegistryToken } from './BaseRegistry';
+import type { IFieldEditor, IFieldEditorRegistry, FieldEditorContext } from './IFieldEditor';
 
-export class FieldEditorRegistry implements IFieldEditorRegistry, IService {
-    private editors: Map<string, IFieldEditor> = new Map();
+/**
+ * @zh 字段编辑器注册表
+ * @en Field Editor Registry
+ */
+export class FieldEditorRegistry
+    extends PrioritizedRegistry<IFieldEditor>
+    implements IFieldEditorRegistry {
 
-    register(editor: IFieldEditor): void {
-        if (this.editors.has(editor.type)) {
-            logger.warn(`Overwriting existing field editor: ${editor.type}`);
-        }
-
-        this.editors.set(editor.type, editor);
-        logger.debug(`Registered field editor: ${editor.name} (${editor.type})`);
+    constructor() {
+        super('FieldEditorRegistry');
     }
 
-    unregister(type: string): void {
-        if (this.editors.delete(type)) {
-            logger.debug(`Unregistered field editor: ${type}`);
-        }
+    protected getItemKey(item: IFieldEditor): string {
+        return item.type;
     }
 
+    protected override getItemDisplayName(item: IFieldEditor): string {
+        return `${item.name} (${item.type})`;
+    }
+
+    /**
+     * @zh 获取字段编辑器
+     * @en Get field editor
+     */
     getEditor(type: string, context?: FieldEditorContext): IFieldEditor | undefined {
-        const editor = this.editors.get(type);
-        if (editor) {
-            return editor;
-        }
+        // 先尝试精确匹配
+        const exact = this.get(type);
+        if (exact) return exact;
 
-        const editors = Array.from(this.editors.values())
-            .sort((a, b) => (b.priority || 0) - (a.priority || 0));
-
-        for (const editor of editors) {
-            if (editor.canHandle(type, context)) {
-                return editor;
-            }
-        }
-
-        return undefined;
+        // 再按优先级查找可处理的编辑器
+        return this.findByPriority(editor => editor.canHandle(type, context));
     }
 
+    /**
+     * @zh 获取所有编辑器
+     * @en Get all editors
+     */
     getAllEditors(): IFieldEditor[] {
-        return Array.from(this.editors.values());
-    }
-
-    dispose(): void {
-        this.editors.clear();
-        logger.debug('FieldEditorRegistry disposed');
+        return this.getAll();
     }
 }
+
+/** @zh 字段编辑器注册表服务标识符 @en Field editor registry service identifier */
+export const FieldEditorRegistryToken = createRegistryToken<FieldEditorRegistry>('FieldEditorRegistry');

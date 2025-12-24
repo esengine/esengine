@@ -1,0 +1,48 @@
+{
+  "id": "world-streaming",
+  "name": "@esengine/world-streaming",
+  "globalKey": "world-streaming",
+  "displayName": "World Streaming",
+  "description": "Chunk-based world streaming for open world games | 开放世界区块流式加载",
+  "version": "1.0.0",
+  "category": "World",
+  "icon": "Globe",
+  "tags": [
+    "streaming",
+    "chunk",
+    "open-world",
+    "lod"
+  ],
+  "isCore": false,
+  "defaultEnabled": false,
+  "isEngineModule": true,
+  "canContainContent": true,
+  "platforms": [
+    "web",
+    "desktop"
+  ],
+  "dependencies": [
+    "core",
+    "engine-core"
+  ],
+  "exports": {
+    "components": [
+      "ChunkComponent",
+      "StreamingAnchorComponent",
+      "ChunkLoaderComponent"
+    ],
+    "systems": [
+      "ChunkStreamingSystem",
+      "ChunkCullingSystem"
+    ],
+    "services": [
+      "SpatialHashGrid",
+      "ChunkSerializer",
+      "ChunkManager"
+    ]
+  },
+  "editorPackage": "@esengine/world-streaming-editor",
+  "requiresWasm": false,
+  "outputPath": "dist/index.js",
+  "pluginExport": "WorldStreamingModule"
+}

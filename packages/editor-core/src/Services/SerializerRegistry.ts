@@ -1,7 +1,7 @@
 import type { IService } from '@esengine/ecs-framework';
-import { Injectable } from '@esengine/ecs-framework';
-import { createLogger } from '@esengine/ecs-framework';
+import { Injectable, createLogger } from '@esengine/ecs-framework';
 import type { ISerializer } from '../Plugin/EditorModule';
+import { createRegistryToken } from './BaseRegistry';
 
 const logger = createLogger('SerializerRegistry');
 
@@ -12,7 +12,7 @@ const logger = createLogger('SerializerRegistry');
  */
 @Injectable()
 export class SerializerRegistry implements IService {
-    private serializers: Map<string, ISerializer> = new Map();
+    private readonly _serializers = new Map<string, ISerializer>();
 
     /**
      * 注册序列化器
@@ -24,12 +24,12 @@ export class SerializerRegistry implements IService {
         const type = serializer.getSupportedType();
         const key = `${pluginName}:${type}`;
 
-        if (this.serializers.has(key)) {
+        if (this._serializers.has(key)) {
             logger.warn(`Serializer for ${key} is already registered`);
             return;
         }
 
-        this.serializers.set(key, serializer);
+        this._serializers.set(key, serializer);
         logger.info(`Registered serializer: ${key}`);
     }
 
@@ -54,7 +54,7 @@ export class SerializerRegistry implements IService {
      */
     public unregister(pluginName: string, type: string): boolean {
         const key = `${pluginName}:${type}`;
-        const result = this.serializers.delete(key);
+        const result = this._serializers.delete(key);
 
         if (result) {
             logger.info(`Unregistered serializer: ${key}`);
@@ -72,14 +72,14 @@ export class SerializerRegistry implements IService {
         const prefix = `${pluginName}:`;
         const keysToDelete: string[] = [];
 
-        for (const key of this.serializers.keys()) {
+        for (const key of this._serializers.keys()) {
             if (key.startsWith(prefix)) {
                 keysToDelete.push(key);
             }
         }
 
         for (const key of keysToDelete) {
-            this.serializers.delete(key);
+            this._serializers.delete(key);
             logger.info(`Unregistered serializer: ${key}`);
         }
     }
@@ -93,7 +93,7 @@ export class SerializerRegistry implements IService {
      */
     public get(pluginName: string, type: string): ISerializer | undefined {
         const key = `${pluginName}:${type}`;
-        return this.serializers.get(key);
+        return this._serializers.get(key);
     }
 
     /**
@@ -105,7 +105,7 @@ export class SerializerRegistry implements IService {
     public findByType(type: string): ISerializer[] {
         const result: ISerializer[] = [];
 
-        for (const [key, serializer] of this.serializers) {
+        for (const [key, serializer] of this._serializers) {
             if (key.endsWith(`:${type}`)) {
                 result.push(serializer);
             }
@@ -120,7 +120,7 @@ export class SerializerRegistry implements IService {
      * @returns 序列化器映射表
      */
     public getAll(): Map<string, ISerializer> {
-        return new Map(this.serializers);
+        return new Map(this._serializers);
     }
 
     /**
@@ -132,7 +132,7 @@ export class SerializerRegistry implements IService {
      */
     public has(pluginName: string, type: string): boolean {
         const key = `${pluginName}:${type}`;
-        return this.serializers.has(key);
+        return this._serializers.has(key);
     }
 
     /**
@@ -175,7 +175,10 @@ export class SerializerRegistry implements IService {
      * 释放资源
      */
     public dispose(): void {
-        this.serializers.clear();
+        this._serializers.clear();
         logger.info('SerializerRegistry disposed');
     }
 }
+
+/** @zh 序列化器注册表服务标识符 @en Serializer registry service identifier */
+export const ISerializerRegistry = createRegistryToken<SerializerRegistry>('SerializerRegistry');

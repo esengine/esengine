@@ -12,7 +12,9 @@
  * 使用事件驱动架构实现高效的变化通知。
  */
 
-import type { Component, ComponentType, Entity } from '@esengine/ecs-framework';
+import { createLogger, type Component, type ComponentType, type Entity } from '@esengine/ecs-framework';
+
+const logger = createLogger('VirtualNodeRegistry');
 
 /**
  * Virtual node data
@@ -154,7 +156,7 @@ export class VirtualNodeRegistry {
             try {
                 return provider(component, entity);
             } catch (e) {
-                console.warn(`[VirtualNodeRegistry] Error in provider for ${componentType.name}:`, e);
+                logger.warn(`Error in provider for ${componentType.name}:`, e);
                 return [];
             }
         }
@@ -249,7 +251,7 @@ export class VirtualNodeRegistry {
             try {
                 listener(event);
             } catch (e) {
-                console.warn('[VirtualNodeRegistry] Error in change listener:', e);
+                logger.warn('Error in change listener:', e);
             }
         }
     }

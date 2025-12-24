@@ -91,14 +91,14 @@ export type TranslationParams = Record<string, string | number>;
  */
 @Injectable()
 export class LocaleService implements IService {
-    private currentLocale: Locale = 'en';
-    private translations: Map<Locale, Translations> = new Map();
-    private changeListeners: Set<(locale: Locale) => void> = new Set();
+    private _currentLocale: Locale = 'en';
+    private _translations: Map<Locale, Translations> = new Map();
+    private _changeListeners: Set<(locale: Locale) => void> = new Set();
 
     constructor() {
-        const savedLocale = this.loadSavedLocale();
+        const savedLocale = this._loadSavedLocale();
         if (savedLocale) {
-            this.currentLocale = savedLocale;
+            this._currentLocale = savedLocale;
         }
     }
 
@@ -113,7 +113,7 @@ export class LocaleService implements IService {
      * @param translations - 翻译对象 | Translation object
      */
     public registerTranslations(locale: Locale, translations: Translations): void {
-        this.translations.set(locale, translations);
+        this._translations.set(locale, translations);
         logger.info(`Registered translations for locale: ${locale}`);
     }
 
@@ -153,19 +153,19 @@ export class LocaleService implements IService {
         const locales: Locale[] = ['en', 'zh', 'es'];
 
         for (const locale of locales) {
-            const existing = this.translations.get(locale) || {};
+            const existing = this._translations.get(locale) || {};
             const pluginTrans = pluginTranslations[locale];
 
             if (pluginTrans) {
                 // 深度合并到命名空间下 | Deep merge under namespace
                 const merged = {
                     ...existing,
-                    [namespace]: this.deepMerge(
+                    [namespace]: this._deepMerge(
                         (existing[namespace] as Translations) || {},
                         pluginTrans
                     )
                 };
-                this.translations.set(locale, merged);
+                this._translations.set(locale, merged);
             }
         }
 
@@ -176,7 +176,7 @@ export class LocaleService implements IService {
      * 深度合并两个翻译对象
      * Deep merge two translation objects
      */
-    private deepMerge(target: Translations, source: Translations): Translations {
+    private _deepMerge(target: Translations, source: Translations): Translations {
         const result: Translations = { ...target };
 
         for (const key of Object.keys(source)) {
@@ -189,7 +189,7 @@ export class LocaleService implements IService {
                 typeof targetValue === 'object' &&
                 targetValue !== null
             ) {
-                result[key] = this.deepMerge(
+                result[key] = this._deepMerge(
                     targetValue as Translations,
                     sourceValue as Translations
                 );
@@ -206,7 +206,7 @@ export class LocaleService implements IService {
      * Get current locale
      */
     public getCurrentLocale(): Locale {
-        return this.currentLocale;
+        return this._currentLocale;
     }
 
     /**
@@ -224,15 +224,15 @@ export class LocaleService implements IService {
      * @param locale - 目标语言代码 | Target locale code
      */
     public setLocale(locale: Locale): void {
-        if (!this.translations.has(locale)) {
+        if (!this._translations.has(locale)) {
             logger.warn(`Translations not found for locale: ${locale}`);
             return;
         }
 
-        this.currentLocale = locale;
-        this.saveLocale(locale);
+        this._currentLocale = locale;
+        this._saveLocale(locale);
 
-        this.changeListeners.forEach((listener) => listener(locale));
+        this._changeListeners.forEach((listener) => listener(locale));
 
         logger.info(`Locale changed to: ${locale}`);
     }
@@ -261,12 +261,12 @@ export class LocaleService implements IService {
      * ```
      */
     public t(key: string, params?: TranslationParams, fallback?: string): string {
-        const translations = this.translations.get(this.currentLocale);
+        const translations = this._translations.get(this._currentLocale);
         if (!translations) {
             return fallback || key;
         }
 
-        const value = this.getNestedValue(translations, key);
+        const value = this._getNestedValue(translations, key);
         if (typeof value === 'string') {
             // 支持参数替换 {{key}} | Support parameter substitution {{key}}
             if (params) {
@@ -288,10 +288,10 @@ export class LocaleService implements IService {
      * @returns 取消订阅函数 | Unsubscribe function
      */
     public onChange(listener: (locale: Locale) => void): () => void {
-        this.changeListeners.add(listener);
+        this._changeListeners.add(listener);
 
         return () => {
-            this.changeListeners.delete(listener);
+            this._changeListeners.delete(listener);
         };
     }
 
@@ -303,12 +303,12 @@ export class LocaleService implements IService {
      * @param locale - 可选的语言代码，默认使用当前语言 | Optional locale, defaults to current
      */
     public hasKey(key: string, locale?: Locale): boolean {
-        const targetLocale = locale || this.currentLocale;
-        const translations = this.translations.get(targetLocale);
+        const targetLocale = locale || this._currentLocale;
+        const translations = this._translations.get(targetLocale);
         if (!translations) {
             return false;
         }
-        const value = this.getNestedValue(translations, key);
+        const value = this._getNestedValue(translations, key);
         return typeof value === 'string';
     }
 
@@ -316,7 +316,7 @@ export class LocaleService implements IService {
      * 获取嵌套对象的值
      * Get nested object value
      */
-    private getNestedValue(obj: Translations, path: string): string | Translations | undefined {
+    private _getNestedValue(obj: Translations, path: string): string | Translations | undefined {
         const keys = path.split('.');
         let current: string | Translations | undefined = obj;
 
@@ -335,7 +335,7 @@ export class LocaleService implements IService {
      * 从 localStorage 加载保存的语言设置
      * Load saved locale from localStorage
      */
-    private loadSavedLocale(): Locale | null {
+    private _loadSavedLocale(): Locale | null {
         try {
             const saved = localStorage.getItem('editor-locale');
             if (saved === 'en' || saved === 'zh' || saved === 'es') {
@@ -351,7 +351,7 @@ export class LocaleService implements IService {
      * 保存语言设置到 localStorage
      * Save locale to localStorage
      */
-    private saveLocale(locale: Locale): void {
+    private _saveLocale(locale: Locale): void {
         try {
             localStorage.setItem('editor-locale', locale);
         } catch (error) {
@@ -360,8 +360,8 @@ export class LocaleService implements IService {
     }
 
     public dispose(): void {
-        this.translations.clear();
-        this.changeListeners.clear();
+        this._translations.clear();
+        this._changeListeners.clear();
         logger.info('LocaleService disposed');
     }
 }

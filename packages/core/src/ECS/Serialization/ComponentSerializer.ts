@@ -9,8 +9,11 @@ import { ComponentType } from '../Core/ComponentStorage';
 import { getComponentTypeName, isEntityRefProperty } from '../Decorators';
 import { getSerializationMetadata } from './SerializationDecorators';
 import { ValueSerializer, SerializableValue } from './ValueSerializer';
+import { createLogger } from '../../Utils/Logger';
 import type { Entity } from '../Entity';
 import type { SerializationContext, SerializedEntityRef } from './SerializationContext';
+
+const logger = createLogger('ComponentSerializer');
 
 export type { SerializableValue } from './ValueSerializer';
 
@@ -57,13 +60,13 @@ export class ComponentSerializer {
     ): Component | null {
         const componentClass = componentRegistry.get(serializedData.type);
         if (!componentClass) {
-            console.warn(`Component type not found: ${serializedData.type}`);
+            logger.warn(`Component type not found: ${serializedData.type} | 未找到组件类型: ${serializedData.type}`);
             return null;
         }
 
         const metadata = getSerializationMetadata(componentClass);
         if (!metadata) {
-            console.warn(`Component ${serializedData.type} is not serializable`);
+            logger.warn(`Component ${serializedData.type} is not serializable | 组件 ${serializedData.type} 不可序列化`);
             return null;
         }
 

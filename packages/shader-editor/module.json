@@ -1,0 +1,14 @@
+{
+  "id": "shader-editor",
+  "name": "@esengine/shader-editor",
+  "displayName": "Shader Editor",
+  "description": "Shader code editor with preview | 着色器代码编辑器",
+  "version": "1.0.0",
+  "category": "Editor",
+  "icon": "Code",
+  "isEditorPlugin": true,
+  "runtimeModule": "@esengine/material-system",
+  "exports": {
+    "panels": ["ShaderEditorPanel"]
+  }
+}

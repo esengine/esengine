@@ -4,33 +4,33 @@ import type { MessageHub } from '@esengine/editor-runtime';
 const logger = createLogger('NotificationService');
 
 export class NotificationService {
-    private static instance: NotificationService;
-    private messageHub: MessageHub | null = null;
+    private static _instance: NotificationService;
+    private _messageHub: MessageHub | null = null;
 
     private constructor() {
         // 延迟获取 MessageHub，因为初始化时可能还不可用
     }
 
-    private getMessageHub(): MessageHub | null {
-        if (!this.messageHub && PluginAPI.isAvailable) {
+    private _getMessageHub(): MessageHub | null {
+        if (!this._messageHub && PluginAPI.isAvailable) {
             try {
-                this.messageHub = PluginAPI.messageHub;
+                this._messageHub = PluginAPI.messageHub;
             } catch (error) {
                 logger.warn('MessageHub not available');
             }
         }
-        return this.messageHub;
+        return this._messageHub;
     }
 
     public static getInstance(): NotificationService {
-        if (!NotificationService.instance) {
-            NotificationService.instance = new NotificationService();
+        if (!NotificationService._instance) {
+            NotificationService._instance = new NotificationService();
         }
-        return NotificationService.instance;
+        return NotificationService._instance;
     }
 
     public showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info'): void {
-        const hub = this.getMessageHub();
+        const hub = this._getMessageHub();
         if (!hub) {
             logger.info(`[Toast ${type}] ${message}`);
             return;

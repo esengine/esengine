@@ -1,4 +1,4 @@
-import type { PluginPackageInfo, PluginConfig } from './PluginLoader';
+import type { PluginPackageInfo, PluginConfig, PluginLoadConfig } from './PluginLoader';
 
 export interface ProjectConfig {
     name: string;
@@ -7,58 +7,128 @@ export interface ProjectConfig {
 }
 
 /**
- * 内置引擎插件的包信息
- * 这些信息在构建时从各包的 package.json 中提取
+ * @zh 扩展的插件包信息（包含依赖）
+ * @en Extended plugin package info (with dependencies)
  */
-export const BUILTIN_PLUGIN_PACKAGES: Record<string, PluginPackageInfo> = {
+export interface ExtendedPluginPackageInfo extends PluginPackageInfo {
+    /**
+     * @zh 依赖的包 ID 列表
+     * @en List of dependency package IDs
+     */
+    dependencies?: string[];
+}
+
+/**
+ * @zh 内置引擎插件的包信息（包含依赖关系）
+ * @en Built-in engine plugin package info (with dependencies)
+ *
+ * @zh 依赖顺序很重要，确保插件按正确顺序加载
+ * @en Dependency order matters, ensures plugins load in correct order
+ */
+export const BUILTIN_PLUGIN_PACKAGES: Record<string, ExtendedPluginPackageInfo> = {
     '@esengine/engine-core': {
         plugin: true,
         pluginExport: 'EnginePlugin',
         category: 'core',
-        isEnginePlugin: true
+        isEnginePlugin: true,
+        dependencies: []
     },
     '@esengine/camera': {
         plugin: true,
         pluginExport: 'CameraPlugin',
         category: 'core',
-        isEnginePlugin: true
+        isEnginePlugin: true,
+        dependencies: ['@esengine/engine-core']
     },
     '@esengine/sprite': {
         plugin: true,
         pluginExport: 'SpritePlugin',
         category: 'rendering',
-        isEnginePlugin: true
+        isEnginePlugin: true,
+        dependencies: ['@esengine/engine-core']
     },
     '@esengine/audio': {
         plugin: true,
         pluginExport: 'AudioPlugin',
         category: 'audio',
-        isEnginePlugin: true
+        isEnginePlugin: true,
+        dependencies: ['@esengine/engine-core']
+    },
+    '@esengine/ui': {
+        plugin: true,
+        pluginExport: 'UIPlugin',
+        category: 'ui',
+        dependencies: ['@esengine/engine-core', '@esengine/sprite']
     },
     '@esengine/fairygui': {
         plugin: true,
         pluginExport: 'FGUIPlugin',
-        category: 'ui'
+        category: 'ui',
+        dependencies: ['@esengine/engine-core', '@esengine/sprite']
     },
     '@esengine/tilemap': {
         plugin: true,
         pluginExport: 'TilemapPlugin',
-        category: 'tilemap'
+        category: 'tilemap',
+        dependencies: ['@esengine/engine-core', '@esengine/sprite']
     },
     '@esengine/behavior-tree': {
         plugin: true,
         pluginExport: 'BehaviorTreePlugin',
-        category: 'ai'
+        category: 'ai',
+        dependencies: ['@esengine/engine-core']
     },
     '@esengine/physics-rapier2d': {
         plugin: true,
         pluginExport: 'PhysicsPlugin',
-        category: 'physics'
+        category: 'physics',
+        dependencies: ['@esengine/engine-core']
+    },
+    '@esengine/particle': {
+        plugin: true,
+        pluginExport: 'ParticlePlugin',
+        category: 'rendering',
+        dependencies: ['@esengine/engine-core', '@esengine/sprite']
     }
 };
 
 /**
- * 创建默认项目配置
+ * @zh 将项目配置转换为 UnifiedPluginLoader 配置
+ * @en Convert project config to UnifiedPluginLoader config
+ *
+ * @param config - @zh 项目配置 @en Project config
+ * @param packageInfoMap - @zh 包信息映射 @en Package info map
+ * @returns @zh 插件加载配置列表 @en Plugin load config list
+ */
+export function convertToPluginLoadConfigs(
+    config: ProjectConfig,
+    packageInfoMap: Record<string, ExtendedPluginPackageInfo> = BUILTIN_PLUGIN_PACKAGES
+): PluginLoadConfig[] {
+    const result: PluginLoadConfig[] = [];
+
+    for (const [packageId, pluginConfig] of Object.entries(config.plugins)) {
+        const packageInfo = packageInfoMap[packageId];
+        if (!packageInfo) {
+            console.warn(`[ProjectConfig] No package info for ${packageId}, skipping`);
+            continue;
+        }
+
+        result.push({
+            packageId,
+            enabled: pluginConfig.enabled,
+            sourceType: 'npm',
+            exportName: packageInfo.pluginExport,
+            dependencies: packageInfo.dependencies,
+            options: pluginConfig.options
+        });
+    }
+
+    return result;
+}
+
+/**
+ * @zh 创建默认项目配置
+ * @en Create default project config
  */
 export function createDefaultProjectConfig(): ProjectConfig {
     return {
@@ -69,7 +139,9 @@ export function createDefaultProjectConfig(): ProjectConfig {
             '@esengine/camera': { enabled: true },
             '@esengine/sprite': { enabled: true },
             '@esengine/audio': { enabled: true },
-            '@esengine/fairygui': { enabled: true },
+            '@esengine/ui': { enabled: true },
+            '@esengine/particle': { enabled: false },
+            '@esengine/fairygui': { enabled: false },
             '@esengine/tilemap': { enabled: false },
             '@esengine/behavior-tree': { enabled: false },
             '@esengine/physics-rapier2d': { enabled: false }

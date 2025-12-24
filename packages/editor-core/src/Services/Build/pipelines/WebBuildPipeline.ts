@@ -50,6 +50,7 @@ import type {
 import { BuildPlatform, BuildStatus } from '../IBuildPipeline';
 import type { ModuleManifest } from '../../Module/ModuleTypes';
 import { hashFileInfo } from '@esengine/asset-system';
+import { generateImportMap, type ImportMapConfig } from '@esengine/runtime-core';
 
 // ============================================================================
 // Build File System Interface
@@ -1655,33 +1656,20 @@ Built with ESEngine | 使用 ESEngine 构建
     }
 
     /**
-     * Generate Import Map from module manifests.
-     * 从模块清单生成 Import Map。
+     * @zh 使用共享的 ImportMapGenerator 生成 Import Map
+     * @en Generate Import Map using shared ImportMapGenerator
+     *
+     * @zh 统一使用 @esengine/runtime-core 的 generateImportMap 工具
+     * @en Unified usage of generateImportMap utility from @esengine/runtime-core
      */
     private _generateImportMap(coreModules: ModuleManifest[], pluginModules: ModuleManifest[]): Record<string, string> {
-        const imports: Record<string, string> = {};
-
-        for (const module of coreModules) {
-            if (module.name) {
-                imports[module.name] = './libs/esengine.core.js';
-            }
-        }
-
-        for (const module of pluginModules) {
-            if (module.name) {
-                imports[module.name] = `./libs/plugins/${module.id}.js`;
-            }
-            if (module.externalDependencies) {
-                for (const dep of module.externalDependencies) {
-                    if (!imports[dep]) {
-                        const depId = dep.startsWith('@esengine/') ? dep.slice(10) : dep;
-                        imports[dep] = `./libs/plugins/${depId}.js`;
-                    }
-                }
-            }
-        }
-
-        return imports;
+        const config: ImportMapConfig = {
+            mode: 'production',
+            basePath: '.',
+            coreModules,
+            pluginModules
+        };
+        return generateImportMap(config);
     }
 
     private _generateSingleBundleHtml(mainScenePath: string, wasmRuntimePath: string | null): string {

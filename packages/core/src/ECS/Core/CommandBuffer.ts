@@ -1,6 +1,7 @@
 import { Entity } from '../Entity';
 import { Component } from '../Component';
 import { ComponentType, GlobalComponentRegistry } from './ComponentStorage';
+import { getComponentTypeName } from '../Decorators';
 import { IScene } from '../IScene';
 import { createLogger } from '../../Utils/Logger';
 
@@ -239,7 +240,8 @@ export class CommandBuffer {
             pending.adds.set(typeId, component);
 
             if (this._debug) {
-                logger.debug(`CommandBuffer: 延迟添加组件 ${component.constructor.name} 到实体 ${entity.name}`);
+                const typeName = getComponentTypeName(component.constructor as ComponentType);
+                logger.debug(`CommandBuffer: 延迟添加组件 ${typeName} 到实体 ${entity.name}`);
             }
         } else {
             // 旧模式
@@ -435,9 +437,10 @@ export class CommandBuffer {
                         entity.addComponent(component);
                         commandCount++;
                     } catch (error) {
+                        const typeName = getComponentTypeName(component.constructor as ComponentType);
                         logger.error(`CommandBuffer: 添加组件失败`, {
                             entity: entity.name,
-                            component: component.constructor.name,
+                            component: typeName,
                             error
                         });
                     }

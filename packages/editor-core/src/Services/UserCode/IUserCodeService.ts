@@ -411,6 +411,27 @@ export interface IUserCodeService {
      * 打开新项目时调用以重置就绪 Promise。
      */
     resetReady(): void;
+
+    /**
+     * Get the user code realm.
+     * 获取用户代码隔离域。
+     *
+     * The realm provides isolated registration for user components, systems, and services.
+     * 隔离域提供用户组件、系统和服务的隔离注册。
+     *
+     * @returns User code realm instance | 用户代码隔离域实例
+     */
+    getUserCodeRealm(): import('@esengine/runtime-core').UserCodeRealm;
+
+    /**
+     * Reset the user code realm for project switching.
+     * 重置用户代码隔离域（用于项目切换）。
+     *
+     * This clears all user-registered components, systems, and services,
+     * preparing for a new project's user code.
+     * 这会清除所有用户注册的组件、系统和服务，为新项目的用户代码做准备。
+     */
+    resetRealm(): void;
 }
 
 import { EditorConfig } from '../../Config';

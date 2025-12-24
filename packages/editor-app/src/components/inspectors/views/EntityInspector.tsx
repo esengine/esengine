@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Settings, ChevronDown, ChevronRight, X, Plus, Box, Search, Lock, Unlock } from 'lucide-react';
 import { Entity, Component, Core, getComponentDependencies, getComponentTypeName, getComponentInstanceTypeName, isComponentInstanceHiddenInInspector, PrefabInstanceComponent } from '@esengine/ecs-framework';
 import { MessageHub, CommandManager, EditorComponentRegistry, ComponentActionRegistry, ComponentInspectorRegistry, PrefabService } from '@esengine/editor-core';
-import { PropertyInspector } from '../../PropertyInspector';
+import { PropertyInspector } from '..';
 import { NotificationService } from '../../../services/NotificationService';
 import { RemoveComponentCommand, UpdateComponentCommand, AddComponentCommand } from '../../../application/commands/component';
 import { PrefabInstanceInfo } from '../common/PrefabInstanceInfo';

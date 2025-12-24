@@ -1,0 +1,14 @@
+{
+  "id": "asset-system-editor",
+  "name": "@esengine/asset-system-editor",
+  "displayName": "Asset System Editor",
+  "description": "Asset packing and bundling tools | 资产打包工具",
+  "version": "1.0.0",
+  "category": "Editor",
+  "icon": "Package",
+  "isEditorPlugin": true,
+  "runtimeModule": "@esengine/asset-system",
+  "exports": {
+    "services": ["AssetPacker", "AssetBundler"]
+  }
+}

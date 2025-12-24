@@ -24,64 +24,64 @@ export interface GlobalBlackboardVariable {
  * 管理跨行为树共享的全局变量
  */
 export class GlobalBlackboardService {
-    private static instance: GlobalBlackboardService;
-    private variables: Map<string, GlobalBlackboardVariable> = new Map();
-    private changeCallbacks: Array<() => void> = [];
-    private projectPath: string | null = null;
+    private static _instance: GlobalBlackboardService;
+    private _variables: Map<string, GlobalBlackboardVariable> = new Map();
+    private _changeCallbacks: Array<() => void> = [];
+    private _projectPath: string | null = null;
 
     private constructor() {}
 
     static getInstance(): GlobalBlackboardService {
-        if (!this.instance) {
-            this.instance = new GlobalBlackboardService();
+        if (!this._instance) {
+            this._instance = new GlobalBlackboardService();
         }
-        return this.instance;
+        return this._instance;
     }
 
     /**
      * 设置项目路径
      */
     setProjectPath(path: string | null): void {
-        this.projectPath = path;
+        this._projectPath = path;
     }
 
     /**
      * 获取项目路径
      */
     getProjectPath(): string | null {
-        return this.projectPath;
+        return this._projectPath;
     }
 
     /**
      * 添加全局变量
      */
     addVariable(variable: GlobalBlackboardVariable): void {
-        if (this.variables.has(variable.key)) {
+        if (this._variables.has(variable.key)) {
             throw new Error(`全局变量 "${variable.key}" 已存在`);
         }
-        this.variables.set(variable.key, variable);
-        this.notifyChange();
+        this._variables.set(variable.key, variable);
+        this._notifyChange();
     }
 
     /**
      * 更新全局变量
      */
     updateVariable(key: string, updates: Partial<Omit<GlobalBlackboardVariable, 'key'>>): void {
-        const variable = this.variables.get(key);
+        const variable = this._variables.get(key);
         if (!variable) {
             throw new Error(`全局变量 "${key}" 不存在`);
         }
-        this.variables.set(key, { ...variable, ...updates });
-        this.notifyChange();
+        this._variables.set(key, { ...variable, ...updates });
+        this._notifyChange();
     }
 
     /**
      * 删除全局变量
      */
     deleteVariable(key: string): boolean {
-        const result = this.variables.delete(key);
+        const result = this._variables.delete(key);
         if (result) {
-            this.notifyChange();
+            this._notifyChange();
         }
         return result;
     }
@@ -90,36 +90,36 @@ export class GlobalBlackboardService {
      * 重命名全局变量
      */
     renameVariable(oldKey: string, newKey: string): void {
-        if (!this.variables.has(oldKey)) {
+        if (!this._variables.has(oldKey)) {
             throw new Error(`全局变量 "${oldKey}" 不存在`);
         }
-        if (this.variables.has(newKey)) {
+        if (this._variables.has(newKey)) {
             throw new Error(`全局变量 "${newKey}" 已存在`);
         }
 
-        const variable = this.variables.get(oldKey)!;
-        this.variables.delete(oldKey);
-        this.variables.set(newKey, { ...variable, key: newKey });
-        this.notifyChange();
+        const variable = this._variables.get(oldKey)!;
+        this._variables.delete(oldKey);
+        this._variables.set(newKey, { ...variable, key: newKey });
+        this._notifyChange();
     }
 
     /**
      * 获取全局变量
      */
     getVariable(key: string): GlobalBlackboardVariable | undefined {
-        return this.variables.get(key);
+        return this._variables.get(key);
     }
 
     /**
      * 获取所有全局变量
      */
     getAllVariables(): GlobalBlackboardVariable[] {
-        return Array.from(this.variables.values());
+        return Array.from(this._variables.values());
     }
 
     getVariablesMap(): Record<string, GlobalBlackboardValue> {
         const map: Record<string, GlobalBlackboardValue> = {};
-        for (const [, variable] of this.variables) {
+        for (const [, variable] of this._variables) {
             map[variable.key] = variable.defaultValue;
         }
         return map;
@@ -129,15 +129,15 @@ export class GlobalBlackboardService {
      * 检查变量是否存在
      */
     hasVariable(key: string): boolean {
-        return this.variables.has(key);
+        return this._variables.has(key);
     }
 
     /**
      * 清空所有变量
      */
     clear(): void {
-        this.variables.clear();
-        this.notifyChange();
+        this._variables.clear();
+        this._notifyChange();
     }
 
     /**
@@ -146,7 +146,7 @@ export class GlobalBlackboardService {
     toConfig(): GlobalBlackboardConfig {
         const variables: BlackboardVariable[] = [];
 
-        for (const variable of this.variables.values()) {
+        for (const variable of this._variables.values()) {
             variables.push({
                 name: variable.key,
                 type: variable.type,
@@ -162,11 +162,11 @@ export class GlobalBlackboardService {
      * 从配置导入
      */
     fromConfig(config: GlobalBlackboardConfig): void {
-        this.variables.clear();
+        this._variables.clear();
 
         if (config.variables && Array.isArray(config.variables)) {
             for (const variable of config.variables) {
-                this.variables.set(variable.name, {
+                this._variables.set(variable.name, {
                     key: variable.name,
                     type: variable.type,
                     defaultValue: variable.value as GlobalBlackboardValue,
@@ -175,7 +175,7 @@ export class GlobalBlackboardService {
             }
         }
 
-        this.notifyChange();
+        this._notifyChange();
     }
 
     /**
@@ -202,17 +202,17 @@ export class GlobalBlackboardService {
      * 监听变化
      */
     onChange(callback: () => void): () => void {
-        this.changeCallbacks.push(callback);
+        this._changeCallbacks.push(callback);
         return () => {
-            const index = this.changeCallbacks.indexOf(callback);
+            const index = this._changeCallbacks.indexOf(callback);
             if (index > -1) {
-                this.changeCallbacks.splice(index, 1);
+                this._changeCallbacks.splice(index, 1);
             }
         };
     }
 
-    private notifyChange(): void {
-        this.changeCallbacks.forEach((cb) => {
+    private _notifyChange(): void {
+        this._changeCallbacks.forEach((cb) => {
             try {
                 cb();
             } catch (error) {

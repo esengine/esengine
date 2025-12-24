@@ -1,0 +1,15 @@
+{
+  "id": "camera-editor",
+  "name": "@esengine/camera-editor",
+  "displayName": "Camera Editor",
+  "description": "Editor support for camera system | 相机系统编辑器支持",
+  "version": "1.0.0",
+  "category": "Editor",
+  "icon": "Camera",
+  "isEditorPlugin": true,
+  "runtimeModule": "@esengine/camera",
+  "exports": {
+    "inspectors": ["CameraComponentInspector"],
+    "gizmos": ["CameraGizmo"]
+  }
+}
