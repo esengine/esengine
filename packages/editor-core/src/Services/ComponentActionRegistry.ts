@@ -1,41 +1,55 @@
 /**
- * Component Action Registry Service
+ * @zh 组件动作注册表服务
+ * @en Component Action Registry Service
  *
- * Manages component-specific actions for the inspector panel
+ * @zh 管理检视器面板中的组件特定动作
+ * @en Manages component-specific actions for the inspector panel
  */
 
-import { injectable } from 'tsyringe';
-import type { IService } from '@esengine/ecs-framework';
+import { createLogger, type ILogger, type IService } from '@esengine/ecs-framework';
 import type { ComponentAction } from '../Plugin/EditorModule';
-// Re-export ComponentAction type from Plugin system
+import { createRegistryToken } from './BaseRegistry';
+
 export type { ComponentAction } from '../Plugin/EditorModule';
 
-@injectable()
+/**
+ * @zh 组件动作注册表
+ * @en Component Action Registry
+ */
 export class ComponentActionRegistry implements IService {
-    private actions: Map<string, ComponentAction[]> = new Map();
+    private readonly _actions = new Map<string, ComponentAction[]>();
+    private readonly _logger: ILogger;
+
+    constructor() {
+        this._logger = createLogger('ComponentActionRegistry');
+    }
 
     /**
-     * Register a component action
+     * @zh 注册组件动作
+     * @en Register component action
      */
     register(action: ComponentAction): void {
-        const componentName = action.componentName;
-        if (!this.actions.has(componentName)) {
-            this.actions.set(componentName, []);
+        const { componentName, id } = action;
+
+        if (!this._actions.has(componentName)) {
+            this._actions.set(componentName, []);
         }
 
-        const actions = this.actions.get(componentName)!;
-        const existingIndex = actions.findIndex(a => a.id === action.id);
+        const actions = this._actions.get(componentName)!;
+        const existingIndex = actions.findIndex(a => a.id === id);
 
         if (existingIndex >= 0) {
-            console.warn(`[ComponentActionRegistry] Action '${action.id}' already exists for '${componentName}', overwriting`);
+            this._logger.warn(`Overwriting action: ${id} for ${componentName}`);
             actions[existingIndex] = action;
         } else {
             actions.push(action);
+            this._logger.debug(`Registered action: ${id} for ${componentName}`);
         }
     }
 
     /**
-     * Register multiple actions
+     * @zh 批量注册动作
+     * @en Register multiple actions
      */
     registerMany(actions: ComponentAction[]): void {
         for (const action of actions) {
@@ -44,45 +58,55 @@ export class ComponentActionRegistry implements IService {
     }
 
     /**
-     * Unregister an action by ID
+     * @zh 注销动作
+     * @en Unregister action
      */
-    unregister(componentName: string, actionId: string): void {
-        const actions = this.actions.get(componentName);
-        if (actions) {
-            const index = actions.findIndex(a => a.id === actionId);
-            if (index >= 0) {
-                actions.splice(index, 1);
-            }
+    unregister(componentName: string, actionId: string): boolean {
+        const actions = this._actions.get(componentName);
+        if (!actions) return false;
+
+        const index = actions.findIndex(a => a.id === actionId);
+        if (index < 0) return false;
+
+        actions.splice(index, 1);
+        this._logger.debug(`Unregistered action: ${actionId} from ${componentName}`);
+
+        if (actions.length === 0) {
+            this._actions.delete(componentName);
         }
+        return true;
     }
 
     /**
-     * Get all actions for a component type sorted by order
+     * @zh 获取组件的所有动作（按 order 排序）
+     * @en Get all actions for component (sorted by order)
      */
     getActionsForComponent(componentName: string): ComponentAction[] {
-        const actions = this.actions.get(componentName) || [];
+        const actions = this._actions.get(componentName);
+        if (!actions) return [];
         return [...actions].sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
     }
 
     /**
-     * Check if a component has any actions
+     * @zh 检查组件是否有动作
+     * @en Check if component has actions
      */
     hasActions(componentName: string): boolean {
-        const actions = this.actions.get(componentName);
+        const actions = this._actions.get(componentName);
         return actions !== undefined && actions.length > 0;
     }
 
-    /**
-     * Clear all actions
-     */
+    /** @zh 清空所有动作 @en Clear all actions */
     clear(): void {
-        this.actions.clear();
+        this._actions.clear();
+        this._logger.debug('Cleared');
     }
 
-    /**
-     * Dispose resources
-     */
+    /** @zh 释放资源 @en Dispose resources */
     dispose(): void {
-        this.actions.clear();
+        this.clear();
     }
 }
+
+/** @zh 组件动作注册表服务标识符 @en Component action registry service identifier */
+export const IComponentActionRegistry = createRegistryToken<ComponentActionRegistry>('ComponentActionRegistry');

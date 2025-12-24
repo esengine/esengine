@@ -1,5 +1,10 @@
-import { Injectable, IService } from '@esengine/ecs-framework';
+import { createLogger, type ILogger, type IService } from '@esengine/ecs-framework';
+import { createRegistryToken } from './BaseRegistry';
 
+/**
+ * @zh 设置类型
+ * @en Setting type
+ */
 export type SettingType = 'string' | 'number' | 'boolean' | 'select' | 'color' | 'range' | 'pluginList' | 'collisionMatrix' | 'moduleList';
 
 /**
@@ -82,127 +87,154 @@ export interface SettingCategory {
   sections: SettingSection[];
 }
 
-@Injectable()
+/**
+ * @zh 设置注册表
+ * @en Settings Registry
+ */
 export class SettingsRegistry implements IService {
-    private categories: Map<string, SettingCategory> = new Map();
+    private readonly _categories = new Map<string, SettingCategory>();
+    private readonly _logger: ILogger;
 
-    public dispose(): void {
-        this.categories.clear();
+    constructor() {
+        this._logger = createLogger('SettingsRegistry');
     }
 
-    public registerCategory(category: SettingCategory): void {
-        if (this.categories.has(category.id)) {
-            console.warn(`[SettingsRegistry] Category ${category.id} already registered, overwriting`);
-        }
-        console.log(`[SettingsRegistry] Registering category: ${category.id} (${category.title}), sections: ${category.sections.map(s => s.id).join(', ')}`);
-        this.categories.set(category.id, category);
+    /** @zh 释放资源 @en Dispose resources */
+    dispose(): void {
+        this._categories.clear();
+        this._logger.debug('Disposed');
     }
 
-    public registerSection(categoryId: string, section: SettingSection): void {
-        let category = this.categories.get(categoryId);
-
-        if (!category) {
-            category = {
-                id: categoryId,
-                title: categoryId,
-                sections: []
-            };
-            this.categories.set(categoryId, category);
+    /**
+     * @zh 注册设置分类
+     * @en Register setting category
+     */
+    registerCategory(category: SettingCategory): void {
+        if (this._categories.has(category.id)) {
+            this._logger.warn(`Overwriting category: ${category.id}`);
         }
+        this._categories.set(category.id, category);
+        this._logger.debug(`Registered category: ${category.id}`);
+    }
 
-        const existingIndex = category.sections.findIndex((s) => s.id === section.id);
+    /**
+     * @zh 注册设置分区
+     * @en Register setting section
+     */
+    registerSection(categoryId: string, section: SettingSection): void {
+        const category = this.ensureCategory(categoryId);
+
+        const existingIndex = category.sections.findIndex(s => s.id === section.id);
         if (existingIndex >= 0) {
             category.sections[existingIndex] = section;
-            console.warn(`[SettingsRegistry] Section ${section.id} in category ${categoryId} already exists, overwriting`);
+            this._logger.warn(`Overwriting section: ${section.id} in ${categoryId}`);
         } else {
             category.sections.push(section);
+            this._logger.debug(`Registered section: ${section.id} in ${categoryId}`);
         }
     }
 
-    public registerSetting(categoryId: string, sectionId: string, setting: SettingDescriptor): void {
-        let category = this.categories.get(categoryId);
+    /**
+     * @zh 注册单个设置项
+     * @en Register single setting
+     */
+    registerSetting(categoryId: string, sectionId: string, setting: SettingDescriptor): void {
+        const category = this.ensureCategory(categoryId);
+        const section = this.ensureSection(category, sectionId);
 
-        if (!category) {
-            category = {
-                id: categoryId,
-                title: categoryId,
-                sections: []
-            };
-            this.categories.set(categoryId, category);
-        }
-
-        let section = category.sections.find((s) => s.id === sectionId);
-        if (!section) {
-            section = {
-                id: sectionId,
-                title: sectionId,
-                settings: []
-            };
-            category.sections.push(section);
-        }
-
-        const existingIndex = section.settings.findIndex((s) => s.key === setting.key);
+        const existingIndex = section.settings.findIndex(s => s.key === setting.key);
         if (existingIndex >= 0) {
             section.settings[existingIndex] = setting;
-            console.warn(`[SettingsRegistry] Setting ${setting.key} in section ${sectionId} already exists, overwriting`);
+            this._logger.warn(`Overwriting setting: ${setting.key} in ${sectionId}`);
         } else {
             section.settings.push(setting);
+            this._logger.debug(`Registered setting: ${setting.key} in ${sectionId}`);
         }
     }
 
-    public unregisterCategory(categoryId: string): void {
-        this.categories.delete(categoryId);
+    /**
+     * @zh 确保分类存在
+     * @en Ensure category exists
+     */
+    private ensureCategory(categoryId: string): SettingCategory {
+        let category = this._categories.get(categoryId);
+        if (!category) {
+            category = { id: categoryId, title: categoryId, sections: [] };
+            this._categories.set(categoryId, category);
+        }
+        return category;
     }
 
-    public unregisterSection(categoryId: string, sectionId: string): void {
-        const category = this.categories.get(categoryId);
-        if (category) {
-            category.sections = category.sections.filter((s) => s.id !== sectionId);
-            if (category.sections.length === 0) {
-                this.categories.delete(categoryId);
-            }
+    /**
+     * @zh 确保分区存在
+     * @en Ensure section exists
+     */
+    private ensureSection(category: SettingCategory, sectionId: string): SettingSection {
+        let section = category.sections.find(s => s.id === sectionId);
+        if (!section) {
+            section = { id: sectionId, title: sectionId, settings: [] };
+            category.sections.push(section);
+        }
+        return section;
+    }
+
+    /** @zh 注销分类 @en Unregister category */
+    unregisterCategory(categoryId: string): void {
+        this._categories.delete(categoryId);
+    }
+
+    /** @zh 注销分区 @en Unregister section */
+    unregisterSection(categoryId: string, sectionId: string): void {
+        const category = this._categories.get(categoryId);
+        if (!category) return;
+
+        category.sections = category.sections.filter(s => s.id !== sectionId);
+        if (category.sections.length === 0) {
+            this._categories.delete(categoryId);
         }
     }
 
-    public getCategory(categoryId: string): SettingCategory | undefined {
-        return this.categories.get(categoryId);
+    /** @zh 获取分类 @en Get category */
+    getCategory(categoryId: string): SettingCategory | undefined {
+        return this._categories.get(categoryId);
     }
 
-    public getAllCategories(): SettingCategory[] {
-        return Array.from(this.categories.values());
+    /** @zh 获取所有分类 @en Get all categories */
+    getAllCategories(): SettingCategory[] {
+        return Array.from(this._categories.values());
     }
 
-    public getSetting(categoryId: string, sectionId: string, key: string): SettingDescriptor | undefined {
-        const category = this.categories.get(categoryId);
-        if (!category) return undefined;
-
-        const section = category.sections.find((s) => s.id === sectionId);
-        if (!section) return undefined;
-
-        return section.settings.find((s) => s.key === key);
+    /** @zh 获取设置项 @en Get setting */
+    getSetting(categoryId: string, sectionId: string, key: string): SettingDescriptor | undefined {
+        const section = this._categories.get(categoryId)?.sections.find(s => s.id === sectionId);
+        return section?.settings.find(s => s.key === key);
     }
 
-    public getAllSettings(): Map<string, SettingDescriptor> {
+    /** @zh 获取所有设置项 @en Get all settings */
+    getAllSettings(): Map<string, SettingDescriptor> {
         const allSettings = new Map<string, SettingDescriptor>();
-
-        for (const category of this.categories.values()) {
+        for (const category of this._categories.values()) {
             for (const section of category.sections) {
                 for (const setting of section.settings) {
                     allSettings.set(setting.key, setting);
                 }
             }
         }
-
         return allSettings;
     }
 
-    public validateSetting(setting: SettingDescriptor, value: any): boolean {
+    /**
+     * @zh 验证设置值
+     * @en Validate setting value
+     */
+    validateSetting(setting: SettingDescriptor, value: unknown): boolean {
         if (setting.validator) {
             return setting.validator.validate(value);
         }
 
         switch (setting.type) {
             case 'number':
+            case 'range':
                 if (typeof value !== 'number') return false;
                 if (setting.min !== undefined && value < setting.min) return false;
                 if (setting.max !== undefined && value > setting.max) return false;
@@ -215,14 +247,7 @@ export class SettingsRegistry implements IService {
                 return typeof value === 'string';
 
             case 'select':
-                if (!setting.options) return false;
-                return setting.options.some((opt) => opt.value === value);
-
-            case 'range':
-                if (typeof value !== 'number') return false;
-                if (setting.min !== undefined && value < setting.min) return false;
-                if (setting.max !== undefined && value > setting.max) return false;
-                return true;
+                return setting.options?.some(opt => opt.value === value) ?? false;
 
             case 'color':
                 return typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/.test(value);
@@ -232,3 +257,6 @@ export class SettingsRegistry implements IService {
         }
     }
 }
+
+/** @zh 设置注册表服务标识符 @en Settings registry service identifier */
+export const ISettingsRegistry = createRegistryToken<SettingsRegistry>('SettingsRegistry');

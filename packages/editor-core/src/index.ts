@@ -55,6 +55,7 @@ export * from './Services/InspectorRegistry';
 export * from './Services/PropertyRendererRegistry';
 export * from './Services/FieldEditorRegistry';
 export * from './Services/ComponentInspectorRegistry';
+export * from './Services/WindowRegistry';
 
 // ============================================================================
 // Asset & File Services | 资产与文件服务

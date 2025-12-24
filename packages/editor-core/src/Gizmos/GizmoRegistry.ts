@@ -8,8 +8,10 @@
  * 使用注册表模式替代原型修改，实现更清晰的架构。
  */
 
-import type { Component, ComponentType, Entity } from '@esengine/ecs-framework';
+import { createLogger, type Component, type ComponentType, type Entity } from '@esengine/ecs-framework';
 import type { IGizmoProvider, IGizmoRenderData } from './IGizmoProvider';
+
+const logger = createLogger('GizmoRegistry');
 
 /**
  * Gizmo provider function type
@@ -124,9 +126,7 @@ export class GizmoRegistry {
             try {
                 return provider(component, entity, isSelected);
             } catch (e) {
-                // Silently ignore errors from gizmo providers
-                // 静默忽略 gizmo 提供者的错误
-                console.warn(`[GizmoRegistry] Error in gizmo provider for ${componentType.name}:`, e);
+                logger.warn(`Error in gizmo provider for ${componentType.name}:`, e);
                 return [];
             }
         }

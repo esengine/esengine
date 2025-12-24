@@ -1,177 +1,162 @@
-import { IService } from '@esengine/ecs-framework';
-import { ComponentType } from 'react';
+import { createLogger, type ILogger, type IService } from '@esengine/ecs-framework';
+import type { ComponentType } from 'react';
+import { createRegistryToken } from './BaseRegistry';
 
 /**
- * 窗口描述符
+ * @zh 窗口描述符
+ * @en Window descriptor
  */
 export interface WindowDescriptor {
-    /**
-     * 窗口唯一标识
-     */
+    /** @zh 窗口唯一标识 @en Unique window ID */
     id: string;
-
-    /**
-     * 窗口组件
-     */
-    component: ComponentType<any>;
-
-    /**
-     * 窗口标题
-     */
+    /** @zh 窗口组件 @en Window component */
+    component: ComponentType<unknown>;
+    /** @zh 窗口标题 @en Window title */
     title?: string;
-
-    /**
-     * 默认宽度
-     */
+    /** @zh 默认宽度 @en Default width */
     defaultWidth?: number;
-
-    /**
-     * 默认高度
-     */
+    /** @zh 默认高度 @en Default height */
     defaultHeight?: number;
 }
 
 /**
- * 窗口实例
+ * @zh 窗口实例
+ * @en Window instance
  */
 export interface WindowInstance {
-    /**
-     * 窗口描述符
-     */
+    /** @zh 窗口描述符 @en Window descriptor */
     descriptor: WindowDescriptor;
-
-    /**
-     * 是否打开
-     */
+    /** @zh 是否打开 @en Whether the window is open */
     isOpen: boolean;
-
-    /**
-     * 窗口参数
-     */
-    params?: Record<string, any>;
+    /** @zh 窗口参数 @en Window parameters */
+    params?: Record<string, unknown>;
 }
 
 /**
- * 窗口注册表服务
- *
- * 管理插件注册的窗口组件
+ * @zh 窗口注册表服务 - 管理插件注册的窗口组件
+ * @en Window Registry Service - Manages plugin-registered window components
  */
 export class WindowRegistry implements IService {
-    private windows: Map<string, WindowDescriptor> = new Map();
-    private openWindows: Map<string, WindowInstance> = new Map();
-    private listeners: Set<() => void> = new Set();
+    private readonly _windows = new Map<string, WindowDescriptor>();
+    private readonly _openWindows = new Map<string, WindowInstance>();
+    private readonly _listeners = new Set<() => void>();
+    private readonly _logger: ILogger;
+
+    constructor() {
+        this._logger = createLogger('WindowRegistry');
+    }
 
     /**
-     * 注册窗口
+     * @zh 注册窗口
+     * @en Register a window
      */
     registerWindow(descriptor: WindowDescriptor): void {
-        if (this.windows.has(descriptor.id)) {
-            console.warn(`Window ${descriptor.id} is already registered`);
+        if (this._windows.has(descriptor.id)) {
+            this._logger.warn(`Window already registered: ${descriptor.id}`);
             return;
         }
-        this.windows.set(descriptor.id, descriptor);
+        this._windows.set(descriptor.id, descriptor);
+        this._logger.debug(`Registered window: ${descriptor.id}`);
     }
 
     /**
-     * 取消注册窗口
+     * @zh 取消注册窗口
+     * @en Unregister a window
      */
     unregisterWindow(windowId: string): void {
-        this.windows.delete(windowId);
-        this.openWindows.delete(windowId);
-        this.notifyListeners();
+        this._windows.delete(windowId);
+        this._openWindows.delete(windowId);
+        this._notifyListeners();
+        this._logger.debug(`Unregistered window: ${windowId}`);
     }
 
-    /**
-     * 获取窗口描述符
-     */
+    /** @zh 获取窗口描述符 @en Get window descriptor */
     getWindow(windowId: string): WindowDescriptor | undefined {
-        return this.windows.get(windowId);
+        return this._windows.get(windowId);
     }
 
-    /**
-     * 获取所有窗口描述符
-     */
+    /** @zh 获取所有窗口描述符 @en Get all window descriptors */
     getAllWindows(): WindowDescriptor[] {
-        return Array.from(this.windows.values());
+        return Array.from(this._windows.values());
     }
 
     /**
-     * 打开窗口
+     * @zh 打开窗口
+     * @en Open a window
      */
-    openWindow(windowId: string, params?: Record<string, any>): void {
-        const descriptor = this.windows.get(windowId);
+    openWindow(windowId: string, params?: Record<string, unknown>): void {
+        const descriptor = this._windows.get(windowId);
         if (!descriptor) {
-            console.warn(`Window ${windowId} is not registered`);
+            this._logger.warn(`Window not registered: ${windowId}`);
             return;
         }
 
-        this.openWindows.set(windowId, {
+        this._openWindows.set(windowId, {
             descriptor,
             isOpen: true,
             params
         });
-        this.notifyListeners();
+        this._notifyListeners();
+        this._logger.debug(`Opened window: ${windowId}`);
     }
 
     /**
-     * 关闭窗口
+     * @zh 关闭窗口
+     * @en Close a window
      */
     closeWindow(windowId: string): void {
-        this.openWindows.delete(windowId);
-        this.notifyListeners();
+        this._openWindows.delete(windowId);
+        this._notifyListeners();
+        this._logger.debug(`Closed window: ${windowId}`);
     }
 
-    /**
-     * 获取打开的窗口实例
-     */
+    /** @zh 获取打开的窗口实例 @en Get open window instance */
     getOpenWindow(windowId: string): WindowInstance | undefined {
-        return this.openWindows.get(windowId);
+        return this._openWindows.get(windowId);
     }
 
-    /**
-     * 获取所有打开的窗口
-     */
+    /** @zh 获取所有打开的窗口 @en Get all open windows */
     getAllOpenWindows(): WindowInstance[] {
-        return Array.from(this.openWindows.values());
+        return Array.from(this._openWindows.values());
     }
 
-    /**
-     * 检查窗口是否打开
-     */
+    /** @zh 检查窗口是否打开 @en Check if window is open */
     isWindowOpen(windowId: string): boolean {
-        return this.openWindows.has(windowId);
+        return this._openWindows.has(windowId);
     }
 
     /**
-     * 添加变化监听器
+     * @zh 添加变化监听器
+     * @en Add change listener
+     * @returns @zh 取消订阅函数 @en Unsubscribe function
      */
     addListener(listener: () => void): () => void {
-        this.listeners.add(listener);
+        this._listeners.add(listener);
         return () => {
-            this.listeners.delete(listener);
+            this._listeners.delete(listener);
         };
     }
 
-    /**
-     * 通知所有监听器
-     */
-    private notifyListeners(): void {
-        this.listeners.forEach((listener) => listener());
+    /** @zh 通知所有监听器 @en Notify all listeners */
+    private _notifyListeners(): void {
+        for (const listener of this._listeners) {
+            listener();
+        }
     }
 
-    /**
-     * 清空所有窗口
-     */
+    /** @zh 清空所有窗口 @en Clear all windows */
     clear(): void {
-        this.windows.clear();
-        this.openWindows.clear();
-        this.listeners.clear();
+        this._windows.clear();
+        this._openWindows.clear();
+        this._listeners.clear();
+        this._logger.debug('Cleared');
     }
 
-    /**
-     * 释放资源
-     */
+    /** @zh 释放资源 @en Dispose resources */
     dispose(): void {
         this.clear();
     }
 }
+
+/** @zh 窗口注册表服务标识符 @en Window registry service identifier */
+export const IWindowRegistry = createRegistryToken<WindowRegistry>('WindowRegistry');
