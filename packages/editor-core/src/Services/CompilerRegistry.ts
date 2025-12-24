@@ -1,37 +1,28 @@
-import { IService } from '@esengine/ecs-framework';
-import { ICompiler } from './ICompiler';
+/**
+ * @zh 编译器注册表
+ * @en Compiler Registry
+ */
 
-export class CompilerRegistry implements IService {
-    private compilers: Map<string, ICompiler> = new Map();
+import { BaseRegistry, createRegistryToken } from './BaseRegistry';
+import type { ICompiler } from './ICompiler';
 
-    register(compiler: ICompiler): void {
-        if (this.compilers.has(compiler.id)) {
-            console.warn(`Compiler with id "${compiler.id}" is already registered. Overwriting.`);
-        }
-        this.compilers.set(compiler.id, compiler);
+/**
+ * @zh 编译器注册表
+ * @en Compiler Registry
+ */
+export class CompilerRegistry extends BaseRegistry<ICompiler> {
+    constructor() {
+        super('CompilerRegistry');
     }
 
-    unregister(compilerId: string): void {
-        this.compilers.delete(compilerId);
+    protected getItemKey(item: ICompiler): string {
+        return item.id;
     }
 
-    get(compilerId: string): ICompiler | undefined {
-        return this.compilers.get(compilerId);
-    }
-
-    getAll(): ICompiler[] {
-        return Array.from(this.compilers.values());
-    }
-
-    clear(): void {
-        this.compilers.clear();
-    }
-
-    dispose(): void {
-        this.clear();
+    protected override getItemDisplayName(item: ICompiler): string {
+        return `${item.name} (${item.id})`;
     }
 }
 
-// Service identifier for DI registration (用于跨包插件访问)
-// 使用 Symbol.for 确保跨包共享同一个 Symbol
-export const ICompilerRegistry = Symbol.for('ICompilerRegistry');
+/** @zh 编译器注册表服务标识符 @en Compiler registry service identifier */
+export const ICompilerRegistry = createRegistryToken<CompilerRegistry>('CompilerRegistry');
