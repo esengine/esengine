@@ -1,7 +1,7 @@
 import type { IService } from '@esengine/ecs-framework';
-import { Injectable } from '@esengine/ecs-framework';
-import { createLogger } from '@esengine/ecs-framework';
+import { Injectable, createLogger } from '@esengine/ecs-framework';
 import type { MenuItem, ToolbarItem, PanelDescriptor } from '../Types/UITypes';
+import { createRegistryToken } from './BaseRegistry';
 
 const logger = createLogger('UIRegistry');
 
@@ -12,20 +12,20 @@ const logger = createLogger('UIRegistry');
  */
 @Injectable()
 export class UIRegistry implements IService {
-    private menus: Map<string, MenuItem> = new Map();
-    private toolbarItems: Map<string, ToolbarItem> = new Map();
-    private panels: Map<string, PanelDescriptor> = new Map();
+    private readonly _menus = new Map<string, MenuItem>();
+    private readonly _toolbarItems = new Map<string, ToolbarItem>();
+    private readonly _panels = new Map<string, PanelDescriptor>();
 
     /**
      * 注册菜单项
      */
     public registerMenu(item: MenuItem): void {
-        if (this.menus.has(item.id)) {
+        if (this._menus.has(item.id)) {
             logger.warn(`Menu item ${item.id} is already registered`);
             return;
         }
 
-        this.menus.set(item.id, item);
+        this._menus.set(item.id, item);
         logger.debug(`Registered menu item: ${item.id}`);
     }
 
@@ -42,7 +42,7 @@ export class UIRegistry implements IService {
      * 注销菜单项
      */
     public unregisterMenu(id: string): boolean {
-        const result = this.menus.delete(id);
+        const result = this._menus.delete(id);
         if (result) {
             logger.debug(`Unregistered menu item: ${id}`);
         }
@@ -53,14 +53,14 @@ export class UIRegistry implements IService {
      * 获取菜单项
      */
     public getMenu(id: string): MenuItem | undefined {
-        return this.menus.get(id);
+        return this._menus.get(id);
     }
 
     /**
      * 获取所有菜单项
      */
     public getAllMenus(): MenuItem[] {
-        return Array.from(this.menus.values()).sort((a, b) => {
+        return Array.from(this._menus.values()).sort((a, b) => {
             return (a.order ?? 0) - (b.order ?? 0);
         });
     }
@@ -78,12 +78,12 @@ export class UIRegistry implements IService {
      * 注册工具栏项
      */
     public registerToolbarItem(item: ToolbarItem): void {
-        if (this.toolbarItems.has(item.id)) {
+        if (this._toolbarItems.has(item.id)) {
             logger.warn(`Toolbar item ${item.id} is already registered`);
             return;
         }
 
-        this.toolbarItems.set(item.id, item);
+        this._toolbarItems.set(item.id, item);
         logger.debug(`Registered toolbar item: ${item.id}`);
     }
 
@@ -100,7 +100,7 @@ export class UIRegistry implements IService {
      * 注销工具栏项
      */
     public unregisterToolbarItem(id: string): boolean {
-        const result = this.toolbarItems.delete(id);
+        const result = this._toolbarItems.delete(id);
         if (result) {
             logger.debug(`Unregistered toolbar item: ${id}`);
         }
@@ -111,14 +111,14 @@ export class UIRegistry implements IService {
      * 获取工具栏项
      */
     public getToolbarItem(id: string): ToolbarItem | undefined {
-        return this.toolbarItems.get(id);
+        return this._toolbarItems.get(id);
     }
 
     /**
      * 获取所有工具栏项
      */
     public getAllToolbarItems(): ToolbarItem[] {
-        return Array.from(this.toolbarItems.values()).sort((a, b) => {
+        return Array.from(this._toolbarItems.values()).sort((a, b) => {
             return (a.order ?? 0) - (b.order ?? 0);
         });
     }
@@ -136,12 +136,12 @@ export class UIRegistry implements IService {
      * 注册面板
      */
     public registerPanel(panel: PanelDescriptor): void {
-        if (this.panels.has(panel.id)) {
+        if (this._panels.has(panel.id)) {
             logger.warn(`Panel ${panel.id} is already registered`);
             return;
         }
 
-        this.panels.set(panel.id, panel);
+        this._panels.set(panel.id, panel);
         logger.debug(`Registered panel: ${panel.id}`);
     }
 
@@ -158,7 +158,7 @@ export class UIRegistry implements IService {
      * 注销面板
      */
     public unregisterPanel(id: string): boolean {
-        const result = this.panels.delete(id);
+        const result = this._panels.delete(id);
         if (result) {
             logger.debug(`Unregistered panel: ${id}`);
         }
@@ -169,14 +169,14 @@ export class UIRegistry implements IService {
      * 获取面板
      */
     public getPanel(id: string): PanelDescriptor | undefined {
-        return this.panels.get(id);
+        return this._panels.get(id);
     }
 
     /**
      * 获取所有面板
      */
     public getAllPanels(): PanelDescriptor[] {
-        return Array.from(this.panels.values()).sort((a, b) => {
+        return Array.from(this._panels.values()).sort((a, b) => {
             return (a.order ?? 0) - (b.order ?? 0);
         });
     }
@@ -194,9 +194,12 @@ export class UIRegistry implements IService {
      * 释放资源
      */
     public dispose(): void {
-        this.menus.clear();
-        this.toolbarItems.clear();
-        this.panels.clear();
+        this._menus.clear();
+        this._toolbarItems.clear();
+        this._panels.clear();
         logger.info('UIRegistry disposed');
     }
 }
+
+/** @zh UI 注册表服务标识符 @en UI registry service identifier */
+export const IUIRegistry = createRegistryToken<UIRegistry>('UIRegistry');
