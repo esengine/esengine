@@ -536,15 +536,15 @@ export const useBehaviorTreeDataStore = create<BehaviorTreeDataState>((set, get)
  * 将 Zustand Store 适配为 ITreeState 接口
  */
 export class TreeStateAdapter implements ITreeState {
-    private static instance: TreeStateAdapter | null = null;
+    private static _instance: TreeStateAdapter | null = null;
 
     private constructor() {}
 
     static getInstance(): TreeStateAdapter {
-        if (!TreeStateAdapter.instance) {
-            TreeStateAdapter.instance = new TreeStateAdapter();
+        if (!TreeStateAdapter._instance) {
+            TreeStateAdapter._instance = new TreeStateAdapter();
         }
-        return TreeStateAdapter.instance;
+        return TreeStateAdapter._instance;
     }
 
     getTree(): BehaviorTree {

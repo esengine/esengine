@@ -73,7 +73,7 @@ const logger = createLogger('EngineService');
  * Internally uses GameRuntime, maintains original API compatibility externally
  */
 export class EngineService {
-    private static instance: EngineService | null = null;
+    private static _instance: EngineService | null = null;
 
     private _runtime: GameRuntime | null = null;
     private _initialized = false;
@@ -103,10 +103,10 @@ export class EngineService {
      * 获取单例实例。
      */
     static getInstance(): EngineService {
-        if (!EngineService.instance) {
-            EngineService.instance = new EngineService();
+        if (!EngineService._instance) {
+            EngineService._instance = new EngineService();
         }
-        return EngineService.instance;
+        return EngineService._instance;
     }
 
     /**

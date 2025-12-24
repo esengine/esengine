@@ -36,63 +36,63 @@ export interface NodePropertyConfig {
  * 提供编辑器级别的节点注册和管理功能
  */
 export class NodeRegistryService {
-    private static instance: NodeRegistryService;
-    private customTemplates: Map<string, NodeTemplate> = new Map();
-    private registrationCallbacks: Array<(template: NodeTemplate) => void> = [];
+    private static _instance: NodeRegistryService;
+    private _customTemplates: Map<string, NodeTemplate> = new Map();
+    private _registrationCallbacks: Array<(template: NodeTemplate) => void> = [];
 
     private constructor() {}
 
     static getInstance(): NodeRegistryService {
-        if (!this.instance) {
-            this.instance = new NodeRegistryService();
+        if (!this._instance) {
+            this._instance = new NodeRegistryService();
         }
-        return this.instance;
+        return this._instance;
     }
 
     /**
      * 注册自定义节点类型
      */
     registerNode(config: NodeRegistrationConfig): void {
-        const nodeType = this.mapStringToNodeType(config.type);
+        const nodeType = this._mapStringToNodeType(config.type);
 
         const metadata: NodeMetadata = {
             implementationType: config.implementationType,
             nodeType: nodeType,
             displayName: config.displayName,
             description: config.description || '',
-            category: config.category || this.getDefaultCategory(config.type),
-            configSchema: this.convertPropertiesToSchema(config.properties || []),
-            childrenConstraints: this.getChildrenConstraints(config)
+            category: config.category || this._getDefaultCategory(config.type),
+            configSchema: this._convertPropertiesToSchema(config.properties || []),
+            childrenConstraints: this._getChildrenConstraints(config)
         };
 
         class DummyExecutor {}
         NodeMetadataRegistry.register(DummyExecutor, metadata);
 
-        const template = this.createTemplate(config, metadata);
-        this.customTemplates.set(config.implementationType, template);
+        const template = this._createTemplate(config, metadata);
+        this._customTemplates.set(config.implementationType, template);
 
-        this.registrationCallbacks.forEach((cb) => cb(template));
+        this._registrationCallbacks.forEach((cb) => cb(template));
     }
 
     /**
      * 注销节点类型
      */
     unregisterNode(implementationType: string): boolean {
-        return this.customTemplates.delete(implementationType);
+        return this._customTemplates.delete(implementationType);
     }
 
     /**
      * 获取所有自定义模板
      */
     getCustomTemplates(): NodeTemplate[] {
-        return Array.from(this.customTemplates.values());
+        return Array.from(this._customTemplates.values());
     }
 
     /**
      * 检查节点类型是否已注册
      */
     hasNode(implementationType: string): boolean {
-        return this.customTemplates.has(implementationType) ||
+        return this._customTemplates.has(implementationType) ||
                NodeMetadataRegistry.getMetadata(implementationType) !== undefined;
     }
 
@@ -100,16 +100,16 @@ export class NodeRegistryService {
      * 监听节点注册事件
      */
     onNodeRegistered(callback: (template: NodeTemplate) => void): () => void {
-        this.registrationCallbacks.push(callback);
+        this._registrationCallbacks.push(callback);
         return () => {
-            const index = this.registrationCallbacks.indexOf(callback);
+            const index = this._registrationCallbacks.indexOf(callback);
             if (index > -1) {
-                this.registrationCallbacks.splice(index, 1);
+                this._registrationCallbacks.splice(index, 1);
             }
         };
     }
 
-    private mapStringToNodeType(type: string): NodeType {
+    private _mapStringToNodeType(type: string): NodeType {
         switch (type) {
             case 'composite': return NodeType.Composite;
             case 'decorator': return NodeType.Decorator;
@@ -119,7 +119,7 @@ export class NodeRegistryService {
         }
     }
 
-    private getDefaultCategory(type: string): string {
+    private _getDefaultCategory(type: string): string {
         switch (type) {
             case 'composite': return '组合';
             case 'decorator': return '装饰器';
@@ -129,12 +129,12 @@ export class NodeRegistryService {
         }
     }
 
-    private convertPropertiesToSchema(properties: NodePropertyConfig[]): Record<string, any> {
+    private _convertPropertiesToSchema(properties: NodePropertyConfig[]): Record<string, any> {
         const schema: Record<string, any> = {};
 
         for (const prop of properties) {
             schema[prop.name] = {
-                type: this.mapPropertyType(prop.type),
+                type: this._mapPropertyType(prop.type),
                 default: prop.defaultValue,
                 description: prop.description,
                 min: prop.min,
@@ -146,7 +146,7 @@ export class NodeRegistryService {
         return schema;
     }
 
-    private mapPropertyType(type: string): string {
+    private _mapPropertyType(type: string): string {
         switch (type) {
             case 'string':
             case 'code':
@@ -162,7 +162,7 @@ export class NodeRegistryService {
         }
     }
 
-    private getChildrenConstraints(config: NodeRegistrationConfig): { min?: number; max?: number } | undefined {
+    private _getChildrenConstraints(config: NodeRegistrationConfig): { min?: number; max?: number } | undefined {
         if (config.minChildren !== undefined || config.maxChildren !== undefined) {
             return {
                 min: config.minChildren,
@@ -183,7 +183,7 @@ export class NodeRegistryService {
         }
     }
 
-    private createTemplate(config: NodeRegistrationConfig, metadata: NodeMetadata): NodeTemplate {
+    private _createTemplate(config: NodeRegistrationConfig, metadata: NodeMetadata): NodeTemplate {
         const defaultConfig: any = {
             nodeType: config.type
         };
@@ -212,10 +212,10 @@ export class NodeRegistryService {
         const template: NodeTemplate = {
             type: metadata.nodeType,
             displayName: config.displayName,
-            category: config.category || this.getDefaultCategory(config.type),
+            category: config.category || this._getDefaultCategory(config.type),
             description: config.description || '',
-            icon: config.icon || this.getDefaultIcon(config.type),
-            color: config.color || this.getDefaultColor(config.type),
+            icon: config.icon || this._getDefaultIcon(config.type),
+            color: config.color || this._getDefaultColor(config.type),
             className: config.implementationType,
             defaultConfig,
             properties: (config.properties || []).map((p) => ({
@@ -242,7 +242,7 @@ export class NodeRegistryService {
         return template;
     }
 
-    private getDefaultIcon(type: string): string {
+    private _getDefaultIcon(type: string): string {
         switch (type) {
             case 'composite': return 'GitBranch';
             case 'decorator': return 'Settings';
@@ -252,7 +252,7 @@ export class NodeRegistryService {
         }
     }
 
-    private getDefaultColor(type: string): string {
+    private _getDefaultColor(type: string): string {
         switch (type) {
             case 'composite': return '#1976d2';
             case 'decorator': return '#fb8c00';

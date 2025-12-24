@@ -45,18 +45,18 @@ export interface ModuleManifest {
 }
 
 export class RuntimeResolver {
-    private static instance: RuntimeResolver;
-    private baseDir: string = '';
-    private engineModulesPath: string = '';
-    private initialized: boolean = false;
+    private static _instance: RuntimeResolver;
+    private _baseDir: string = '';
+    private _engineModulesPath: string = '';
+    private _initialized: boolean = false;
 
     private constructor() {}
 
     static getInstance(): RuntimeResolver {
-        if (!RuntimeResolver.instance) {
-            RuntimeResolver.instance = new RuntimeResolver();
+        if (!RuntimeResolver._instance) {
+            RuntimeResolver._instance = new RuntimeResolver();
         }
-        return RuntimeResolver.instance;
+        return RuntimeResolver._instance;
     }
 
     /**
@@ -64,23 +64,23 @@ export class RuntimeResolver {
      * Initialize the runtime resolver
      */
     async initialize(): Promise<void> {
-        if (this.initialized) return;
+        if (this._initialized) return;
 
         // 查找工作区根目录 | Find workspace root
         const currentDir = await TauriAPI.getCurrentDir();
-        this.baseDir = await this.findWorkspaceRoot(currentDir);
+        this._baseDir = await this._findWorkspaceRoot(currentDir);
 
         // 查找引擎模块路径 | Find engine modules path
-        this.engineModulesPath = await this.findEngineModulesPath();
+        this._engineModulesPath = await this._findEngineModulesPath();
 
-        this.initialized = true;
+        this._initialized = true;
     }
 
     /**
      * 查找工作区根目录
      * Find workspace root by looking for workspace markers
      */
-    private async findWorkspaceRoot(startPath: string): Promise<string> {
+    private async _findWorkspaceRoot(startPath: string): Promise<string> {
         let currentPath = startPath;
 
         for (let i = 0; i < 5; i++) {
@@ -122,7 +122,7 @@ export class RuntimeResolver {
      * 使用环境变量和标准路径，避免硬编码
      * Use environment variables and standard paths, avoid hardcoding
      */
-    private getInstalledEnginePaths(): string[] {
+    private _getInstalledEnginePaths(): string[] {
         const paths: string[] = [];
 
         // 1. 使用环境变量（如果设置） | Use environment variable if set
@@ -147,16 +147,16 @@ export class RuntimeResolver {
      * Find engine modules path (where compiled modules with module.json are)
      * 查找引擎模块路径（编译后的模块和 module.json 所在位置）
      */
-    private async findEngineModulesPath(): Promise<string> {
+    private async _findEngineModulesPath(): Promise<string> {
         // Try installed editor locations first (production mode)
-        for (const installedPath of this.getInstalledEnginePaths()) {
+        for (const installedPath of this._getInstalledEnginePaths()) {
             if (await TauriAPI.pathExists(`${installedPath}/index.json`)) {
                 return installedPath;
             }
         }
 
         // Try workspace packages directory (dev mode)
-        const workspacePath = `${this.baseDir}\\packages`;
+        const workspacePath = `${this._baseDir}\\packages`;
         if (await TauriAPI.pathExists(`${workspacePath}\\core\\module.json`)) {
             return workspacePath;
         }
@@ -172,14 +172,14 @@ export class RuntimeResolver {
      * 扫描 packages 目录查找 module.json 文件，而不是硬编码
      */
     async getAvailableModules(): Promise<ModuleManifest[]> {
-        if (!this.initialized) {
+        if (!this._initialized) {
             await this.initialize();
         }
 
         const modules: ModuleManifest[] = [];
 
         // Try to read index.json if it exists (installed editor)
-        const indexPath = `${this.engineModulesPath}\\index.json`;
+        const indexPath = `${this._engineModulesPath}\\index.json`;
         if (await TauriAPI.pathExists(indexPath)) {
             try {
                 const indexContent = await TauriAPI.readFileContent(indexPath);
@@ -191,11 +191,11 @@ export class RuntimeResolver {
         }
 
         // Scan packages directory for module.json files
-        const packageEntries = await TauriAPI.listDirectory(this.engineModulesPath);
+        const packageEntries = await TauriAPI.listDirectory(this._engineModulesPath);
         for (const entry of packageEntries) {
             if (!entry.is_dir) continue;
 
-            const manifestPath = `${this.engineModulesPath}\\${entry.name}\\module.json`;
+            const manifestPath = `${this._engineModulesPath}\\${entry.name}\\module.json`;
             if (await TauriAPI.pathExists(manifestPath)) {
                 try {
                     const content = await TauriAPI.readFileContent(manifestPath);
@@ -210,14 +210,14 @@ export class RuntimeResolver {
         }
 
         // Sort by dependencies
-        return this.sortModulesByDependencies(modules);
+        return this._sortModulesByDependencies(modules);
     }
 
     /**
      * Sort modules by dependencies (topological sort)
      * 按依赖排序模块（拓扑排序）
      */
-    private sortModulesByDependencies(modules: ModuleManifest[]): ModuleManifest[] {
+    private _sortModulesByDependencies(modules: ModuleManifest[]): ModuleManifest[] {
         const sorted: ModuleManifest[] = [];
         const visited = new Set<string>();
         const moduleMap = new Map(modules.map(m => [m.id, m]));
@@ -246,7 +246,7 @@ export class RuntimeResolver {
      * 创建与发布构建一致的 libs/{moduleId}/{moduleId}.js 结构
      */
     async prepareRuntimeFiles(targetDir: string): Promise<{ modules: ModuleManifest[], importMap: Record<string, string> }> {
-        if (!this.initialized) {
+        if (!this._initialized) {
             await this.initialize();
         }
 
@@ -267,7 +267,7 @@ export class RuntimeResolver {
         // Copy each module's dist files
         const missingModules: string[] = [];
         for (const module of modules) {
-            const moduleDistDir = `${this.engineModulesPath}\\${module.id}\\dist`;
+            const moduleDistDir = `${this._engineModulesPath}\\${module.id}\\dist`;
             const moduleSrcFile = `${moduleDistDir}\\index.mjs`;
 
             // Check for index.mjs or index.js
@@ -287,7 +287,7 @@ export class RuntimeResolver {
 
                 // Copy all chunk files (code splitting creates chunk-*.js files)
                 // 复制所有 chunk 文件（代码分割会创建 chunk-*.js 文件）
-                await this.copyChunkFiles(moduleDistDir, dstModuleDir);
+                await this._copyChunkFiles(moduleDistDir, dstModuleDir);
 
                 // Add to import map using module.name from module.json
                 // 使用 module.json 中的 module.name 作为 import map 的 key
@@ -310,13 +310,13 @@ export class RuntimeResolver {
         }
 
         // Copy external dependencies (e.g., rapier2d)
-        await this.copyExternalDependencies(modules, libsDir, importMap);
+        await this._copyExternalDependencies(modules, libsDir, importMap);
 
         // Copy engine WASM files to libs/es-engine/
-        await this.copyEngineWasm(libsDir);
+        await this._copyEngineWasm(libsDir);
 
         // Copy module-specific WASM files
-        await this.copyModuleWasm(modules, targetDir);
+        await this._copyModuleWasm(modules, targetDir);
 
         console.log(`[RuntimeResolver] Prepared ${copiedModules.length} modules for browser preview`);
 
@@ -327,7 +327,7 @@ export class RuntimeResolver {
      * Copy chunk files from dist directory (for code-split modules)
      * 复制 dist 目录中的 chunk 文件（用于代码分割的模块）
      */
-    private async copyChunkFiles(srcDir: string, dstDir: string): Promise<void> {
+    private async _copyChunkFiles(srcDir: string, dstDir: string): Promise<void> {
         try {
             const entries = await TauriAPI.listDirectory(srcDir);
             for (const entry of entries) {
@@ -347,7 +347,7 @@ export class RuntimeResolver {
      * Copy external dependencies like rapier2d
      * 复制外部依赖如 rapier2d
      */
-    private async copyExternalDependencies(
+    private async _copyExternalDependencies(
         modules: ModuleManifest[],
         libsDir: string,
         importMap: Record<string, string>
@@ -363,7 +363,7 @@ export class RuntimeResolver {
 
         for (const dep of externalDeps) {
             const depId = dep.startsWith('@esengine/') ? dep.slice(10) : dep.replace(/^@[^/]+\//, '');
-            const srcDistDir = `${this.engineModulesPath}\\${depId}\\dist`;
+            const srcDistDir = `${this._engineModulesPath}\\${depId}\\dist`;
             let srcFile = `${srcDistDir}\\index.mjs`;
             if (!await TauriAPI.pathExists(srcFile)) {
                 srcFile = `${srcDistDir}\\index.js`;
@@ -379,7 +379,7 @@ export class RuntimeResolver {
                 await TauriAPI.copyFile(srcFile, dstFile);
 
                 // Copy chunk files for external dependencies too
-                await this.copyChunkFiles(srcDistDir, dstModuleDir);
+                await this._copyChunkFiles(srcDistDir, dstModuleDir);
 
                 importMap[dep] = `./libs/${depId}/${depId}.js`;
                 console.log(`[RuntimeResolver] Copied external dependency: ${depId}`);
@@ -391,17 +391,17 @@ export class RuntimeResolver {
      * 获取引擎 WASM 文件的搜索路径
      * Get search paths for engine WASM files
      */
-    private getEngineWasmSearchPaths(): string[] {
+    private _getEngineWasmSearchPaths(): string[] {
         const paths: string[] = [];
 
         // 1. 开发模式：工作区内的 engine 包 | Dev mode: engine package in workspace
-        paths.push(`${this.baseDir}\\packages\\${ENGINE_WASM_CONFIG.packageName}\\pkg`);
+        paths.push(`${this._baseDir}\\packages\\${ENGINE_WASM_CONFIG.packageName}\\pkg`);
 
         // 2. 相对于引擎模块路径 | Relative to engine modules path
-        paths.push(`${this.engineModulesPath}\\..\\..\\${ENGINE_WASM_CONFIG.packageName}\\pkg`);
+        paths.push(`${this._engineModulesPath}\\..\\..\\${ENGINE_WASM_CONFIG.packageName}\\pkg`);
 
         // 3. 生产模式：安装目录中的 wasm 文件夹 | Production mode: wasm folder in install dir
-        for (const installedPath of this.getInstalledEnginePaths()) {
+        for (const installedPath of this._getInstalledEnginePaths()) {
             // 将 /engine 替换为 /wasm | Replace /engine with /wasm
             const wasmPath = installedPath.replace(/[/\\]engine$/, '/wasm');
             paths.push(wasmPath);
@@ -414,14 +414,14 @@ export class RuntimeResolver {
      * Copy engine WASM files
      * 复制引擎 WASM 文件
      */
-    private async copyEngineWasm(libsDir: string): Promise<void> {
+    private async _copyEngineWasm(libsDir: string): Promise<void> {
         const esEngineDir = `${libsDir}\\${ENGINE_WASM_CONFIG.dirName}`;
         if (!await TauriAPI.pathExists(esEngineDir)) {
             await TauriAPI.createDirectory(esEngineDir);
         }
 
         // Try different locations for engine WASM
-        const wasmSearchPaths = this.getEngineWasmSearchPaths();
+        const wasmSearchPaths = this._getEngineWasmSearchPaths();
 
         for (const searchPath of wasmSearchPaths) {
             if (await TauriAPI.pathExists(searchPath)) {
@@ -444,7 +444,7 @@ export class RuntimeResolver {
      * Copy module-specific WASM files (e.g., physics)
      * 复制模块特定的 WASM 文件（如物理）
      */
-    private async copyModuleWasm(modules: ModuleManifest[], targetDir: string): Promise<void> {
+    private async _copyModuleWasm(modules: ModuleManifest[], targetDir: string): Promise<void> {
         for (const module of modules) {
             if (!module.requiresWasm || !module.wasmPaths?.length) continue;
 
@@ -463,16 +463,16 @@ export class RuntimeResolver {
 
             // Build search paths - check module's own pkg, external deps, and common locations
             const searchPaths: string[] = [
-                `${this.engineModulesPath}\\${module.id}\\pkg\\${wasmFileName}`,
-                `${this.baseDir}\\packages\\${module.id}\\pkg\\${wasmFileName}`,
+                `${this._engineModulesPath}\\${module.id}\\pkg\\${wasmFileName}`,
+                `${this._baseDir}\\packages\\${module.id}\\pkg\\${wasmFileName}`,
             ];
 
             // Check external dependencies for WASM (e.g., physics-rapier2d uses rapier2d's WASM)
             if (module.externalDependencies) {
                 for (const dep of module.externalDependencies) {
                     const depId = dep.startsWith('@esengine/') ? dep.slice(10) : dep.replace(/^@[^/]+\//, '');
-                    searchPaths.push(`${this.engineModulesPath}\\${depId}\\pkg\\${wasmFileName}`);
-                    searchPaths.push(`${this.baseDir}\\packages\\${depId}\\pkg\\${wasmFileName}`);
+                    searchPaths.push(`${this._engineModulesPath}\\${depId}\\pkg\\${wasmFileName}`);
+                    searchPaths.push(`${this._baseDir}\\packages\\${depId}\\pkg\\${wasmFileName}`);
                 }
             }
 
@@ -501,7 +501,7 @@ export class RuntimeResolver {
      * 获取工作区根目录
      */
     getBaseDir(): string {
-        return this.baseDir;
+        return this._baseDir;
     }
 
     /**
@@ -509,6 +509,6 @@ export class RuntimeResolver {
      * 获取引擎模块路径
      */
     getEngineModulesPath(): string {
-        return this.engineModulesPath;
+        return this._engineModulesPath;
     }
 }
