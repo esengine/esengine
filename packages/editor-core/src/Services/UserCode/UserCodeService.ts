@@ -15,6 +15,7 @@ import {
     COMPONENT_TYPE_NAME,
     SYSTEM_TYPE_NAME
 } from '@esengine/ecs-framework';
+import { UserCodeRealm, type UserCodeRealmConfig } from '@esengine/runtime-core';
 import type {
     IUserCodeService,
     UserScriptInfo,
@@ -89,10 +90,17 @@ export class UserCodeService implements IService, IUserCodeService {
     private _readyPromise: Promise<void>;
     private _readyResolve: (() => void) | undefined;
 
-    constructor(fileSystem: IFileSystem) {
+    /**
+     * 用户代码隔离域
+     * User code realm for isolation
+     */
+    private _userCodeRealm: UserCodeRealm;
+
+    constructor(fileSystem: IFileSystem, realmConfig?: UserCodeRealmConfig) {
         this._fileSystem = fileSystem;
         this._hotReloadCoordinator = new HotReloadCoordinator();
         this._readyPromise = this._createReadyPromise();
+        this._userCodeRealm = new UserCodeRealm(realmConfig);
     }
 
     /**
@@ -387,6 +395,15 @@ export class UserCodeService implements IService, IUserCodeService {
             // Check if it's a Component subclass | 检查是否是 Component 子类
             if (this._isComponentClass(exported)) {
                 logger.debug(`Found component: ${name} | 发现组件: ${name}`);
+
+                // Register to UserCodeRealm for isolation
+                // 注册到 UserCodeRealm 实现隔离
+                try {
+                    this._userCodeRealm.registerComponent(exported);
+                    logger.info(`Component ${name} registered to user code realm`);
+                } catch (err) {
+                    logger.warn(`Failed to register component ${name} to realm:`, err);
+                }
 
                 // Register with Core ComponentRegistry for serialization/deserialization
                 // 注册到核心 ComponentRegistry 用于序列化/反序列化
@@ -982,6 +999,32 @@ export class UserCodeService implements IService, IUserCodeService {
         this.stopWatch();
         this._runtimeModule = undefined;
         this._editorModule = undefined;
+        this._userCodeRealm.dispose();
+    }
+
+    /**
+     * Get the user code realm.
+     * 获取用户代码隔离域。
+     *
+     * The realm provides isolated registration for user components, systems, and services.
+     * 隔离域提供用户组件、系统和服务的隔离注册。
+     *
+     * @returns User code realm instance | 用户代码隔离域实例
+     */
+    getUserCodeRealm(): UserCodeRealm {
+        return this._userCodeRealm;
+    }
+
+    /**
+     * Reset the user code realm for project switching.
+     * 重置用户代码隔离域（用于项目切换）。
+     *
+     * This clears all user-registered components, systems, and services,
+     * preparing for a new project's user code.
+     * 这会清除所有用户注册的组件、系统和服务，为新项目的用户代码做准备。
+     */
+    resetRealm(): void {
+        this._userCodeRealm.reset();
     }
 
     // ==================== Private Methods | 私有方法 ====================
