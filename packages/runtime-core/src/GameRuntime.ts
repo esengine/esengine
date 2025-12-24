@@ -97,16 +97,23 @@ import {
     type IRuntimeModule
 } from './PluginManager';
 import {
-    loadEnabledPlugins,
-    type PluginPackageInfo,
-    type ProjectPluginConfig
+    PluginLoader,
+    type PluginLoadConfig
 } from './PluginLoader';
 import {
     BUILTIN_PLUGIN_PACKAGES,
     mergeProjectConfig,
+    convertToPluginLoadConfigs,
     type ProjectConfig
 } from './ProjectConfig';
 import type { IPlatformAdapter, PlatformAdapterConfig } from './IPlatformAdapter';
+import {
+    RuntimeMode,
+    getRuntimeModeConfig,
+    isEditorMode as checkIsEditorMode,
+    shouldEnableGameLogic,
+    type RuntimeModeConfig
+} from './RuntimeMode';
 
 /**
  * 运行时配置
@@ -143,6 +150,7 @@ export interface RuntimeState {
     initialized: boolean;
     running: boolean;
     paused: boolean;
+    mode: RuntimeMode;
 }
 
 /**
@@ -166,7 +174,8 @@ export class GameRuntime {
     private _state: RuntimeState = {
         initialized: false,
         running: false,
-        paused: false
+        paused: false,
+        mode: RuntimeMode.EditorStatic
     };
 
     private _animationFrameId: number | null = null;
@@ -194,6 +203,14 @@ export class GameRuntime {
      */
     get state(): RuntimeState {
         return { ...this._state };
+    }
+
+    /**
+     * @zh 获取当前运行模式
+     * @en Get current runtime mode
+     */
+    get mode(): RuntimeMode {
+        return this._state.mode;
     }
 
     /**
@@ -251,6 +268,95 @@ export class GameRuntime {
      */
     get platform(): IPlatformAdapter {
         return this._platform;
+    }
+
+    /**
+     * @zh 设置运行模式
+     * @en Set runtime mode
+     *
+     * @zh 根据模式自动配置系统启用状态、UI 显示等
+     * @en Automatically configures system enabling, UI visibility, etc. based on mode
+     *
+     * @param mode - @zh 目标模式 @en Target mode
+     * @param options - @zh 可选覆盖配置 @en Optional override configuration
+     */
+    setMode(mode: RuntimeMode, options?: Partial<RuntimeModeConfig>): void {
+        if (!this._state.initialized) {
+            console.warn('[GameRuntime] Cannot set mode before initialization');
+            return;
+        }
+
+        const previousMode = this._state.mode;
+        this._state.mode = mode;
+
+        // 获取模式配置并应用覆盖
+        const config = { ...getRuntimeModeConfig(mode), ...options };
+
+        console.log(`[GameRuntime] Mode: ${previousMode} → ${mode}`);
+
+        // 1. 配置场景编辑器模式
+        if (this._scene) {
+            this._scene.isEditorMode = !config.triggerLifecycle;
+        }
+
+        // 2. 配置渲染系统
+        if (this._renderSystem) {
+            this._renderSystem.setPreviewMode(mode !== RuntimeMode.EditorStatic);
+            this._renderSystem.setShowGizmos(config.showGizmos);
+        }
+
+        // 3. 配置引擎桥接
+        if (this._bridge) {
+            this._bridge.setShowGrid(config.showGrid);
+            this._bridge.setEditorMode(config.isEditorEnvironment);
+        }
+
+        // 4. 配置输入系统
+        if (this._inputSystem) {
+            this._inputSystem.enabled = config.enableInput;
+        }
+
+        // 5. 配置游戏逻辑系统
+        this._applySystemConfig(config);
+
+        // 6. 触发生命周期（从静态模式进入其他模式时）
+        if (previousMode === RuntimeMode.EditorStatic && config.triggerLifecycle) {
+            this._scene?.begin();
+        }
+
+        // 7. 更新运行状态
+        this._state.running = shouldEnableGameLogic(mode);
+        this._state.paused = false;
+    }
+
+    /**
+     * @zh 应用系统配置
+     * @en Apply system configuration
+     */
+    private _applySystemConfig(config: RuntimeModeConfig): void {
+        const services = this._systemContext?.services;
+        if (!services) return;
+
+        // 物理系统
+        const physicsSystem = services.get(Physics2DSystemToken);
+        if (physicsSystem) {
+            physicsSystem.enabled = config.enablePhysics;
+        }
+
+        // 行为树系统
+        const behaviorTreeSystem = services.get(BehaviorTreeSystemToken);
+        if (behaviorTreeSystem) {
+            behaviorTreeSystem.enabled = config.enableBehaviorTree;
+            if (config.enableBehaviorTree) {
+                behaviorTreeSystem.startAllAutoStartTrees?.();
+            }
+        }
+
+        // 动画系统
+        const animatorSystem = services.get(SpriteAnimatorSystemToken);
+        if (animatorSystem) {
+            animatorSystem.enabled = config.enableAnimation;
+        }
     }
 
     /**
@@ -395,13 +501,17 @@ export class GameRuntime {
                 defaultWorld.start();
             }
 
-            // 14. 编辑器模式下的特殊处理
-            if (this._platform.isEditorMode()) {
-                // 禁用游戏逻辑系统
-                this._disableGameLogicSystems();
-            }
-
             this._state.initialized = true;
+
+            // 14. 设置初始模式
+            const initialMode = this._platform.isEditorMode()
+                ? RuntimeMode.EditorStatic
+                : RuntimeMode.Standalone;
+            this._state.mode = initialMode;
+
+            // 应用初始模式配置（不触发 setMode 的完整流程，因为刚初始化）
+            const modeConfig = getRuntimeModeConfig(initialMode);
+            this._applySystemConfig(modeConfig);
 
             // 15. 自动启动渲染循环
             if (this._config.autoStartRenderLoop !== false) {
@@ -414,23 +524,31 @@ export class GameRuntime {
     }
 
     /**
-     * 加载并初始化插件
+     * @zh 加载并初始化插件
+     * @en Load and initialize plugins
      */
     private async _initializePlugins(): Promise<void> {
-        // 检查是否已有插件注册（静态导入场景）
-        // Check if plugins are already registered (static import scenario)
         const hasPlugins = runtimePluginManager.getPlugins().length > 0;
 
         if (!hasPlugins) {
-            // 没有预注册的插件，尝试动态加载
-            // No pre-registered plugins, try dynamic loading
-            await loadEnabledPlugins(
-                { plugins: this._projectConfig.plugins },
-                BUILTIN_PLUGIN_PACKAGES
-            );
+            const configs = convertToPluginLoadConfigs(this._projectConfig, BUILTIN_PLUGIN_PACKAGES);
+            const loader = new PluginLoader({ plugins: configs });
+
+            await loader.loadAll();
+
+            const loaded = loader.getLoaded();
+            const failed = loader.getFailed();
+
+            if (loaded.length > 0) {
+                console.log(`[GameRuntime] Loaded: ${loaded.map(p => p.packageId).join(', ')}`);
+            }
+            if (failed.length > 0) {
+                for (const p of failed) {
+                    console.warn(`[GameRuntime] Failed: ${p.packageId} - ${p.error}`);
+                }
+            }
         }
 
-        // 初始化插件（注册组件和服务）
         await runtimePluginManager.initializeRuntime(Core.services);
     }
 
@@ -518,36 +636,23 @@ export class GameRuntime {
     }
 
     /**
-     * 开始运行（启用游戏逻辑）
-     * Start running (enable game logic)
+     * @zh 开始运行（切换到预览模式）
+     * @en Start running (switch to preview mode)
+     *
+     * @zh 在编辑器中，从 EditorStatic 切换到 EditorPreview
+     * @en In editor, switches from EditorStatic to EditorPreview
      */
     start(): void {
         if (!this._state.initialized || this._state.running) {
             return;
         }
 
-        this._state.running = true;
-        this._state.paused = false;
+        // 根据平台选择目标模式
+        const targetMode = this._platform.isEditorMode()
+            ? RuntimeMode.EditorPreview
+            : RuntimeMode.Standalone;
 
-        // 启用预览模式
-        if (this._renderSystem) {
-            this._renderSystem.setPreviewMode(true);
-        }
-
-        // 禁用编辑器模式，启用 InputSystem 和组件生命周期回调
-        // Disable editor mode to enable InputSystem and component lifecycle callbacks
-        if (this._scene) {
-            this._scene.isEditorMode = false;
-        }
-
-        // 调用场景 begin() 触发延迟的组件生命周期回调
-        // Call scene begin() to trigger deferred component lifecycle callbacks
-        if (this._scene) {
-            this._scene.begin();
-        }
-
-        // 启用游戏逻辑系统
-        this._enableGameLogicSystems();
+        this.setMode(targetMode);
 
         // 确保渲染循环在运行
         this._startRenderLoop();
@@ -576,32 +681,23 @@ export class GameRuntime {
     }
 
     /**
-     * 停止运行（禁用游戏逻辑）
-     * Stop running (disable game logic)
+     * @zh 停止运行（切换回静态模式）
+     * @en Stop running (switch back to static mode)
+     *
+     * @zh 在编辑器中，从 EditorPreview 切换回 EditorStatic
+     * @en In editor, switches from EditorPreview back to EditorStatic
      */
     stop(): void {
         if (!this._state.running) {
             return;
         }
 
-        this._state.running = false;
-        this._state.paused = false;
-
-        // 禁用预览模式
-        if (this._renderSystem) {
-            this._renderSystem.setPreviewMode(false);
+        // 在编辑器中切换回静态模式（setMode 会处理系统禁用）
+        if (this._platform.isEditorMode()) {
+            this.setMode(RuntimeMode.EditorStatic);
         }
 
-        // 恢复编辑器模式（如果是编辑器平台）
-        // Restore editor mode (if editor platform)
-        if (this._scene && this._platform.isEditorMode()) {
-            this._scene.isEditorMode = true;
-        }
-
-        // 禁用游戏逻辑系统
-        this._disableGameLogicSystems();
-
-        // 重置物理系统
+        // 重置物理系统状态
         const physicsSystem = this._systemContext?.services.get(Physics2DSystemToken);
         if (physicsSystem) {
             physicsSystem.reset?.();
