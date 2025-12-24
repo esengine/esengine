@@ -34,25 +34,19 @@ export interface IWeChatMiniGameAPI extends IMiniGamePlatformAPI {
  * @zh 字节跳动小游戏 API
  * @en ByteDance Mini Game API
  */
-export interface IByteDanceMiniGameAPI extends IMiniGamePlatformAPI {
-    // 继承 IMiniGamePlatformAPI 的可选方法
-}
+export type IByteDanceMiniGameAPI = IMiniGamePlatformAPI;
 
 /**
  * @zh 支付宝小游戏 API
  * @en Alipay Mini Game API
  */
-export interface IAlipayMiniGameAPI extends IMiniGamePlatformAPI {
-    // 继承 IMiniGamePlatformAPI 的可选方法
-}
+export type IAlipayMiniGameAPI = IMiniGamePlatformAPI;
 
 /**
  * @zh 百度小游戏 API
  * @en Baidu Mini Game API
  */
-export interface IBaiduMiniGameAPI extends IMiniGamePlatformAPI {
-    // 继承 IMiniGamePlatformAPI 的可选方法
-}
+export type IBaiduMiniGameAPI = IMiniGamePlatformAPI;
 
 /**
  * @zh 扩展的 globalThis 类型，包含小游戏平台
