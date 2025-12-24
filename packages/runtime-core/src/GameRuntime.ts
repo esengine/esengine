@@ -29,19 +29,10 @@ import {
 import { AssetManager, EngineIntegration, AssetManagerToken, setGlobalAssetDatabase } from '@esengine/asset-system';
 
 // ============================================================================
-// 本地服务令牌定义 | Local Service Token Definitions
+// 本地服务令牌（松耦合设计）| Local Service Tokens (Loose Coupling)
 // ============================================================================
-// 这些令牌使用 createServiceToken() 本地定义，而不是从源模块导入。
-// 这是有意为之：
-// 1. runtime-core 应保持与 ui/sprite/behavior-tree 等模块的松耦合
-// 2. createServiceToken() 使用 Symbol.for()，确保相同名称在运行时匹配
-// 3. 本地接口提供类型安全，无需引入模块依赖
-//
-// These tokens are defined locally using createServiceToken() instead of
-// importing from source modules. This is intentional:
-// 1. runtime-core should remain loosely coupled to ui/sprite/behavior-tree etc.
-// 2. createServiceToken() uses Symbol.for(), ensuring same names match at runtime
-// 3. Local interfaces provide type safety without introducing module dependencies
+// 使用 Symbol.for() 确保与源模块的 Token 在运行时匹配
+// Uses Symbol.for() to match source module tokens at runtime
 // ============================================================================
 
 /**
@@ -553,51 +544,24 @@ export class GameRuntime {
     }
 
     /**
-     * 禁用游戏逻辑系统（编辑器模式）
+     * @zh 设置游戏逻辑系统启用状态
+     * @en Set game logic systems enabled state
      */
-    private _disableGameLogicSystems(): void {
-        const services = this._systemContext?.services;
-        if (!services) return;
-
-        // 这些系统由插件创建，通过服务注册表获取引用
-        const animatorSystem = services.get(SpriteAnimatorSystemToken);
-        if (animatorSystem) {
-            animatorSystem.enabled = false;
-        }
-
-        const behaviorTreeSystem = services.get(BehaviorTreeSystemToken);
-        if (behaviorTreeSystem) {
-            behaviorTreeSystem.enabled = false;
-        }
-
-        const physicsSystem = services.get(Physics2DSystemToken);
-        if (physicsSystem) {
-            physicsSystem.enabled = false;
-        }
-    }
-
-    /**
-     * 启用游戏逻辑系统（预览/运行模式）
-     */
-    private _enableGameLogicSystems(): void {
+    private _setGameLogicSystemsEnabled(enabled: boolean): void {
         const services = this._systemContext?.services;
         if (!services) return;
 
         const animatorSystem = services.get(SpriteAnimatorSystemToken);
-        if (animatorSystem) {
-            animatorSystem.enabled = true;
-        }
+        if (animatorSystem) animatorSystem.enabled = enabled;
 
         const behaviorTreeSystem = services.get(BehaviorTreeSystemToken);
         if (behaviorTreeSystem) {
-            behaviorTreeSystem.enabled = true;
-            behaviorTreeSystem.startAllAutoStartTrees?.();
+            behaviorTreeSystem.enabled = enabled;
+            if (enabled) behaviorTreeSystem.startAllAutoStartTrees?.();
         }
 
         const physicsSystem = services.get(Physics2DSystemToken);
-        if (physicsSystem) {
-            physicsSystem.enabled = true;
-        }
+        if (physicsSystem) physicsSystem.enabled = enabled;
     }
 
     /**
@@ -714,9 +678,9 @@ export class GameRuntime {
         }
 
         // 启用系统执行一帧
-        this._enableGameLogicSystems();
+        this._setGameLogicSystemsEnabled(true);
         Core.update(1 / 60);
-        this._disableGameLogicSystems();
+        this._setGameLogicSystemsEnabled(false);
     }
 
     /**
