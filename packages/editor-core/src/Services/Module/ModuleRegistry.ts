@@ -6,6 +6,7 @@
  * 管理引擎模块、其依赖关系和项目配置。
  */
 
+import { createLogger } from '@esengine/ecs-framework';
 import type {
     ModuleManifest,
     ModuleRegistryEntry,
@@ -37,7 +38,8 @@ export interface IModuleFileSystem {
  * 模块注册表服务。
  */
 export class ModuleRegistry {
-    private _modules: Map<string, ModuleRegistryEntry> = new Map();
+    private readonly _modules = new Map<string, ModuleRegistryEntry>();
+    private readonly _logger = createLogger('ModuleRegistry');
     private _projectConfig: ProjectModuleConfig = { enabled: [] };
     private _fileSystem: IModuleFileSystem | null = null;
     private _engineModulesPath: string = '';
@@ -332,7 +334,7 @@ export class ModuleRegistry {
                     }>;
                 }>(indexPath);
 
-                console.log(`[ModuleRegistry] Loaded ${index.modules.length} modules from index.json`);
+                this._logger.debug(`Loaded ${index.modules.length} modules from index.json`);
 
                 // Use data directly from index.json (includes jsSize, wasmSize)
                 // 直接使用 index.json 中的数据（包含 jsSize、wasmSize）
@@ -386,10 +388,10 @@ export class ModuleRegistry {
                     }
                 }
             } else {
-                console.warn(`[ModuleRegistry] index.json not found at ${indexPath}, run 'pnpm copy-modules' first`);
+                this._logger.warn(`index.json not found at ${indexPath}, run 'pnpm copy-modules' first`);
             }
         } catch (error) {
-            console.error('[ModuleRegistry] Failed to load index.json:', error);
+            this._logger.error('Failed to load index.json:', error);
         }
 
         // Compute dependents | 计算依赖者
@@ -433,7 +435,7 @@ export class ModuleRegistry {
                 this._projectConfig = { enabled: this._getDefaultEnabledModules() };
             }
         } catch (error) {
-            console.error('[ModuleRegistry] Failed to load project config:', error);
+            this._logger.error('Failed to load project config:', error);
             this._projectConfig = { enabled: this._getDefaultEnabledModules() };
         }
     }
@@ -457,7 +459,7 @@ export class ModuleRegistry {
             config.modules = this._projectConfig;
             await this._fileSystem.writeJson(configPath, config);
         } catch (error) {
-            console.error('[ModuleRegistry] Failed to save project config:', error);
+            this._logger.error('Failed to save project config:', error);
         }
     }
 
@@ -545,7 +547,7 @@ export class ModuleRegistry {
                 }
             }
         } catch (error) {
-            console.warn('[ModuleRegistry] Failed to check scene usage:', error);
+            this._logger.warn('Failed to check scene usage:', error);
         }
 
         return usages;
@@ -602,7 +604,7 @@ export class ModuleRegistry {
                 }
             }
         } catch (error) {
-            console.warn('[ModuleRegistry] Failed to check script usage:', error);
+            this._logger.warn('Failed to check script usage:', error);
         }
 
         return usages;
