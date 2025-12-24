@@ -130,50 +130,63 @@ requestAnimationFrame(gameLoop);
 
 ## Packages
 
-ESEngine is organized as a monorepo with modular packages.
+ESEngine is organized as a monorepo with 50+ modular packages. Install only what you need.
 
-### Core
+### Essential
 
-| Package | Description |
-|---------|-------------|
-| `@esengine/ecs-framework` | Core ECS framework with entity management, component system, and queries |
-| `@esengine/math` | Vector, matrix, and mathematical utilities |
-| `@esengine/engine` | Rust/WASM 2D renderer |
-| `@esengine/engine-core` | Engine module system and lifecycle management |
+```bash
+npm install @esengine/ecs-framework  # Core ECS (can be used standalone)
+npm install @esengine/engine-core    # Full engine with module system
+```
 
-### Runtime
+### Popular Modules
 
-| Package | Description |
-|---------|-------------|
-| `@esengine/sprite` | 2D sprite rendering and animation |
-| `@esengine/tilemap` | Tile-based map rendering |
-| `@esengine/physics-rapier2d` | 2D physics simulation (Rapier) |
-| `@esengine/behavior-tree` | Behavior tree AI system |
-| `@esengine/blueprint` | Visual scripting runtime |
-| `@esengine/camera` | Camera control and management |
-| `@esengine/audio` | Audio playback |
-| `@esengine/ui` | UI components |
-| `@esengine/material-system` | Material and shader system |
-| `@esengine/asset-system` | Asset loading and management |
+| Category | Packages |
+|----------|----------|
+| **Rendering** | `sprite`, `tilemap`, `particle`, `mesh-3d`, `fairygui` |
+| **Physics** | `physics-rapier2d` |
+| **AI & Logic** | `behavior-tree`, `blueprint` |
+| **Network** | `network`, `network-server` |
+| **Platform** | `platform-web`, `platform-wechat` |
 
-### Editor Extensions
+<details>
+<summary><b>View all 50+ packages</b></summary>
 
-| Package | Description |
-|---------|-------------|
-| `@esengine/sprite-editor` | Sprite inspector and tools |
-| `@esengine/tilemap-editor` | Visual tilemap editor |
-| `@esengine/physics-rapier2d-editor` | Physics collider visualization |
-| `@esengine/behavior-tree-editor` | Visual behavior tree editor |
-| `@esengine/blueprint-editor` | Visual scripting editor |
-| `@esengine/material-editor` | Material editor |
+#### Core
+- `@esengine/ecs-framework` - ECS framework core
+- `@esengine/math` - Vector, matrix utilities
+- `@esengine/engine` - Rust/WASM renderer
+- `@esengine/engine-core` - Module lifecycle
 
-### Platform
+#### Runtime
+- `@esengine/sprite` - 2D sprites & animation
+- `@esengine/tilemap` - Tile-based maps
+- `@esengine/particle` - Particle effects
+- `@esengine/physics-rapier2d` - 2D physics
+- `@esengine/behavior-tree` - AI behavior trees
+- `@esengine/blueprint` - Visual scripting
+- `@esengine/camera` - Camera system
+- `@esengine/audio` - Audio playback
+- `@esengine/fairygui` - FairyGUI integration
+- `@esengine/mesh-3d` - 3D mesh (FBX/GLTF/OBJ)
+- `@esengine/material-system` - Materials & shaders
+- `@esengine/asset-system` - Asset management
+- `@esengine/world-streaming` - Large world streaming
 
-| Package | Description |
-|---------|-------------|
-| `@esengine/platform-common` | Platform abstraction interfaces |
-| `@esengine/platform-web` | Web browser runtime |
-| `@esengine/platform-wechat` | WeChat Mini Game runtime |
+#### Network
+- `@esengine/network` - Client (TSRPC)
+- `@esengine/network-server` - Server runtime
+- `@esengine/network-protocols` - Shared protocols
+
+#### Editor Extensions
+All runtime modules have corresponding `-editor` packages for visual editing.
+
+#### Platform
+- `@esengine/platform-common` - Platform abstraction
+- `@esengine/platform-web` - Web runtime
+- `@esengine/platform-wechat` - WeChat Mini Game
+
+</details>
 
 ## Editor
 
