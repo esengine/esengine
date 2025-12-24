@@ -7,9 +7,9 @@ import { getProfilerService } from './services/getService';
 
 // 将 React 暴露到全局，供动态加载的插件使用
 // editor-runtime.js 将 React 设为 external，需要从全局获取
-(window as any).React = React;
-(window as any).ReactDOM = ReactDOM;
-(window as any).ReactJSXRuntime = ReactJSXRuntime;
+window.React = React;
+window.ReactDOM = ReactDOM;
+window.ReactJSXRuntime = ReactJSXRuntime;
 import {
     PluginManager,
     UIRegistry,

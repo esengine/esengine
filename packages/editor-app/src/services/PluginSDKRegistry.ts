@@ -101,12 +101,11 @@ export class PluginSDKRegistry {
 
         // 设置全局对象
         // Set global object
-        const sdkGlobalName = EditorConfig.globals.sdk;
-        (window as any)[sdkGlobalName] = sdkGlobal;
+        window.__ESENGINE_SDK__ = sdkGlobal;
 
         this.initialized = true;
 
-        console.log(`[PluginSDKRegistry] Initialized SDK at window.${sdkGlobalName}`);
+        console.log(`[PluginSDKRegistry] Initialized SDK at window.__ESENGINE_SDK__`);
     }
 
     /**

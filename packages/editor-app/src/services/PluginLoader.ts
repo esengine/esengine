@@ -81,8 +81,8 @@ export class PluginLoader {
      * 初始化插件容器
      */
     private initPluginContainer(): void {
-        if (!(window as any)[PLUGINS_GLOBAL_NAME]) {
-            (window as any)[PLUGINS_GLOBAL_NAME] = {};
+        if (!window.__ESENGINE_PLUGINS__) {
+            window.__ESENGINE_PLUGINS__ = {};
         }
     }
 
@@ -167,7 +167,7 @@ export class PluginLoader {
     ): Promise<IRuntimePlugin | null> {
         const pluginKey = this.sanitizePluginKey(pluginName);
 
-        const pluginsContainer = (window as any)[PLUGINS_GLOBAL_NAME] as Record<string, any>;
+        const pluginsContainer = window.__ESENGINE_PLUGINS__ ?? {};
 
         try {
             // 插件代码是 IIFE 格式，会自动导出到全局插件容器
@@ -338,7 +338,7 @@ export class PluginLoader {
      * 卸载所有已加载的插件
      */
     async unloadProjectPlugins(_pluginManager: PluginManager): Promise<void> {
-        const pluginsContainer = (window as any)[PLUGINS_GLOBAL_NAME] as Record<string, any> | undefined;
+        const pluginsContainer = window.__ESENGINE_PLUGINS__;
 
         for (const pluginName of this.loadedPlugins.keys()) {
             // 清理全局容器中的插件

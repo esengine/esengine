@@ -459,7 +459,7 @@ export class UserCodeService implements IService, IUserCodeService {
 
         // Access scene through Core.scene
         // 通过 Core.scene 访问场景
-        const sdkGlobal = (window as any)[EditorConfig.globals.sdk];
+        const sdkGlobal = window.__ESENGINE_SDK__;
         const Core = sdkGlobal?.Core;
         const scene = Core?.scene;
         if (!scene || !scene.entities) {
@@ -782,7 +782,7 @@ export class UserCodeService implements IService, IUserCodeService {
 
         // Initialize hot reload coordinator with Core reference
         // 使用 Core 引用初始化热更新协调器
-        const sdkGlobal = (window as any)[EditorConfig.globals.sdk];
+        const sdkGlobal = window.__ESENGINE_SDK__;
         const Core = sdkGlobal?.Core;
         if (Core) {
             this._hotReloadCoordinator.initialize(Core);
