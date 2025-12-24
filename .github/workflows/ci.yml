@@ -25,6 +25,9 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
     steps:
     - name: Checkout code
@@ -67,17 +70,7 @@ jobs:
     - name: Install dependencies
       run: pnpm install --no-frozen-lockfile
 
-    # 缓存 Turbo
-    - name: Cache Turbo
-      uses: actions/cache@v4
-      with:
-        path: .turbo
-        key: turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-        restore-keys: |
-          turbo-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-
-          turbo-${{ runner.os }}-
-
-    # 构建所有包
+    # 构建所有包 (使用 Turborepo Remote Cache)
     - name: Build all packages
       run: pnpm run build
 
