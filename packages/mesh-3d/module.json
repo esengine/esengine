@@ -1,0 +1,47 @@
+{
+  "id": "mesh-3d",
+  "name": "@esengine/mesh-3d",
+  "globalKey": "mesh-3d",
+  "displayName": "3D Mesh Rendering",
+  "description": "3D mesh rendering with GLTF/GLB support | 3D 网格渲染",
+  "version": "1.0.0",
+  "category": "Rendering",
+  "icon": "Box",
+  "tags": [
+    "3d",
+    "mesh",
+    "gltf",
+    "rendering"
+  ],
+  "isCore": false,
+  "defaultEnabled": false,
+  "isEngineModule": true,
+  "canContainContent": true,
+  "platforms": [
+    "web",
+    "desktop"
+  ],
+  "dependencies": [
+    "core",
+    "engine-core",
+    "asset-system",
+    "ecs-engine-bindgen"
+  ],
+  "exports": {
+    "components": [
+      "MeshComponent",
+      "Animation3DComponent",
+      "SkeletonComponent"
+    ],
+    "systems": [
+      "MeshRenderSystem",
+      "Animation3DSystem",
+      "SkeletonBakingSystem",
+      "MeshAssetLoaderSystem"
+    ]
+  },
+  "editorPackage": "@esengine/mesh-3d-editor",
+  "requiresWasm": true,
+  "outputPath": "dist/index.js",
+  "pluginExport": "Mesh3DPlugin"
+}
