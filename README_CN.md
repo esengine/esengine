@@ -279,9 +279,10 @@ esengine/
 
 ## 社区
 
+- [Discord](https://discord.gg/gCAgzXFW) - 国际社区
+- [QQ 交流群](https://jq.qq.com/?_wv=1027&k=29w1Nud6) - 中文社区
 - [GitHub Issues](https://github.com/esengine/esengine/issues) - Bug 反馈和功能建议
 - [GitHub Discussions](https://github.com/esengine/esengine/discussions) - 问题和想法
-- [QQ 交流群](https://jq.qq.com/?_wv=1027&k=29w1Nud6) - 中文社区
 
 ## 贡献
 

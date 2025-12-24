@@ -279,6 +279,7 @@ esengine/
 
 ## Community
 
+- [Discord](https://discord.gg/gCAgzXFW) - Chat with the community
 - [GitHub Issues](https://github.com/esengine/esengine/issues) - Bug reports and feature requests
 - [GitHub Discussions](https://github.com/esengine/esengine/discussions) - Questions and ideas
 
