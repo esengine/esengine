@@ -130,50 +130,63 @@ requestAnimationFrame(gameLoop);
 
 ## 模块
 
-ESEngine 采用 Monorepo 组织，包含多个模块化包。
+ESEngine 采用 Monorepo 组织，包含 50+ 个模块化包。按需引入即可。
 
-### 核心
+### 核心安装
 
-| 包名 | 描述 |
+```bash
+npm install @esengine/ecs-framework  # ECS 核心（可独立使用）
+npm install @esengine/engine-core    # 完整引擎模块系统
+```
+
+### 常用模块
+
+| 分类 | 包名 |
 |------|------|
-| `@esengine/ecs-framework` | ECS 框架核心，包含实体管理、组件系统和查询 |
-| `@esengine/math` | 向量、矩阵和数学工具 |
-| `@esengine/engine` | Rust/WASM 2D 渲染器 |
-| `@esengine/engine-core` | 引擎模块系统和生命周期管理 |
+| **渲染** | `sprite`, `tilemap`, `particle`, `mesh-3d`, `fairygui` |
+| **物理** | `physics-rapier2d` |
+| **AI 逻辑** | `behavior-tree`, `blueprint` |
+| **网络** | `network`, `network-server` |
+| **平台** | `platform-web`, `platform-wechat` |
 
-### 运行时
+<details>
+<summary><b>查看全部 50+ 个包</b></summary>
 
-| 包名 | 描述 |
-|------|------|
-| `@esengine/sprite` | 2D 精灵渲染和动画 |
-| `@esengine/tilemap` | Tilemap 渲染 |
-| `@esengine/physics-rapier2d` | 2D 物理模拟 (Rapier) |
-| `@esengine/behavior-tree` | 行为树 AI 系统 |
-| `@esengine/blueprint` | 可视化脚本运行时 |
-| `@esengine/camera` | 相机控制和管理 |
-| `@esengine/audio` | 音频播放 |
-| `@esengine/ui` | UI 组件 |
-| `@esengine/material-system` | 材质和着色器系统 |
-| `@esengine/asset-system` | 资源加载和管理 |
+#### 核心
+- `@esengine/ecs-framework` - ECS 框架核心
+- `@esengine/math` - 向量、矩阵工具
+- `@esengine/engine` - Rust/WASM 渲染器
+- `@esengine/engine-core` - 模块生命周期
 
-### 编辑器扩展
+#### 运行时
+- `@esengine/sprite` - 2D 精灵和动画
+- `@esengine/tilemap` - 瓦片地图
+- `@esengine/particle` - 粒子特效
+- `@esengine/physics-rapier2d` - 2D 物理
+- `@esengine/behavior-tree` - AI 行为树
+- `@esengine/blueprint` - 可视化脚本
+- `@esengine/camera` - 相机系统
+- `@esengine/audio` - 音频播放
+- `@esengine/fairygui` - FairyGUI 集成
+- `@esengine/mesh-3d` - 3D 模型 (FBX/GLTF/OBJ)
+- `@esengine/material-system` - 材质和着色器
+- `@esengine/asset-system` - 资源管理
+- `@esengine/world-streaming` - 大世界流式加载
 
-| 包名 | 描述 |
-|------|------|
-| `@esengine/sprite-editor` | 精灵检视器和工具 |
-| `@esengine/tilemap-editor` | 可视化 Tilemap 编辑器 |
-| `@esengine/physics-rapier2d-editor` | 物理碰撞体可视化 |
-| `@esengine/behavior-tree-editor` | 可视化行为树编辑器 |
-| `@esengine/blueprint-editor` | 可视化脚本编辑器 |
-| `@esengine/material-editor` | 材质编辑器 |
+#### 网络
+- `@esengine/network` - 客户端 (TSRPC)
+- `@esengine/network-server` - 服务端运行时
+- `@esengine/network-protocols` - 共享协议
 
-### 平台
+#### 编辑器扩展
+所有运行时模块都有对应的 `-editor` 包用于可视化编辑。
 
-| 包名 | 描述 |
-|------|------|
-| `@esengine/platform-common` | 平台抽象接口 |
-| `@esengine/platform-web` | Web 浏览器运行时 |
-| `@esengine/platform-wechat` | 微信小游戏运行时 |
+#### 平台
+- `@esengine/platform-common` - 平台抽象层
+- `@esengine/platform-web` - Web 运行时
+- `@esengine/platform-wechat` - 微信小游戏
+
+</details>
 
 ## 编辑器
 
