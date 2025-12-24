@@ -154,7 +154,7 @@ export class Scene implements IScene {
     /**
      * 日志记录器
      */
-    private readonly logger: ReturnType<typeof createLogger>;
+    private readonly _logger: ReturnType<typeof createLogger>;
 
     /**
      * 性能监控器缓存
@@ -298,12 +298,12 @@ export class Scene implements IScene {
             return this._systemScheduler.getAllSortedSystems(systems);
         } catch (error) {
             if (error instanceof CycleDependencyError) {
-                this.logger.error(
+                this._logger.error(
                     `[Scene] 系统存在循环依赖，回退到 updateOrder 排序 | Cycle dependency detected, falling back to updateOrder sort`,
                     error.involvedNodes
                 );
             } else {
-                this.logger.error(`[Scene] 系统排序失败 | System sorting failed`, error);
+                this._logger.error(`[Scene] 系统排序失败 | System sorting failed`, error);
             }
             return this._sortSystemsByUpdateOrder(systems);
         }
@@ -395,7 +395,7 @@ export class Scene implements IScene {
         this.referenceTracker = new ReferenceTracker();
         this.handleManager = new EntityHandleManager();
         this._services = new ServiceContainer();
-        this.logger = createLogger('Scene');
+        this._logger = createLogger('Scene');
         this._maxErrorCount = config?.maxSystemErrorCount ?? 10;
 
         if (config?.name) {
@@ -467,7 +467,7 @@ export class Scene implements IScene {
                 try {
                     callback();
                 } catch (error) {
-                    this.logger.error('Error executing deferred component callback:', error);
+                    this._logger.error('Error executing deferred component callback:', error);
                 }
             }
             this._deferredComponentCallbacks = [];
@@ -580,7 +580,7 @@ export class Scene implements IScene {
                 try {
                     system.flushCommands();
                 } catch (error) {
-                    this.logger.error(`Error flushing commands for system ${system.systemName}:`, error);
+                    this._logger.error(`Error flushing commands for system ${system.systemName}:`, error);
                 }
             }
         } finally {
@@ -602,14 +602,14 @@ export class Scene implements IScene {
         this._systemErrorCount.set(system, errorCount);
 
         const name = system.systemName;
-        this.logger.error(
+        this._logger.error(
             `Error in system ${name}.${phase}() [${errorCount}/${this._maxErrorCount}]:`,
             error
         );
 
         if (errorCount >= this._maxErrorCount) {
             system.enabled = false;
-            this.logger.error(
+            this._logger.error(
                 `System ${name} has been disabled due to excessive errors (${errorCount} errors)`
             );
         }
@@ -1087,7 +1087,7 @@ export class Scene implements IScene {
 
             if (this._services.isRegistered(constructor)) {
                 const existingSystem = this._services.resolve(constructor) as T;
-                this.logger.debug(`System ${constructor.name} already registered, returning existing instance`);
+                this._logger.debug(`System ${constructor.name} already registered, returning existing instance`);
                 return existingSystem;
             }
 
@@ -1103,10 +1103,10 @@ export class Scene implements IScene {
             if (this._services.isRegistered(constructor)) {
                 const existingSystem = this._services.resolve(constructor);
                 if (existingSystem === system) {
-                    this.logger.debug(`System ${constructor.name} instance already registered, returning it`);
+                    this._logger.debug(`System ${constructor.name} instance already registered, returning it`);
                     return system;
                 } else {
-                    this.logger.warn(
+                    this._logger.warn(
                         `Attempting to register a different instance of ${constructor.name}, ` +
                             'but type is already registered. Returning existing instance.'
                     );
@@ -1139,7 +1139,7 @@ export class Scene implements IScene {
 
         system.initialize();
 
-        this.logger.debug(`System ${constructor.name} registered and initialized`);
+        this._logger.debug(`System ${constructor.name} registered and initialized`);
 
         return system;
     }
