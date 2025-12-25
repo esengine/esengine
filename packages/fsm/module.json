@@ -1,0 +1,23 @@
+{
+    "id": "fsm",
+    "name": "@esengine/fsm",
+    "globalKey": "fsm",
+    "displayName": "State Machine",
+    "description": "有限状态机 | Finite State Machine",
+    "version": "1.0.0",
+    "category": "AI",
+    "icon": "GitBranch",
+    "tags": ["fsm", "state", "machine", "ai"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": true,
+    "canContainContent": false,
+    "platforms": ["web", "desktop"],
+    "dependencies": ["core"],
+    "exports": {
+        "components": ["StateMachineComponent"],
+        "systems": []
+    },
+    "outputPath": "dist/index.js",
+    "pluginExport": "FSMPlugin"
+}
