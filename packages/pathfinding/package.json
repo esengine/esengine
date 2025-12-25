@@ -1,0 +1,37 @@
+{
+    "name": "@esengine/pathfinding",
+    "version": "1.0.0",
+    "description": "寻路系统 | Pathfinding System - A*, Grid, NavMesh",
+    "type": "module",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist",
+        "module.json"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/ecs-framework-math": "workspace:*",
+        "@esengine/blueprint": "workspace:*"
+    },
+    "devDependencies": {
+        "tsup": "^8.0.0",
+        "typescript": "^5.8.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
