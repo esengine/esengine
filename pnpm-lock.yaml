@@ -1725,6 +1725,9 @@ importers:
         specifier: ^2.8.1
         version: 2.8.1
     devDependencies:
+      '@esengine/blueprint':
+        specifier: workspace:*
+        version: link:../blueprint
       '@esengine/build-config':
         specifier: workspace:*
         version: link:../build-config

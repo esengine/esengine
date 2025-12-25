@@ -43,3 +43,26 @@ export { GridSpatialIndex, createGridSpatialIndex } from './GridSpatialIndex';
 // =============================================================================
 
 export { SpatialIndexToken, SpatialQueryToken } from './tokens';
+
+// =============================================================================
+// 蓝图节点 | Blueprint Nodes
+// =============================================================================
+
+export {
+    // Templates
+    FindInRadiusTemplate,
+    FindInRectTemplate,
+    FindNearestTemplate,
+    FindKNearestTemplate,
+    RaycastTemplate,
+    RaycastFirstTemplate,
+    // Executors
+    FindInRadiusExecutor,
+    FindInRectExecutor,
+    FindNearestExecutor,
+    FindKNearestExecutor,
+    RaycastExecutor,
+    RaycastFirstExecutor,
+    // Collection
+    SpatialQueryNodeDefinitions
+} from './nodes';

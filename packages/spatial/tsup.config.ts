@@ -8,7 +8,8 @@ export default defineConfig({
     clean: true,
     external: [
         '@esengine/ecs-framework',
-        '@esengine/ecs-framework-math'
+        '@esengine/ecs-framework-math',
+        '@esengine/blueprint'
     ],
     tsconfig: 'tsconfig.build.json'
 });

@@ -28,6 +28,7 @@
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/ecs-framework-math": "workspace:*",
+        "@esengine/blueprint": "workspace:*",
         "@esengine/build-config": "workspace:*",
         "@types/node": "^20.19.17",
         "rimraf": "^5.0.0",
