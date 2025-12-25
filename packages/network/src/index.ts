@@ -63,3 +63,56 @@ export { NetworkSyncSystem } from './systems/NetworkSyncSystem';
 export { NetworkSpawnSystem } from './systems/NetworkSpawnSystem';
 export type { PrefabFactory } from './systems/NetworkSpawnSystem';
 export { NetworkInputSystem } from './systems/NetworkInputSystem';
+
+// ============================================================================
+// State Sync | 状态同步
+// ============================================================================
+
+export type {
+    IStateSnapshot,
+    ITransformState,
+    ITransformStateWithVelocity,
+    ISnapshotBufferConfig,
+    ISnapshotBuffer
+} from './sync';
+
+export type {
+    IInterpolator,
+    IExtrapolator,
+    IInputSnapshot,
+    IPredictedState,
+    IPredictor,
+    ClientPredictionConfig
+} from './sync';
+
+export {
+    lerp,
+    lerpAngle,
+    smoothDamp,
+    SnapshotBuffer,
+    createSnapshotBuffer,
+    TransformInterpolator,
+    HermiteTransformInterpolator,
+    createTransformInterpolator,
+    createHermiteTransformInterpolator,
+    ClientPrediction,
+    createClientPrediction
+} from './sync';
+
+// ============================================================================
+// Blueprint Nodes | 蓝图节点
+// ============================================================================
+
+export {
+    IsLocalPlayerTemplate,
+    IsServerTemplate,
+    HasAuthorityTemplate,
+    GetNetworkIdTemplate,
+    GetLocalPlayerIdTemplate,
+    IsLocalPlayerExecutor,
+    IsServerExecutor,
+    HasAuthorityExecutor,
+    GetNetworkIdExecutor,
+    GetLocalPlayerIdExecutor,
+    NetworkNodeDefinitions
+} from './nodes';

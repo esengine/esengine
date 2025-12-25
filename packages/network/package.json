@@ -32,6 +32,7 @@
         "tsrpc-browser": "^3.4.16"
     },
     "devDependencies": {
+        "@esengine/blueprint": "workspace:*",
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/build-config": "workspace:*",
         "rimraf": "^5.0.5",
