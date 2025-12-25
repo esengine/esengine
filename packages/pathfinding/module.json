@@ -1,0 +1,24 @@
+{
+    "id": "pathfinding",
+    "name": "@esengine/pathfinding",
+    "globalKey": "pathfinding",
+    "displayName": "Pathfinding",
+    "description": "寻路系统，提供 A*、网格地图、导航网格和路径平滑 | Pathfinding system with A*, grid map, NavMesh and path smoothing",
+    "version": "1.0.0",
+    "category": "AI",
+    "icon": "Route",
+    "tags": ["pathfinding", "navigation", "astar", "navmesh", "ai"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": true,
+    "canContainContent": false,
+    "platforms": ["web", "desktop", "mobile"],
+    "dependencies": ["core", "math", "blueprint"],
+    "exports": {
+        "components": ["PathfindingAgentComponent"],
+        "systems": ["PathfindingSystem"]
+    },
+    "requiresWasm": false,
+    "outputPath": "dist/index.js",
+    "pluginExport": "PathfindingPlugin"
+}
