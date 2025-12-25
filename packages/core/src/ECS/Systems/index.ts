@@ -14,6 +14,7 @@ export { IntervalSystem } from './IntervalSystem';
 export { WorkerEntitySystem } from './WorkerEntitySystem';
 export { HierarchySystem } from './HierarchySystem';
 export { PlatformWorkerPool } from './PlatformWorkerPool';
+export type { IWorkerPoolStatus } from './PlatformWorkerPool';
 
 // =============================================================================
 // Worker 系统类型导出 | Worker System Type Exports

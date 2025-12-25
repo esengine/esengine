@@ -6,6 +6,12 @@
 import type { PlatformWorker } from '../../Platform/IPlatformAdapter';
 
 // =============================================================================
+// 常量 | Constants
+// =============================================================================
+
+const ERROR_POOL_DESTROYED = 'Worker pool has been destroyed';
+
+// =============================================================================
 // 类型定义 | Type Definitions
 // =============================================================================
 
@@ -37,8 +43,25 @@ interface IWorkerMessageData {
 }
 
 /**
- * @zh Worker 状态
- * @en Worker state
+ * @zh Worker 池状态接口
+ * @en Worker pool status interface
+ */
+export interface IWorkerPoolStatus {
+    /** @zh Worker 总数 @en Total number of workers */
+    readonly total: number;
+    /** @zh 空闲 Worker 数量 @en Number of idle workers */
+    readonly idle: number;
+    /** @zh 忙碌 Worker 数量 @en Number of busy workers */
+    readonly busy: number;
+    /** @zh 初始化中的 Worker 数量 @en Number of initializing workers */
+    readonly initializing: number;
+    /** @zh 队列中等待的任务数 @en Number of queued tasks */
+    readonly queuedTasks: number;
+}
+
+/**
+ * @zh Worker 状态枚举
+ * @en Worker state enum
  */
 const enum WorkerState {
     /** @zh 初始化中 @en Initializing */
@@ -66,7 +89,11 @@ export class PlatformWorkerPool {
     private readonly pendingTasks: Map<number, IWorkerTask> = new Map();
     private readonly taskQueue: IWorkerTask[] = [];
     private taskCounter = 0;
-    private isDestroyed = false;
+    private _isDestroyed = false;
+
+    // =========================================================================
+    // 构造函数 | Constructor
+    // =========================================================================
 
     /**
      * @zh 创建 Worker 池
@@ -83,6 +110,136 @@ export class PlatformWorkerPool {
         this.initializeWorkers(sharedBuffer);
     }
 
+    // =========================================================================
+    // 公共属性 | Public Properties
+    // =========================================================================
+
+    /**
+     * @zh 池是否已销毁
+     * @en Whether the pool has been destroyed
+     */
+    get isDestroyed(): boolean {
+        return this._isDestroyed;
+    }
+
+    /**
+     * @zh Worker 数量
+     * @en Number of workers in the pool
+     */
+    get workerCount(): number {
+        return this.workers.length;
+    }
+
+    /**
+     * @zh 所有 Worker 是否已就绪（无初始化中的 Worker）
+     * @en Whether all workers are ready (no initializing workers)
+     */
+    get isReady(): boolean {
+        if (this._isDestroyed) return false;
+        for (const state of this.workerStates.values()) {
+            if (state === WorkerState.Initializing) return false;
+        }
+        return this.workers.length > 0;
+    }
+
+    /**
+     * @zh 是否有待处理的任务（队列中或执行中）
+     * @en Whether there are pending tasks (queued or executing)
+     */
+    get hasPendingTasks(): boolean {
+        return this.taskQueue.length > 0 || this.pendingTasks.size > 0;
+    }
+
+    // =========================================================================
+    // 公共方法 | Public Methods
+    // =========================================================================
+
+    /**
+     * @zh 执行 SharedArrayBuffer 任务
+     * @en Execute SharedArrayBuffer task
+     *
+     * @param data - @zh 任务数据 @en Task data
+     * @returns @zh 任务完成的 Promise @en Promise that resolves when task completes
+     */
+    executeSharedBuffer(data: Record<string, unknown>): Promise<void> {
+        return this.createTask<void>(
+            `shared-${++this.taskCounter}`,
+            { ...data, type: 'shared' },
+            () => undefined
+        );
+    }
+
+    /**
+     * @zh 执行普通任务
+     * @en Execute normal task
+     *
+     * @param data - @zh 任务数据 @en Task data
+     * @returns @zh 包含任务结果的 Promise @en Promise with task result
+     */
+    execute<TResult = unknown>(data: Record<string, unknown>): Promise<TResult> {
+        return this.createTask<TResult>(
+            `task-${++this.taskCounter}`,
+            data,
+            (result) => result as TResult
+        );
+    }
+
+    /**
+     * @zh 获取 Worker 池状态
+     * @en Get Worker pool status
+     *
+     * @returns @zh 池状态对象 @en Pool status object
+     */
+    getStatus(): IWorkerPoolStatus {
+        const status = { idle: 0, busy: 0, initializing: 0 };
+
+        for (const state of this.workerStates.values()) {
+            if (state === WorkerState.Idle) status.idle++;
+            else if (state === WorkerState.Busy) status.busy++;
+            else if (state === WorkerState.Initializing) status.initializing++;
+        }
+
+        return {
+            total: this.workers.length,
+            ...status,
+            queuedTasks: this.taskQueue.length
+        };
+    }
+
+    /**
+     * @zh 销毁 Worker 池，释放所有资源
+     * @en Destroy Worker pool and release all resources
+     */
+    destroy(): void {
+        if (this._isDestroyed) return;
+        this._isDestroyed = true;
+
+        const destroyError = new Error(ERROR_POOL_DESTROYED);
+
+        // Reject all pending and queued tasks
+        for (const task of this.pendingTasks.values()) {
+            task.reject(destroyError);
+        }
+        for (const task of this.taskQueue) {
+            task.reject(destroyError);
+        }
+
+        // Terminate all workers
+        for (const worker of this.workers) {
+            worker.terminate();
+        }
+
+        // Clear state
+        this.workers.length = 0;
+        this.taskQueue.length = 0;
+        this.pendingTasks.clear();
+        this.workerStates.clear();
+    }
+
+    // =========================================================================
+    // 私有方法 | Private Methods
+    // =========================================================================
+
     /**
      * @zh 初始化所有 Worker
      * @en Initialize all Workers
@@ -92,14 +249,10 @@ export class PlatformWorkerPool {
             const worker = this.workers[i];
             if (!worker) continue;
 
-            // Set initial state
             this.workerStates.set(i, sharedBuffer ? WorkerState.Initializing : WorkerState.Idle);
-
-            // Bind message and error handlers
             worker.onMessage((event) => this.handleMessage(i, event.data));
             worker.onError((error) => this.handleError(i, error));
 
-            // Initialize SharedArrayBuffer if provided
             if (sharedBuffer) {
                 worker.postMessage({ type: 'init', sharedBuffer });
             }
@@ -107,46 +260,26 @@ export class PlatformWorkerPool {
     }
 
     /**
-     * @zh 执行 SharedArrayBuffer 任务
-     * @en Execute SharedArrayBuffer task
+     * @zh 创建并入队任务
+     * @en Create and enqueue task
      */
-    executeSharedBuffer(data: Record<string, unknown>): Promise<void> {
+    private createTask<T>(
+        id: string,
+        data: Record<string, unknown>,
+        transform: (result: unknown) => T
+    ): Promise<T> {
         return new Promise((resolve, reject) => {
-            if (this.isDestroyed) {
-                reject(new Error('Worker pool has been destroyed'));
+            if (this._isDestroyed) {
+                reject(new Error(ERROR_POOL_DESTROYED));
                 return;
             }
 
-            const task: IWorkerTask = {
-                id: `shared-${++this.taskCounter}`,
-                data: { ...data, type: 'shared' },
-                resolve: () => resolve(),
-                reject
-            };
-
-            this.enqueueTask(task);
-        });
-    }
-
-    /**
-     * @zh 执行普通任务
-     * @en Execute normal task
-     */
-    execute<TResult = unknown>(data: Record<string, unknown>): Promise<TResult> {
-        return new Promise((resolve, reject) => {
-            if (this.isDestroyed) {
-                reject(new Error('Worker pool has been destroyed'));
-                return;
-            }
-
-            const task: IWorkerTask = {
-                id: `task-${++this.taskCounter}`,
+            this.enqueueTask({
+                id,
                 data,
-                resolve: (result) => resolve(result as TResult),
+                resolve: (result) => resolve(transform(result)),
                 reject
-            };
-
-            this.enqueueTask(task);
+            });
         });
     }
 
@@ -208,27 +341,17 @@ export class PlatformWorkerPool {
      * @en Handle Worker message
      */
     private handleMessage(workerIndex: number, data: IWorkerMessageData): void {
-        // Handle initialization response
         if (data.type === 'init') {
             this.workerStates.set(workerIndex, WorkerState.Idle);
             this.dispatchTasks();
             return;
         }
 
-        // Handle task response
-        const task = this.pendingTasks.get(workerIndex);
-        if (!task) return;
-
-        this.pendingTasks.delete(workerIndex);
-        this.workerStates.set(workerIndex, WorkerState.Idle);
-
         if (data.error) {
-            task.reject(new Error(data.error));
+            this.completeTask(workerIndex, new Error(data.error));
         } else {
-            task.resolve(data.result);
+            this.completeTask(workerIndex, undefined, data.result);
         }
-
-        this.dispatchTasks();
     }
 
     /**
@@ -236,82 +359,26 @@ export class PlatformWorkerPool {
      * @en Handle Worker error
      */
     private handleError(workerIndex: number, error: ErrorEvent): void {
-        const task = this.pendingTasks.get(workerIndex);
+        this.completeTask(workerIndex, new Error(error.message));
+    }
 
-        if (task) {
-            this.pendingTasks.delete(workerIndex);
-            this.workerStates.set(workerIndex, WorkerState.Idle);
-            task.reject(new Error(error.message));
+    /**
+     * @zh 完成任务并释放 Worker
+     * @en Complete task and release Worker
+     */
+    private completeTask(workerIndex: number, error?: Error, result?: unknown): void {
+        const task = this.pendingTasks.get(workerIndex);
+        if (!task) return;
+
+        this.pendingTasks.delete(workerIndex);
+        this.workerStates.set(workerIndex, WorkerState.Idle);
+
+        if (error) {
+            task.reject(error);
+        } else {
+            task.resolve(result);
         }
 
         this.dispatchTasks();
-    }
-
-    /**
-     * @zh 获取 Worker 池状态
-     * @en Get Worker pool status
-     */
-    getStatus(): {
-        total: number;
-        idle: number;
-        busy: number;
-        initializing: number;
-        queuedTasks: number;
-    } {
-        let idle = 0;
-        let busy = 0;
-        let initializing = 0;
-
-        for (const state of this.workerStates.values()) {
-            switch (state) {
-                case WorkerState.Idle:
-                    idle++;
-                    break;
-                case WorkerState.Busy:
-                    busy++;
-                    break;
-                case WorkerState.Initializing:
-                    initializing++;
-                    break;
-            }
-        }
-
-        return {
-            total: this.workers.length,
-            idle,
-            busy,
-            initializing,
-            queuedTasks: this.taskQueue.length
-        };
-    }
-
-    /**
-     * @zh 销毁 Worker 池
-     * @en Destroy Worker pool
-     */
-    destroy(): void {
-        if (this.isDestroyed) return;
-        this.isDestroyed = true;
-
-        // Reject all pending tasks
-        for (const task of this.pendingTasks.values()) {
-            task.reject(new Error('Worker pool destroyed'));
-        }
-
-        // Reject all queued tasks
-        for (const task of this.taskQueue) {
-            task.reject(new Error('Worker pool destroyed'));
-        }
-
-        // Terminate all workers
-        for (const worker of this.workers) {
-            worker.terminate();
-        }
-
-        // Clear state
-        this.workers.length = 0;
-        this.taskQueue.length = 0;
-        this.pendingTasks.clear();
-        this.workerStates.clear();
     }
 }
