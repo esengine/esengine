@@ -1,8 +1,11 @@
 /**
- * 增量序列化器
+ * @zh 增量序列化器
+ * @en Incremental Serializer
  *
- * 提供高性能的增量序列化支持，只序列化变更的数据
- * 适用于网络同步、大场景存档、时间回溯等场景
+ * @zh 提供高性能的增量序列化支持，只序列化变更的数据。
+ *     适用于网络同步、大场景存档、时间回溯等场景。
+ * @en Provides high-performance incremental serialization, serializing only changed data.
+ *     Suitable for network sync, large scene archiving, and time rewind scenarios.
  */
 
 import type { IScene } from '../IScene';
@@ -14,177 +17,263 @@ import { BinarySerializer } from '../../Utils/BinarySerializer';
 import { HierarchyComponent } from '../Components/HierarchyComponent';
 import { HierarchySystem } from '../Systems/HierarchySystem';
 
+// =============================================================================
+// 枚举 | Enums
+// =============================================================================
+
 /**
- * 变更操作类型
+ * @zh 变更操作类型
+ * @en Change operation type
  */
 export enum ChangeOperation {
-    /** 添加新实体 */
+    /** @zh 添加新实体 @en Entity added */
     EntityAdded = 'entity_added',
-    /** 删除实体 */
+    /** @zh 删除实体 @en Entity removed */
     EntityRemoved = 'entity_removed',
-    /** 实体属性更新 */
+    /** @zh 实体属性更新 @en Entity updated */
     EntityUpdated = 'entity_updated',
-    /** 添加组件 */
+    /** @zh 添加组件 @en Component added */
     ComponentAdded = 'component_added',
-    /** 删除组件 */
+    /** @zh 删除组件 @en Component removed */
     ComponentRemoved = 'component_removed',
-    /** 组件数据更新 */
+    /** @zh 组件数据更新 @en Component updated */
     ComponentUpdated = 'component_updated',
-    /** 场景数据更新 */
+    /** @zh 场景数据更新 @en Scene data updated */
     SceneDataUpdated = 'scene_data_updated'
 }
 
+// =============================================================================
+// 类型定义 | Type Definitions
+// =============================================================================
+
 /**
- * 实体变更记录
+ * @zh 实体变更记录
+ * @en Entity change record
  */
-export type EntityChange = {
-    /** 操作类型 */
-    operation: ChangeOperation;
-    /** 实体ID */
-    entityId: number;
-    /** 实体名称（用于Added操作） */
-    entityName?: string;
-    /** 实体数据（用于Added/Updated操作） */
-    entityData?: Partial<SerializedEntity>;
+export interface EntityChange {
+    /** @zh 操作类型 @en Operation type */
+    readonly operation: ChangeOperation;
+    /** @zh 实体ID @en Entity ID */
+    readonly entityId: number;
+    /** @zh 实体名称（用于Added操作）@en Entity name (for Added operation) */
+    readonly entityName?: string;
+    /** @zh 实体数据（用于Added/Updated操作）@en Entity data (for Added/Updated operation) */
+    readonly entityData?: Partial<SerializedEntity>;
 }
 
 /**
- * 组件变更记录
+ * @zh 组件变更记录
+ * @en Component change record
  */
-export type ComponentChange = {
-    /** 操作类型 */
-    operation: ChangeOperation;
-    /** 实体ID */
-    entityId: number;
-    /** 组件类型名称 */
-    componentType: string;
-    /** 组件数据（用于Added/Updated操作） */
-    componentData?: SerializedComponent;
+export interface ComponentChange {
+    /** @zh 操作类型 @en Operation type */
+    readonly operation: ChangeOperation;
+    /** @zh 实体ID @en Entity ID */
+    readonly entityId: number;
+    /** @zh 组件类型名称 @en Component type name */
+    readonly componentType: string;
+    /** @zh 组件数据（用于Added/Updated操作）@en Component data (for Added/Updated operation) */
+    readonly componentData?: SerializedComponent;
 }
 
 /**
- * 场景数据变更记录
+ * @zh 场景数据变更记录
+ * @en Scene data change record
  */
-export type SceneDataChange = {
-    /** 操作类型 */
-    operation: ChangeOperation;
-    /** 变更的键 */
-    key: string;
-    /** 新值 */
-    value: any;
-    /** 是否删除 */
-    deleted?: boolean;
+export interface SceneDataChange {
+    /** @zh 操作类型 @en Operation type */
+    readonly operation: ChangeOperation;
+    /** @zh 变更的键 @en Changed key */
+    readonly key: string;
+    /** @zh 新值 @en New value */
+    readonly value: unknown;
+    /** @zh 是否删除 @en Whether deleted */
+    readonly deleted?: boolean;
 }
 
 /**
- * 增量序列化数据
+ * @zh 增量序列化数据
+ * @en Incremental snapshot data
  */
-export type IncrementalSnapshot = {
-    /** 快照版本号 */
-    version: number;
-    /** 时间戳 */
-    timestamp: number;
-    /** 场景名称 */
-    sceneName: string;
-    /** 基础版本号（相对于哪个快照的增量） */
-    baseVersion: number;
-    /** 实体变更列表 */
-    entityChanges: EntityChange[];
-    /** 组件变更列表 */
-    componentChanges: ComponentChange[];
-    /** 场景数据变更列表 */
-    sceneDataChanges: SceneDataChange[];
+export interface IncrementalSnapshot {
+    /** @zh 快照版本号 @en Snapshot version */
+    readonly version: number;
+    /** @zh 时间戳 @en Timestamp */
+    readonly timestamp: number;
+    /** @zh 场景名称 @en Scene name */
+    readonly sceneName: string;
+    /** @zh 基础版本号（相对于哪个快照的增量）@en Base version (incremental from which snapshot) */
+    readonly baseVersion: number;
+    /** @zh 实体变更列表 @en Entity changes list */
+    readonly entityChanges: EntityChange[];
+    /** @zh 组件变更列表 @en Component changes list */
+    readonly componentChanges: ComponentChange[];
+    /** @zh 场景数据变更列表 @en Scene data changes list */
+    readonly sceneDataChanges: SceneDataChange[];
 }
 
 /**
- * 场景快照（用于对比）
+ * @zh 实体快照数据
+ * @en Entity snapshot data
  */
-interface SceneSnapshot {
-    /** 快照版本号 */
-    version: number;
-    /** 实体ID集合 */
-    entityIds: Set<number>;
-    /** 实体数据映射 */
-    entities: Map<number, {
-        name: string;
-        tag: number;
-        active: boolean;
-        enabled: boolean;
-        updateOrder: number;
-        parentId?: number;
-    }>;
-    /** 组件数据映射 (entityId -> componentType -> serializedData) */
-    components: Map<number, Map<string, string>>;  // 使用JSON字符串存储组件数据
-    /** 场景自定义数据 */
-    sceneData: Map<string, string>;  // 使用JSON字符串存储场景数据
+interface EntitySnapshotData {
+    readonly name: string;
+    readonly tag: number;
+    readonly active: boolean;
+    readonly enabled: boolean;
+    readonly updateOrder: number;
+    readonly parentId?: number;
 }
 
 /**
- * 增量序列化格式
+ * @zh 场景快照（用于对比）
+ * @en Scene snapshot (for comparison)
+ */
+export interface SceneSnapshot {
+    /** @zh 快照版本号 @en Snapshot version */
+    readonly version: number;
+    /** @zh 实体ID集合 @en Entity ID set */
+    readonly entityIds: Set<number>;
+    /** @zh 实体数据映射 @en Entity data map */
+    readonly entities: Map<number, EntitySnapshotData>;
+    /** @zh 组件数据映射 (entityId -> componentType -> serializedData JSON) @en Component data map */
+    readonly components: Map<number, Map<string, string>>;
+    /** @zh 场景自定义数据 @en Scene custom data */
+    readonly sceneData: Map<string, string>;
+}
+
+/**
+ * @zh 增量序列化格式
+ * @en Incremental serialization format
  */
 export type IncrementalSerializationFormat = 'json' | 'binary';
 
 /**
- * 增量序列化选项
+ * @zh 增量快照统计信息
+ * @en Incremental snapshot statistics
  */
-export type IncrementalSerializationOptions = {
+export interface IIncrementalStats {
+    /** @zh 总变更数 @en Total changes */
+    readonly totalChanges: number;
+    /** @zh 实体变更数 @en Entity changes count */
+    readonly entityChanges: number;
+    /** @zh 组件变更数 @en Component changes count */
+    readonly componentChanges: number;
+    /** @zh 场景数据变更数 @en Scene data changes count */
+    readonly sceneDataChanges: number;
+    /** @zh 新增实体数 @en Added entities count */
+    readonly addedEntities: number;
+    /** @zh 删除实体数 @en Removed entities count */
+    readonly removedEntities: number;
+    /** @zh 更新实体数 @en Updated entities count */
+    readonly updatedEntities: number;
+    /** @zh 新增组件数 @en Added components count */
+    readonly addedComponents: number;
+    /** @zh 删除组件数 @en Removed components count */
+    readonly removedComponents: number;
+    /** @zh 更新组件数 @en Updated components count */
+    readonly updatedComponents: number;
+}
+
+/**
+ * @zh 增量序列化选项
+ * @en Incremental serialization options
+ */
+export interface IncrementalSerializationOptions {
     /**
-     * 是否包含组件数据的深度对比
-     * 默认true，设为false可提升性能但可能漏掉组件内部字段变更
+     * @zh 实体过滤器 - 只快照符合条件的实体
+     * @en Entity filter - only snapshot entities that match the condition
+     *
+     * @example
+     * ```typescript
+     * // 只快照玩家实体
+     * const snapshot = IncrementalSerializer.createSnapshot(scene, {
+     *     entityFilter: (entity) => entity.tag === PLAYER_TAG
+     * });
+     *
+     * // 只快照有特定组件的实体
+     * const snapshot = IncrementalSerializer.createSnapshot(scene, {
+     *     entityFilter: (entity) => entity.hasComponent(PlayerMarker)
+     * });
+     * ```
+     */
+    entityFilter?: (entity: Entity) => boolean;
+
+    /**
+     * @zh 是否包含组件数据的深度对比，默认true
+     * @en Whether to deep compare component data, default true
      */
     deepComponentComparison?: boolean;
 
     /**
-     * 是否跟踪场景数据变更
-     * 默认true
+     * @zh 是否跟踪场景数据变更，默认true
+     * @en Whether to track scene data changes, default true
      */
     trackSceneData?: boolean;
 
     /**
-     * 是否压缩快照（使用JSON序列化）
-     * 默认false，设为true可减少内存占用但增加CPU开销
+     * @zh 是否压缩快照，默认false
+     * @en Whether to compress snapshot, default false
      */
     compressSnapshot?: boolean;
 
     /**
-     * 序列化格式
-     * - 'json': JSON格式
-     * - 'binary': 二进制格式
-     * 默认 'json'
+     * @zh 序列化格式，默认 'json'
+     * @en Serialization format, default 'json'
      */
     format?: IncrementalSerializationFormat;
 
     /**
-     * 是否美化JSON输出（仅在format='json'时有效）
-     * 默认false
+     * @zh 是否美化JSON输出（仅在format='json'时有效），默认false
+     * @en Whether to prettify JSON output (only for format='json'), default false
      */
     pretty?: boolean;
 }
 
+// =============================================================================
+// 常量 | Constants
+// =============================================================================
+
+const DEFAULT_OPTIONS: Required<Omit<IncrementalSerializationOptions, 'entityFilter'>> = {
+    deepComponentComparison: true,
+    trackSceneData: true,
+    compressSnapshot: false,
+    format: 'json',
+    pretty: false
+};
+
+// =============================================================================
+// IncrementalSerializer
+// =============================================================================
+
 /**
- * 增量序列化器类
+ * @zh 增量序列化器类
+ * @en Incremental serializer class
+ *
+ * @zh 提供场景快照创建、增量计算、应用和序列化功能
+ * @en Provides scene snapshot creation, incremental computation, application and serialization
  */
 export class IncrementalSerializer {
-    /** 当前快照版本号 */
+    /** @zh 当前快照版本号 @en Current snapshot version */
     private static snapshotVersion = 0;
 
+    // =========================================================================
+    // 快照创建 | Snapshot Creation
+    // =========================================================================
+
     /**
-     * 创建场景快照
+     * @zh 创建场景快照
+     * @en Create scene snapshot
      *
-     * @param scene 要快照的场景
-     * @param options 序列化选项
-     * @returns 场景快照对象
+     * @param scene - @zh 要快照的场景 @en Scene to snapshot
+     * @param options - @zh 序列化选项 @en Serialization options
+     * @returns @zh 场景快照对象 @en Scene snapshot object
      */
     public static createSnapshot(
         scene: IScene,
         options?: IncrementalSerializationOptions
     ): SceneSnapshot {
-        const opts = {
-            deepComponentComparison: true,
-            trackSceneData: true,
-            compressSnapshot: false,
-            ...options
-        };
+        const opts = { ...DEFAULT_OPTIONS, ...options };
 
         const snapshot: SceneSnapshot = {
             version: ++this.snapshotVersion,
@@ -194,8 +283,13 @@ export class IncrementalSerializer {
             sceneData: new Map()
         };
 
-        // 快照所有实体
+        // 快照实体（支持过滤）
         for (const entity of scene.entities.buffer) {
+            // 应用实体过滤器
+            if (opts.entityFilter && !opts.entityFilter(entity)) {
+                continue;
+            }
+
             snapshot.entityIds.add(entity.id);
 
             // 获取层级信息
@@ -243,24 +337,25 @@ export class IncrementalSerializer {
         return snapshot;
     }
 
+    // =========================================================================
+    // 增量计算 | Incremental Computation
+    // =========================================================================
+
     /**
-     * 计算增量变更
+     * @zh 计算增量变更
+     * @en Compute incremental changes
      *
-     * @param scene 当前场景
-     * @param baseSnapshot 基础快照
-     * @param options 序列化选项
-     * @returns 增量快照
+     * @param scene - @zh 当前场景 @en Current scene
+     * @param baseSnapshot - @zh 基础快照 @en Base snapshot
+     * @param options - @zh 序列化选项 @en Serialization options
+     * @returns @zh 增量快照 @en Incremental snapshot
      */
     public static computeIncremental(
         scene: IScene,
         baseSnapshot: SceneSnapshot,
         options?: IncrementalSerializationOptions
     ): IncrementalSnapshot {
-        const opts = {
-            deepComponentComparison: true,
-            trackSceneData: true,
-            ...options
-        };
+        const opts = { ...DEFAULT_OPTIONS, ...options };
 
         const incremental: IncrementalSnapshot = {
             version: ++this.snapshotVersion,
@@ -274,8 +369,13 @@ export class IncrementalSerializer {
 
         const currentEntityIds = new Set<number>();
 
-        // 检测实体变更
+        // 检测实体变更（支持过滤）
         for (const entity of scene.entities.buffer) {
+            // 应用实体过滤器
+            if (opts.entityFilter && !opts.entityFilter(entity)) {
+                continue;
+            }
+
             currentEntityIds.add(entity.id);
 
             // 获取层级信息
@@ -372,8 +472,13 @@ export class IncrementalSerializer {
         return incremental;
     }
 
+    // =========================================================================
+    // 私有方法 - 变更检测 | Private Methods - Change Detection
+    // =========================================================================
+
     /**
-     * 检测组件变更
+     * @zh 检测组件变更
+     * @en Detect component changes
      */
     private static detectComponentChanges(
         entity: Entity,
@@ -429,7 +534,8 @@ export class IncrementalSerializer {
     }
 
     /**
-     * 检测场景数据变更
+     * @zh 检测场景数据变更
+     * @en Detect scene data changes
      */
     private static detectSceneDataChanges(
         scene: IScene,
@@ -466,12 +572,17 @@ export class IncrementalSerializer {
         }
     }
 
+    // =========================================================================
+    // 增量应用 | Incremental Application
+    // =========================================================================
+
     /**
-     * 应用增量变更到场景
+     * @zh 应用增量变更到场景
+     * @en Apply incremental changes to scene
      *
-     * @param scene 目标场景
-     * @param incremental 增量快照
-     * @param componentRegistry 组件类型注册表
+     * @param scene - @zh 目标场景 @en Target scene
+     * @param incremental - @zh 增量快照 @en Incremental snapshot
+     * @param componentRegistry - @zh 组件类型注册表 @en Component type registry
      */
     public static applyIncremental(
         scene: IScene,
@@ -617,12 +728,17 @@ export class IncrementalSerializer {
         }
     }
 
+    // =========================================================================
+    // 序列化与反序列化 | Serialization & Deserialization
+    // =========================================================================
+
     /**
-     * 序列化增量快照
+     * @zh 序列化增量快照
+     * @en Serialize incremental snapshot
      *
-     * @param incremental 增量快照
-     * @param options 序列化选项
-     * @returns 序列化后的数据（JSON字符串或二进制Uint8Array）
+     * @param incremental - @zh 增量快照 @en Incremental snapshot
+     * @param options - @zh 序列化选项 @en Serialization options
+     * @returns @zh 序列化后的数据 @en Serialized data
      *
      * @example
      * ```typescript
@@ -633,74 +749,62 @@ export class IncrementalSerializer {
      * const binaryData = IncrementalSerializer.serializeIncremental(snapshot, {
      *     format: 'binary'
      * });
-     *
-     * // 美化JSON
-     * const prettyJson = IncrementalSerializer.serializeIncremental(snapshot, {
-     *     format: 'json',
-     *     pretty: true
-     * });
      * ```
      */
     public static serializeIncremental(
         incremental: IncrementalSnapshot,
         options?: { format?: IncrementalSerializationFormat; pretty?: boolean }
     ): string | Uint8Array {
-        const opts = {
-            format: 'json' as IncrementalSerializationFormat,
-            pretty: false,
-            ...options
-        };
+        const format = options?.format ?? 'json';
+        const pretty = options?.pretty ?? false;
 
-        if (opts.format === 'binary') {
+        if (format === 'binary') {
             return BinarySerializer.encode(incremental);
-        } else {
-            return opts.pretty
-                ? JSON.stringify(incremental, null, 2)
-                : JSON.stringify(incremental);
         }
+        return pretty ? JSON.stringify(incremental, null, 2) : JSON.stringify(incremental);
     }
 
     /**
-     * 反序列化增量快照
+     * @zh 反序列化增量快照
+     * @en Deserialize incremental snapshot
      *
-     * @param data 序列化的数据（JSON字符串或二进制Uint8Array）
-     * @returns 增量快照
-     *
-     * @example
-     * ```typescript
-     * // 从JSON反序列化
-     * const snapshot = IncrementalSerializer.deserializeIncremental(jsonString);
-     *
-     * // 从二进制反序列化
-     * const snapshot = IncrementalSerializer.deserializeIncremental(buffer);
-     * ```
+     * @param data - @zh 序列化的数据 @en Serialized data
+     * @returns @zh 增量快照 @en Incremental snapshot
      */
     public static deserializeIncremental(data: string | Uint8Array): IncrementalSnapshot {
         if (typeof data === 'string') {
             return JSON.parse(data);
-        } else {
-            return BinarySerializer.decode(data) as IncrementalSnapshot;
         }
+        return BinarySerializer.decode(data) as IncrementalSnapshot;
     }
 
+    // =========================================================================
+    // 统计与工具 | Statistics & Utilities
+    // =========================================================================
+
     /**
-     * 获取增量快照的统计信息
+     * @zh 获取增量快照的统计信息
+     * @en Get incremental snapshot statistics
      *
-     * @param incremental 增量快照
-     * @returns 统计信息
+     * @param incremental - @zh 增量快照 @en Incremental snapshot
+     * @returns @zh 统计信息 @en Statistics
      */
-    public static getIncrementalStats(incremental: IncrementalSnapshot): {
-        totalChanges: number;
-        entityChanges: number;
-        componentChanges: number;
-        sceneDataChanges: number;
-        addedEntities: number;
-        removedEntities: number;
-        updatedEntities: number;
-        addedComponents: number;
-        removedComponents: number;
-        updatedComponents: number;
-    } {
+    public static getIncrementalStats(incremental: IncrementalSnapshot): IIncrementalStats {
+        const entityStats = { added: 0, removed: 0, updated: 0 };
+        const componentStats = { added: 0, removed: 0, updated: 0 };
+
+        for (const change of incremental.entityChanges) {
+            if (change.operation === ChangeOperation.EntityAdded) entityStats.added++;
+            else if (change.operation === ChangeOperation.EntityRemoved) entityStats.removed++;
+            else if (change.operation === ChangeOperation.EntityUpdated) entityStats.updated++;
+        }
+
+        for (const change of incremental.componentChanges) {
+            if (change.operation === ChangeOperation.ComponentAdded) componentStats.added++;
+            else if (change.operation === ChangeOperation.ComponentRemoved) componentStats.removed++;
+            else if (change.operation === ChangeOperation.ComponentUpdated) componentStats.updated++;
+        }
+
         return {
             totalChanges:
                 incremental.entityChanges.length +
@@ -709,29 +813,18 @@ export class IncrementalSerializer {
             entityChanges: incremental.entityChanges.length,
             componentChanges: incremental.componentChanges.length,
             sceneDataChanges: incremental.sceneDataChanges.length,
-            addedEntities: incremental.entityChanges.filter(
-                (c) => c.operation === ChangeOperation.EntityAdded
-            ).length,
-            removedEntities: incremental.entityChanges.filter(
-                (c) => c.operation === ChangeOperation.EntityRemoved
-            ).length,
-            updatedEntities: incremental.entityChanges.filter(
-                (c) => c.operation === ChangeOperation.EntityUpdated
-            ).length,
-            addedComponents: incremental.componentChanges.filter(
-                (c) => c.operation === ChangeOperation.ComponentAdded
-            ).length,
-            removedComponents: incremental.componentChanges.filter(
-                (c) => c.operation === ChangeOperation.ComponentRemoved
-            ).length,
-            updatedComponents: incremental.componentChanges.filter(
-                (c) => c.operation === ChangeOperation.ComponentUpdated
-            ).length
+            addedEntities: entityStats.added,
+            removedEntities: entityStats.removed,
+            updatedEntities: entityStats.updated,
+            addedComponents: componentStats.added,
+            removedComponents: componentStats.removed,
+            updatedComponents: componentStats.updated
         };
     }
 
     /**
-     * 重置快照版本号（用于测试）
+     * @zh 重置快照版本号（用于测试）
+     * @en Reset snapshot version (for testing)
      */
     public static resetVersion(): void {
         this.snapshotVersion = 0;
