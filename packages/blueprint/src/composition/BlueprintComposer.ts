@@ -8,7 +8,7 @@
 
 import type { BlueprintAsset, BlueprintVariable } from '../types/blueprint';
 import type { BlueprintNode, BlueprintConnection } from '../types/nodes';
-import type { IBlueprintFragment, ExposedPin } from './BlueprintFragment';
+import type { IBlueprintFragment } from './BlueprintFragment';
 
 // =============================================================================
 // 槽位定义 | Slot Definition
