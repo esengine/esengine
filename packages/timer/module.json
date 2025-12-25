@@ -1,0 +1,23 @@
+{
+    "id": "timer",
+    "name": "@esengine/timer",
+    "globalKey": "timer",
+    "displayName": "Timer & Cooldown",
+    "description": "定时器和冷却系统 | Timer and cooldown system",
+    "version": "1.0.0",
+    "category": "Other",
+    "icon": "Timer",
+    "tags": ["timer", "cooldown", "delay", "schedule"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": true,
+    "canContainContent": false,
+    "platforms": ["web", "desktop"],
+    "dependencies": ["core"],
+    "exports": {
+        "components": [],
+        "systems": []
+    },
+    "outputPath": "dist/index.js",
+    "pluginExport": "TimerPlugin"
+}
