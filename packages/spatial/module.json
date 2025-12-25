@@ -1,0 +1,23 @@
+{
+    "id": "spatial",
+    "name": "@esengine/spatial",
+    "globalKey": "spatial",
+    "displayName": "Spatial Query",
+    "description": "空间查询和索引系统 | Spatial query and indexing system",
+    "version": "1.0.0",
+    "category": "Core",
+    "icon": "Grid",
+    "tags": ["spatial", "query", "quadtree", "grid"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": true,
+    "canContainContent": false,
+    "platforms": ["web", "desktop", "server"],
+    "dependencies": ["core", "math"],
+    "exports": {
+        "components": [],
+        "systems": ["SpatialIndexSystem"]
+    },
+    "outputPath": "dist/index.js",
+    "pluginExport": "SpatialPlugin"
+}
