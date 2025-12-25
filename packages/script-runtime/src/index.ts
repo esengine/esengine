@@ -76,3 +76,41 @@ export {
 } from './tokens';
 
 export type { IScriptRuntimeService } from './tokens';
+
+// =============================================================================
+// Server | 服务器端
+// =============================================================================
+
+export {
+    // PlayerSession
+    PlayerSession,
+    // TickScheduler
+    TickScheduler,
+    // IntentProcessor
+    IntentProcessorBase,
+    IntentProcessorRegistry,
+    // GameLoop
+    GameLoop,
+    DEFAULT_GAME_LOOP_CONFIG
+} from './server';
+
+export type {
+    // Types
+    PlayerTickResult,
+    TickExecutionResult,
+    IntentProcessingResult,
+    GameLoopConfig,
+    GameLoopState,
+    GameLoopEvents,
+    // PlayerSession
+    PlayerSessionConfig,
+    PlayerSessionState,
+    // TickScheduler
+    TickSchedulerConfig,
+    SchedulerStats,
+    // IntentProcessor
+    IIntentProcessor,
+    SingleIntentResult,
+    // GameLoop
+    GameLoopStats
+} from './server';
