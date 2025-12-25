@@ -9,6 +9,9 @@ export * from './types';
 // Runtime
 export * from './runtime';
 
+// Triggers
+export * from './triggers';
+
 // Nodes (import to register)
 import './nodes';
 
