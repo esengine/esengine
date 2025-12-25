@@ -11,5 +11,5 @@ export default defineConfig({
         '@esengine/engine-core',
         '@esengine/blueprint'
     ],
-    tsconfig: 'tsconfig.json'
+    tsconfig: 'tsconfig.build.json'
 });
