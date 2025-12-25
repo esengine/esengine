@@ -15,14 +15,7 @@ export { ServerBlueprintVM } from './vm/ServerBlueprintVM';
 export type { ServerVMConfig, TickResult } from './vm/ServerBlueprintVM';
 
 export { ServerExecutionContext } from './vm/ServerExecutionContext';
-export type {
-    IGameState,
-    IUnitState,
-    ISpawnerState,
-    IZoneState,
-    IResourceState,
-    LogEntry
-} from './vm/ServerExecutionContext';
+export type { IGameState, LogEntry } from './vm/ServerExecutionContext';
 
 export { CPULimiter, DEFAULT_CPU_CONFIG } from './vm/CPULimiter';
 export type { CPULimiterConfig, CPUStats } from './vm/CPULimiter';
@@ -34,43 +27,20 @@ export type { CPULimiterConfig, CPUStats } from './vm/CPULimiter';
 export { IntentCollector } from './intent/IntentCollector';
 export type { IIntentCollector } from './intent/IntentCollector';
 
-export type {
-    IIntent,
-    Intent,
-    IntentType,
-    // Unit intents
-    UnitMoveIntent,
-    UnitHarvestIntent,
-    UnitBuildIntent,
-    UnitRepairIntent,
-    UnitAttackIntent,
-    UnitTransferIntent,
-    UnitPickupIntent,
-    // Spawner intents
-    SpawnerSpawnUnitIntent,
-    SpawnerCancelIntent,
-    BodyPartConstant,
-    // Tower intents
-    TowerAttackIntent,
-    TowerRepairIntent,
-    TowerHealIntent
-} from './intent/IntentTypes';
+export type { IIntent, IntentKeyExtractor, Direction } from './intent/IntentTypes';
+
+export { defaultIntentKeyExtractor } from './intent/IntentTypes';
 
 // Result constants
 export {
     OK,
+    ERR_GENERIC,
     ERR_NOT_OWNER,
-    ERR_NO_PATH,
-    ERR_NAME_EXISTS,
-    ERR_BUSY,
-    ERR_NOT_ENOUGH_ENERGY,
-    ERR_NOT_ENOUGH_RESOURCES,
     ERR_INVALID_TARGET,
-    ERR_FULL,
     ERR_NOT_IN_RANGE,
+    ERR_NOT_ENOUGH_RESOURCES,
+    ERR_BUSY,
     ERR_INVALID_ARGS,
-    ERR_TIRED,
-    ERR_NO_BODYPART,
     // Direction constants
     TOP,
     TOP_RIGHT,

@@ -7,12 +7,29 @@
  */
 
 import type { BlueprintAsset } from '@esengine/blueprint';
-import type { IntentCollector } from '../intent/IntentCollector';
+import type { IIntent } from '../intent/IntentTypes';
+import type { IIntentCollector } from '../intent/IntentCollector';
 import type { CPULimiter } from './CPULimiter';
 
+// =============================================================================
+// 基础游戏状态接口 | Base Game State Interface
+// =============================================================================
+
 /**
- * @zh 游戏状态接口（玩家可见的部分）
- * @en Game state interface (player visible portion)
+ * @zh 基础游戏状态接口（引擎级别）
+ * @en Base game state interface (engine level)
+ *
+ * @zh 引擎只定义最基础的时间信息，具体的游戏状态由游戏项目扩展
+ * @en Engine only defines basic timing info, specific game state is extended by game projects
+ *
+ * @example
+ * ```typescript
+ * // 游戏项目中扩展游戏状态 | Extend game state in game project
+ * interface MyGameState extends IGameState {
+ *     units: Map<string, IUnitState>;
+ *     buildings: Map<string, IBuildingState>;
+ * }
+ * ```
  */
 export interface IGameState {
     /**
@@ -26,100 +43,11 @@ export interface IGameState {
      * @en Time interval since last tick
      */
     deltaTime: number;
-
-    /**
-     * @zh 玩家可见的单位列表
-     * @en Player visible units
-     */
-    units: Map<string, IUnitState>;
-
-    /**
-     * @zh 玩家可见的生成器列表
-     * @en Player visible spawners
-     */
-    spawners: Map<string, ISpawnerState>;
-
-    /**
-     * @zh 玩家可见的区域列表
-     * @en Player visible zones
-     */
-    zones: Map<string, IZoneState>;
-
-    /**
-     * @zh 玩家可见的资源列表
-     * @en Player visible resources
-     */
-    resources: Map<string, IResourceState>;
 }
 
-/**
- * @zh 单位状态
- * @en Unit state
- */
-export interface IUnitState {
-    id: string;
-    name: string;
-    ownerId: string;
-    x: number;
-    y: number;
-    zoneName: string;
-    hits: number;
-    hitsMax: number;
-    fatigue: number;
-    body: Array<{ type: string; hits: number }>;
-    store: Record<string, number>;
-    storeCapacity: number;
-}
-
-/**
- * @zh 生成器状态
- * @en Spawner state
- */
-export interface ISpawnerState {
-    id: string;
-    name: string;
-    ownerId: string;
-    x: number;
-    y: number;
-    zoneName: string;
-    hits: number;
-    hitsMax: number;
-    energy: number;
-    energyCapacity: number;
-    spawning: {
-        name: string;
-        needTime: number;
-        remainingTime: number;
-    } | null;
-}
-
-/**
- * @zh 区域状态
- * @en Zone state
- */
-export interface IZoneState {
-    name: string;
-    energyAvailable: number;
-    energyCapacityAvailable: number;
-    controller?: {
-        level: number;
-        progress: number;
-        progressTotal: number;
-    };
-}
-
-/**
- * @zh 资源状态
- * @en Resource state
- */
-export interface IResourceState {
-    id: string;
-    x: number;
-    y: number;
-    roomName: string;
-    resourceType: string;
-    amount: number;
-}
+// =============================================================================
+// 日志接口 | Log Interface
+// =============================================================================
 
 /**
  * @zh 日志条目
@@ -132,14 +60,41 @@ export interface LogEntry {
     tick: number;
 }
 
+// =============================================================================
+// 服务器执行上下文 | Server Execution Context
+// =============================================================================
+
 /**
  * @zh 服务器端执行上下文
  * @en Server-side Execution Context
  *
  * @zh 提供蓝图执行时访问游戏状态和收集意图的能力
  * @en Provides ability to access game state and collect intents during blueprint execution
+ *
+ * @typeParam TGameState - @zh 游戏状态类型，由游戏项目定义 @en Game state type, defined by game project
+ * @typeParam TIntent - @zh 意图类型，由游戏项目定义 @en Intent type, defined by game project
+ *
+ * @example
+ * ```typescript
+ * // 游戏项目中定义具体类型 | Define specific types in game project
+ * interface MyGameState extends IGameState {
+ *     units: Map<string, IUnit>;
+ *     resources: Map<string, IResource>;
+ * }
+ *
+ * interface MyIntent extends IIntent {
+ *     readonly type: 'unit.move' | 'unit.attack';
+ *     unitId: string;
+ * }
+ *
+ * // 创建上下文 | Create context
+ * const context = new ServerExecutionContext<MyGameState, MyIntent>(blueprint, 'player1');
+ * ```
  */
-export class ServerExecutionContext {
+export class ServerExecutionContext<
+    TGameState extends IGameState = IGameState,
+    TIntent extends IIntent = IIntent
+> {
     /**
      * @zh 蓝图资产
      * @en Blueprint asset
@@ -156,13 +111,13 @@ export class ServerExecutionContext {
      * @zh 当前游戏状态
      * @en Current game state
      */
-    private _gameState: IGameState | null = null;
+    private _gameState: TGameState | null = null;
 
     /**
      * @zh 意图收集器
      * @en Intent collector
      */
-    private _intentCollector: IntentCollector | null = null;
+    private _intentCollector: IIntentCollector<TIntent> | null = null;
 
     /**
      * @zh CPU 限制器
@@ -222,7 +177,6 @@ export class ServerExecutionContext {
         this.blueprint = blueprint;
         this.playerId = playerId;
 
-        // 初始化实例变量 | Initialize instance variables
         for (const variable of blueprint.variables) {
             if (variable.scope === 'instance') {
                 this._instanceVariables.set(variable.name, variable.defaultValue);
@@ -238,7 +192,7 @@ export class ServerExecutionContext {
      * @zh 设置当前游戏状态
      * @en Set current game state
      */
-    setGameState(state: IGameState): void {
+    setGameState(state: TGameState): void {
         this._gameState = state;
         this.deltaTime = state.deltaTime;
     }
@@ -247,7 +201,7 @@ export class ServerExecutionContext {
      * @zh 获取当前游戏状态
      * @en Get current game state
      */
-    getGameState(): IGameState | null {
+    getGameState(): TGameState | null {
         return this._gameState;
     }
 
@@ -259,47 +213,6 @@ export class ServerExecutionContext {
         return this._gameState?.tick ?? 0;
     }
 
-    /**
-     * @zh 获取玩家的所有单位
-     * @en Get all player's units
-     */
-    getUnits(): IUnitState[] {
-        if (!this._gameState) return [];
-        return Array.from(this._gameState.units.values())
-            .filter(u => u.ownerId === this.playerId);
-    }
-
-    /**
-     * @zh 获取玩家的所有生成器
-     * @en Get all player's spawners
-     */
-    getSpawners(): ISpawnerState[] {
-        if (!this._gameState) return [];
-        return Array.from(this._gameState.spawners.values())
-            .filter(s => s.ownerId === this.playerId);
-    }
-
-    /**
-     * @zh 通过 ID 获取对象
-     * @en Get object by ID
-     */
-    getObjectById<T>(id: string): T | null {
-        if (!this._gameState) return null;
-
-        // 尝试从各个集合中查找 | Try to find from each collection
-        if (this._gameState.units.has(id)) {
-            return this._gameState.units.get(id) as T;
-        }
-        if (this._gameState.spawners.has(id)) {
-            return this._gameState.spawners.get(id) as T;
-        }
-        if (this._gameState.resources.has(id)) {
-            return this._gameState.resources.get(id) as T;
-        }
-
-        return null;
-    }
-
     // =========================================================================
     // 意图收集 | Intent Collection
     // =========================================================================
@@ -308,7 +221,7 @@ export class ServerExecutionContext {
      * @zh 设置意图收集器
      * @en Set intent collector
      */
-    setIntentCollector(collector: IntentCollector): void {
+    setIntentCollector(collector: IIntentCollector<TIntent>): void {
         this._intentCollector = collector;
     }
 
@@ -316,7 +229,7 @@ export class ServerExecutionContext {
      * @zh 获取意图收集器
      * @en Get intent collector
      */
-    get intentCollector(): IntentCollector | null {
+    get intentCollector(): IIntentCollector<TIntent> | null {
         return this._intentCollector;
     }
 

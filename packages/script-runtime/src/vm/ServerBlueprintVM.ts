@@ -16,13 +16,15 @@ import { NodeRegistry } from '@esengine/blueprint';
 import { ServerExecutionContext, type IGameState, type LogEntry } from './ServerExecutionContext';
 import { CPULimiter, type CPULimiterConfig, type CPUStats } from './CPULimiter';
 import { IntentCollector } from '../intent/IntentCollector';
-import type { Intent } from '../intent/IntentTypes';
+import type { IIntent, IntentKeyExtractor } from '../intent/IntentTypes';
 
 /**
  * @zh 服务器 VM 配置
  * @en Server VM configuration
+ *
+ * @typeParam TIntent - @zh 意图类型 @en Intent type
  */
-export interface ServerVMConfig {
+export interface ServerVMConfig<TIntent extends IIntent = IIntent> {
     /**
      * @zh CPU 限制配置
      * @en CPU limit configuration
@@ -34,13 +36,21 @@ export interface ServerVMConfig {
      * @en Debug mode
      */
     debug?: boolean;
+
+    /**
+     * @zh 意图键提取器
+     * @en Intent key extractor
+     */
+    intentKeyExtractor?: IntentKeyExtractor<TIntent>;
 }
 
 /**
  * @zh Tick 执行结果
  * @en Tick execution result
+ *
+ * @typeParam TIntent - @zh 意图类型 @en Intent type
  */
-export interface TickResult {
+export interface TickResult<TIntent extends IIntent = IIntent> {
     /**
      * @zh 是否执行成功
      * @en Whether execution succeeded
@@ -57,7 +67,7 @@ export interface TickResult {
      * @zh 收集的意图列表
      * @en Collected intents list
      */
-    intents: Intent[];
+    intents: TIntent[];
 
     /**
      * @zh 日志列表
@@ -116,19 +126,34 @@ interface ExecutionResult {
  * @zh - Memory 持久化
  * @en - Memory persistence
  *
+ * @typeParam TGameState - @zh 游戏状态类型 @en Game state type
+ * @typeParam TIntent - @zh 意图类型 @en Intent type
+ *
  * @example
  * ```typescript
- * const vm = new ServerBlueprintVM('player1', blueprint, config);
+ * // 游戏项目中定义类型 | Define types in game project
+ * interface MyGameState extends IGameState {
+ *     units: Map<string, IUnit>;
+ * }
+ *
+ * interface MyIntent extends IIntent {
+ *     readonly type: 'unit.move' | 'unit.attack';
+ *     unitId: string;
+ * }
+ *
+ * // 创建 VM | Create VM
+ * const vm = new ServerBlueprintVM<MyGameState, MyIntent>('player1', blueprint, {
+ *     intentKeyExtractor: (intent) => `${intent.type}:${intent.unitId}`
+ * });
  *
  * // 每个 tick 执行 | Execute each tick
  * const result = vm.executeTick(gameState, playerMemory);
- *
- * // 处理结果 | Process result
- * console.log(`CPU: ${result.cpu.used}ms`);
- * console.log(`Intents: ${result.intents.length}`);
  * ```
  */
-export class ServerBlueprintVM {
+export class ServerBlueprintVM<
+    TGameState extends IGameState = IGameState,
+    TIntent extends IIntent = IIntent
+> {
     /**
      * @zh 玩家 ID
      * @en Player ID
@@ -145,7 +170,7 @@ export class ServerBlueprintVM {
      * @zh 执行上下文
      * @en Execution context
      */
-    private readonly _context: ServerExecutionContext;
+    private readonly _context: ServerExecutionContext<TGameState, TIntent>;
 
     /**
      * @zh CPU 限制器
@@ -157,7 +182,7 @@ export class ServerBlueprintVM {
      * @zh 意图收集器
      * @en Intent collector
      */
-    private readonly _intentCollector: IntentCollector;
+    private readonly _intentCollector: IntentCollector<TIntent>;
 
     /**
      * @zh 事件节点缓存
@@ -204,26 +229,23 @@ export class ServerBlueprintVM {
     constructor(
         playerId: string,
         blueprint: BlueprintAsset,
-        config: ServerVMConfig = {}
+        config: ServerVMConfig<TIntent> = {}
     ) {
         this._playerId = playerId;
         this._blueprint = blueprint;
         this._debug = config.debug ?? false;
 
-        // 创建执行上下文 | Create execution context
-        this._context = new ServerExecutionContext(blueprint, playerId);
+        this._context = new ServerExecutionContext<TGameState, TIntent>(blueprint, playerId);
 
-        // 创建 CPU 限制器 | Create CPU limiter
         this._cpuLimiter = new CPULimiter(playerId, config.cpuConfig);
 
-        // 创建意图收集器 | Create intent collector
-        this._intentCollector = new IntentCollector(playerId);
+        this._intentCollector = new IntentCollector<TIntent>(playerId, {
+            keyExtractor: config.intentKeyExtractor
+        });
 
-        // 关联到上下文 | Associate to context
         this._context.setCPULimiter(this._cpuLimiter);
         this._context.setIntentCollector(this._intentCollector);
 
-        // 构建查找表 | Build lookup tables
         this._buildLookupTables();
         this._cacheEventNodes();
     }
@@ -240,7 +262,7 @@ export class ServerBlueprintVM {
      * @zh 获取执行上下文
      * @en Get execution context
      */
-    get context(): ServerExecutionContext {
+    get context(): ServerExecutionContext<TGameState, TIntent> {
         return this._context;
     }
 
@@ -253,19 +275,25 @@ export class ServerBlueprintVM {
     }
 
     /**
+     * @zh 获取意图收集器
+     * @en Get intent collector
+     */
+    get intentCollector(): IntentCollector<TIntent> {
+        return this._intentCollector;
+    }
+
+    /**
      * @zh 构建连接查找表
      * @en Build connection lookup tables
      */
     private _buildLookupTables(): void {
         for (const conn of this._blueprint.connections) {
-            // 按源 | By source
             const sourceKey = `${conn.fromNodeId}.${conn.fromPin}`;
             if (!this._connectionsBySource.has(sourceKey)) {
                 this._connectionsBySource.set(sourceKey, []);
             }
             this._connectionsBySource.get(sourceKey)!.push(conn);
 
-            // 按目标 | By target
             const targetKey = `${conn.toNodeId}.${conn.toPin}`;
             if (!this._connectionsByTarget.has(targetKey)) {
                 this._connectionsByTarget.set(targetKey, []);
@@ -298,38 +326,28 @@ export class ServerBlueprintVM {
      * @param memory - @zh 玩家 Memory @en Player Memory
      * @returns @zh Tick 执行结果 @en Tick execution result
      */
-    executeTick(gameState: IGameState, memory: Record<string, unknown> = {}): TickResult {
+    executeTick(gameState: TGameState, memory: Record<string, unknown> = {}): TickResult<TIntent> {
         this._currentTick = gameState.tick;
         this._errors = [];
 
-        // 重置收集器 | Reset collectors
         this._intentCollector.clear();
         this._intentCollector.setTick(this._currentTick);
         this._context.clearLogs();
         this._context.clearOutputCache();
 
-        // 设置游戏状态和 Memory | Set game state and Memory
         this._context.setGameState(gameState);
         this._context.setMemory(memory);
 
-        // 开始 CPU 计时 | Start CPU timing
         this._cpuLimiter.start();
 
         try {
-            // 处理待处理的延迟执行 | Process pending delayed executions
             this._processPendingExecutions();
-
-            // 触发 Tick 事件 | Trigger Tick event
             this._triggerEvent('EventTick');
-
         } catch (error) {
             this._errors.push(`Execution error: ${error}`);
         }
 
-        // 结束 CPU 计时 | End CPU timing
         this._cpuLimiter.end();
-
-        // 恢复 CPU 桶 | Recover CPU bucket
         this._cpuLimiter.recoverBucket();
 
         return {
@@ -368,7 +386,6 @@ export class ServerBlueprintVM {
         startPin: string,
         eventData?: Record<string, unknown>
     ): void {
-        // 设置事件数据为节点输出 | Set event data as node outputs
         if (eventData) {
             this._context.setOutputs(startNode.id, eventData);
         }
@@ -377,20 +394,17 @@ export class ServerBlueprintVM {
         let currentPin: string = startPin;
 
         while (currentNodeId) {
-            // 检查 CPU 限制 | Check CPU limit
             if (!this._context.checkCPU()) {
                 this._errors.push('CPU limit exceeded during execution');
                 return;
             }
 
-            // 获取连接 | Get connections
             const connections = this._getConnectionsFromPin(currentNodeId, currentPin);
 
             if (connections.length === 0) {
                 break;
             }
 
-            // 执行下一个节点 | Execute next node
             const nextConn = connections[0];
             const result = this._executeNode(nextConn.toNodeId);
 
@@ -400,7 +414,6 @@ export class ServerBlueprintVM {
             }
 
             if (result.delay && result.delay > 0) {
-                // 添加到延迟队列 | Add to delay queue
                 this._pendingExecutions.push({
                     nodeId: nextConn.toNodeId,
                     execPin: result.nextExec ?? 'exec',
@@ -442,14 +455,10 @@ export class ServerBlueprintVM {
                 console.log(`[ServerVM] Executing: ${node.type} (${nodeId})`);
             }
 
-            // 创建兼容的执行上下文 | Create compatible execution context
-            // 使用类型断言以兼容 Blueprint 的 ExecutionContext 类型
-            // Use type assertion to be compatible with Blueprint's ExecutionContext type
             const compatContext = this._createCompatibleContext() as unknown as Parameters<typeof executor.execute>[1];
 
             const result = executor.execute(node, compatContext);
 
-            // 缓存输出 | Cache outputs
             if (result.outputs) {
                 this._context.setOutputs(nodeId, result.outputs);
             }
@@ -476,9 +485,8 @@ export class ServerBlueprintVM {
         getOutputs: (nodeId: string) => Record<string, unknown> | undefined;
         getVariable: (name: string) => unknown;
         setVariable: (name: string, value: unknown) => void;
-        // 扩展的服务器端方法 | Extended server-side methods
-        intentCollector: IntentCollector;
-        gameState: IGameState | null;
+        intentCollector: IntentCollector<TIntent>;
+        gameState: TGameState | null;
         playerId: string;
         memory: Record<string, unknown>;
         log: (message: string) => void;
@@ -501,7 +509,6 @@ export class ServerBlueprintVM {
             getOutputs: (nodeId: string) => this._context.getOutputs(nodeId),
             getVariable: (name: string) => this._context.getVariable(name),
             setVariable: (name: string, value: unknown) => this._context.setVariable(name, value),
-            // 扩展方法 | Extended methods
             intentCollector: this._intentCollector,
             gameState: this._context.getGameState(),
             playerId: this._playerId,

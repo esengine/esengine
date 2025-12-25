@@ -6,30 +6,31 @@
  * @en Collects all intents generated during player blueprint execution
  */
 
-import type { IIntent, Intent, IntentType } from './IntentTypes';
+import type { IIntent, IntentKeyExtractor } from './IntentTypes';
+import { defaultIntentKeyExtractor } from './IntentTypes';
 
 /**
  * @zh 意图收集器接口
  * @en Intent collector interface
  */
-export interface IIntentCollector {
+export interface IIntentCollector<T extends IIntent = IIntent> {
     /**
      * @zh 添加一个意图
      * @en Add an intent
      */
-    addIntent(intent: Intent): void;
+    addIntent(intent: T): boolean;
 
     /**
      * @zh 获取所有收集的意图
      * @en Get all collected intents
      */
-    getIntents(): Intent[];
+    getIntents(): T[];
 
     /**
      * @zh 按类型获取意图
      * @en Get intents by type
      */
-    getIntentsByType<T extends Intent>(type: T['type']): T[];
+    getIntentsByType(type: string): T[];
 
     /**
      * @zh 清除所有意图
@@ -48,28 +49,28 @@ export interface IIntentCollector {
  * @zh 意图收集器
  * @en Intent Collector
  *
- * @zh 在蓝图执行过程中收集玩家的操作意图，
- * @en Collects player operation intents during blueprint execution,
+ * @zh 在蓝图执行过程中收集玩家的操作意图，执行完成后由服务器统一处理
+ * @en Collects player operation intents during blueprint execution, processed by server after execution
  *
- * @zh 执行完成后由服务器统一处理
- * @en processed by server after execution completes
+ * @typeParam T - @zh 意图类型，必须继承 IIntent @en Intent type, must extend IIntent
  *
  * @example
  * ```typescript
- * const collector = new IntentCollector('player1');
+ * // 游戏项目中定义意图类型 | Define intent types in game project
+ * interface MyGameIntent extends IIntent {
+ *     readonly type: 'unit.move' | 'unit.attack';
+ *     unitId: string;
+ * }
  *
- * // 在节点执行中添加意图 | Add intent in node execution
- * collector.addIntent({
- *     type: 'creep.move',
- *     creepId: 'creep1',
- *     direction: 1
+ * // 创建收集器时提供键提取器 | Provide key extractor when creating collector
+ * const collector = new IntentCollector<MyGameIntent>('player1', {
+ *     keyExtractor: (intent) => `${intent.type}:${intent.unitId}`
  * });
  *
- * // 获取所有意图 | Get all intents
- * const intents = collector.getIntents();
+ * collector.addIntent({ type: 'unit.move', unitId: 'unit1' });
  * ```
  */
-export class IntentCollector implements IIntentCollector {
+export class IntentCollector<T extends IIntent = IIntent> implements IIntentCollector<T> {
     /**
      * @zh 玩家 ID
      * @en Player ID
@@ -86,22 +87,38 @@ export class IntentCollector implements IIntentCollector {
      * @zh 收集的意图列表
      * @en Collected intents list
      */
-    private _intents: Intent[] = [];
+    private _intents: T[] = [];
 
     /**
      * @zh 按类型索引的意图
      * @en Intents indexed by type
      */
-    private _intentsByType: Map<IntentType, Intent[]> = new Map();
+    private _intentsByType: Map<string, T[]> = new Map();
 
     /**
-     * @zh 每个对象每个动作只能有一个意图（防止重复）
-     * @en Each object can only have one intent per action (prevent duplicates)
+     * @zh 已添加的意图键（防止重复）
+     * @en Added intent keys (prevent duplicates)
      */
     private _intentKeys: Set<string> = new Set();
 
-    constructor(playerId: string) {
+    /**
+     * @zh 意图键提取器
+     * @en Intent key extractor
+     */
+    private readonly _keyExtractor: IntentKeyExtractor<T>;
+
+    /**
+     * @param playerId - @zh 玩家 ID @en Player ID
+     * @param options - @zh 配置选项 @en Configuration options
+     */
+    constructor(
+        playerId: string,
+        options: {
+            keyExtractor?: IntentKeyExtractor<T>;
+        } = {}
+    ) {
         this._playerId = playerId;
+        this._keyExtractor = options.keyExtractor ?? (defaultIntentKeyExtractor as IntentKeyExtractor<T>);
     }
 
     /**
@@ -135,17 +152,15 @@ export class IntentCollector implements IIntentCollector {
      * @param intent - @zh 要添加的意图 @en Intent to add
      * @returns @zh 是否添加成功（重复意图返回 false）@en Whether added successfully (duplicate returns false)
      */
-    addIntent(intent: Intent): boolean {
-        // 生成唯一键以防止重复 | Generate unique key to prevent duplicates
-        const key = this._getIntentKey(intent);
+    addIntent(intent: T): boolean {
+        const key = this._keyExtractor(intent);
 
         if (this._intentKeys.has(key)) {
-            // 同一对象同一动作已有意图，忽略后续的 | Same object same action already has intent, ignore subsequent
             return false;
         }
 
         // 添加元数据 | Add metadata
-        const intentWithMeta: Intent = {
+        const intentWithMeta: T = {
             ...intent,
             playerId: this._playerId,
             tick: this._currentTick
@@ -167,7 +182,7 @@ export class IntentCollector implements IIntentCollector {
      * @zh 获取所有收集的意图
      * @en Get all collected intents
      */
-    getIntents(): Intent[] {
+    getIntents(): T[] {
         return [...this._intents];
     }
 
@@ -175,16 +190,15 @@ export class IntentCollector implements IIntentCollector {
      * @zh 按类型获取意图
      * @en Get intents by type
      */
-    getIntentsByType<T extends Intent>(type: T['type']): T[] {
-        return (this._intentsByType.get(type) as T[]) ?? [];
+    getIntentsByType(type: string): T[] {
+        return [...(this._intentsByType.get(type) ?? [])];
     }
 
     /**
-     * @zh 检查对象是否已有指定类型的意图
-     * @en Check if object already has intent of specified type
+     * @zh 检查是否已有指定键的意图
+     * @en Check if intent with specified key exists
      */
-    hasIntent(objectId: string, intentType: IntentType): boolean {
-        const key = `${intentType}:${objectId}`;
+    hasIntentKey(key: string): boolean {
         return this._intentKeys.has(key);
     }
 
@@ -196,38 +210,5 @@ export class IntentCollector implements IIntentCollector {
         this._intents = [];
         this._intentsByType.clear();
         this._intentKeys.clear();
-    }
-
-    /**
-     * @zh 生成意图的唯一键
-     * @en Generate unique key for intent
-     */
-    private _getIntentKey(intent: Intent): string {
-        // 根据意图类型提取对象 ID | Extract object ID based on intent type
-        switch (intent.type) {
-            case 'unit.move':
-            case 'unit.harvest':
-            case 'unit.build':
-            case 'unit.repair':
-            case 'unit.attack':
-            case 'unit.transfer':
-            case 'unit.pickup':
-                return `${intent.type}:${intent.unitId}`;
-
-            case 'spawner.spawnUnit':
-            case 'spawner.cancel':
-                return `${intent.type}:${intent.spawnerId}`;
-
-            case 'tower.attack':
-            case 'tower.repair':
-            case 'tower.heal':
-                return `${intent.type}:${intent.towerId}`;
-
-            default: {
-                // 处理未知类型 | Handle unknown types
-                const unknownIntent = intent as IIntent;
-                return `${unknownIntent.type}:unknown`;
-            }
-        }
     }
 }
