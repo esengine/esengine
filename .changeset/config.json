@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.2/schema.json",
+  "changelog": [
+    "@changesets/changelog-github",
+    { "repo": "esengine/esengine" }
+  ],
+  "commit": false,
+  "fixed": [],
+  "linked": [
+    ["@esengine/ecs-framework", "@esengine/ecs-framework-math"]
+  ],
+  "access": "public",
+  "baseBranch": "master",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@esengine/editor-app",
+    "@esengine/editor-core",
+    "@esengine/editor-runtime",
+    "@esengine/*-editor",
+    "@esengine/engine",
+    "@esengine/build-config",
+    "@esengine/ecs-engine-bindgen"
+  ]
+}

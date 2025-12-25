@@ -1,0 +1,85 @@
+name: Release (Changesets)
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.changeset/**'
+      - 'packages/*/package.json'
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/engine
+          cache-on-failure: true
+
+      - name: Cache wasm-pack
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-pack
+          key: wasm-pack-${{ runner.os }}
+
+      - name: Install wasm-pack
+        run: |
+          if ! command -v wasm-pack &> /dev/null; then
+            cargo install wasm-pack
+          fi
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Copy WASM files
+        run: |
+          mkdir -p packages/ecs-engine-bindgen/src/wasm
+          cp packages/engine/pkg/es_engine.js packages/ecs-engine-bindgen/src/wasm/
+          cp packages/engine/pkg/es_engine.d.ts packages/ecs-engine-bindgen/src/wasm/
+          cp packages/engine/pkg/es_engine_bg.wasm packages/ecs-engine-bindgen/src/wasm/
+          cp packages/engine/pkg/es_engine_bg.wasm.d.ts packages/ecs-engine-bindgen/src/wasm/
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset:version
+          publish: pnpm changeset:publish
+          title: 'chore: release packages'
+          commit: 'chore: release packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -17,6 +17,9 @@
     "egret"
   ],
   "scripts": {
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "pnpm build && changeset publish",
     "bootstrap": "lerna bootstrap",
     "clean": "turbo run clean",
     "build": "turbo run build",
@@ -64,6 +67,8 @@
   "author": "yhh",
   "license": "MIT",
   "devDependencies": {
+    "@changesets/changelog-github": "^0.5.2",
+    "@changesets/cli": "^2.29.8",
     "@commitlint/cli": "^18.6.0",
     "@commitlint/config-conventional": "^18.6.0",
     "@eslint/js": "^9.39.1",
@@ -121,4 +126,3 @@
     "ws": "^8.18.2"
   }
 }
-
