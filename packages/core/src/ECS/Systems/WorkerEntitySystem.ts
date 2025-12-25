@@ -1,3 +1,8 @@
+/**
+ * @zh 支持 Worker 并行处理的实体系统基类
+ * @en Base class for entity systems with Worker parallel processing support
+ */
+
 import { Entity } from '../Entity';
 import { EntitySystem } from './EntitySystem';
 import { Matcher } from '../Utils/Matcher';
@@ -5,75 +10,130 @@ import { Time } from '../../Utils/Time';
 import { PlatformManager } from '../../Platform/PlatformManager';
 import type { IPlatformAdapter, PlatformWorker } from '../../Platform/IPlatformAdapter';
 import { getSystemInstanceTypeName } from '../Decorators';
+import { PlatformWorkerPool } from './PlatformWorkerPool';
+
+// =============================================================================
+// 类型定义 | Type Definitions
+// =============================================================================
 
 /**
- * Worker处理函数类型
- * 用户编写的处理逻辑，会被序列化到Worker中执行
+ * @zh Worker 处理函数类型
+ * @en Worker process function type
+ *
+ * @zh 用户编写的处理逻辑，会被序列化到 Worker 中执行
+ * @en User-defined processing logic, serialized and executed in Worker
  */
-export type WorkerProcessFunction<T extends Record<string, any> = any> = (
+export type WorkerProcessFunction<T extends Record<string, unknown> = Record<string, unknown>> = (
     entities: T[],
     deltaTime: number,
-    config?: any
+    config?: unknown
 ) => T[] | Promise<T[]>;
 
 /**
- * Worker配置接口
- */
-export type WorkerSystemConfig = {
-    /** 是否启用Worker并行处理 */
-    enableWorker?: boolean;
-    /** Worker数量，默认为CPU核心数，自动限制在系统最大值内 */
-    workerCount?: number;
-    /** 每个Worker处理的实体数量，用于控制负载分布 */
-    entitiesPerWorker?: number;
-    /** 系统配置数据，会传递给Worker */
-    systemConfig?: any;
-    /** 是否使用SharedArrayBuffer优化 */
-    useSharedArrayBuffer?: boolean;
-    /** 每个实体在SharedArrayBuffer中占用的Float32数量 */
-    entityDataSize?: number;
-    /** 最大实体数量（用于预分配SharedArrayBuffer） */
-    maxEntities?: number;
-    /**
-     * 预编译 Worker 脚本路径（微信小游戏等不支持动态脚本的平台必需）
-     * Pre-compiled Worker script path (required for platforms like WeChat Mini Game that don't support dynamic scripts)
-     *
-     * @example
-     * ```typescript
-     * // 微信小游戏使用方式：
-     * // 1. 创建 Worker 文件: workers/physics-worker.js
-     * // 2. 在 game.json 配置 "workers": "workers"
-     * // 3. 指定路径：
-     * workerScriptPath: 'workers/physics-worker.js'
-     * ```
-     */
-    workerScriptPath?: string;
-}
-
-
-/**
- * SharedArrayBuffer处理函数类型
+ * @zh SharedArrayBuffer 处理函数类型
+ * @en SharedArrayBuffer process function type
  */
 export type SharedArrayBufferProcessFunction = (
     sharedFloatArray: Float32Array,
     startIndex: number,
     endIndex: number,
     deltaTime: number,
-    systemConfig?: any
+    systemConfig?: unknown
 ) => void;
 
 /**
- * 支持Worker并行处理的EntitySystem基类
+ * @zh Worker 系统配置接口
+ * @en Worker system configuration interface
+ */
+export interface IWorkerSystemConfig {
+    /**
+     * @zh 是否启用 Worker 并行处理
+     * @en Enable Worker parallel processing
+     * @default true
+     */
+    enableWorker?: boolean;
+
+    /**
+     * @zh Worker 数量，默认为 CPU 核心数，自动限制在系统最大值内
+     * @en Worker count, defaults to CPU cores, auto-limited to system max
+     */
+    workerCount?: number;
+
+    /**
+     * @zh 每个 Worker 处理的实体数量，用于控制负载分布
+     * @en Entities per Worker, for load distribution control
+     */
+    entitiesPerWorker?: number;
+
+    /**
+     * @zh 系统配置数据，会传递给 Worker
+     * @en System config data, passed to Worker
+     */
+    systemConfig?: unknown;
+
+    /**
+     * @zh 是否使用 SharedArrayBuffer 优化
+     * @en Use SharedArrayBuffer optimization
+     */
+    useSharedArrayBuffer?: boolean;
+
+    /**
+     * @zh 每个实体在 SharedArrayBuffer 中占用的 Float32 数量
+     * @en Float32 count per entity in SharedArrayBuffer
+     */
+    entityDataSize?: number;
+
+    /**
+     * @zh 最大实体数量（用于预分配 SharedArrayBuffer）
+     * @en Max entities (for SharedArrayBuffer pre-allocation)
+     * @default 10000
+     */
+    maxEntities?: number;
+
+    /**
+     * @zh 预编译 Worker 脚本路径（微信小游戏等不支持动态脚本的平台必需）
+     * @en Pre-compiled Worker script path (required for platforms like WeChat Mini Game)
+     *
+     * @example
+     * ```typescript
+     * // 微信小游戏使用方式：
+     * workerScriptPath: 'workers/physics-worker.js'
+     * ```
+     */
+    workerScriptPath?: string;
+}
+
+/**
+ * @zh 内部使用的完整配置类型
+ * @en Internal complete config type
+ */
+type ResolvedConfig = Required<Omit<IWorkerSystemConfig, 'systemConfig' | 'entitiesPerWorker' | 'workerScriptPath'>> & {
+    systemConfig?: unknown;
+    entitiesPerWorker?: number;
+    workerScriptPath?: string;
+};
+
+/**
+ * @zh 处理模式
+ * @en Processing mode
+ */
+export type ProcessingMode = 'shared-buffer' | 'worker' | 'sync';
+
+// =============================================================================
+// WorkerEntitySystem
+// =============================================================================
+
+/**
+ * @zh 支持 Worker 并行处理的 EntitySystem 基类
+ * @en Base EntitySystem class with Worker parallel processing support
  *
- * 支持传统Worker和SharedArrayBuffer两种优化模式：
+ * @zh 支持传统 Worker 和 SharedArrayBuffer 两种优化模式：
  * - 传统模式：数据序列化传输，适用于复杂计算
- * - SharedArrayBuffer模式：零拷贝数据共享，适用于大量简单计算
+ * - SharedArrayBuffer 模式：零拷贝数据共享，适用于大量简单计算
  *
- * 用户需要实现：
- * 1. extractEntityData - 定义数据提取逻辑
- * 2. workerProcess - 编写处理函数（纯函数，可序列化）
- * 3. applyResult - 定义结果应用逻辑
- * 4. (可选) SharedArrayBuffer相关方法
+ * @en Supports two optimization modes:
+ * - Traditional mode: Data serialization, for complex calculations
+ * - SharedArrayBuffer mode: Zero-copy sharing, for many simple calculations
  *
  * @example
  * ```typescript
@@ -81,12 +141,8 @@ export type SharedArrayBufferProcessFunction = (
  *     constructor() {
  *         super(Matcher.all(Transform, Velocity), {
  *             enableWorker: true,
- *             workerCount: 8, // 指定8个worker，系统会自动限制在系统最大值内
- *             entitiesPerWorker: 100, // 每个worker处理100个实体
- *             useSharedArrayBuffer: true,
- *             entityDataSize: 6, // x, y, vx, vy, radius, mass
- *             maxEntities: 10000,
- *             systemConfig: { gravity: 100, friction: 0.95 }
+ *             workerCount: 8,
+ *             systemConfig: { gravity: 100 }
  *         });
  *     }
  *
@@ -95,334 +151,263 @@ export type SharedArrayBufferProcessFunction = (
  *     }
  *
  *     protected extractEntityData(entity: Entity): PhysicsData {
- *         const transform = entity.getComponent(Transform);
- *         const velocity = entity.getComponent(Velocity);
- *         const physics = entity.getComponent(PhysicsComponent);
- *         return {
- *             x: transform.x,
- *             y: transform.y,
- *             vx: velocity.x,
- *             vy: velocity.y,
- *             radius: physics.radius,
- *             mass: physics.mass
- *         };
+ *         // Extract component data
  *     }
  *
- *     protected workerProcess(entities: PhysicsData[], deltaTime: number, config: any): PhysicsData[] {
- *         return entities.map(entity => {
- *             // 应用重力
- *             entity.vy += config.gravity * deltaTime;
- *
- *             // 更新位置
- *             entity.x += entity.vx * deltaTime;
- *             entity.y += entity.vy * deltaTime;
- *
- *             // 应用摩擦力
- *             entity.vx *= config.friction;
- *             entity.vy *= config.friction;
- *
- *             return entity;
- *         });
+ *     protected workerProcess(entities: PhysicsData[], deltaTime: number, config: unknown): PhysicsData[] {
+ *         // Pure function executed in Worker
  *     }
  *
  *     protected applyResult(entity: Entity, result: PhysicsData): void {
- *         const transform = entity.getComponent(Transform);
- *         const velocity = entity.getComponent(Velocity);
- *
- *         transform.x = result.x;
- *         transform.y = result.y;
- *         velocity.x = result.vx;
- *         velocity.y = result.vy;
+ *         // Apply result back to components
  *     }
- *
- *     // SharedArrayBuffer优化支持
- *     protected writeEntityToBuffer(entityData: PhysicsData, offset: number): void {
- *         if (!this.sharedFloatArray) return;
- *
- *         this.sharedFloatArray[offset] = entityData.x;
- *         this.sharedFloatArray[offset + 1] = entityData.y;
- *         this.sharedFloatArray[offset + 2] = entityData.vx;
- *         this.sharedFloatArray[offset + 3] = entityData.vy;
- *         this.sharedFloatArray[offset + 4] = entityData.radius;
- *         this.sharedFloatArray[offset + 5] = entityData.mass;
- *     }
- *
- *     protected readEntityFromBuffer(offset: number): PhysicsData | null {
- *         if (!this.sharedFloatArray) return null;
- *
- *         return {
- *             x: this.sharedFloatArray[offset],
- *             y: this.sharedFloatArray[offset + 1],
- *             vx: this.sharedFloatArray[offset + 2],
- *             vy: this.sharedFloatArray[offset + 3],
- *             radius: this.sharedFloatArray[offset + 4],
- *             mass: this.sharedFloatArray[offset + 5]
- *         };
- *     }
- *
- *     protected getSharedArrayBufferProcessFunction(): SharedArrayBufferProcessFunction {
- *         return function(sharedFloatArray: Float32Array, startIndex: number, endIndex: number, deltaTime: number, config: any) {
- *             const entitySize = 6;
- *             for (let i = startIndex; i < endIndex; i++) {
- *                 const offset = i * entitySize;
- *
- *                 // 读取数据
- *                 let x = sharedFloatArray[offset];
- *                 let y = sharedFloatArray[offset + 1];
- *                 let vx = sharedFloatArray[offset + 2];
- *                 let vy = sharedFloatArray[offset + 3];
- *                 const radius = sharedFloatArray[offset + 4];
- *                 const mass = sharedFloatArray[offset + 5];
- *
- *                 // 物理计算
- *                 vy += config.gravity * deltaTime;
- *                 x += vx * deltaTime;
- *                 y += vy * deltaTime;
- *                 vx *= config.friction;
- *                 vy *= config.friction;
- *
- *                 // 写回数据
- *                 sharedFloatArray[offset] = x;
- *                 sharedFloatArray[offset + 1] = y;
- *                 sharedFloatArray[offset + 2] = vx;
- *                 sharedFloatArray[offset + 3] = vy;
- *             }
- *         };
- *     }
- * }
- *
- * interface PhysicsData {
- *     x: number;
- *     y: number;
- *     vx: number;
- *     vy: number;
- *     radius: number;
- *     mass: number;
  * }
  * ```
  */
-export abstract class WorkerEntitySystem<TEntityData = any> extends EntitySystem {
-    protected config: Required<Omit<WorkerSystemConfig, 'systemConfig' | 'entitiesPerWorker' | 'workerScriptPath'>> & {
-        systemConfig?: any;
-        entitiesPerWorker?: number;
-        workerScriptPath?: string;
-    };
-    private workerPool: PlatformWorkerPool | null = null;
-    private isProcessing = false;
+export abstract class WorkerEntitySystem<TEntityData = unknown> extends EntitySystem {
+    // =========================================================================
+    // 成员变量 | Member Variables
+    // =========================================================================
+
+    protected config: ResolvedConfig;
     protected sharedBuffer: SharedArrayBuffer | null = null;
     protected sharedFloatArray: Float32Array | null = null;
-    private platformAdapter: IPlatformAdapter;
-    private hasLoggedSyncMode = false;
 
-    constructor(matcher?: Matcher, config: WorkerSystemConfig = {}) {
+    private workerPool: PlatformWorkerPool | null = null;
+    private isProcessing = false;
+    private hasLoggedSyncMode = false;
+    private readonly platformAdapter: IPlatformAdapter;
+
+    // =========================================================================
+    // 构造函数 | Constructor
+    // =========================================================================
+
+    constructor(matcher?: Matcher, config: IWorkerSystemConfig = {}) {
         super(matcher);
 
-        // 获取平台适配器
         this.platformAdapter = PlatformManager.getInstance().getAdapter();
-
-        // 验证和调整 worker 数量，确保不超过系统最大值
-        const requestedWorkerCount = config.workerCount ?? this.getMaxSystemWorkerCount();
-        const maxSystemWorkerCount = this.getMaxSystemWorkerCount();
-        const validatedWorkerCount = Math.min(requestedWorkerCount, maxSystemWorkerCount);
-
-        // 如果用户请求的数量超过系统最大值，给出警告
-        if (requestedWorkerCount > maxSystemWorkerCount) {
-            this.logger.warn(`请求 ${requestedWorkerCount} 个Worker，但系统最多支持 ${maxSystemWorkerCount} 个。实际使用 ${validatedWorkerCount} 个Worker。`);
-        }
-
-        this.config = {
-            enableWorker: config.enableWorker ?? true,
-            workerCount: validatedWorkerCount,
-            systemConfig: config.systemConfig,
-            ...(config.entitiesPerWorker !== undefined && { entitiesPerWorker: config.entitiesPerWorker }),
-            useSharedArrayBuffer: config.useSharedArrayBuffer ?? this.isSharedArrayBufferSupported(),
-            entityDataSize: config.entityDataSize ?? this.getDefaultEntityDataSize(),
-            maxEntities: config.maxEntities ?? 10000,
-            ...(config.workerScriptPath !== undefined && { workerScriptPath: config.workerScriptPath })
-        };
-
+        this.config = this.resolveConfig(config);
 
         if (this.config.enableWorker && this.isWorkerSupported()) {
-            // 先初始化SharedArrayBuffer，再初始化Worker池
-            if (this.config.useSharedArrayBuffer) {
-                this.initializeSharedArrayBuffer();
-            }
-            this.initializeWorkerPool();
+            this.initializeWorkerSystem();
         }
     }
 
+    // =========================================================================
+    // 配置解析 | Config Resolution
+    // =========================================================================
+
     /**
-     * 检查是否支持Worker
+     * @zh 解析并验证配置
+     * @en Resolve and validate config
+     */
+    private resolveConfig(config: IWorkerSystemConfig): ResolvedConfig {
+        const maxWorkerCount = this.getMaxSystemWorkerCount();
+        const requestedWorkerCount = config.workerCount ?? maxWorkerCount;
+        const validatedWorkerCount = Math.min(requestedWorkerCount, maxWorkerCount);
+
+        if (requestedWorkerCount > maxWorkerCount) {
+            this.logger.warn(
+                `请求 ${requestedWorkerCount} 个 Worker，但系统最多支持 ${maxWorkerCount} 个。` +
+                `实际使用 ${validatedWorkerCount} 个 Worker。`
+            );
+        }
+
+        return {
+            enableWorker: config.enableWorker ?? true,
+            workerCount: validatedWorkerCount,
+            useSharedArrayBuffer: config.useSharedArrayBuffer ?? this.isSharedArrayBufferSupported(),
+            entityDataSize: config.entityDataSize ?? this.getDefaultEntityDataSize(),
+            maxEntities: config.maxEntities ?? 10000,
+            systemConfig: config.systemConfig,
+            ...(config.entitiesPerWorker !== undefined && { entitiesPerWorker: config.entitiesPerWorker }),
+            ...(config.workerScriptPath !== undefined && { workerScriptPath: config.workerScriptPath })
+        };
+    }
+
+    // =========================================================================
+    // 平台能力检测 | Platform Capability Detection
+    // =========================================================================
+
+    /**
+     * @zh 检查是否支持 Worker
+     * @en Check Worker support
      */
     private isWorkerSupported(): boolean {
         return this.platformAdapter.isWorkerSupported();
     }
 
     /**
-     * 检查是否支持SharedArrayBuffer
+     * @zh 检查是否支持 SharedArrayBuffer
+     * @en Check SharedArrayBuffer support
      */
     private isSharedArrayBufferSupported(): boolean {
         return this.platformAdapter.isSharedArrayBufferSupported();
     }
 
     /**
-     * 获取系统支持的最大Worker数量
+     * @zh 获取系统支持的最大 Worker 数量
+     * @en Get max Worker count supported by system
      */
     private getMaxSystemWorkerCount(): number {
-        const platformConfig = this.platformAdapter.getPlatformConfig();
-        return platformConfig.maxWorkerCount;
+        return this.platformAdapter.getPlatformConfig().maxWorkerCount;
+    }
+
+    // =========================================================================
+    // 初始化 | Initialization
+    // =========================================================================
+
+    /**
+     * @zh 初始化 Worker 系统
+     * @en Initialize Worker system
+     */
+    private initializeWorkerSystem(): void {
+        if (this.config.useSharedArrayBuffer) {
+            this.initializeSharedArrayBuffer();
+        }
+        this.initializeWorkerPool();
     }
 
     /**
-     * 获取实体数据大小 - 子类必须实现
-     * 返回每个实体在SharedArrayBuffer中占用的Float32数量
-     */
-    protected abstract getDefaultEntityDataSize(): number;
-
-    /**
-     * 初始化SharedArrayBuffer
+     * @zh 初始化 SharedArrayBuffer
+     * @en Initialize SharedArrayBuffer
      */
     private initializeSharedArrayBuffer(): void {
         try {
-            // 检查是否支持SharedArrayBuffer
             if (!this.isSharedArrayBufferSupported()) {
-                this.logger.warn(`${this.systemName}: 平台不支持SharedArrayBuffer，降级到单Worker模式以保证数据处理完整性`);
-                this.config.useSharedArrayBuffer = false;
-                // 降级到单Worker模式：确保所有实体在同一个Worker中处理，维持实体间交互的完整性
-                this.config.workerCount = 1;
+                this.fallbackToSingleWorker('平台不支持 SharedArrayBuffer');
                 return;
             }
 
-            // 使用配置的实体数据大小和最大实体数量
-            // 预分配缓冲区：maxEntities * entityDataSize * 4字节
             const bufferSize = this.config.maxEntities * this.config.entityDataSize * 4;
             this.sharedBuffer = this.platformAdapter.createSharedArrayBuffer(bufferSize);
+
             if (this.sharedBuffer) {
                 this.sharedFloatArray = new Float32Array(this.sharedBuffer);
+                this.logger.info(`${this.systemName}: SharedArrayBuffer 初始化成功 (${bufferSize} bytes)`);
             }
-
-            this.logger.info(`${this.systemName}: SharedArrayBuffer初始化成功 (${bufferSize} 字节)`);
         } catch (error) {
-            this.logger.warn(`${this.systemName}: SharedArrayBuffer初始化失败，降级到单Worker模式以保证数据处理完整性`, error);
-            this.config.useSharedArrayBuffer = false;
-            this.sharedBuffer = null;
-            this.sharedFloatArray = null;
-            this.config.workerCount = 1;
+            this.fallbackToSingleWorker('SharedArrayBuffer 初始化失败');
+            this.logger.warn(`${this.systemName}:`, error);
         }
     }
 
     /**
-     * 初始化Worker池
+     * @zh 降级到单 Worker 模式
+     * @en Fallback to single Worker mode
+     */
+    private fallbackToSingleWorker(reason: string): void {
+        this.logger.warn(`${this.systemName}: ${reason}，降级到单 Worker 模式`);
+        this.config.useSharedArrayBuffer = false;
+        this.config.workerCount = 1;
+        this.sharedBuffer = null;
+        this.sharedFloatArray = null;
+    }
+
+    /**
+     * @zh 初始化 Worker 池
+     * @en Initialize Worker pool
      */
     private initializeWorkerPool(): void {
         try {
-            const platformConfig = this.platformAdapter.getPlatformConfig();
-            const workers: PlatformWorker[] = [];
-
-            // 判断使用外部脚本路径还是动态生成脚本
-            // Determine whether to use external script path or dynamically generated script
-            let scriptOrPath: string;
-
-            if (this.config.workerScriptPath) {
-                // 使用预编译的外部 Worker 文件（微信小游戏等平台）
-                // Use pre-compiled external Worker file (for WeChat Mini Game, etc.)
-                scriptOrPath = this.config.workerScriptPath;
-                this.logger.info(`${this.systemName}: 使用外部Worker文件: ${scriptOrPath}`);
-            } else if (platformConfig.limitations?.noEval) {
-                // 平台不支持动态脚本，且未提供外部脚本路径
-                // Platform doesn't support dynamic scripts and no external script path provided
-                this.logger.error(`${this.systemName}: 当前平台不支持动态Worker脚本，请配置 workerScriptPath 指定预编译的Worker文件`);
+            const scriptOrPath = this.resolveWorkerScript();
+            if (!scriptOrPath) {
                 this.config.enableWorker = false;
                 return;
-            } else {
-                // 动态生成 Worker 脚本（浏览器等支持的平台）
-                // Dynamically generate Worker script (for browsers and other supported platforms)
-                const script = this.createWorkerScript();
-                scriptOrPath = (platformConfig.workerScriptPrefix || '') + script;
             }
 
-            for (let i = 0; i < this.config.workerCount; i++) {
-                try {
-                    const worker = this.platformAdapter.createWorker(scriptOrPath, {
-                        name: `WorkerEntitySystem-${i}`
-                    });
-                    workers.push(worker);
-                } catch (error) {
-                    this.logger.error(`创建Worker ${i} 失败:`, error);
-                    throw error;
-                }
-            }
-
-            this.workerPool = new PlatformWorkerPool(workers);
+            const workers = this.createWorkers(scriptOrPath);
+            this.workerPool = new PlatformWorkerPool(workers, this.sharedBuffer);
         } catch (error) {
-            this.logger.error(`${this.systemName}: Worker池初始化失败`, error);
+            this.logger.error(`${this.systemName}: Worker 池初始化失败`, error);
             this.config.enableWorker = false;
         }
     }
 
     /**
-     * 创建Worker脚本
+     * @zh 解析 Worker 脚本
+     * @en Resolve Worker script
+     */
+    private resolveWorkerScript(): string | null {
+        const platformConfig = this.platformAdapter.getPlatformConfig();
+
+        // External script path (WeChat Mini Game, etc.)
+        if (this.config.workerScriptPath) {
+            this.logger.info(`${this.systemName}: 使用外部 Worker 文件: ${this.config.workerScriptPath}`);
+            return this.config.workerScriptPath;
+        }
+
+        // Platform doesn't support dynamic scripts
+        if (platformConfig.limitations?.noEval) {
+            this.logger.error(
+                `${this.systemName}: 当前平台不支持动态 Worker 脚本，` +
+                `请配置 workerScriptPath 指定预编译的 Worker 文件`
+            );
+            return null;
+        }
+
+        // Dynamic script (browsers, etc.)
+        const script = this.createWorkerScript();
+        return (platformConfig.workerScriptPrefix || '') + script;
+    }
+
+    /**
+     * @zh 创建 Worker 实例数组
+     * @en Create Worker instance array
+     */
+    private createWorkers(scriptOrPath: string): PlatformWorker[] {
+        const workers: PlatformWorker[] = [];
+
+        for (let i = 0; i < this.config.workerCount; i++) {
+            const worker = this.platformAdapter.createWorker(scriptOrPath, {
+                name: `${this.systemName}-Worker-${i}`
+            });
+            workers.push(worker);
+        }
+
+        return workers;
+    }
+
+    /**
+     * @zh 创建 Worker 脚本
+     * @en Create Worker script
      */
     private createWorkerScript(): string {
-        // 获取方法字符串并提取函数体
-        const methodStr = this.workerProcess.toString();
-
-        // 提取函数体部分（去掉方法签名）
-        const functionBodyMatch = methodStr.match(/\{([\s\S]*)\}/);
-        if (!functionBodyMatch) {
-            throw new Error('无法解析workerProcess方法');
-        }
-
-        const functionBody = functionBodyMatch[1];
+        const functionBody = this.extractFunctionBody(this.workerProcess.toString());
+        const sharedProcessBody = this.getSharedProcessFunctionBody();
         const entityDataSize = this.config.entityDataSize;
 
-        // 获取SharedArrayBuffer处理函数的字符串
-        const sharedProcessMethod = this.getSharedArrayBufferProcessFunction?.() || null;
-        let sharedProcessFunctionBody = '';
-
-        if (sharedProcessMethod) {
-            const sharedMethodStr = sharedProcessMethod.toString();
-            const sharedFunctionBodyMatch = sharedMethodStr.match(/\{([\s\S]*)\}/);
-            if (sharedFunctionBodyMatch) {
-                sharedProcessFunctionBody = sharedFunctionBodyMatch[1] ?? '';
-            }
-        }
-
         return `
-            // Worker脚本 - 支持SharedArrayBuffer
             let sharedFloatArray = null;
             const ENTITY_DATA_SIZE = ${entityDataSize};
 
             self.onmessage = function(e) {
                 const { type, id, entities, deltaTime, systemConfig, startIndex, endIndex, sharedBuffer } = e.data;
 
-
                 try {
-                    // 处理SharedArrayBuffer初始化
                     if (type === 'init' && sharedBuffer) {
                         sharedFloatArray = new Float32Array(sharedBuffer);
                         self.postMessage({ type: 'init', success: true });
                         return;
                     }
 
-                    // 处理SharedArrayBuffer数据
-                    if (type === 'shared' && sharedFloatArray) {
+                    if (type === 'shared') {
+                        if (!sharedFloatArray) {
+                            self.postMessage({ id, error: 'SharedArrayBuffer not initialized' });
+                            return;
+                        }
                         processSharedArrayBuffer(startIndex, endIndex, deltaTime, systemConfig);
-                        self.postMessage({ id, result: null }); // SharedArrayBuffer不需要返回数据
+                        self.postMessage({ id, result: null });
                         return;
                     }
 
-                    // 传统处理方式
                     if (entities) {
-                        // 定义处理函数
                         function workerProcess(entities, deltaTime, systemConfig) {
                             ${functionBody}
                         }
 
-                        // 执行处理
                         const result = workerProcess(entities, deltaTime, systemConfig);
 
-                        // 处理Promise返回值
                         if (result && typeof result.then === 'function') {
                             result.then(finalResult => {
                                 self.postMessage({ id, result: finalResult });
@@ -438,54 +423,75 @@ export abstract class WorkerEntitySystem<TEntityData = any> extends EntitySystem
                 }
             };
 
-            // SharedArrayBuffer处理函数 - 由子类定义
             function processSharedArrayBuffer(startIndex, endIndex, deltaTime, systemConfig) {
                 if (!sharedFloatArray) return;
-
-                ${sharedProcessFunctionBody ? `
-                    // 用户定义的处理函数
-                    const userProcessFunction = function(sharedFloatArray, startIndex, endIndex, deltaTime, systemConfig) {
-                        ${sharedProcessFunctionBody}
-                    };
-                    userProcessFunction(sharedFloatArray, startIndex, endIndex, deltaTime, systemConfig);
-                ` : ''}
+                ${sharedProcessBody}
             }
         `;
     }
 
     /**
-     * 重写process方法，支持Worker并行处理
+     * @zh 提取函数体
+     * @en Extract function body
+     */
+    private extractFunctionBody(methodStr: string): string {
+        const match = methodStr.match(/\{([\s\S]*)\}/);
+        if (!match || match[1] === undefined) {
+            throw new Error('无法解析 workerProcess 方法');
+        }
+        return match[1];
+    }
+
+    /**
+     * @zh 获取 SharedArrayBuffer 处理函数体
+     * @en Get SharedArrayBuffer process function body
+     */
+    private getSharedProcessFunctionBody(): string {
+        const processFunc = this.getSharedArrayBufferProcessFunction?.();
+        if (!processFunc) return '';
+
+        const body = this.extractFunctionBody(processFunc.toString());
+        return `
+            const userProcessFunction = function(sharedFloatArray, startIndex, endIndex, deltaTime, systemConfig) {
+                ${body}
+            };
+            userProcessFunction(sharedFloatArray, startIndex, endIndex, deltaTime, systemConfig);
+        `;
+    }
+
+    // =========================================================================
+    // 处理逻辑 | Processing Logic
+    // =========================================================================
+
+    /**
+     * @zh 重写 process 方法，支持 Worker 并行处理
+     * @en Override process method with Worker parallel processing
      */
     protected override process(entities: readonly Entity[]): void {
         if (this.isProcessing) return;
         this.isProcessing = true;
 
+        const mode = this.getCurrentProcessingMode();
+
         try {
-            if (this.config.enableWorker && this.workerPool) {
-                // 检查SharedArrayBuffer是否真正可用
-                if (this.config.useSharedArrayBuffer && this.sharedFloatArray && this.isSharedArrayBufferSupported()) {
-                    // 使用SharedArrayBuffer优化的异步处理
+            switch (mode) {
+                case 'shared-buffer':
                     this.processWithSharedArrayBuffer(entities).finally(() => {
                         this.isProcessing = false;
                     });
-                } else {
-                    // 如果配置了SharedArrayBuffer但不可用，记录降级信息
-                    if (this.config.useSharedArrayBuffer) {
-                        this.logger.info(`${this.systemName}: 本帧降级到传统Worker模式`);
-                    }
-                    // 传统Worker异步处理
+                    break;
+
+                case 'worker':
                     this.processWithWorker(entities).finally(() => {
                         this.isProcessing = false;
                     });
-                }
-            } else {
-                // 同步处理（最后的fallback）
-                if (!this.hasLoggedSyncMode) {
-                    this.logger.info(`${this.systemName}: Worker不可用，使用同步处理`);
-                    this.hasLoggedSyncMode = true;
-                }
-                this.processSynchronously(entities);
-                this.isProcessing = false;
+                    break;
+
+                case 'sync':
+                default:
+                    this.processSynchronously(entities);
+                    this.isProcessing = false;
+                    break;
             }
         } catch (error) {
             this.isProcessing = false;
@@ -495,121 +501,141 @@ export abstract class WorkerEntitySystem<TEntityData = any> extends EntitySystem
     }
 
     /**
-     * 使用SharedArrayBuffer优化的Worker处理
+     * @zh 获取当前处理模式
+     * @en Get current processing mode
+     */
+    private getCurrentProcessingMode(): ProcessingMode {
+        if (!this.config.enableWorker || !this.workerPool) {
+            if (!this.hasLoggedSyncMode) {
+                this.logger.info(`${this.systemName}: Worker 不可用，使用同步处理`);
+                this.hasLoggedSyncMode = true;
+            }
+            return 'sync';
+        }
+
+        if (this.config.useSharedArrayBuffer && this.sharedFloatArray) {
+            return 'shared-buffer';
+        }
+
+        return 'worker';
+    }
+
+    /**
+     * @zh 使用 SharedArrayBuffer 优化的 Worker 处理
+     * @en Worker processing with SharedArrayBuffer optimization
      */
     private async processWithSharedArrayBuffer(entities: readonly Entity[]): Promise<void> {
-        if (!this.sharedFloatArray) {
-            throw new Error('SharedArrayBuffer not initialized');
-        }
+        if (!this.sharedFloatArray || !this.workerPool) return;
 
-        // 1. 将实体数据写入SharedArrayBuffer
-        this.writeEntitiesToSharedBuffer(entities);
+        this.writeEntitiesToBuffer(entities);
 
-        // 2. 通知Workers处理数据
-        const promises = this.createSharedArrayBufferTasks(entities.length);
-        await Promise.all(promises);
+        const tasks = this.createBatchTasks(entities.length, true);
+        await Promise.all(tasks);
 
-        // 3. 从SharedArrayBuffer读取结果并应用
-        this.readResultsFromSharedBuffer(entities);
+        this.readResultsFromBuffer(entities);
     }
 
     /**
-     * 使用Worker并行处理
+     * @zh 使用 Worker 并行处理
+     * @en Worker parallel processing
      */
     private async processWithWorker(entities: readonly Entity[]): Promise<void> {
-        // 1. 数据提取阶段
-        const entityData: TEntityData[] = [];
-        for (let i = 0; i < entities.length; i++) {
-            entityData[i] = this.extractEntityData(entities[i]!);
-        }
+        if (!this.workerPool) return;
 
-        // 2. 分批处理
-        const batches = this.createBatches(entityData);
+        const entityData = entities.map(entity => this.extractEntityData(entity));
+        const batches = this.createDataBatches(entityData);
         const deltaTime = Time.deltaTime;
 
-        // 3. Worker执行阶段
-        const promises = batches.map((batch) =>
-            this.workerPool!.execute({
-                entities: batch,
-                deltaTime,
-                systemConfig: this.config.systemConfig
-            })
+        const results = await Promise.all(
+            batches.map(batch =>
+                this.workerPool!.execute<TEntityData[]>({
+                    entities: batch,
+                    deltaTime,
+                    systemConfig: this.config.systemConfig
+                })
+            )
         );
 
-        const results = await Promise.all(promises);
-
-        // 4. 结果应用阶段
-        let entityIndex = 0;
-        for (const batchResult of results) {
-            for (const result of batchResult) {
-                if (entityIndex < entities.length) {
-                    const entity = entities[entityIndex];
-                    // 只对有效实体应用结果
-                    if (entity && result) {
-                        this.applyResult(entity, result);
-                    }
-                }
-                entityIndex++;
-            }
-        }
+        this.applyBatchResults(entities, results);
     }
 
     /**
-     * 同步处理（fallback）
+     * @zh 同步处理（fallback）
+     * @en Synchronous processing (fallback)
      */
     private processSynchronously(entities: readonly Entity[]): void {
-        // 1. 数据提取阶段
-        const entityData = entities.map((entity) => this.extractEntityData(entity));
-
-        // 2. 主线程处理阶段
+        const entityData = entities.map(entity => this.extractEntityData(entity));
         const deltaTime = Time.deltaTime;
         const results = this.workerProcess(entityData, deltaTime, this.config.systemConfig);
 
-        // 3. 结果应用阶段
-        // 处理Promise返回值
-        if (results && typeof (results as any).then === 'function') {
-            (results as Promise<TEntityData[]>).then((finalResults) => {
-                entities.forEach((entity, index) => {
-                    this.applyResult(entity, finalResults[index]!);
-                });
+        if (results && typeof (results as Promise<TEntityData[]>).then === 'function') {
+            (results as Promise<TEntityData[]>).then(finalResults => {
+                this.applyResults(entities, finalResults);
             });
         } else {
-            entities.forEach((entity, index) => {
-                this.applyResult(entity, (results as TEntityData[])[index]!);
-            });
+            this.applyResults(entities, results as TEntityData[]);
         }
     }
 
+    // =========================================================================
+    // 批次处理 | Batch Processing
+    // =========================================================================
+
     /**
-     * 创建数据批次 - 支持用户指定每个Worker的实体数量
+     * @zh 创建数据批次
+     * @en Create data batches
      */
-    private createBatches<T>(data: T[]): T[][] {
-        const workerCount = this.config.workerCount;
-        const batches: T[][] = [];
+    private createDataBatches<T>(data: T[]): T[][] {
+        return this.splitIntoBatches(
+            data.length,
+            (start, end) => data.slice(start, end)
+        );
+    }
 
-        // 如果用户指定了每个Worker处理的实体数量
-        if (this.config.entitiesPerWorker) {
-            const entitiesPerWorker = this.config.entitiesPerWorker;
-
-            for (let i = 0; i < data.length; i += entitiesPerWorker) {
-                const endIndex = Math.min(i + entitiesPerWorker, data.length);
-                batches.push(data.slice(i, endIndex));
+    /**
+     * @zh 创建批次任务
+     * @en Create batch tasks
+     */
+    private createBatchTasks(entityCount: number, useSharedBuffer: boolean): Promise<void>[] {
+        return this.splitIntoBatches(
+            entityCount,
+            (startIndex, endIndex) => {
+                if (useSharedBuffer) {
+                    return this.workerPool!.executeSharedBuffer({
+                        startIndex,
+                        endIndex,
+                        deltaTime: Time.deltaTime,
+                        systemConfig: this.config.systemConfig
+                    });
+                }
+                return Promise.resolve();
             }
+        );
+    }
 
-            // 限制批次数量不超过Worker数量
-            if (batches.length > workerCount) {
-                this.logger.warn(`${this.systemName}: 创建了 ${batches.length} 个批次，但只有 ${workerCount} 个Worker。某些Worker将依次处理多个批次。`);
+    /**
+     * @zh 通用批次分割逻辑
+     * @en Generic batch splitting logic
+     */
+    private splitIntoBatches<T>(
+        totalCount: number,
+        createBatch: (start: number, end: number) => T
+    ): T[] {
+        const batches: T[] = [];
+        const { workerCount, entitiesPerWorker } = this.config;
+
+        if (entitiesPerWorker) {
+            for (let i = 0; i < totalCount; i += entitiesPerWorker) {
+                const end = Math.min(i + entitiesPerWorker, totalCount);
+                batches.push(createBatch(i, end));
             }
         } else {
-            // 默认行为：按Worker数量平均分配
-            const batchSize = Math.ceil(data.length / workerCount);
-
+            const batchSize = Math.ceil(totalCount / workerCount);
             for (let i = 0; i < workerCount; i++) {
-                const startIndex = i * batchSize;
-                const endIndex = Math.min(startIndex + batchSize, data.length);
-
-                if (startIndex < data.length) {
-                    batches.push(data.slice(startIndex, endIndex));
+                const start = i * batchSize;
+                const end = Math.min(start + batchSize, totalCount);
+                if (start < totalCount) {
+                    batches.push(createBatch(start, end));
                 }
             }
         }
@@ -617,226 +643,161 @@ export abstract class WorkerEntitySystem<TEntityData = any> extends EntitySystem
         return batches;
     }
 
+    // =========================================================================
+    // 结果应用 | Result Application
+    // =========================================================================
+
     /**
-     * 将实体数据写入SharedArrayBuffer
+     * @zh 应用批次结果
+     * @en Apply batch results
      */
-    private writeEntitiesToSharedBuffer(entities: readonly Entity[]): void {
+    private applyBatchResults(entities: readonly Entity[], batchResults: TEntityData[][]): void {
+        let entityIndex = 0;
+
+        for (const batchResult of batchResults) {
+            for (const result of batchResult) {
+                if (entityIndex < entities.length && result) {
+                    this.applyResult(entities[entityIndex]!, result);
+                }
+                entityIndex++;
+            }
+        }
+    }
+
+    /**
+     * @zh 应用结果数组
+     * @en Apply results array
+     */
+    private applyResults(entities: readonly Entity[], results: TEntityData[]): void {
+        for (let i = 0; i < entities.length && i < results.length; i++) {
+            this.applyResult(entities[i]!, results[i]!);
+        }
+    }
+
+    // =========================================================================
+    // SharedArrayBuffer 操作 | SharedArrayBuffer Operations
+    // =========================================================================
+
+    /**
+     * @zh 将实体数据写入 SharedArrayBuffer
+     * @en Write entity data to SharedArrayBuffer
+     */
+    private writeEntitiesToBuffer(entities: readonly Entity[]): void {
         if (!this.sharedFloatArray) return;
 
-        for (let i = 0; i < entities.length && i < this.config.maxEntities; i++) {
-            const entity = entities[i]!;
-            const data = this.extractEntityData(entity);
-            const offset = i * this.config.entityDataSize; // 使用配置的数据大小
+        const count = Math.min(entities.length, this.config.maxEntities);
 
-            // 使用子类提供的数据提取方法，然后转换为标准格式
+        for (let i = 0; i < count; i++) {
+            const data = this.extractEntityData(entities[i]!);
+            const offset = i * this.config.entityDataSize;
             this.writeEntityToBuffer(data, offset);
         }
     }
 
     /**
-     * 将单个实体数据写入SharedArrayBuffer - 子类必须实现
-     * @param entityData 实体数据
-     * @param offset 在SharedArrayBuffer中的偏移位置（Float32索引）
+     * @zh 从 SharedArrayBuffer 读取结果并应用
+     * @en Read results from SharedArrayBuffer and apply
      */
-    protected abstract writeEntityToBuffer(entityData: TEntityData, offset: number): void;
-
-    /**
-     * 创建SharedArrayBuffer任务 - 支持用户指定每个Worker的实体数量
-     */
-    private createSharedArrayBufferTasks(entityCount: number): Promise<void>[] {
-        const promises: Promise<void>[] = [];
-
-        // 如果用户指定了每个Worker处理的实体数量
-        if (this.config.entitiesPerWorker) {
-            const entitiesPerWorker = this.config.entitiesPerWorker;
-            const tasksNeeded = Math.ceil(entityCount / entitiesPerWorker);
-            const availableWorkers = this.config.workerCount;
-
-            // 如果任务数超过Worker数量，警告用户
-            if (tasksNeeded > availableWorkers) {
-                this.logger.warn(`${this.systemName}: 需要 ${tasksNeeded} 个任务处理 ${entityCount} 个实体（每任务 ${entitiesPerWorker} 个），但只有 ${availableWorkers} 个Worker。某些Worker将依次处理多个任务。`);
-            }
-
-            for (let i = 0; i < entityCount; i += entitiesPerWorker) {
-                const startIndex = i;
-                const endIndex = Math.min(i + entitiesPerWorker, entityCount);
-
-                const promise = this.workerPool!.executeSharedBuffer({
-                    startIndex,
-                    endIndex,
-                    deltaTime: Time.deltaTime,
-                    systemConfig: this.config.systemConfig
-                });
-                promises.push(promise);
-            }
-        } else {
-            // 默认行为：按Worker数量平均分配
-            const entitiesPerWorker = Math.ceil(entityCount / this.config.workerCount);
-
-            for (let i = 0; i < this.config.workerCount; i++) {
-                const startIndex = i * entitiesPerWorker;
-                const endIndex = Math.min(startIndex + entitiesPerWorker, entityCount);
-
-                if (startIndex < entityCount) {
-                    const promise = this.workerPool!.executeSharedBuffer({
-                        startIndex,
-                        endIndex,
-                        deltaTime: Time.deltaTime,
-                        systemConfig: this.config.systemConfig
-                    });
-                    promises.push(promise);
-                }
-            }
-        }
-
-        return promises;
-    }
-
-    /**
-     * 从SharedArrayBuffer读取结果并应用
-     */
-    private readResultsFromSharedBuffer(entities: readonly Entity[]): void {
+    private readResultsFromBuffer(entities: readonly Entity[]): void {
         if (!this.sharedFloatArray) return;
 
-        for (let i = 0; i < entities.length && i < this.config.maxEntities; i++) {
-            const entity = entities[i]!;
-            const offset = i * this.config.entityDataSize; // 使用配置的数据大小
+        const count = Math.min(entities.length, this.config.maxEntities);
 
-            // 从SharedArrayBuffer读取数据
+        for (let i = 0; i < count; i++) {
+            const offset = i * this.config.entityDataSize;
             const result = this.readEntityFromBuffer(offset);
+
             if (result) {
-                this.applyResult(entity, result);
+                this.applyResult(entities[i]!, result);
             }
         }
     }
 
-    /**
-     * 从SharedArrayBuffer读取单个实体数据 - 子类必须实现
-     * @param offset 在SharedArrayBuffer中的偏移位置（Float32索引）
-     * @returns 实体数据或null
-     */
-    protected abstract readEntityFromBuffer(offset: number): TEntityData | null;
+    // =========================================================================
+    // 配置更新 | Config Update
+    // =========================================================================
 
     /**
-     * 获取SharedArrayBuffer处理函数 - 子类可选实现
-     * 返回一个函数，该函数将被序列化到Worker中执行
+     * @zh 更新 Worker 配置
+     * @en Update Worker config
      */
-    protected getSharedArrayBufferProcessFunction?(): SharedArrayBufferProcessFunction;
-
-    /**
-     * 提取实体数据 - 子类必须实现
-     *
-     * 将Entity转换为可序列化的数据对象
-     */
-    protected abstract extractEntityData(entity: Entity): TEntityData;
-
-    /**
-     * Worker处理函数 - 子类必须实现
-     *
-     * 这个函数会被序列化并在Worker中执行，因此：
-     * 1. 必须是纯函数，不能访问外部变量
-     * 2. 不能使用闭包或this
-     * 3. 只能使用标准JavaScript API
-     */
-    protected abstract workerProcess(
-        entities: TEntityData[],
-        deltaTime: number,
-        systemConfig?: any
-    ): TEntityData[] | Promise<TEntityData[]>;
-
-    /**
-     * 应用处理结果 - 子类必须实现
-     *
-     * 将Worker处理的结果应用回Entity的组件
-     */
-    protected abstract applyResult(entity: Entity, result: TEntityData): void;
-
-    /**
-     * 更新Worker配置
-     */
-    public updateConfig(newConfig: Partial<WorkerSystemConfig>): void {
+    public updateConfig(newConfig: Partial<IWorkerSystemConfig>): void {
         const oldConfig = { ...this.config };
 
-        // 如果更新了workerCount，需要验证并调整
         if (newConfig.workerCount !== undefined) {
-            const maxSystemWorkerCount = this.getMaxSystemWorkerCount();
-            const validatedWorkerCount = Math.min(newConfig.workerCount, maxSystemWorkerCount);
+            const maxCount = this.getMaxSystemWorkerCount();
+            const validated = Math.min(newConfig.workerCount, maxCount);
 
-            if (newConfig.workerCount > maxSystemWorkerCount) {
-                this.logger.warn(`请求 ${newConfig.workerCount} 个Worker，但系统最多支持 ${maxSystemWorkerCount} 个。实际使用 ${validatedWorkerCount} 个Worker。`);
+            if (newConfig.workerCount > maxCount) {
+                this.logger.warn(
+                    `请求 ${newConfig.workerCount} 个 Worker，但系统最多支持 ${maxCount} 个。` +
+                    `实际使用 ${validated} 个 Worker。`
+                );
             }
-
-            newConfig.workerCount = validatedWorkerCount;
+            newConfig.workerCount = validated;
         }
 
         Object.assign(this.config, newConfig);
 
-        // 如果 SharedArrayBuffer 设置发生变化，需要重新初始化
         if (oldConfig.useSharedArrayBuffer !== this.config.useSharedArrayBuffer) {
-            this.reinitializeWorkerSystem();
-            return;
-        }
-
-        // 如果 Worker 数量发生变化，需要重新创建 Worker 池
-        if (oldConfig.workerCount !== this.config.workerCount) {
+            this.reinitializeSystem();
+        } else if (oldConfig.workerCount !== this.config.workerCount) {
             this.reinitializeWorkerPool();
-            return;
-        }
-
-        // 如果禁用Worker，清理Worker池
-        if (!this.config.enableWorker && this.workerPool) {
-            this.workerPool.destroy();
-            this.workerPool = null;
-        }
-
-        // 如果启用Worker但池不存在，重新创建
-        if (this.config.enableWorker && !this.workerPool && this.isWorkerSupported()) {
+        } else if (!this.config.enableWorker && this.workerPool) {
+            this.destroyWorkerPool();
+        } else if (this.config.enableWorker && !this.workerPool && this.isWorkerSupported()) {
             this.initializeWorkerPool();
         }
     }
 
     /**
-     * 重新初始化整个 Worker 系统（包括 SharedArrayBuffer）
+     * @zh 重新初始化整个系统
+     * @en Reinitialize entire system
      */
-    private reinitializeWorkerSystem(): void {
-        // 清理现有资源
-        if (this.workerPool) {
-            this.workerPool.destroy();
-            this.workerPool = null;
-        }
+    private reinitializeSystem(): void {
+        this.destroyWorkerPool();
         this.sharedBuffer = null;
         this.sharedFloatArray = null;
 
-        // 如果禁用 SharedArrayBuffer，降级到单 Worker 模式
         if (!this.config.useSharedArrayBuffer) {
             this.config.workerCount = 1;
         }
 
-        // 重新初始化
         if (this.config.enableWorker && this.isWorkerSupported()) {
-            if (this.config.useSharedArrayBuffer) {
-                this.initializeSharedArrayBuffer();
-            }
+            this.initializeWorkerSystem();
+        }
+    }
+
+    /**
+     * @zh 重新初始化 Worker 池
+     * @en Reinitialize Worker pool
+     */
+    private reinitializeWorkerPool(): void {
+        this.destroyWorkerPool();
+
+        if (this.config.enableWorker && this.isWorkerSupported()) {
             this.initializeWorkerPool();
         }
     }
 
     /**
-     * 重新初始化 Worker 池（保持 SharedArrayBuffer）
+     * @zh 销毁 Worker 池
+     * @en Destroy Worker pool
      */
-    private reinitializeWorkerPool(): void {
+    private destroyWorkerPool(): void {
         if (this.workerPool) {
             this.workerPool.destroy();
             this.workerPool = null;
         }
-
-        if (this.config.enableWorker && this.isWorkerSupported()) {
-            this.initializeWorkerPool();
-        }
     }
 
+    // =========================================================================
+    // 公共 API | Public API
+    // =========================================================================
+
     /**
-     * 获取系统性能信息
+     * @zh 获取 Worker 系统信息
+     * @en Get Worker system info
      */
     public getWorkerInfo(): {
         enabled: boolean;
@@ -846,18 +807,8 @@ export abstract class WorkerEntitySystem<TEntityData = any> extends EntitySystem
         isProcessing: boolean;
         sharedArrayBufferSupported: boolean;
         sharedArrayBufferEnabled: boolean;
-        currentMode: 'shared-buffer' | 'worker' | 'sync';
-        } {
-        let currentMode: 'shared-buffer' | 'worker' | 'sync' = 'sync';
-
-        if (this.config.enableWorker && this.workerPool) {
-            if (this.config.useSharedArrayBuffer && this.sharedFloatArray && this.isSharedArrayBufferSupported()) {
-                currentMode = 'shared-buffer';
-            } else {
-                currentMode = 'worker';
-            }
-        }
-
+        currentMode: ProcessingMode;
+    } {
         return {
             enabled: this.config.enableWorker,
             workerCount: this.config.workerCount,
@@ -866,165 +817,86 @@ export abstract class WorkerEntitySystem<TEntityData = any> extends EntitySystem
             isProcessing: this.isProcessing,
             sharedArrayBufferSupported: this.isSharedArrayBufferSupported(),
             sharedArrayBufferEnabled: this.config.useSharedArrayBuffer,
-            currentMode
+            currentMode: this.getCurrentProcessingMode()
         };
     }
 
+    // =========================================================================
+    // 生命周期 | Lifecycle
+    // =========================================================================
+
     /**
-     * 销毁系统时清理Worker池
+     * @zh 销毁系统时清理资源
+     * @en Clean up resources on destroy
      */
     protected override onDestroy(): void {
         super.onDestroy();
-
-        if (this.workerPool) {
-            this.workerPool.destroy();
-            this.workerPool = null;
-        }
+        this.destroyWorkerPool();
     }
 
     protected override getLoggerName(): string {
         return getSystemInstanceTypeName(this);
     }
+
+    // =========================================================================
+    // 抽象方法 | Abstract Methods
+    // =========================================================================
+
+    /**
+     * @zh 获取实体数据大小 - 子类必须实现
+     * @en Get entity data size - subclass must implement
+     *
+     * @zh 返回每个实体在 SharedArrayBuffer 中占用的 Float32 数量
+     * @en Returns Float32 count per entity in SharedArrayBuffer
+     */
+    protected abstract getDefaultEntityDataSize(): number;
+
+    /**
+     * @zh 将单个实体数据写入 SharedArrayBuffer - 子类必须实现
+     * @en Write single entity data to SharedArrayBuffer - subclass must implement
+     */
+    protected abstract writeEntityToBuffer(entityData: TEntityData, offset: number): void;
+
+    /**
+     * @zh 从 SharedArrayBuffer 读取单个实体数据 - 子类必须实现
+     * @en Read single entity data from SharedArrayBuffer - subclass must implement
+     */
+    protected abstract readEntityFromBuffer(offset: number): TEntityData | null;
+
+    /**
+     * @zh 提取实体数据 - 子类必须实现
+     * @en Extract entity data - subclass must implement
+     */
+    protected abstract extractEntityData(entity: Entity): TEntityData;
+
+    /**
+     * @zh Worker 处理函数 - 子类必须实现（必须是纯函数）
+     * @en Worker process function - subclass must implement (must be pure function)
+     */
+    protected abstract workerProcess(
+        entities: TEntityData[],
+        deltaTime: number,
+        systemConfig?: unknown
+    ): TEntityData[] | Promise<TEntityData[]>;
+
+    /**
+     * @zh 应用处理结果 - 子类必须实现
+     * @en Apply result - subclass must implement
+     */
+    protected abstract applyResult(entity: Entity, result: TEntityData): void;
+
+    /**
+     * @zh 获取 SharedArrayBuffer 处理函数 - 子类可选实现
+     * @en Get SharedArrayBuffer process function - optional for subclass
+     */
+    protected getSharedArrayBufferProcessFunction?(): SharedArrayBufferProcessFunction;
 }
+
+// =============================================================================
+// 类型导出（向后兼容）| Type Exports (Backward Compatibility)
+// =============================================================================
 
 /**
- * 平台适配的Worker池管理器
+ * @deprecated Use IWorkerSystemConfig instead
  */
-class PlatformWorkerPool {
-    private workers: PlatformWorker[] = [];
-    private taskQueue: Array<{
-        id: string;
-        data: any;
-        resolve: (result: any) => void;
-        reject: (error: Error) => void;
-    }> = [];
-    private busyWorkers = new Set<number>();
-    private taskCounter = 0;
-
-    constructor(
-        workers: PlatformWorker[]
-    ) {
-        this.workers = workers;
-
-        // 为每个Worker设置消息处理器
-        for (let i = 0; i < workers.length; i++) {
-            const worker = workers[i];
-            if (!worker) continue;
-
-            // 设置消息处理器
-            worker.onMessage((event) => this.handleWorkerMessage(i, event.data));
-            worker.onError((error) => this.handleWorkerError(i, error));
-        }
-    }
-
-    /**
-     * 执行SharedArrayBuffer任务
-     */
-    public executeSharedBuffer(data: any): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const task = {
-                id: `shared-task-${++this.taskCounter}`,
-                data: { ...data, type: 'shared' },
-                resolve: () => resolve(), // SharedArrayBuffer不需要返回数据
-                reject
-            };
-
-            this.taskQueue.push(task);
-            this.processQueue();
-        });
-    }
-
-    /**
-     * 执行任务
-     */
-    public execute(data: any): Promise<any> {
-        return new Promise((resolve, reject) => {
-            const task = {
-                id: `task-${++this.taskCounter}`,
-                data,
-                resolve: (result: any) => {
-                    resolve(result);
-                },
-                reject
-            };
-
-            this.taskQueue.push(task);
-            this.processQueue();
-        });
-    }
-
-    /**
-     * 处理任务队列
-     */
-    private processQueue(): void {
-        if (this.taskQueue.length === 0) return;
-
-        // 找到空闲的Worker
-        for (let i = 0; i < this.workers.length; i++) {
-            if (!this.busyWorkers.has(i) && this.taskQueue.length > 0) {
-                const task = this.taskQueue.shift()!;
-                this.busyWorkers.add(i);
-                const worker = this.workers[i]!;
-
-                worker.postMessage({
-                    id: task.id,
-                    ...task.data
-                });
-
-                // 存储任务信息以便后续处理
-                (worker as any)._currentTask = task;
-            }
-        }
-    }
-
-    /**
-     * 处理Worker消息
-     */
-    private handleWorkerMessage(workerIndex: number, data: any): void {
-        const worker = this.workers[workerIndex];
-        const task = (worker as any)._currentTask;
-
-        if (!task) return;
-
-        this.busyWorkers.delete(workerIndex);
-        (worker as any)._currentTask = null;
-
-        if (data.error) {
-            task.reject(new Error(data.error));
-        } else {
-            task.resolve(data.result);
-        }
-
-        // 处理下一个任务
-        this.processQueue();
-    }
-
-    /**
-     * 处理Worker错误
-     */
-    private handleWorkerError(workerIndex: number, error: ErrorEvent): void {
-        const worker = this.workers[workerIndex];
-        const task = (worker as any)._currentTask;
-
-        if (task) {
-            this.busyWorkers.delete(workerIndex);
-            (worker as any)._currentTask = null;
-            task.reject(new Error(error.message));
-        }
-
-        // 处理下一个任务
-        this.processQueue();
-    }
-
-    /**
-     * 销毁Worker池
-     */
-    public destroy(): void {
-        for (const worker of this.workers) {
-            worker.terminate();
-        }
-        this.workers.length = 0;
-        this.taskQueue.length = 0;
-        this.busyWorkers.clear();
-    }
-}
+export type WorkerSystemConfig = IWorkerSystemConfig;
