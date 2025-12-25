@@ -3,9 +3,9 @@
  * 蓝图组件 - 将蓝图附加到实体
  */
 
+import type { Entity, IScene } from '@esengine/ecs-framework';
 import { BlueprintAsset } from '../types/blueprint';
 import { BlueprintVM } from './BlueprintVM';
-import { IEntity, IScene } from './ExecutionContext';
 
 /**
  * Component interface for ECS integration
@@ -56,7 +56,7 @@ export function createBlueprintComponentData(): IBlueprintComponent {
  */
 export function initializeBlueprintVM(
     component: IBlueprintComponent,
-    entity: IEntity,
+    entity: Entity,
     scene: IScene
 ): void {
     if (!component.blueprintAsset) {

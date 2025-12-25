@@ -3,6 +3,7 @@
  * 蓝图执行系统 - 管理蓝图生命周期和执行
  */
 
+import type { Entity, IScene } from '@esengine/ecs-framework';
 import {
     IBlueprintComponent,
     initializeBlueprintVM,
@@ -10,7 +11,6 @@ import {
     tickBlueprint,
     cleanupBlueprint
 } from './BlueprintComponent';
-import { IEntity, IScene } from './ExecutionContext';
 
 /**
  * Blueprint system interface for engine integration
@@ -31,7 +31,7 @@ export interface IBlueprintSystem {
  * Entity with blueprint component
  * 带有蓝图组件的实体
  */
-export interface IBlueprintEntity extends IEntity {
+export interface IBlueprintEntity extends Entity {
     /** Blueprint component data (蓝图组件数据) */
     blueprintComponent: IBlueprintComponent;
 }

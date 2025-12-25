@@ -3,6 +3,7 @@
  * 执行上下文 - 蓝图执行的运行时上下文
  */
 
+import type { Entity, IScene } from '@esengine/ecs-framework';
 import { BlueprintNode, BlueprintConnection } from '../types/nodes';
 import { BlueprintAsset } from '../types/blueprint';
 
@@ -43,31 +44,6 @@ export interface ExecutionResult {
 }
 
 /**
- * Entity interface (minimal for decoupling)
- * 实体接口（最小化以解耦）
- */
-export interface IEntity {
-    id: number;
-    name: string;
-    active: boolean;
-    getComponent<T>(type: new (...args: unknown[]) => T): T | null;
-    addComponent<T>(component: T): T;
-    removeComponent<T>(type: new (...args: unknown[]) => T): void;
-    hasComponent<T>(type: new (...args: unknown[]) => T): boolean;
-}
-
-/**
- * Scene interface (minimal for decoupling)
- * 场景接口（最小化以解耦）
- */
-export interface IScene {
-    createEntity(name?: string): IEntity;
-    destroyEntity(entity: IEntity): void;
-    findEntityByName(name: string): IEntity | null;
-    findEntitiesByTag(tag: number): IEntity[];
-}
-
-/**
  * Execution context provides access to runtime services
  * 执行上下文提供对运行时服务的访问
  */
@@ -76,7 +52,7 @@ export class ExecutionContext {
     readonly blueprint: BlueprintAsset;
 
     /** Owner entity (所有者实体) */
-    readonly entity: IEntity;
+    readonly entity: Entity;
 
     /** Current scene (当前场景) */
     readonly scene: IScene;
@@ -105,7 +81,7 @@ export class ExecutionContext {
     /** Connection lookup by source (按源的连接查找) */
     private _connectionsBySource: Map<string, BlueprintConnection[]> = new Map();
 
-    constructor(blueprint: BlueprintAsset, entity: IEntity, scene: IScene) {
+    constructor(blueprint: BlueprintAsset, entity: Entity, scene: IScene) {
         this.blueprint = blueprint;
         this.entity = entity;
         this.scene = scene;

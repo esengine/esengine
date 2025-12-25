@@ -3,9 +3,10 @@
  * 蓝图虚拟机 - 执行蓝图图
  */
 
+import type { Entity, IScene } from '@esengine/ecs-framework';
 import { BlueprintNode } from '../types/nodes';
 import { BlueprintAsset } from '../types/blueprint';
-import { ExecutionContext, ExecutionResult, IEntity, IScene } from './ExecutionContext';
+import { ExecutionContext, ExecutionResult } from './ExecutionContext';
 import { NodeRegistry } from './NodeRegistry';
 
 /**
@@ -57,7 +58,7 @@ export class BlueprintVM {
     /** Debug mode (调试模式) */
     debug: boolean = false;
 
-    constructor(blueprint: BlueprintAsset, entity: IEntity, scene: IScene) {
+    constructor(blueprint: BlueprintAsset, entity: Entity, scene: IScene) {
         this._context = new ExecutionContext(blueprint, entity, scene);
         this._cacheEventNodes();
     }
