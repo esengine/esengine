@@ -1,14 +1,29 @@
-// ECS系统导出
+/**
+ * @zh ECS 系统模块导出
+ * @en ECS Systems Module Exports
+ */
+
+// =============================================================================
+// 系统类 | System Classes
+// =============================================================================
+
 export { EntitySystem } from './EntitySystem';
 export { ProcessingSystem } from './ProcessingSystem';
 export { PassiveSystem } from './PassiveSystem';
 export { IntervalSystem } from './IntervalSystem';
 export { WorkerEntitySystem } from './WorkerEntitySystem';
 export { HierarchySystem } from './HierarchySystem';
+export { PlatformWorkerPool } from './PlatformWorkerPool';
 
-// Worker系统相关类型导出
+// =============================================================================
+// Worker 系统类型导出 | Worker System Type Exports
+// =============================================================================
+
 export type {
     WorkerProcessFunction,
-    WorkerSystemConfig,
-    SharedArrayBufferProcessFunction
+    SharedArrayBufferProcessFunction,
+    IWorkerSystemConfig,
+    ProcessingMode,
+    // 向后兼容 | Backward compatibility
+    WorkerSystemConfig
 } from './WorkerEntitySystem';
