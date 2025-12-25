@@ -4,6 +4,36 @@ This document records the version update history of the `@esengine/ecs-framework
 
 ---
 
+## v2.4.2 (2025-12-25)
+
+### Features
+
+- **IncrementalSerializer Entity Filter**: Incremental serialization supports `entityFilter` option (#335)
+  - Filter entities by condition when creating snapshots
+  - Support custom filter logic by tag, component type, etc.
+  - Suitable for scenarios that only sync partial entities (e.g., only sync players)
+
+```typescript
+// Only snapshot player entities
+const snapshot = IncrementalSerializer.createSnapshot(scene, {
+    entityFilter: (entity) => entity.tag === PLAYER_TAG
+});
+
+// Only snapshot entities with specific component
+const snapshot = IncrementalSerializer.createSnapshot(scene, {
+    entityFilter: (entity) => entity.hasComponent(PlayerMarker)
+});
+```
+
+### Refactor
+
+- Optimize `PlatformWorkerPool` code style, extract as standalone module (#335)
+- Optimize `WorkerEntitySystem` implementation, improve code structure (#334)
+- Code standardization and dependency cleanup (#317)
+- Code structure optimization, add `GlobalTypes.ts` for unified type definitions (#316)
+
+---
+
 ## v2.4.1 (2025-12-23)
 
 ### Bug Fixes

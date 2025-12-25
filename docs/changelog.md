@@ -4,6 +4,36 @@
 
 ---
 
+## v2.4.2 (2025-12-25)
+
+### Features
+
+- **IncrementalSerializer 实体过滤**: 增量序列化支持 `entityFilter` 选项 (#335)
+  - 创建快照时可按条件过滤实体
+  - 支持按标签、组件类型等自定义过滤逻辑
+  - 适用于只同步部分实体的场景（如只同步玩家）
+
+```typescript
+// 只快照玩家实体
+const snapshot = IncrementalSerializer.createSnapshot(scene, {
+    entityFilter: (entity) => entity.tag === PLAYER_TAG
+});
+
+// 只快照有特定组件的实体
+const snapshot = IncrementalSerializer.createSnapshot(scene, {
+    entityFilter: (entity) => entity.hasComponent(PlayerMarker)
+});
+```
+
+### Refactor
+
+- 优化 `PlatformWorkerPool` 代码规范，提取为独立模块 (#335)
+- 优化 `WorkerEntitySystem` 实现，改进代码结构 (#334)
+- 代码规范化与依赖清理 (#317)
+- 代码结构优化，添加 `GlobalTypes.ts` 统一类型定义 (#316)
+
+---
+
 ## v2.4.1 (2025-12-23)
 
 ### Bug Fixes
