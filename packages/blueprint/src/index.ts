@@ -12,6 +12,9 @@ export * from './runtime';
 // Triggers
 export * from './triggers';
 
+// Composition
+export * from './composition';
+
 // Nodes (import to register)
 import './nodes';
 
