@@ -1,0 +1,40 @@
+{
+    "name": "@esengine/effect",
+    "version": "1.0.0",
+    "description": "Effect system for ECS Framework / ECS 框架的效果系统",
+    "type": "module",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist",
+        "module.json"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "tslib": "^2.8.1"
+    },
+    "devDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/blueprint": "workspace:*",
+        "@esengine/build-config": "workspace:*",
+        "@types/node": "^20.19.17",
+        "rimraf": "^5.0.0",
+        "tsup": "^8.0.0",
+        "typescript": "^5.8.3"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
