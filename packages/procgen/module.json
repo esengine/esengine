@@ -1,0 +1,24 @@
+{
+    "id": "procgen",
+    "name": "@esengine/procgen",
+    "globalKey": "procgen",
+    "displayName": "Procedural Generation",
+    "description": "程序化生成工具，包含噪声函数和随机工具 | Procedural generation tools with noise functions and random utilities",
+    "version": "1.0.0",
+    "category": "Math",
+    "icon": "Wand",
+    "tags": ["noise", "random", "procedural", "generation"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": true,
+    "canContainContent": false,
+    "platforms": ["web", "desktop"],
+    "dependencies": ["core"],
+    "exports": {
+        "components": [],
+        "systems": []
+    },
+    "requiresWasm": false,
+    "outputPath": "dist/index.js",
+    "pluginExport": "ProcGenPlugin"
+}
