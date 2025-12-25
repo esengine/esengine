@@ -188,6 +188,9 @@ jobs:
         with:
           tag_name: ${{ steps.parse.outputs.tag }}
           name: "${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}"
+          # 不设置为 latest，latest 保留给编辑器热更新使用
+          # Don't mark as latest, reserve latest for editor auto-update
+          make_latest: false
           body: |
             ## 🚀 @esengine/${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}
 
