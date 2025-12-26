@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          cd packages/core
+          cd packages/framework/core
           pnpm run test:coverage
 
       - name: Upload coverage to Codecov
@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/core/coverage/coverage-final.json
+          files: ./packages/framework/core/coverage/coverage-final.json
           flags: core
           name: core-coverage
           fail_ci_if_error: false
@@ -46,4 +46,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: packages/core/coverage/
+          path: packages/framework/core/coverage/

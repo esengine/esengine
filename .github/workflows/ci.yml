@@ -42,57 +42,35 @@ jobs:
         node-version: '20.x'
         cache: 'pnpm'
 
-    - name: Install Rust stable
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: wasm32-unknown-unknown
-
-    # 缓存 Rust 编译结果
-    - name: Cache Rust dependencies
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: packages/engine
-        cache-on-failure: true
-
-    # 缓存 wasm-pack
-    - name: Cache wasm-pack
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/bin/wasm-pack
-        key: wasm-pack-${{ runner.os }}
-
-    - name: Install wasm-pack
-      run: |
-        if ! command -v wasm-pack &> /dev/null; then
-          cargo install wasm-pack
-        fi
-
     - name: Install dependencies
       run: pnpm install --no-frozen-lockfile
 
-    # 构建所有包 (使用 Turborepo Remote Cache)
-    - name: Build all packages
-      run: pnpm run build
-
-    - name: Copy WASM files to ecs-engine-bindgen
+    # 构建 framework 包 (可独立发布的通用库，无外部依赖)
+    - name: Build framework packages
       run: |
-        mkdir -p packages/ecs-engine-bindgen/src/wasm
-        cp packages/engine/pkg/es_engine.js packages/ecs-engine-bindgen/src/wasm/
-        cp packages/engine/pkg/es_engine.d.ts packages/ecs-engine-bindgen/src/wasm/
-        cp packages/engine/pkg/es_engine_bg.wasm packages/ecs-engine-bindgen/src/wasm/
-        cp packages/engine/pkg/es_engine_bg.wasm.d.ts packages/ecs-engine-bindgen/src/wasm/
+        pnpm --filter @esengine/ecs-framework build
+        pnpm --filter @esengine/ecs-framework-math build
+        pnpm --filter @esengine/behavior-tree build
+        pnpm --filter @esengine/blueprint build
+        pnpm --filter @esengine/fsm build
+        pnpm --filter @esengine/timer build
+        pnpm --filter @esengine/spatial build
+        pnpm --filter @esengine/procgen build
+        pnpm --filter @esengine/pathfinding build
+        pnpm --filter @esengine/network-protocols build
+        pnpm --filter @esengine/network build
 
-    # 类型检查
-    - name: Type check
-      run: pnpm run type-check
+    # 类型检查 (仅 framework 包)
+    - name: Type check (framework packages)
+      run: pnpm run type-check:framework
 
-    # Lint 检查
-    - name: Lint check
-      run: pnpm run lint
+    # Lint 检查 (仅 framework 包)
+    - name: Lint check (framework packages)
+      run: pnpm run lint:framework
 
-    # 测试
+    # 测试 (仅 framework 包)
     - name: Run tests with coverage
-      run: pnpm run test:ci
+      run: pnpm run test:ci:framework
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
@@ -103,9 +81,11 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
-    # 构建 npm 包
+    # 构建 npm 包 (core 和 math)
     - name: Build npm packages
-      run: pnpm run build:npm
+      run: |
+        pnpm run build:npm:core
+        pnpm run build:npm:math
 
     # 上传构建产物
     - name: Upload build artifacts
@@ -113,6 +93,6 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          packages/*/dist/
-          packages/*/bin/
+          packages/framework/**/dist/
+          packages/framework/**/bin/
         retention-days: 7

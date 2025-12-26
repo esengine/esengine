@@ -1,0 +1,62 @@
+{
+    "name": "@esengine/behavior-tree",
+    "version": "1.0.1",
+    "description": "ECS-based AI behavior tree system - works with any ECS framework (ESEngine, Cocos, Laya, etc.)",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "keywords": [
+        "ecs",
+        "behavior-tree",
+        "ai",
+        "game-ai",
+        "entity-component-system",
+        "cocos",
+        "laya",
+        "esengine"
+    ],
+    "scripts": {
+        "clean": "rimraf dist tsconfig.tsbuildinfo",
+        "build": "tsup",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit"
+    },
+    "author": "yhh",
+    "license": "MIT",
+    "devDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/build-config": "workspace:*",
+        "@types/jest": "^29.5.14",
+        "@types/node": "^20.19.17",
+        "jest": "^29.7.0",
+        "rimraf": "^5.0.0",
+        "ts-jest": "^29.4.0",
+        "tsup": "^8.0.0",
+        "typescript": "^5.8.3"
+    },
+    "peerDependencies": {
+        "@esengine/ecs-framework": "workspace:*"
+    },
+    "dependencies": {
+        "tslib": "^2.8.1"
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/esengine/esengine.git",
+        "directory": "packages/framework/behavior-tree"
+    }
+}
