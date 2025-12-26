@@ -10,10 +10,6 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
-        },
-        "./esengine": {
-            "types": "./dist/esengine/index.d.ts",
-            "import": "./dist/esengine/index.js"
         }
     },
     "files": [
@@ -39,20 +35,13 @@
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/build-config": "workspace:*",
-        "@esengine/engine-core": "workspace:*",
         "@types/node": "^20.19.17",
         "rimraf": "^5.0.0",
         "tsup": "^8.0.0",
         "typescript": "^5.8.3"
     },
     "peerDependencies": {
-        "@esengine/ecs-framework": "workspace:*",
-        "@esengine/engine-core": "workspace:*"
-    },
-    "peerDependenciesMeta": {
-        "@esengine/engine-core": {
-            "optional": true
-        }
+        "@esengine/ecs-framework": "workspace:*"
     },
     "dependencies": {
         "tslib": "^2.8.1"

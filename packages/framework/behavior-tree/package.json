@@ -10,10 +10,6 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
-        },
-        "./esengine": {
-            "types": "./dist/esengine/index.d.ts",
-            "import": "./dist/esengine/index.js"
         }
     },
     "files": [
@@ -40,8 +36,6 @@
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/build-config": "workspace:*",
-        "@esengine/engine-core": "workspace:*",
-        "@esengine/asset-system": "workspace:*",
         "@types/jest": "^29.5.14",
         "@types/node": "^20.19.17",
         "jest": "^29.7.0",
@@ -51,17 +45,7 @@
         "typescript": "^5.8.3"
     },
     "peerDependencies": {
-        "@esengine/ecs-framework": "workspace:*",
-        "@esengine/engine-core": "workspace:*",
-        "@esengine/asset-system": "workspace:*"
-    },
-    "peerDependenciesMeta": {
-        "@esengine/engine-core": {
-            "optional": true
-        },
-        "@esengine/asset-system": {
-            "optional": true
-        }
+        "@esengine/ecs-framework": "workspace:*"
     },
     "dependencies": {
         "tslib": "^2.8.1"

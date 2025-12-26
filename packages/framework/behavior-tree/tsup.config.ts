@@ -4,10 +4,8 @@ import { runtimeOnlyPreset } from '../../tools/build-config/src/presets/plugin-t
 export default defineConfig({
     ...runtimeOnlyPreset({
         tsupConfig: {
-            // Multiple entry points: main + ESEngine integration
             entry: {
-                index: 'src/index.ts',
-                'esengine/index': 'src/esengine/index.ts'
+                index: 'src/index.ts'
             }
         }
     }),
