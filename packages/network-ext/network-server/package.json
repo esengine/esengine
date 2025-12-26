@@ -1,6 +1,6 @@
 {
     "name": "@esengine/network-server",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "TSRPC-based network server for ESEngine",
     "type": "module",
     "main": "dist/index.cjs",
