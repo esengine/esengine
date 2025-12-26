@@ -22,43 +22,111 @@ npm install @esengine/network
 npm install @esengine/network-server
 ```
 
+## Quick Setup with CLI
+
+We recommend using ESEngine CLI to quickly create a complete game server project:
+
+```bash
+# Create project directory
+mkdir my-game-server && cd my-game-server
+npm init -y
+
+# Initialize Node.js server with CLI
+npx @esengine/cli init -p nodejs
+```
+
+The CLI will generate the following project structure:
+
+```
+my-game-server/
+├── src/
+│   ├── index.ts                    # Entry point
+│   ├── server/
+│   │   └── GameServer.ts           # Network server configuration
+│   └── game/
+│       ├── Game.ts                 # ECS game class
+│       ├── scenes/
+│       │   └── MainScene.ts        # Main scene
+│       ├── components/             # ECS components
+│       │   ├── PositionComponent.ts
+│       │   └── VelocityComponent.ts
+│       └── systems/                # ECS systems
+│           └── MovementSystem.ts
+├── tsconfig.json
+├── package.json
+└── README.md
+```
+
+Start the server:
+
+```bash
+# Development mode (hot reload)
+npm run dev
+
+# Production mode
+npm run start
+```
+
 ## Quick Start
 
 ### Client
 
 ```typescript
-import { World } from '@esengine/ecs-framework';
+import { Core, Scene } from '@esengine/ecs-framework';
 import {
     NetworkPlugin,
     NetworkIdentity,
     NetworkTransform
 } from '@esengine/network';
 
-// Create World and install network plugin
-const world = new World();
-const networkPlugin = new NetworkPlugin({
-    serverUrl: 'ws://localhost:3000'
-});
-networkPlugin.install(world.services);
+// Define game scene
+class GameScene extends Scene {
+    initialize(): void {
+        this.name = 'Game';
+        // Network systems are automatically added by NetworkPlugin
+    }
+}
+
+// Initialize Core
+Core.create({ debug: false });
+const scene = new GameScene();
+Core.setScene(scene);
+
+// Install network plugin
+const networkPlugin = new NetworkPlugin();
+await Core.installPlugin(networkPlugin);
 
 // Register prefab factory
-networkPlugin.registerPrefab('player', (netId, ownerId) => {
-    const entity = world.createEntity(`player_${netId}`);
-    entity.addComponent(new NetworkIdentity(netId, ownerId));
+networkPlugin.registerPrefab('player', (scene, spawn) => {
+    const entity = scene.createEntity(`player_${spawn.netId}`);
+
+    const identity = entity.addComponent(new NetworkIdentity());
+    identity.netId = spawn.netId;
+    identity.ownerId = spawn.ownerId;
+    identity.isLocalPlayer = spawn.ownerId === networkPlugin.networkService.localClientId;
+
     entity.addComponent(new NetworkTransform());
-    // Add other components...
     return entity;
 });
 
 // Connect to server
-await networkPlugin.connect('PlayerName');
-console.log('Connected! Client ID:', networkPlugin.localPlayerId);
+const success = await networkPlugin.connect('ws://localhost:3000', 'PlayerName');
+if (success) {
+    console.log('Connected!');
+}
+
+// Game loop
+function gameLoop(dt: number) {
+    Core.update(dt);
+}
 
 // Disconnect
-networkPlugin.disconnect();
+await networkPlugin.disconnect();
 ```
 
 ### Server
+
+After creating a server project with CLI, the generated code already configures GameServer:
 
 ```typescript
 import { GameServer } from '@esengine/network-server';
@@ -72,6 +140,7 @@ const server = new GameServer({
 });
 
 await server.start();
+console.log('Server started on ws://localhost:3000');
 ```
 
 ## Core Concepts
@@ -229,15 +298,19 @@ interface INetworkCallbacks {
 ### Prefab Factory
 
 ```typescript
-type PrefabFactory = (netId: number, ownerId: number) => Entity;
+type PrefabFactory = (scene: Scene, spawn: MsgSpawn) => Entity;
 ```
 
 Register prefab factories for network entity creation:
 
 ```typescript
-networkPlugin.registerPrefab('enemy', (netId, ownerId) => {
-    const entity = world.createEntity(`enemy_${netId}`);
-    entity.addComponent(new NetworkIdentity(netId, ownerId));
+networkPlugin.registerPrefab('enemy', (scene, spawn) => {
+    const entity = scene.createEntity(`enemy_${spawn.netId}`);
+
+    const identity = entity.addComponent(new NetworkIdentity());
+    identity.netId = spawn.netId;
+    identity.ownerId = spawn.ownerId;
+
     entity.addComponent(new NetworkTransform());
     entity.addComponent(new EnemyComponent());
     return entity;
@@ -264,9 +337,12 @@ class NetworkInputSystem extends EntitySystem {
 Usage example:
 
 ```typescript
-const inputSystem = world.getSystem(NetworkInputSystem);
+// Send input via NetworkPlugin (recommended)
+networkPlugin.sendMoveInput(0, 1);      // Movement
+networkPlugin.sendActionInput('jump');  // Action
 
-// Handle keyboard input
+// Or use inputSystem directly
+const inputSystem = networkPlugin.inputSystem;
 if (keyboard.isPressed('W')) {
     inputSystem.addMoveInput(0, 1);
 }
@@ -519,74 +595,92 @@ const networkService = services.get(NetworkServiceToken);
 ### Complete Multiplayer Client
 
 ```typescript
-import { World, EntitySystem, Matcher } from '@esengine/ecs-framework';
+import { Core, Scene, EntitySystem, Matcher, Entity } from '@esengine/ecs-framework';
 import {
     NetworkPlugin,
     NetworkIdentity,
-    NetworkTransform,
-    NetworkInputSystem
+    NetworkTransform
 } from '@esengine/network';
 
-// Create game world
-const world = new World();
+// Define game scene
+class GameScene extends Scene {
+    initialize(): void {
+        this.name = 'MultiplayerGame';
+        // Network systems are automatically added by NetworkPlugin
+        // Add custom systems
+        this.addSystem(new LocalInputHandler());
+    }
+}
 
-// Configure network plugin
-const networkPlugin = new NetworkPlugin({
-    serverUrl: 'ws://localhost:3000'
-});
-networkPlugin.install(world.services);
+// Initialize
+async function initGame() {
+    Core.create({ debug: false });
 
-// Register player prefab
-networkPlugin.registerPrefab('player', (netId, ownerId) => {
-    const entity = world.createEntity(`player_${netId}`);
+    const scene = new GameScene();
+    Core.setScene(scene);
 
-    const identity = new NetworkIdentity(netId, ownerId);
-    entity.addComponent(identity);
-    entity.addComponent(new NetworkTransform());
+    // Install network plugin
+    const networkPlugin = new NetworkPlugin();
+    await Core.installPlugin(networkPlugin);
 
-    // If local player, add input component
-    if (identity.bIsLocalPlayer) {
-        entity.addComponent(new LocalInputComponent());
+    // Register player prefab
+    networkPlugin.registerPrefab('player', (scene, spawn) => {
+        const entity = scene.createEntity(`player_${spawn.netId}`);
+
+        const identity = entity.addComponent(new NetworkIdentity());
+        identity.netId = spawn.netId;
+        identity.ownerId = spawn.ownerId;
+        identity.isLocalPlayer = spawn.ownerId === networkPlugin.networkService.localClientId;
+
+        entity.addComponent(new NetworkTransform());
+
+        // If local player, add input marker
+        if (identity.isLocalPlayer) {
+            entity.addComponent(new LocalInputComponent());
+        }
+
+        return entity;
+    });
+
+    // Connect to server
+    const success = await networkPlugin.connect('ws://localhost:3000', 'Player1');
+    if (success) {
+        console.log('Connected!');
+    } else {
+        console.error('Connection failed');
     }
 
-    return entity;
-});
-
-// Connect to server
-async function startGame() {
-    try {
-        await networkPlugin.connect('Player1');
-        console.log('Connected! Player ID:', networkPlugin.localPlayerId);
-    } catch (error) {
-        console.error('Connection failed:', error);
-    }
+    return networkPlugin;
 }
 
 // Game loop
 function gameLoop(deltaTime: number) {
-    world.update(deltaTime);
+    Core.update(deltaTime);
 }
 
-startGame();
+initGame();
 ```
 
 ### Handling Input
 
 ```typescript
 class LocalInputHandler extends EntitySystem {
-    private _inputSystem: NetworkInputSystem;
+    private _networkPlugin: NetworkPlugin | null = null;
 
     constructor() {
-        super(Matcher.all(NetworkIdentity, LocalInputComponent));
+        super(Matcher.empty().all(NetworkIdentity, LocalInputComponent));
     }
 
-    protected onAddedToWorld(): void {
-        this._inputSystem = this.world.getSystem(NetworkInputSystem);
+    protected onAddedToScene(): void {
+        // Get NetworkPlugin reference
+        this._networkPlugin = Core.getPlugin(NetworkPlugin);
     }
 
     protected processEntity(entity: Entity, dt: number): void {
-        const identity = entity.getComponent(NetworkIdentity);
-        if (!identity.bIsLocalPlayer) return;
+        if (!this._networkPlugin) return;
+
+        const identity = entity.getComponent(NetworkIdentity)!;
+        if (!identity.isLocalPlayer) return;
 
         // Read keyboard input
         let moveX = 0;
@@ -598,11 +692,11 @@ class LocalInputHandler extends EntitySystem {
         if (keyboard.isPressed('S')) moveY -= 1;
 
         if (moveX !== 0 || moveY !== 0) {
-            this._inputSystem.addMoveInput(moveX, moveY);
+            this._networkPlugin.sendMoveInput(moveX, moveY);
         }
 
         if (keyboard.isJustPressed('Space')) {
-            this._inputSystem.addActionInput('jump');
+            this._networkPlugin.sendActionInput('jump');
         }
     }
 }

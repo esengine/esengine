@@ -1,15 +1,21 @@
 {
     "name": "@esengine/network-server",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "TSRPC-based network server for ESEngine",
     "type": "module",
-    "main": "dist/index.js",
+    "main": "dist/index.cjs",
     "module": "dist/index.js",
     "types": "dist/index.d.ts",
     "exports": {
         ".": {
-            "import": "./dist/index.js",
-            "types": "./dist/index.d.ts"
+            "import": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.js"
+            },
+            "require": {
+                "types": "./dist/index.d.cts",
+                "default": "./dist/index.cjs"
+            }
         }
     },
     "files": [
@@ -22,7 +28,8 @@
     },
     "dependencies": {
         "@esengine/network-protocols": "workspace:*",
-        "tsrpc": "^3.4.15"
+        "tsrpc": "^3.4.15",
+        "ws": "^8.18.0"
     },
     "devDependencies": {
         "tsup": "^8.5.1",

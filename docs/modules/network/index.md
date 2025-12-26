@@ -22,43 +22,111 @@ npm install @esengine/network
 npm install @esengine/network-server
 ```
 
+## 使用 CLI 快速创建服务端
+
+推荐使用 ESEngine CLI 快速创建完整的游戏服务端项目：
+
+```bash
+# 创建项目目录
+mkdir my-game-server && cd my-game-server
+npm init -y
+
+# 使用 CLI 初始化 Node.js 服务端
+npx @esengine/cli init -p nodejs
+```
+
+CLI 会自动生成以下项目结构：
+
+```
+my-game-server/
+├── src/
+│   ├── index.ts                    # 入口文件
+│   ├── server/
+│   │   └── GameServer.ts           # 网络服务器配置
+│   └── game/
+│       ├── Game.ts                 # ECS 游戏主类
+│       ├── scenes/
+│       │   └── MainScene.ts        # 主场景
+│       ├── components/             # ECS 组件
+│       │   ├── PositionComponent.ts
+│       │   └── VelocityComponent.ts
+│       └── systems/                # ECS 系统
+│           └── MovementSystem.ts
+├── tsconfig.json
+├── package.json
+└── README.md
+```
+
+启动服务端：
+
+```bash
+# 开发模式（热重载）
+npm run dev
+
+# 生产模式
+npm run start
+```
+
 ## 快速开始
 
 ### 客户端
 
 ```typescript
-import { World } from '@esengine/ecs-framework';
+import { Core, Scene } from '@esengine/ecs-framework';
 import {
     NetworkPlugin,
     NetworkIdentity,
     NetworkTransform
 } from '@esengine/network';
 
-// 创建 World 并安装网络插件
-const world = new World();
-const networkPlugin = new NetworkPlugin({
-    serverUrl: 'ws://localhost:3000'
-});
-networkPlugin.install(world.services);
+// 定义游戏场景
+class GameScene extends Scene {
+    initialize(): void {
+        this.name = 'Game';
+        // 网络系统由 NetworkPlugin 自动添加
+    }
+}
+
+// 初始化 Core
+Core.create({ debug: false });
+const scene = new GameScene();
+Core.setScene(scene);
+
+// 安装网络插件
+const networkPlugin = new NetworkPlugin();
+await Core.installPlugin(networkPlugin);
 
 // 注册预制体工厂
-networkPlugin.registerPrefab('player', (netId, ownerId) => {
-    const entity = world.createEntity(`player_${netId}`);
-    entity.addComponent(new NetworkIdentity(netId, ownerId));
+networkPlugin.registerPrefab('player', (scene, spawn) => {
+    const entity = scene.createEntity(`player_${spawn.netId}`);
+
+    const identity = entity.addComponent(new NetworkIdentity());
+    identity.netId = spawn.netId;
+    identity.ownerId = spawn.ownerId;
+    identity.isLocalPlayer = spawn.ownerId === networkPlugin.networkService.localClientId;
+
     entity.addComponent(new NetworkTransform());
-    // 添加其他组件...
     return entity;
 });
 
 // 连接服务器
-await networkPlugin.connect('PlayerName');
-console.log('Connected! Client ID:', networkPlugin.localPlayerId);
+const success = await networkPlugin.connect('ws://localhost:3000', 'PlayerName');
+if (success) {
+    console.log('Connected!');
+}
+
+// 游戏循环
+function gameLoop(dt: number) {
+    Core.update(dt);
+}
 
 // 断开连接
-networkPlugin.disconnect();
+await networkPlugin.disconnect();
 ```
 
 ### 服务器端
+
+使用 CLI 创建服务端项目后，默认生成的代码已经配置好了 GameServer：
 
 ```typescript
 import { GameServer } from '@esengine/network-server';
@@ -72,6 +140,7 @@ const server = new GameServer({
 });
 
 await server.start();
+console.log('Server started on ws://localhost:3000');
 ```
 
 ## 核心概念
@@ -229,15 +298,19 @@ interface INetworkCallbacks {
 ### 预制体工厂
 
 ```typescript
-type PrefabFactory = (netId: number, ownerId: number) => Entity;
+type PrefabFactory = (scene: Scene, spawn: MsgSpawn) => Entity;
 ```
 
 注册预制体工厂用于网络实体的创建：
 
 ```typescript
-networkPlugin.registerPrefab('enemy', (netId, ownerId) => {
-    const entity = world.createEntity(`enemy_${netId}`);
-    entity.addComponent(new NetworkIdentity(netId, ownerId));
+networkPlugin.registerPrefab('enemy', (scene, spawn) => {
+    const entity = scene.createEntity(`enemy_${spawn.netId}`);
+
+    const identity = entity.addComponent(new NetworkIdentity());
+    identity.netId = spawn.netId;
+    identity.ownerId = spawn.ownerId;
+
     entity.addComponent(new NetworkTransform());
     entity.addComponent(new EnemyComponent());
     return entity;
@@ -264,9 +337,12 @@ class NetworkInputSystem extends EntitySystem {
 使用示例：
 
 ```typescript
-const inputSystem = world.getSystem(NetworkInputSystem);
+// 通过 NetworkPlugin 发送输入（推荐）
+networkPlugin.sendMoveInput(0, 1);      // 移动
+networkPlugin.sendActionInput('jump');  // 动作
 
-// 处理键盘输入
+// 或直接使用 inputSystem
+const inputSystem = networkPlugin.inputSystem;
 if (keyboard.isPressed('W')) {
     inputSystem.addMoveInput(0, 1);
 }
@@ -519,74 +595,92 @@ const networkService = services.get(NetworkServiceToken);
 ### 完整的多人游戏客户端
 
 ```typescript
-import { World, EntitySystem, Matcher } from '@esengine/ecs-framework';
+import { Core, Scene, EntitySystem, Matcher, Entity } from '@esengine/ecs-framework';
 import {
     NetworkPlugin,
     NetworkIdentity,
-    NetworkTransform,
-    NetworkInputSystem
+    NetworkTransform
 } from '@esengine/network';
 
-// 创建游戏世界
-const world = new World();
+// 定义游戏场景
+class GameScene extends Scene {
+    initialize(): void {
+        this.name = 'MultiplayerGame';
+        // 网络系统由 NetworkPlugin 自动添加
+        // 添加自定义系统
+        this.addSystem(new LocalInputHandler());
+    }
+}
 
-// 配置网络插件
-const networkPlugin = new NetworkPlugin({
-    serverUrl: 'ws://localhost:3000'
-});
-networkPlugin.install(world.services);
+// 初始化
+async function initGame() {
+    Core.create({ debug: false });
 
-// 注册玩家预制体
-networkPlugin.registerPrefab('player', (netId, ownerId) => {
-    const entity = world.createEntity(`player_${netId}`);
+    const scene = new GameScene();
+    Core.setScene(scene);
 
-    const identity = new NetworkIdentity(netId, ownerId);
-    entity.addComponent(identity);
-    entity.addComponent(new NetworkTransform());
+    // 安装网络插件
+    const networkPlugin = new NetworkPlugin();
+    await Core.installPlugin(networkPlugin);
 
-    // 如果是本地玩家，添加输入组件
-    if (identity.bIsLocalPlayer) {
-        entity.addComponent(new LocalInputComponent());
+    // 注册玩家预制体
+    networkPlugin.registerPrefab('player', (scene, spawn) => {
+        const entity = scene.createEntity(`player_${spawn.netId}`);
+
+        const identity = entity.addComponent(new NetworkIdentity());
+        identity.netId = spawn.netId;
+        identity.ownerId = spawn.ownerId;
+        identity.isLocalPlayer = spawn.ownerId === networkPlugin.networkService.localClientId;
+
+        entity.addComponent(new NetworkTransform());
+
+        // 如果是本地玩家，添加输入标记
+        if (identity.isLocalPlayer) {
+            entity.addComponent(new LocalInputComponent());
+        }
+
+        return entity;
+    });
+
+    // 连接服务器
+    const success = await networkPlugin.connect('ws://localhost:3000', 'Player1');
+    if (success) {
+        console.log('已连接!');
+    } else {
+        console.error('连接失败');
     }
 
-    return entity;
-});
-
-// 连接服务器
-async function startGame() {
-    try {
-        await networkPlugin.connect('Player1');
-        console.log('已连接! 玩家 ID:', networkPlugin.localPlayerId);
-    } catch (error) {
-        console.error('连接失败:', error);
-    }
+    return networkPlugin;
 }
 
 // 游戏循环
 function gameLoop(deltaTime: number) {
-    world.update(deltaTime);
+    Core.update(deltaTime);
 }
 
-startGame();
+initGame();
 ```
 
 ### 处理输入
 
 ```typescript
 class LocalInputHandler extends EntitySystem {
-    private _inputSystem: NetworkInputSystem;
+    private _networkPlugin: NetworkPlugin | null = null;
 
     constructor() {
-        super(Matcher.all(NetworkIdentity, LocalInputComponent));
+        super(Matcher.empty().all(NetworkIdentity, LocalInputComponent));
     }
 
-    protected onAddedToWorld(): void {
-        this._inputSystem = this.world.getSystem(NetworkInputSystem);
+    protected onAddedToScene(): void {
+        // 获取 NetworkPlugin 引用
+        this._networkPlugin = Core.getPlugin(NetworkPlugin);
     }
 
     protected processEntity(entity: Entity, dt: number): void {
-        const identity = entity.getComponent(NetworkIdentity);
-        if (!identity.bIsLocalPlayer) return;
+        if (!this._networkPlugin) return;
+
+        const identity = entity.getComponent(NetworkIdentity)!;
+        if (!identity.isLocalPlayer) return;
 
         // 读取键盘输入
         let moveX = 0;
@@ -598,11 +692,11 @@ class LocalInputHandler extends EntitySystem {
         if (keyboard.isPressed('S')) moveY -= 1;
 
         if (moveX !== 0 || moveY !== 0) {
-            this._inputSystem.addMoveInput(moveX, moveY);
+            this._networkPlugin.sendMoveInput(moveX, moveY);
         }
 
         if (keyboard.isJustPressed('Space')) {
-            this._inputSystem.addActionInput('jump');
+            this._networkPlugin.sendActionInput('jump');
         }
     }
 }
