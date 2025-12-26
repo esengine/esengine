@@ -33,7 +33,6 @@
     "@esengine/physics-rapier2d",
     "@esengine/rapier2d",
     "@esengine/world-streaming",
-    "@esengine/network-server",
     "@esengine/editor-core",
     "@esengine/editor-runtime",
     "@esengine/editor-app",
