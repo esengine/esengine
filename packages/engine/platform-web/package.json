@@ -57,5 +57,6 @@
     "type": "git",
     "url": "https://github.com/esengine/esengine.git",
     "directory": "packages/platform-web"
-  }
+  },
+  "private": true
 }

@@ -46,5 +46,6 @@
     "type": "git",
     "url": "https://github.com/esengine/esengine.git",
     "directory": "packages/platform-common"
-  }
+  },
+  "private": true
 }
