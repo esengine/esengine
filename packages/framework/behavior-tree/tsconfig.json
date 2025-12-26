@@ -31,18 +31,13 @@
   "exclude": [
     "node_modules",
     "dist",
+    "src/esengine",
     "**/*.test.ts",
     "**/*.spec.ts"
   ],
   "references": [
     {
-      "path": "../../framework/core"
-    },
-    {
-      "path": "../../engine/engine-core"
-    },
-    {
-      "path": "../../engine/asset-system"
+      "path": "../core"
     }
   ]
 }
