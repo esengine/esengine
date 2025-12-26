@@ -13,18 +13,31 @@ on:
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [ master, main, develop ]
-    paths:
-      - 'packages/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'tsconfig.json'
-      - 'turbo.json'
-      - 'jest.config.*'
-      - '.github/workflows/ci.yml'
-      - '.changeset/**'
+    # Run on all PRs to satisfy branch protection, but skip build if no code changes
 
 jobs:
+  # Check if we need to run the full CI
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig.json'
+              - 'turbo.json'
+              - 'jest.config.*'
+
   ci:
+    needs: check-changes
+    if: needs.check-changes.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
