@@ -460,8 +460,11 @@ ${properties}
         const escapeChar = opts.quoteStyle === 'single' ? "\\'" : '\\"';
 
         switch (type) {
-            case BlackboardValueType.String:
-                return `${quote}${value.toString().replace(escapeRegex, escapeChar)}${quote}`;
+            case BlackboardValueType.String: {
+                // First escape backslashes, then escape quotes
+                const escaped = value.toString().replace(/\\/g, '\\\\').replace(escapeRegex, escapeChar);
+                return `${quote}${escaped}${quote}`;
+            }
             case BlackboardValueType.Number:
             case BlackboardValueType.Boolean:
                 return String(value);

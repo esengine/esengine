@@ -6,3 +6,8 @@ paths-ignore:
   - "**/node_modules"
   - "**/dist"
   - "**/bin"
+  - "**/tests"
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/test"
+  - "**/__tests__"
