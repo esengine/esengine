@@ -21,6 +21,7 @@ on:
       - 'turbo.json'
       - 'jest.config.*'
       - '.github/workflows/ci.yml'
+      - '.changeset/**'
 
 jobs:
   ci:

@@ -34,7 +34,6 @@
     "@esengine/rapier2d",
     "@esengine/world-streaming",
     "@esengine/network-server",
-    "@esengine/network-protocols",
     "@esengine/editor-core",
     "@esengine/editor-runtime",
     "@esengine/editor-app",
@@ -52,7 +51,6 @@
     "@esengine/shader-editor",
     "@esengine/world-streaming-editor",
     "@esengine/node-editor",
-    "@esengine/build-config",
     "@esengine/sdk",
     "@esengine/worker-generator",
     "@esengine/engine"
