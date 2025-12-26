@@ -28,7 +28,7 @@
   "scripts": {
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "pnpm build && changeset publish",
+    "changeset:publish": "changeset publish",
     "bootstrap": "lerna bootstrap",
     "clean": "turbo run clean",
     "build": "turbo run build",

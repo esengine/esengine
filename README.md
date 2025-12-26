@@ -55,6 +55,19 @@ npm install @esengine/ecs-framework
 
 ## Quick Start
 
+### Using CLI (Recommended)
+
+The easiest way to add ECS to your existing project:
+
+```bash
+# In your project directory
+npx @esengine/cli init
+```
+
+The CLI automatically detects your project type (Cocos Creator 2.x/3.x, LayaAir 3.x, or Node.js) and generates the necessary integration code.
+
+### Manual Setup
+
 ```typescript
 import {
     Core, Scene, Entity, Component, EntitySystem,
@@ -144,24 +157,30 @@ export class GameManager extends CCComponent {
 }
 ```
 
-### With Laya
+### With Laya 3.x
 
 ```typescript
 import { Core, Scene } from '@esengine/ecs-framework';
 import { FSMSystem } from '@esengine/fsm';
 
-class Main {
-    constructor() {
-        Core.create();
-        const scene = new Scene();
-        scene.addSystem(new FSMSystem());
-        Core.setScene(scene);
+const { regClass } = Laya;
 
-        Laya.timer.frameLoop(1, this, this.update);
+@regClass()
+export class ECSManager extends Laya.Script {
+    private ecsScene = new Scene();
+
+    onAwake(): void {
+        Core.create();
+        this.ecsScene.addSystem(new FSMSystem());
+        Core.setScene(this.ecsScene);
     }
 
-    update() {
+    onUpdate(): void {
         Core.update(Laya.timer.delta / 1000);
+    }
+
+    onDestroy(): void {
+        Core.destroy();
     }
 }
 ```

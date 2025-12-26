@@ -4,7 +4,24 @@
 
 ## 安装
 
-### NPM 安装
+### 使用 CLI（推荐）
+
+在现有项目中添加 ECS 的最简单方式：
+
+```bash
+# 在项目目录中运行
+npx @esengine/cli init
+```
+
+CLI 会自动检测项目类型（Cocos Creator 2.x/3.x、LayaAir 3.x 或 Node.js）并生成相应的集成代码，包括：
+
+- `ECSManager` 组件/脚本 - 负责 ECS 生命周期管理
+- 示例组件和系统 - 帮助快速上手
+- 自动安装依赖
+
+### NPM 手动安装
+
+如果你更喜欢手动配置，可以直接安装：
 
 ```bash
 # 使用 npm
@@ -333,26 +350,38 @@ function gameLoop(deltaTime: number) {
 
 ## 与游戏引擎集成
 
-### Laya 引擎集成
+### Laya 3.x 引擎集成
+
+推荐使用 `Laya.Script` 组件来管理 ECS 生命周期：
 
 ```typescript
-import { Stage } from "laya/display/Stage";
-import { Laya } from "Laya";
-import { Core } from '@esengine/ecs-framework';
+import { Core, Scene } from '@esengine/ecs-framework';
 
-// 初始化 Laya
-Laya.init(800, 600).then(() => {
-  // 初始化 ECS
-  Core.create(true);
-  Core.setScene(new GameScene());
+const { regClass } = Laya;
 
-  // 启动游戏循环
-  Laya.timer.frameLoop(1, this, () => {
-    const deltaTime = Laya.timer.delta / 1000;
-    Core.update(deltaTime);  // 自动更新全局服务和场景
-  });
-});
+@regClass()
+export class ECSManager extends Laya.Script {
+  private ecsScene = new GameScene();
+
+  onAwake(): void {
+    // 初始化 ECS
+    Core.create({ debug: true });
+    Core.setScene(this.ecsScene);
+  }
+
+  onUpdate(): void {
+    // 自动更新全局服务和场景
+    Core.update(Laya.timer.delta / 1000);
+  }
+
+  onDestroy(): void {
+    // 清理资源
+    Core.destroy();
+  }
+}
 ```
+
+在 Laya IDE 中，将 `ECSManager` 脚本挂载到场景中的节点上即可。
 
 ### Cocos Creator 集成
 

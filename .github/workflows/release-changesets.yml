@@ -35,42 +35,24 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/engine
-          cache-on-failure: true
-
-      - name: Cache wasm-pack
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/wasm-pack
-          key: wasm-pack-${{ runner.os }}
-
-      - name: Install wasm-pack
-        run: |
-          if ! command -v wasm-pack &> /dev/null; then
-            cargo install wasm-pack
-          fi
-
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build all packages
-        run: pnpm build
-
-      - name: Copy WASM files
+      - name: Build framework packages
         run: |
-          mkdir -p packages/ecs-engine-bindgen/src/wasm
-          cp packages/engine/pkg/es_engine.js packages/ecs-engine-bindgen/src/wasm/
-          cp packages/engine/pkg/es_engine.d.ts packages/ecs-engine-bindgen/src/wasm/
-          cp packages/engine/pkg/es_engine_bg.wasm packages/ecs-engine-bindgen/src/wasm/
-          cp packages/engine/pkg/es_engine_bg.wasm.d.ts packages/ecs-engine-bindgen/src/wasm/
+          # Only build packages managed by Changesets (not in ignore list)
+          pnpm --filter "@esengine/ecs-framework" build
+          pnpm --filter "@esengine/ecs-framework-math" build
+          pnpm --filter "@esengine/behavior-tree" build
+          pnpm --filter "@esengine/blueprint" build
+          pnpm --filter "@esengine/fsm" build
+          pnpm --filter "@esengine/timer" build
+          pnpm --filter "@esengine/spatial" build
+          pnpm --filter "@esengine/procgen" build
+          pnpm --filter "@esengine/pathfinding" build
+          pnpm --filter "@esengine/network-protocols" build
+          pnpm --filter "@esengine/network" build
+          pnpm --filter "@esengine/cli" build
 
       - name: Create Release Pull Request or Publish
         id: changesets

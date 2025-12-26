@@ -4,7 +4,24 @@ This guide will help you get started with ECS Framework, from installation to cr
 
 ## Installation
 
-### NPM Installation
+### Using CLI (Recommended)
+
+The easiest way to add ECS to your existing project:
+
+```bash
+# In your project directory
+npx @esengine/cli init
+```
+
+The CLI automatically detects your project type (Cocos Creator 2.x/3.x, LayaAir 3.x, or Node.js) and generates the necessary integration code, including:
+
+- `ECSManager` component/script - Manages ECS lifecycle
+- Example components and systems - Helps you get started quickly
+- Automatic dependency installation
+
+### Manual NPM Installation
+
+If you prefer manual configuration:
 
 ```bash
 # Using npm
@@ -333,26 +350,38 @@ function gameLoop(deltaTime: number) {
 
 ## Game Engine Integration
 
-### Laya Engine Integration
+### Laya 3.x Engine Integration
+
+Using `Laya.Script` component to manage ECS lifecycle is recommended:
 
 ```typescript
-import { Stage } from "laya/display/Stage";
-import { Laya } from "Laya";
-import { Core } from '@esengine/ecs-framework';
+import { Core, Scene } from '@esengine/ecs-framework';
 
-// Initialize Laya
-Laya.init(800, 600).then(() => {
-  // Initialize ECS
-  Core.create(true);
-  Core.setScene(new GameScene());
+const { regClass } = Laya;
 
-  // Start game loop
-  Laya.timer.frameLoop(1, this, () => {
-    const deltaTime = Laya.timer.delta / 1000;
-    Core.update(deltaTime);  // Auto-updates global services and scene
-  });
-});
+@regClass()
+export class ECSManager extends Laya.Script {
+  private ecsScene = new GameScene();
+
+  onAwake(): void {
+    // Initialize ECS
+    Core.create({ debug: true });
+    Core.setScene(this.ecsScene);
+  }
+
+  onUpdate(): void {
+    // Auto-updates global services and scene
+    Core.update(Laya.timer.delta / 1000);
+  }
+
+  onDestroy(): void {
+    // Cleanup resources
+    Core.destroy();
+  }
+}
 ```
+
+In Laya IDE, attach the `ECSManager` script to a node in your scene.
 
 ### Cocos Creator Integration
 
