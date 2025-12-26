@@ -49,21 +49,6 @@ function createSidebar(t, prefix = '') {
               { text: t.sidebar.persistentEntity, link: `${prefix}/guide/persistent-entity` }
             ]
           },
-          {
-            text: t.sidebar.behaviorTree,
-            link: `${prefix}/guide/behavior-tree/`,
-            items: [
-              { text: t.sidebar.btGettingStarted, link: `${prefix}/guide/behavior-tree/getting-started` },
-              { text: t.sidebar.btCoreConcepts, link: `${prefix}/guide/behavior-tree/core-concepts` },
-              { text: t.sidebar.btEditorGuide, link: `${prefix}/guide/behavior-tree/editor-guide` },
-              { text: t.sidebar.btEditorWorkflow, link: `${prefix}/guide/behavior-tree/editor-workflow` },
-              { text: t.sidebar.btCustomActions, link: `${prefix}/guide/behavior-tree/custom-actions` },
-              { text: t.sidebar.btCocosIntegration, link: `${prefix}/guide/behavior-tree/cocos-integration` },
-              { text: t.sidebar.btLayaIntegration, link: `${prefix}/guide/behavior-tree/laya-integration` },
-              { text: t.sidebar.btAdvancedUsage, link: `${prefix}/guide/behavior-tree/advanced-usage` },
-              { text: t.sidebar.btBestPractices, link: `${prefix}/guide/behavior-tree/best-practices` }
-            ]
-          },
           { text: t.sidebar.serialization, link: `${prefix}/guide/serialization` },
           { text: t.sidebar.eventSystem, link: `${prefix}/guide/event-system` },
           { text: t.sidebar.timeAndTimers, link: `${prefix}/guide/time-and-timers` },
@@ -86,6 +71,64 @@ function createSidebar(t, prefix = '') {
           { text: t.sidebar.browserAdapter, link: `${prefix}/guide/platform-adapter/browser` },
           { text: t.sidebar.wechatAdapter, link: `${prefix}/guide/platform-adapter/wechat-minigame` },
           { text: t.sidebar.nodejsAdapter, link: `${prefix}/guide/platform-adapter/nodejs` }
+        ]
+      }
+    ],
+    // 模块总览侧边栏 | Modules overview sidebar
+    [`${prefix}/modules/`]: [
+      {
+        text: t.sidebar.modulesOverview,
+        link: `${prefix}/modules/`,
+        items: [
+          {
+            text: t.sidebar.aiModules,
+            collapsed: false,
+            items: [
+              { text: t.sidebar.behaviorTree, link: `${prefix}/modules/behavior-tree/` },
+              { text: t.sidebar.fsm, link: `${prefix}/modules/fsm/` }
+            ]
+          },
+          {
+            text: t.sidebar.gameplayModules,
+            collapsed: false,
+            items: [
+              { text: t.sidebar.timer, link: `${prefix}/modules/timer/` },
+              { text: t.sidebar.spatial, link: `${prefix}/modules/spatial/` },
+              { text: t.sidebar.pathfinding, link: `${prefix}/modules/pathfinding/` }
+            ]
+          },
+          {
+            text: t.sidebar.toolModules,
+            collapsed: false,
+            items: [
+              { text: t.sidebar.blueprint, link: `${prefix}/modules/blueprint/` },
+              { text: t.sidebar.procgen, link: `${prefix}/modules/procgen/` }
+            ]
+          },
+          {
+            text: t.sidebar.networkModules,
+            collapsed: false,
+            items: [
+              { text: t.sidebar.network, link: `${prefix}/modules/network/` }
+            ]
+          }
+        ]
+      }
+    ],
+    // 行为树模块侧边栏 | Behavior tree module sidebar
+    [`${prefix}/modules/behavior-tree/`]: [
+      {
+        text: t.sidebar.behaviorTree,
+        items: [
+          { text: t.sidebar.btGettingStarted, link: `${prefix}/modules/behavior-tree/getting-started` },
+          { text: t.sidebar.btCoreConcepts, link: `${prefix}/modules/behavior-tree/core-concepts` },
+          { text: t.sidebar.btEditorGuide, link: `${prefix}/modules/behavior-tree/editor-guide` },
+          { text: t.sidebar.btEditorWorkflow, link: `${prefix}/modules/behavior-tree/editor-workflow` },
+          { text: t.sidebar.btCustomActions, link: `${prefix}/modules/behavior-tree/custom-actions` },
+          { text: t.sidebar.btCocosIntegration, link: `${prefix}/modules/behavior-tree/cocos-integration` },
+          { text: t.sidebar.btLayaIntegration, link: `${prefix}/modules/behavior-tree/laya-integration` },
+          { text: t.sidebar.btAdvancedUsage, link: `${prefix}/modules/behavior-tree/advanced-usage` },
+          { text: t.sidebar.btBestPractices, link: `${prefix}/modules/behavior-tree/best-practices` }
         ]
       }
     ],
@@ -173,6 +216,7 @@ function createNav(t, prefix = '') {
     { text: t.nav.home, link: `${prefix}/` },
     { text: t.nav.quickStart, link: `${prefix}/guide/getting-started` },
     { text: t.nav.guide, link: `${prefix}/guide/` },
+    { text: t.nav.modules, link: `${prefix}/modules/` },
     { text: t.nav.api, link: `${prefix}/api/README` },
     {
       text: t.nav.examples,
