@@ -34,7 +34,27 @@
         "tsup": "^8.0.0",
         "typescript": "^5.8.3"
     },
+    "peerDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/blueprint": "workspace:*"
+    },
     "publishConfig": {
-        "access": "public"
-    }
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/esengine/esengine.git",
+        "directory": "packages/framework/fsm"
+    },
+    "keywords": [
+        "ecs",
+        "fsm",
+        "state-machine",
+        "finite-state-machine",
+        "game-ai",
+        "cocos",
+        "laya",
+        "esengine"
+    ]
 }

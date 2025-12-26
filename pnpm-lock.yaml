@@ -1593,7 +1593,7 @@ importers:
         version: 5.9.3
 
   packages/framework/pathfinding:
-    dependencies:
+    devDependencies:
       '@esengine/blueprint':
         specifier: workspace:*
         version: link:../blueprint
@@ -1603,7 +1603,6 @@ importers:
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../math
-    devDependencies:
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@20.19.27))(@swc/core@1.15.7)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
