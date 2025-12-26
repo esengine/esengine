@@ -2056,6 +2056,31 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  packages/tools/demos:
+    dependencies:
+      '@esengine/fsm':
+        specifier: workspace:*
+        version: link:../../framework/fsm
+      '@esengine/pathfinding':
+        specifier: workspace:*
+        version: link:../../framework/pathfinding
+      '@esengine/procgen':
+        specifier: workspace:*
+        version: link:../../framework/procgen
+      '@esengine/spatial':
+        specifier: workspace:*
+        version: link:../../framework/spatial
+      '@esengine/timer':
+        specifier: workspace:*
+        version: link:../../framework/timer
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   packages/tools/sdk:
     dependencies:
       '@esengine/asset-system':

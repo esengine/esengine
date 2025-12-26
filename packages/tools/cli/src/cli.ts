@@ -8,8 +8,9 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { getPlatformChoices, getPlatforms, getAdapter } from './adapters/index.js';
 import type { PlatformType, ProjectConfig } from './adapters/types.js';
+import { AVAILABLE_MODULES, getModuleById, getAllModuleIds, type ModuleInfo } from './modules.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 /**
  * @zh 打印 Logo
@@ -297,12 +298,275 @@ async function initCommand(options: { platform?: string }): Promise<void> {
     console.log();
 }
 
+// =========================================================================
+// Module Management Commands
+// =========================================================================
+
+/**
+ * @zh 列出可用模块
+ * @en List available modules
+ */
+function listCommand(options: { category?: string }): void {
+    printLogo();
+
+    console.log(chalk.bold('  Available Modules:\n'));
+
+    const categories = ['core', 'ai', 'utility', 'physics', 'rendering', 'network'] as const;
+    const categoryNames: Record<string, string> = {
+        core: '核心 | Core',
+        ai: 'AI',
+        utility: '工具 | Utility',
+        physics: '物理 | Physics',
+        rendering: '渲染 | Rendering',
+        network: '网络 | Network'
+    };
+
+    for (const category of categories) {
+        const modules = AVAILABLE_MODULES.filter(m => m.category === category);
+        if (modules.length === 0) continue;
+        if (options.category && options.category !== category) continue;
+
+        console.log(chalk.cyan(`  ─── ${categoryNames[category]} ───`));
+        for (const mod of modules) {
+            console.log(`    ${chalk.green(mod.id.padEnd(15))} ${chalk.gray(mod.package)}`);
+            console.log(`    ${' '.repeat(15)} ${chalk.dim(mod.description)}`);
+        }
+        console.log();
+    }
+
+    console.log(chalk.gray('  Use `esengine add <module>` to add a module to your project.'));
+    console.log();
+}
+
+/**
+ * @zh 添加模块到项目
+ * @en Add module to project
+ */
+async function addCommand(moduleIds: string[], options: { yes?: boolean }): Promise<void> {
+    printLogo();
+
+    const cwd = process.cwd();
+    const packageJsonPath = path.join(cwd, 'package.json');
+
+    if (!fs.existsSync(packageJsonPath)) {
+        console.log(chalk.red('  ✗ No package.json found. Run `npm init` first.'));
+        process.exit(1);
+    }
+
+    // Validate modules
+    const validModules: ModuleInfo[] = [];
+    const invalidIds: string[] = [];
+
+    for (const id of moduleIds) {
+        const mod = getModuleById(id);
+        if (mod) {
+            validModules.push(mod);
+        } else {
+            invalidIds.push(id);
+        }
+    }
+
+    if (invalidIds.length > 0) {
+        console.log(chalk.red(`  ✗ Unknown module(s): ${invalidIds.join(', ')}`));
+        console.log(chalk.gray(`    Available: ${getAllModuleIds().join(', ')}`));
+        process.exit(1);
+    }
+
+    if (validModules.length === 0) {
+        // Interactive selection
+        const response = await prompts({
+            type: 'multiselect',
+            name: 'modules',
+            message: 'Select modules to add:',
+            choices: AVAILABLE_MODULES.map(m => ({
+                title: `${m.id} - ${m.description}`,
+                value: m.id,
+                selected: false
+            })),
+            min: 1
+        }, {
+            onCancel: () => {
+                console.log(chalk.yellow('\n  Cancelled.'));
+                process.exit(0);
+            }
+        });
+
+        for (const id of response.modules) {
+            const mod = getModuleById(id);
+            if (mod) validModules.push(mod);
+        }
+    }
+
+    if (validModules.length === 0) {
+        console.log(chalk.yellow('  No modules selected.'));
+        return;
+    }
+
+    console.log(chalk.bold('\n  Adding modules:\n'));
+    for (const mod of validModules) {
+        console.log(`    ${chalk.green('+')} ${mod.package}`);
+    }
+
+    // Confirm
+    if (!options.yes) {
+        const confirm = await prompts({
+            type: 'confirm',
+            name: 'proceed',
+            message: 'Proceed with installation?',
+            initial: true
+        });
+
+        if (!confirm.proceed) {
+            console.log(chalk.yellow('\n  Cancelled.'));
+            return;
+        }
+    }
+
+    // Install
+    console.log();
+    const deps: Record<string, string> = {};
+    for (const mod of validModules) {
+        deps[mod.package] = mod.version;
+    }
+
+    const success = installDependencies(cwd, deps);
+
+    if (success) {
+        console.log(chalk.bold('\n  Done!'));
+        console.log(chalk.gray('\n  Import modules in your code:'));
+        for (const mod of validModules) {
+            console.log(chalk.cyan(`    import { ... } from '${mod.package}';`));
+        }
+    }
+    console.log();
+}
+
+/**
+ * @zh 从项目移除模块
+ * @en Remove module from project
+ */
+async function removeCommand(moduleIds: string[], options: { yes?: boolean }): Promise<void> {
+    printLogo();
+
+    const cwd = process.cwd();
+    const packageJsonPath = path.join(cwd, 'package.json');
+
+    if (!fs.existsSync(packageJsonPath)) {
+        console.log(chalk.red('  ✗ No package.json found.'));
+        process.exit(1);
+    }
+
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const deps = pkg.dependencies || {};
+
+    // Find installed modules
+    const installed = AVAILABLE_MODULES.filter(m => deps[m.package]);
+
+    if (installed.length === 0) {
+        console.log(chalk.yellow('  No ESEngine modules installed.'));
+        return;
+    }
+
+    // Validate modules to remove
+    let toRemove: ModuleInfo[] = [];
+
+    if (moduleIds.length === 0) {
+        // Interactive selection
+        const response = await prompts({
+            type: 'multiselect',
+            name: 'modules',
+            message: 'Select modules to remove:',
+            choices: installed.map(m => ({
+                title: `${m.id} - ${m.package}`,
+                value: m.id
+            })),
+            min: 1
+        }, {
+            onCancel: () => {
+                console.log(chalk.yellow('\n  Cancelled.'));
+                process.exit(0);
+            }
+        });
+
+        for (const id of response.modules) {
+            const mod = getModuleById(id);
+            if (mod) toRemove.push(mod);
+        }
+    } else {
+        for (const id of moduleIds) {
+            const mod = getModuleById(id);
+            if (mod && deps[mod.package]) {
+                toRemove.push(mod);
+            } else if (!mod) {
+                console.log(chalk.yellow(`  ⚠ Unknown module: ${id}`));
+            } else {
+                console.log(chalk.yellow(`  ⚠ Module not installed: ${id}`));
+            }
+        }
+    }
+
+    if (toRemove.length === 0) {
+        console.log(chalk.yellow('  No modules to remove.'));
+        return;
+    }
+
+    console.log(chalk.bold('\n  Removing modules:\n'));
+    for (const mod of toRemove) {
+        console.log(`    ${chalk.red('-')} ${mod.package}`);
+    }
+
+    // Confirm
+    if (!options.yes) {
+        const confirm = await prompts({
+            type: 'confirm',
+            name: 'proceed',
+            message: 'Proceed with removal?',
+            initial: true
+        });
+
+        if (!confirm.proceed) {
+            console.log(chalk.yellow('\n  Cancelled.'));
+            return;
+        }
+    }
+
+    // Remove from package.json
+    for (const mod of toRemove) {
+        delete deps[mod.package];
+    }
+    pkg.dependencies = deps;
+    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2), 'utf-8');
+
+    // Run uninstall
+    const pm = detectPackageManager(cwd);
+    const packages = toRemove.map(m => m.package).join(' ');
+    const uninstallCmd = pm === 'pnpm'
+        ? `pnpm remove ${packages}`
+        : pm === 'yarn'
+            ? `yarn remove ${packages}`
+            : `npm uninstall ${packages}`;
+
+    console.log(chalk.gray(`\n  Running ${uninstallCmd}...`));
+
+    try {
+        execSync(uninstallCmd, { cwd, stdio: 'inherit' });
+        console.log(chalk.bold('\n  Done!'));
+    } catch {
+        console.log(chalk.yellow(`\n  ⚠ Failed to run uninstall. Modules removed from package.json.`));
+    }
+    console.log();
+}
+
+// =========================================================================
+// CLI Setup
+// =========================================================================
+
 // Setup CLI
 const program = new Command();
 
 program
     .name('esengine')
-    .description('CLI tool for adding ESEngine ECS to your project')
+    .description('CLI tool for ESEngine ECS framework')
     .version(VERSION);
 
 program
@@ -311,10 +575,30 @@ program
     .option('-p, --platform <platform>', 'Target platform (cocos, cocos2, laya, nodejs)')
     .action(initCommand);
 
-// Default command: run init
+program
+    .command('list')
+    .alias('ls')
+    .description('List available modules')
+    .option('-c, --category <category>', 'Filter by category (core, ai, utility, physics, rendering, network)')
+    .action(listCommand);
+
+program
+    .command('add [modules...]')
+    .description('Add modules to your project')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(addCommand);
+
+program
+    .command('remove [modules...]')
+    .alias('rm')
+    .description('Remove modules from your project')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(removeCommand);
+
+// Default command: show help
 program
     .action(() => {
-        initCommand({});
+        program.help();
     });
 
 program.parse();
