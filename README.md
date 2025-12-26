@@ -29,7 +29,7 @@
 
 ---
 
-> **Just need ECS?** The core ECS framework [`@esengine/ecs-framework`](./packages/core/) can be used standalone with Cocos Creator, Laya, or any JS engine. [View ECS Documentation](./packages/core/README.md)
+> **Just need ECS?** The core ECS framework [`@esengine/ecs-framework`](./packages/framework/core/) can be used standalone with Cocos Creator, Laya, or any JS engine. [View ECS Documentation](./packages/framework/core/README.md)
 
 ## Overview
 
@@ -245,7 +245,7 @@ pnpm build:wasm
 ### Run Editor
 
 ```bash
-cd packages/editor-app
+cd packages/editor/editor-app
 pnpm tauri:dev
 ```
 
@@ -254,22 +254,41 @@ pnpm tauri:dev
 ```
 esengine/
 ├── packages/
-│   ├── core/                    # ECS Framework (@esengine/ecs-framework)
-│   ├── math/                    # Math library (@esengine/math)
-│   ├── engine-core/             # Engine lifecycle management
-│   ├── sprite/                  # 2D sprite rendering
-│   ├── tilemap/                 # Tilemap system
-│   ├── physics-rapier2d/        # Physics engine
-│   ├── behavior-tree/           # AI behavior trees
-│   ├── editor-app/              # Desktop editor (Tauri)
-│   └── ...                      # Other modules
-├── docs/                        # Documentation source
-├── examples/                    # Example projects
-├── scripts/                     # Build utilities
-└── thirdparty/                  # Third-party dependencies
+│   ├── framework/               # Generic frameworks (use with Laya/Cocos/etc.)
+│   │   ├── core/               # ECS Framework (@esengine/ecs-framework)
+│   │   ├── math/               # Math library
+│   │   ├── behavior-tree/      # AI behavior trees
+│   │   ├── blueprint/          # Visual scripting
+│   │   ├── fsm/                # Finite state machine
+│   │   └── ...                 # More standalone modules
+│   │
+│   ├── engine/                  # ESEngine runtime (requires WASM renderer)
+│   │   ├── engine-core/        # Engine lifecycle
+│   │   ├── asset-system/       # Asset management
+│   │   └── ...
+│   │
+│   ├── rendering/               # Rendering modules
+│   │   ├── sprite/             # 2D sprites
+│   │   ├── tilemap/            # Tilemaps
+│   │   └── ...
+│   │
+│   ├── physics/                 # Physics modules
+│   │   └── physics-rapier2d/   # Rapier2D physics
+│   │
+│   ├── editor/                  # Editor (Tauri + React)
+│   │   ├── editor-app/         # Desktop app
+│   │   ├── editor-core/        # Editor framework
+│   │   └── plugins/            # Editor plugins
+│   │
+│   └── rust/                    # Rust/WASM engine
+│       └── engine/             # Rendering engine
+│
+├── docs/                        # Documentation
+├── examples/                    # Examples
+└── scripts/                     # Build utilities
 ```
 
-> **Looking for ECS source code?** The ECS framework is in `packages/core/`
+> **Looking for ECS source code?** The ECS framework is in `packages/framework/core/`
 
 ## Documentation
 

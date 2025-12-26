@@ -51,7 +51,7 @@ jobs:
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
       with:
-        workspaces: packages/engine
+        workspaces: packages/rust/engine
         cache-on-failure: true
 
     # 缓存 wasm-pack
@@ -76,19 +76,19 @@ jobs:
 
     - name: Copy WASM files to ecs-engine-bindgen
       run: |
-        mkdir -p packages/ecs-engine-bindgen/src/wasm
-        cp packages/engine/pkg/es_engine.js packages/ecs-engine-bindgen/src/wasm/
-        cp packages/engine/pkg/es_engine.d.ts packages/ecs-engine-bindgen/src/wasm/
-        cp packages/engine/pkg/es_engine_bg.wasm packages/ecs-engine-bindgen/src/wasm/
-        cp packages/engine/pkg/es_engine_bg.wasm.d.ts packages/ecs-engine-bindgen/src/wasm/
+        mkdir -p packages/engine/ecs-engine-bindgen/src/wasm
+        cp packages/rust/engine/pkg/es_engine.js packages/engine/ecs-engine-bindgen/src/wasm/
+        cp packages/rust/engine/pkg/es_engine.d.ts packages/engine/ecs-engine-bindgen/src/wasm/
+        cp packages/rust/engine/pkg/es_engine_bg.wasm packages/engine/ecs-engine-bindgen/src/wasm/
+        cp packages/rust/engine/pkg/es_engine_bg.wasm.d.ts packages/engine/ecs-engine-bindgen/src/wasm/
 
-    # 类型检查
-    - name: Type check
-      run: pnpm run type-check
+    # 类型检查 (仅 framework 包 - 可独立发布的通用库)
+    - name: Type check (framework packages)
+      run: pnpm run type-check:framework
 
-    # Lint 检查
-    - name: Lint check
-      run: pnpm run lint
+    # Lint 检查 (仅 framework 包)
+    - name: Lint check (framework packages)
+      run: pnpm run lint:framework
 
     # 测试
     - name: Run tests with coverage
@@ -113,6 +113,6 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          packages/*/dist/
-          packages/*/bin/
+          packages/**/dist/
+          packages/**/bin/
         retention-days: 7

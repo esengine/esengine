@@ -1,0 +1,30 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "references": [
+    {
+      "path": "../../../framework/core"
+    },
+    {
+      "path": "../../../engine/engine-core"
+    },
+    {
+      "path": "../../../editor/editor-core"
+    },
+    {
+      "path": "../../../rendering/mesh-3d"
+    }
+  ]
+}

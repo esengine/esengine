@@ -1,0 +1,32 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "references": [
+    {
+      "path": "../../../framework/core"
+    },
+    {
+      "path": "../../../engine/engine-core"
+    },
+    {
+      "path": "../../../engine/material-system"
+    },
+    {
+      "path": "../../../editor/editor-core"
+    }
+  ]
+}

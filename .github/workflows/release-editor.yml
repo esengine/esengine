@@ -50,7 +50,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: packages/editor-app/src-tauri
+          workspaces: packages/editor/editor-app/src-tauri
           cache-on-failure: true
 
       - name: Install dependencies (Ubuntu)
@@ -65,7 +65,7 @@ jobs:
       - name: Update version in config files (for manual trigger)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          cd packages/editor-app
+          cd packages/editor/editor-app
           node -e "const pkg=require('./package.json'); pkg.version='${{ github.event.inputs.version }}'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2)+'\n')"
           node scripts/sync-version.js
 
@@ -80,15 +80,15 @@ jobs:
       - name: Copy WASM files to ecs-engine-bindgen
         shell: bash
         run: |
-          mkdir -p packages/ecs-engine-bindgen/src/wasm
-          cp packages/engine/pkg/es_engine.js packages/ecs-engine-bindgen/src/wasm/
-          cp packages/engine/pkg/es_engine.d.ts packages/ecs-engine-bindgen/src/wasm/
-          cp packages/engine/pkg/es_engine_bg.wasm packages/ecs-engine-bindgen/src/wasm/
-          cp packages/engine/pkg/es_engine_bg.wasm.d.ts packages/ecs-engine-bindgen/src/wasm/
+          mkdir -p packages/engine/ecs-engine-bindgen/src/wasm
+          cp packages/rust/engine/pkg/es_engine.js packages/engine/ecs-engine-bindgen/src/wasm/
+          cp packages/rust/engine/pkg/es_engine.d.ts packages/engine/ecs-engine-bindgen/src/wasm/
+          cp packages/rust/engine/pkg/es_engine_bg.wasm packages/engine/ecs-engine-bindgen/src/wasm/
+          cp packages/rust/engine/pkg/es_engine_bg.wasm.d.ts packages/engine/ecs-engine-bindgen/src/wasm/
 
       - name: Bundle runtime files for Tauri
         run: |
-          cd packages/editor-app
+          cd packages/editor/editor-app
           node scripts/bundle-runtime.mjs
 
       - name: Build Tauri app
@@ -99,7 +99,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          projectPath: packages/editor-app
+          projectPath: packages/editor/editor-app
           tagName: ${{ github.event_name == 'workflow_dispatch' && format('editor-v{0}', github.event.inputs.version) || github.ref_name }}
           releaseName: 'ECS Editor v${{ github.event.inputs.version || github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
@@ -116,8 +116,8 @@ jobs:
         with:
           name: windows-unsigned
           path: |
-            packages/editor-app/src-tauri/target/release/bundle/nsis/*.exe
-            packages/editor-app/src-tauri/target/release/bundle/msi/*.msi
+            packages/editor/editor-app/src-tauri/target/release/bundle/nsis/*.exe
+            packages/editor/editor-app/src-tauri/target/release/bundle/msi/*.msi
           retention-days: 1
 
   # SignPath 代码签名（Windows）
@@ -221,7 +221,7 @@ jobs:
 
       - name: Update version files
         run: |
-          cd packages/editor-app
+          cd packages/editor/editor-app
           node -e "const pkg=require('./package.json'); pkg.version='${{ github.event.inputs.version }}'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2)+'\n')"
           node scripts/sync-version.js
 
@@ -239,8 +239,8 @@ jobs:
             This PR updates the editor version after successful release build.
 
             ### Changes
-            - Updated `packages/editor-app/package.json` → `${{ github.event.inputs.version }}`
-            - Updated `packages/editor-app/src-tauri/tauri.conf.json` → `${{ github.event.inputs.version }}`
+            - Updated `packages/editor/editor-app/package.json` → `${{ github.event.inputs.version }}`
+            - Updated `packages/editor/editor-app/src-tauri/tauri.conf.json` → `${{ github.event.inputs.version }}`
 
             ### Release
             - [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/editor-v${{ github.event.inputs.version }})

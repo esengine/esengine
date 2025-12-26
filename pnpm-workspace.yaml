@@ -1,2 +1,11 @@
 packages:
-  - 'packages/*'
+  - 'packages/framework/*'
+  - 'packages/engine/*'
+  - 'packages/rendering/*'
+  - 'packages/physics/*'
+  - 'packages/streaming/*'
+  - 'packages/network-ext/*'
+  - 'packages/editor/*'
+  - 'packages/editor/plugins/*'
+  - 'packages/rust/*'
+  - 'packages/tools/*'
