@@ -12,8 +12,7 @@ permissions:
 jobs:
   ai-helper:
     runs-on: ubuntu-latest
-    # 只在真实用户提到 @ai-helper 时触发，忽略机器人评论
-    if: |
+    # 只在真实用户提到 @ai-helper 时触发，忽略机器人评�?    if: |
       contains(github.event.comment.body, '@ai-helper') &&
       github.event.comment.user.type != 'Bot'
     steps:
@@ -31,7 +30,7 @@ jobs:
               issue_number: context.issue.number
             });
 
-            // 限制长度，避免超过 token 限制
+            // 限制长度，避免超�?token 限制
             const maxLength = 1000;
             const truncate = (str, max) => {
               if (!str) return '';
@@ -55,8 +54,7 @@ jobs:
 
           评论: ${{ env.COMMENT_BODY }}
 
-          请搜索项目代码并提供解决方案。
-          PROMPT_EOF
+          请搜索项目代码并提供解决方案�?          PROMPT_EOF
 
       - name: AI Analysis
         uses: actions/ai-inference@v1
@@ -66,10 +64,7 @@ jobs:
           enable-github-mcp: true
           max-tokens: 1500
           system-prompt: |
-            你是 ECS Framework (TypeScript ECS 框架) 的 AI 助手。
-            主要代码在 packages/core/src。
-            搜索相关代码后，用中文简洁回答问题，包含问题分析、解决方案和代码引用。
-          prompt-file: prompt.txt
+            你是 ECS Framework (TypeScript ECS 框架) �?AI 助手�?            主要代码�?packages/framework/core/src�?            搜索相关代码后，用中文简洁回答问题，包含问题分析、解决方案和代码引用�?          prompt-file: prompt.txt
 
       - name: Post AI Response
         env:

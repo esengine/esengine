@@ -6,8 +6,8 @@ on:
       - master
       - main
     paths:
-      - 'packages/core/src/**'
-      - 'packages/core/package.json'
+      - 'packages/framework/core/src/**'
+      - 'packages/framework/core/package.json'
       - '.size-limit.json'
 
 permissions:
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build core package
         run: |
-          cd packages/core
+          cd packages/framework/core
           pnpm run build:npm
 
       - name: Check bundle size
