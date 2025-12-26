@@ -1,6 +1,6 @@
 {
     "name": "@esengine/spatial",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Spatial query and indexing system for ECS Framework / ECS 框架的空间查询和索引系统",
     "type": "module",
     "main": "./dist/index.js",
