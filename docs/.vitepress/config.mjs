@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corePackageJson = JSON.parse(
-  readFileSync(join(__dirname, '../../packages/core/package.json'), 'utf-8')
+  readFileSync(join(__dirname, '../../packages/framework/core/package.json'), 'utf-8')
 )
 
 // Import i18n messages
