@@ -26,52 +26,68 @@ function printLogo(): void {
     console.log();
 }
 
+// =============================================================================
+// 项目检测 | Project Detection
+// =============================================================================
+
 /**
- * @zh 检测是否存在 *.laya 文件
- * @en Check if *.laya file exists
+ * @zh 检查文件或目录是否存在
+ * @en Check if file or directory exists
  */
-function hasLayaProjectFile(cwd: string): boolean {
+const exists = (cwd: string, ...paths: string[]): boolean =>
+    paths.some(p => fs.existsSync(path.join(cwd, p)));
+
+/**
+ * @zh 安全读取 JSON 文件
+ * @en Safely read JSON file
+ */
+function readJson<T = Record<string, unknown>>(filePath: string): T | null {
     try {
-        const files = fs.readdirSync(cwd);
-        return files.some(f => f.endsWith('.laya'));
+        return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * @zh 检查目录中是否有匹配后缀的文件
+ * @en Check if directory contains files with matching extension
+ */
+function hasFileWithExt(cwd: string, ext: string): boolean {
+    try {
+        return fs.readdirSync(cwd).some(f => f.endsWith(ext));
     } catch {
         return false;
     }
 }
 
 /**
- * @zh 检测 Cocos Creator 版本
- * @en Detect Cocos Creator version
+ * @zh 从 package.json 获取 Cocos Creator 版本
+ * @en Get Cocos Creator version from package.json
  */
-function detectCocosVersion(cwd: string): 'cocos' | 'cocos2' | null {
-    // Cocos 3.x: 检查 cc.config.json 或 extensions 目录
-    if (fs.existsSync(path.join(cwd, 'cc.config.json')) ||
-        fs.existsSync(path.join(cwd, 'extensions'))) {
-        return 'cocos';
-    }
+function getCocosVersionFromPackage(cwd: string): string | null {
+    const pkg = readJson<{ creator?: { version?: string } }>(path.join(cwd, 'package.json'));
+    return pkg?.creator?.version ?? null;
+}
 
-    // 检查 project.json 中的版本号
-    const projectJsonPath = path.join(cwd, 'project.json');
-    if (fs.existsSync(projectJsonPath)) {
-        try {
-            const project = JSON.parse(fs.readFileSync(projectJsonPath, 'utf-8'));
-            // Cocos 2.x project.json 有 engine-version 字段
-            if (project['engine-version'] || project.engine) {
-                const version = project['engine-version'] || project.engine || '';
-                // 2.x 版本格式: "cocos-creator-js-2.4.x" 或 "2.4.x"
-                if (version.includes('2.') || version.startsWith('2')) {
-                    return 'cocos2';
-                }
-            }
-            // 有 project.json 但没有版本信息，假设是 3.x
-            return 'cocos';
-        } catch {
-            // 解析失败，假设是 3.x
-            return 'cocos';
-        }
-    }
+/**
+ * @zh 从 project.json 获取 Cocos 2.x 版本
+ * @en Get Cocos 2.x version from project.json
+ */
+function getCocos2VersionFromProject(cwd: string): string | null {
+    const project = readJson<{ 'engine-version'?: string; engine?: string }>(
+        path.join(cwd, 'project.json')
+    );
+    return project?.['engine-version'] ?? project?.engine ?? null;
+}
 
-    return null;
+/**
+ * @zh 判断版本号属于哪个大版本
+ * @en Determine major version from version string
+ */
+function getMajorVersion(version: string): number | null {
+    const match = version.match(/^(\d+)\./);
+    return match ? parseInt(match[1], 10) : null;
 }
 
 /**
@@ -79,23 +95,35 @@ function detectCocosVersion(cwd: string): 'cocos' | 'cocos2' | null {
  * @en Detect project type
  */
 function detectProjectType(cwd: string): PlatformType | null {
-    // Laya: 检查 *.laya 文件 或 .laya 目录 或 laya.json
-    if (hasLayaProjectFile(cwd) ||
-        fs.existsSync(path.join(cwd, '.laya')) ||
-        fs.existsSync(path.join(cwd, 'laya.json'))) {
+    // Laya: *.laya 文件、.laya 目录、laya.json
+    if (hasFileWithExt(cwd, '.laya') || exists(cwd, '.laya', 'laya.json')) {
         return 'laya';
     }
 
-    // Cocos Creator: 检查 assets 目录
-    if (fs.existsSync(path.join(cwd, 'assets'))) {
-        const cocosVersion = detectCocosVersion(cwd);
-        if (cocosVersion) {
-            return cocosVersion;
-        }
+    // Cocos Creator: 检查 package.json 中的 creator.version
+    const cocosVersion = getCocosVersionFromPackage(cwd);
+    if (cocosVersion) {
+        const major = getMajorVersion(cocosVersion);
+        if (major === 2) return 'cocos2';
+        if (major && major >= 3) return 'cocos';
     }
 
-    // Node.js: 检查 package.json
-    if (fs.existsSync(path.join(cwd, 'package.json'))) {
+    // Cocos 3.x: .creator 目录、settings 目录、cc.config.json、extensions 目录
+    if (exists(cwd, '.creator', 'settings', 'cc.config.json', 'extensions')) {
+        return 'cocos';
+    }
+
+    // Cocos 2.x: project.json 中的 engine-version
+    const cocos2Version = getCocos2VersionFromProject(cwd);
+    if (cocos2Version) {
+        if (cocos2Version.includes('2.') || cocos2Version.startsWith('2')) {
+            return 'cocos2';
+        }
+        return 'cocos';
+    }
+
+    // Node.js: 有 package.json 但不是 Cocos
+    if (exists(cwd, 'package.json')) {
         return 'nodejs';
     }
 
