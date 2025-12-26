@@ -13,12 +13,6 @@
   "baseBranch": "master",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "@esengine/editor-app",
-    "@esengine/editor-core",
-    "@esengine/editor-runtime",
-    "@esengine/*-editor",
-    "@esengine/engine",
-    "@esengine/build-config",
-    "@esengine/ecs-engine-bindgen"
+    "@esengine/editor-app"
   ]
 }
