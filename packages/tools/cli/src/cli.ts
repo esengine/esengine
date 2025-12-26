@@ -112,6 +112,29 @@ function detectPackageManager(cwd: string): 'pnpm' | 'yarn' | 'npm' {
 }
 
 /**
+ * @zh 读取或创建 package.json
+ * @en Read or create package.json
+ */
+function readOrCreatePackageJson(packageJsonPath: string, projectName: string): Record<string, unknown> {
+    try {
+        return JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            const pkg = {
+                name: projectName,
+                version: '1.0.0',
+                private: true,
+                dependencies: {}
+            };
+            fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2), 'utf-8');
+            console.log(chalk.green('  ✓ Created package.json'));
+            return pkg;
+        }
+        throw err;
+    }
+}
+
+/**
  * @zh 安装依赖
  * @en Install dependencies
  */
@@ -119,26 +142,14 @@ function installDependencies(cwd: string, deps: Record<string, string>): boolean
     const pm = detectPackageManager(cwd);
     const packageJsonPath = path.join(cwd, 'package.json');
 
-    // 确保 package.json 存在
-    if (!fs.existsSync(packageJsonPath)) {
-        const pkg = {
-            name: path.basename(cwd),
-            version: '1.0.0',
-            private: true,
-            dependencies: {}
-        };
-        fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2), 'utf-8');
-        console.log(chalk.green('  ✓ Created package.json'));
-    }
-
-    // 读取并更新 package.json
-    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    pkg.dependencies = pkg.dependencies || {};
+    // 读取或创建 package.json（原子操作，避免竞态条件）
+    const pkg = readOrCreatePackageJson(packageJsonPath, path.basename(cwd));
+    const pkgDeps = (pkg.dependencies || {}) as Record<string, string>;
 
     let needsInstall = false;
     for (const [name, version] of Object.entries(deps)) {
-        if (!pkg.dependencies[name]) {
-            pkg.dependencies[name] = version;
+        if (!pkgDeps[name]) {
+            pkgDeps[name] = version;
             needsInstall = true;
         }
     }
@@ -148,6 +159,7 @@ function installDependencies(cwd: string, deps: Record<string, string>): boolean
         return true;
     }
 
+    pkg.dependencies = pkgDeps;
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2), 'utf-8');
 
     // 运行安装命令
@@ -242,21 +254,21 @@ async function initCommand(options: { platform?: string }): Promise<void> {
         const filePath = path.join(cwd, file.path);
         const dir = path.dirname(filePath);
 
-        // 检查文件是否已存在
-        if (fs.existsSync(filePath)) {
-            console.log(chalk.yellow(`  ⚠ Skipped ${file.path} (already exists)`));
-            continue;
-        }
+        // 创建目录（recursive: true 不会因目录存在而失败）
+        fs.mkdirSync(dir, { recursive: true });
 
-        // 创建目录
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+        // 尝试写入文件（wx 模式：如果文件存在则失败，避免竞态条件）
+        try {
+            fs.writeFileSync(filePath, file.content, { encoding: 'utf-8', flag: 'wx' });
+            createdFiles.push(file.path);
+            console.log(chalk.green(`  ✓ Created ${file.path}`));
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+                console.log(chalk.yellow(`  ⚠ Skipped ${file.path} (already exists)`));
+            } else {
+                throw err;
+            }
         }
-
-        // 写入文件
-        fs.writeFileSync(filePath, file.content, 'utf-8');
-        createdFiles.push(file.path);
-        console.log(chalk.green(`  ✓ Created ${file.path}`));
     }
 
     if (createdFiles.length === 0) {
