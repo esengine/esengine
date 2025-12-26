@@ -11,8 +11,8 @@
     "emitDecoratorMetadata": true
   },
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/math" }
+    { "path": "./packages/framework/core" },
+    { "path": "./packages/framework/math" }
   ],
   "files": []
 }
