@@ -81,9 +81,11 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
-    # 构建 npm 包 (仅 framework)
+    # 构建 npm 包 (core 和 math)
     - name: Build npm packages
-      run: pnpm run build:npm
+      run: |
+        pnpm run build:npm:core
+        pnpm run build:npm:math
 
     # 上传构建产物
     - name: Upload build artifacts
