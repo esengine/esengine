@@ -1126,6 +1126,10 @@ importers:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
+    optionalDependencies:
+      es-engine:
+        specifier: file:../../rust/engine/pkg
+        version: file:packages/rust/engine/pkg
 
   packages/engine/engine-core:
     dependencies:
@@ -5988,6 +5992,9 @@ packages:
   es-define-property@1.0.1:
     resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}
     engines: {node: '>= 0.4'}
+
+  es-engine@file:packages/rust/engine/pkg:
+    resolution: {directory: packages/rust/engine/pkg, type: directory}
 
   es-errors@1.3.0:
     resolution: {integrity: sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==}
@@ -14323,6 +14330,9 @@ snapshots:
       is-arrayish: 0.2.1
 
   es-define-property@1.0.1: {}
+
+  es-engine@file:packages/rust/engine/pkg:
+    optional: true
 
   es-errors@1.3.0: {}
 

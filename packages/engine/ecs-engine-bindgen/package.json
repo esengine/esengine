@@ -54,7 +54,7 @@
     }
   },
   "optionalDependencies": {
-    "es-engine": "file:../engine/pkg"
+    "es-engine": "file:../../rust/engine/pkg"
   },
   "devDependencies": {
     "@esengine/sprite": "workspace:*",
