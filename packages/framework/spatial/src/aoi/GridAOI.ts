@@ -107,8 +107,13 @@ export class GridAOI<T> implements IAOIManager<T> {
         this._observers.set(entity, data);
         this._addToCell(cellKey, data);
 
-        // Initial visibility check
+        // Initial visibility check for this observer
         this._updateVisibility(data);
+
+        // Notify other observers about this new entity
+        if (data.observable) {
+            this._updateObserversOfEntity(data);
+        }
     }
 
     /**
@@ -398,40 +403,32 @@ export class GridAOI<T> implements IAOIManager<T> {
      * @en Update other observers' visibility of an entity
      */
     private _updateObserversOfEntity(movedData: AOIObserverData<T>): void {
-        const cellRadius = Math.ceil(this._getMaxViewRange() / this._cellSize) + 1;
-        const centerCell = this._getCellCoords(movedData.position);
+        // Check all observers for visibility changes
+        // This handles both: observers who can now see the entity (enter)
+        // and observers who could see it before but can't anymore (exit)
+        for (const [, otherData] of this._observers) {
+            if (otherData === movedData) continue;
 
-        for (let dx = -cellRadius; dx <= cellRadius; dx++) {
-            for (let dy = -cellRadius; dy <= cellRadius; dy++) {
-                const cellKey = `${centerCell.x + dx},${centerCell.y + dy}`;
-                const cell = this._cells.get(cellKey);
-                if (!cell) continue;
+            const distSq = distanceSquared(otherData.position, movedData.position);
+            const wasVisible = otherData.visibleEntities.has(movedData.entity);
+            const isVisible = distSq <= otherData.viewRangeSq;
 
-                for (const otherData of cell) {
-                    if (otherData === movedData) continue;
-
-                    const distSq = distanceSquared(otherData.position, movedData.position);
-                    const wasVisible = otherData.visibleEntities.has(movedData.entity);
-                    const isVisible = distSq <= otherData.viewRangeSq;
-
-                    if (isVisible && !wasVisible) {
-                        otherData.visibleEntities.add(movedData.entity);
-                        this._emitEvent({
-                            type: 'enter',
-                            observer: otherData.entity,
-                            target: movedData.entity,
-                            position: movedData.position
-                        }, otherData);
-                    } else if (!isVisible && wasVisible) {
-                        otherData.visibleEntities.delete(movedData.entity);
-                        this._emitEvent({
-                            type: 'exit',
-                            observer: otherData.entity,
-                            target: movedData.entity,
-                            position: movedData.position
-                        }, otherData);
-                    }
-                }
+            if (isVisible && !wasVisible) {
+                otherData.visibleEntities.add(movedData.entity);
+                this._emitEvent({
+                    type: 'enter',
+                    observer: otherData.entity,
+                    target: movedData.entity,
+                    position: movedData.position
+                }, otherData);
+            } else if (!isVisible && wasVisible) {
+                otherData.visibleEntities.delete(movedData.entity);
+                this._emitEvent({
+                    type: 'exit',
+                    observer: otherData.entity,
+                    target: movedData.entity,
+                    position: movedData.position
+                }, otherData);
             }
         }
     }

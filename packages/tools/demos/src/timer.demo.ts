@@ -3,20 +3,10 @@
  */
 
 import { createTimerService } from '@esengine/timer';
-
-function assert(condition: boolean, message: string): void {
-    if (!condition) throw new Error(`FAILED: ${message}`);
-    console.log(`  ✓ ${message}`);
-}
-
-function section(name: string): void {
-    console.log(`\n▶ ${name}`);
-}
+import { assert, section, demoHeader, demoFooter } from './utils.js';
 
 export async function runTimerDemo(): Promise<void> {
-    console.log('═══════════════════════════════════════');
-    console.log('       Timer Module Demo');
-    console.log('═══════════════════════════════════════');
+    demoHeader('Timer Module Demo');
 
     // 1. Basic Creation
     section('1. createTimerService()');
@@ -111,9 +101,7 @@ export async function runTimerDemo(): Promise<void> {
     const limited = createTimerService({ maxTimers: 2, maxCooldowns: 1 });
     assert(limited !== null, 'Created with config');
 
-    console.log('\n═══════════════════════════════════════');
-    console.log('  Timer Demo: ALL TESTS PASSED ✓');
-    console.log('═══════════════════════════════════════\n');
+    demoFooter('Timer Demo');
 }
 
 runTimerDemo().catch(console.error);

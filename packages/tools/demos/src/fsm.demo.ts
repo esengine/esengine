@@ -3,22 +3,12 @@
  */
 
 import { createStateMachine } from '@esengine/fsm';
-
-function assert(condition: boolean, message: string): void {
-    if (!condition) throw new Error(`FAILED: ${message}`);
-    console.log(`  ✓ ${message}`);
-}
-
-function section(name: string): void {
-    console.log(`\n▶ ${name}`);
-}
+import { assert, section, demoHeader, demoFooter } from './utils.js';
 
 type PlayerState = 'idle' | 'walk' | 'run' | 'jump';
 
 export async function runFSMDemo(): Promise<void> {
-    console.log('═══════════════════════════════════════');
-    console.log('        FSM Module Demo');
-    console.log('═══════════════════════════════════════');
+    demoHeader('FSM Module Demo');
 
     // 1. Basic Creation
     section('1. createStateMachine()');
@@ -167,9 +157,7 @@ export async function runFSMDemo(): Promise<void> {
     const history = fsmHist.getHistory();
     assert(history.length >= 2, 'History recorded');
 
-    console.log('\n═══════════════════════════════════════');
-    console.log('  FSM Demo: ALL TESTS PASSED ✓');
-    console.log('═══════════════════════════════════════\n');
+    demoFooter('FSM Demo');
 }
 
 runFSMDemo().catch(console.error);

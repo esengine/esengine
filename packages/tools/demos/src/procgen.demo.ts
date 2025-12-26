@@ -17,20 +17,10 @@ import {
     weightedPick,
     weightedPickFromMap
 } from '@esengine/procgen';
-
-function assert(condition: boolean, message: string): void {
-    if (!condition) throw new Error(`FAILED: ${message}`);
-    console.log(`  ✓ ${message}`);
-}
-
-function section(name: string): void {
-    console.log(`\n▶ ${name}`);
-}
+import { assert, section, demoHeader, demoFooter } from './utils.js';
 
 export async function runProcgenDemo(): Promise<void> {
-    console.log('═══════════════════════════════════════');
-    console.log('       Procgen Module Demo');
-    console.log('═══════════════════════════════════════');
+    demoHeader('Procgen Module Demo');
 
     // 1. Perlin Noise
     section('1. createPerlinNoise()');
@@ -200,9 +190,7 @@ export async function runProcgenDemo(): Promise<void> {
     const afterReset = rngReset.next();
     assert(first === afterReset, 'Reset restores initial state');
 
-    console.log('\n═══════════════════════════════════════');
-    console.log('  Procgen Demo: ALL TESTS PASSED ✓');
-    console.log('═══════════════════════════════════════\n');
+    demoFooter('Procgen Demo');
 }
 
 runProcgenDemo().catch(console.error);

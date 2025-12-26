@@ -13,15 +13,7 @@ import {
     distance,
     distanceSquared
 } from '@esengine/spatial';
-
-function assert(condition: boolean, message: string): void {
-    if (!condition) throw new Error(`FAILED: ${message}`);
-    console.log(`  ✓ ${message}`);
-}
-
-function section(name: string): void {
-    console.log(`\n▶ ${name}`);
-}
+import { assert, section, demoHeader, demoFooter } from './utils.js';
 
 interface Entity {
     id: number;
@@ -29,9 +21,7 @@ interface Entity {
 }
 
 export async function runSpatialDemo(): Promise<void> {
-    console.log('═══════════════════════════════════════');
-    console.log('       Spatial Module Demo');
-    console.log('═══════════════════════════════════════');
+    demoHeader('Spatial Module Demo');
 
     // 1. Create Spatial Index
     section('1. createGridSpatialIndex()');
@@ -150,10 +140,6 @@ export async function runSpatialDemo(): Promise<void> {
     aoi.addObserver(p1, { x: 100, y: 100 }, { viewRange: 200 });
     aoi.addObserver(p2, { x: 150, y: 150 }, { viewRange: 200 });
 
-    // Note: After adding p2, p2 can see p1, but p1's visibility isn't auto-updated
-    // We need to trigger an update for p1 to detect p2
-    aoi.updatePosition(p1, { x: 100, y: 100 });
-
     // 15. getEntitiesInView
     section('15. getEntitiesInView()');
     const visible = aoi.getEntitiesInView(p1);
@@ -166,14 +152,11 @@ export async function runSpatialDemo(): Promise<void> {
     // 17. updatePosition
     section('17. updatePosition()');
     aoi.updatePosition(p2, { x: 1000, y: 1000 });
-    // Refresh p1's visibility (implementation requires explicit update for distant moves)
-    aoi.updatePosition(p1, { x: 100, y: 100 });
     assert(!aoi.canSee(p1, p2), 'p1 cannot see p2 after move');
 
     // 18. getObserversOf
     section('18. getObserversOf()');
     aoi.updatePosition(p2, { x: 120, y: 120 });
-    aoi.updatePosition(p1, { x: 100, y: 100 }); // Refresh p1's visibility
     const observers = aoi.getObserversOf(p2);
     assert(observers.includes(p1), 'p1 observes p2');
 
@@ -184,16 +167,13 @@ export async function runSpatialDemo(): Promise<void> {
         eventCount++;
     });
     aoi.updatePosition(p2, { x: 2000, y: 2000 }); // Should trigger exit
-    aoi.updatePosition(p1, { x: 100, y: 100 });   // Refresh p1
     aoi.updatePosition(p2, { x: 130, y: 130 });   // Should trigger enter
-    aoi.updatePosition(p1, { x: 100, y: 100 });   // Refresh p1
     assert(eventCount >= 1, `Events triggered: ${eventCount}`);
 
     // 20. updateViewRange
     section('20. updateViewRange()');
     aoi.updateViewRange(p1, 50);
     aoi.updatePosition(p2, { x: 200, y: 200 });
-    aoi.updatePosition(p1, { x: 100, y: 100 }); // Refresh p1's visibility with new range
     assert(!aoi.canSee(p1, p2), 'Cannot see after view range reduced');
 
     // 21. removeObserver
@@ -238,9 +218,7 @@ export async function runSpatialDemo(): Promise<void> {
     const dsq = distanceSquared({ x: 0, y: 0 }, { x: 3, y: 4 });
     assert(dsq === 25, `Distance squared: ${dsq}`);
 
-    console.log('\n═══════════════════════════════════════');
-    console.log('  Spatial Demo: ALL TESTS PASSED ✓');
-    console.log('═══════════════════════════════════════\n');
+    demoFooter('Spatial Demo');
 }
 
 runSpatialDemo().catch(console.error);

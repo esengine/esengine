@@ -10,20 +10,10 @@ import {
     manhattanDistance,
     octileDistance
 } from '@esengine/pathfinding';
-
-function assert(condition: boolean, message: string): void {
-    if (!condition) throw new Error(`FAILED: ${message}`);
-    console.log(`  ✓ ${message}`);
-}
-
-function section(name: string): void {
-    console.log(`\n▶ ${name}`);
-}
+import { assert, section, demoHeader, demoFooter } from './utils.js';
 
 export async function runPathfindingDemo(): Promise<void> {
-    console.log('═══════════════════════════════════════');
-    console.log('     Pathfinding Module Demo');
-    console.log('═══════════════════════════════════════');
+    demoHeader('Pathfinding Module Demo');
 
     // 1. Create Grid Map
     section('1. createGridMap()');
@@ -156,9 +146,7 @@ export async function runPathfindingDemo(): Promise<void> {
     grid.reset();
     assert(grid.isWalkable(5, 5), 'Grid reset - all walkable');
 
-    console.log('\n═══════════════════════════════════════');
-    console.log('  Pathfinding Demo: ALL TESTS PASSED ✓');
-    console.log('═══════════════════════════════════════\n');
+    demoFooter('Pathfinding Demo');
 }
 
 runPathfindingDemo().catch(console.error);
