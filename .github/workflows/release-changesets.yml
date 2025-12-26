@@ -7,6 +7,9 @@ on:
     paths:
       - '.changeset/**'
       - 'packages/*/package.json'
+      - 'packages/*/*/package.json'
+      - 'packages/*/*/*/package.json'
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
