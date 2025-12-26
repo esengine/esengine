@@ -1,65 +1,66 @@
 {
-    "name": "@esengine/physics-rapier2d",
-    "version": "1.0.0",
-    "description": "Deterministic 2D physics engine based on Rapier2D with enhanced-determinism",
-    "esengine": {
-        "plugin": true,
-        "pluginExport": "PhysicsPlugin",
-        "category": "physics"
+  "name": "@esengine/physics-rapier2d",
+  "version": "1.0.0",
+  "description": "Deterministic 2D physics engine based on Rapier2D with enhanced-determinism",
+  "esengine": {
+    "plugin": true,
+    "pluginExport": "PhysicsPlugin",
+    "category": "physics"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
-    "main": "dist/index.js",
-    "module": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "type": "module",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
-        },
-        "./runtime": {
-            "types": "./dist/runtime.d.ts",
-            "import": "./dist/runtime.js"
-        }
-    },
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "clean": "rimraf dist tsconfig.tsbuildinfo",
-        "build": "tsup",
-        "build:watch": "tsup --watch",
-        "type-check": "tsc --noEmit"
-    },
-    "keywords": [
-        "ecs",
-        "physics",
-        "rapier2d",
-        "deterministic",
-        "game-physics",
-        "2d-physics"
-    ],
-    "author": "yhh",
-    "license": "MIT",
-    "dependencies": {
-        "@esengine/rapier2d": "workspace:*",
-        "@esengine/platform-common": "workspace:*"
-    },
-    "devDependencies": {
-        "@esengine/ecs-framework": "workspace:*",
-        "@esengine/ecs-framework-math": "workspace:*",
-        "@esengine/engine-core": "workspace:*",
-        "@esengine/build-config": "workspace:*",
-        "rimraf": "^5.0.0",
-        "tsup": "^8.0.0",
-        "typescript": "^5.8.3"
-    },
-    "publishConfig": {
-        "access": "public",
-        "registry": "https://registry.npmjs.org/"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/esengine/esengine.git",
-        "directory": "packages/physics-rapier2d"
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
     }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "ecs",
+    "physics",
+    "rapier2d",
+    "deterministic",
+    "game-physics",
+    "2d-physics"
+  ],
+  "author": "yhh",
+  "license": "MIT",
+  "dependencies": {
+    "@esengine/rapier2d": "workspace:*",
+    "@esengine/platform-common": "workspace:*"
+  },
+  "devDependencies": {
+    "@esengine/ecs-framework": "workspace:*",
+    "@esengine/ecs-framework-math": "workspace:*",
+    "@esengine/engine-core": "workspace:*",
+    "@esengine/build-config": "workspace:*",
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.8.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/esengine/esengine.git",
+    "directory": "packages/physics-rapier2d"
+  },
+  "private": true
 }
