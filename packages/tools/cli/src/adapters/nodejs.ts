@@ -7,11 +7,12 @@ import type { FileEntry, PlatformAdapter, ProjectConfig } from './types.js';
 export const nodejsAdapter: PlatformAdapter = {
     id: 'nodejs',
     name: 'Node.js',
-    description: 'Generate standalone Node.js project with ECS (for servers, CLI tools, simulations)',
+    description: 'Generate Node.js game server with ECS and networking',
 
     getDependencies() {
         return {
-            '@esengine/ecs-framework': 'latest'
+            '@esengine/ecs-framework': 'latest',
+            '@esengine/network-server': 'latest'
         };
     },
 
@@ -33,147 +34,96 @@ export const nodejsAdapter: PlatformAdapter = {
     },
 
     generateFiles(config: ProjectConfig): FileEntry[] {
-        const files: FileEntry[] = [];
-
-        files.push({
-            path: 'src/index.ts',
-            content: generateIndex(config)
-        });
-
-        files.push({
-            path: 'src/Game.ts',
-            content: generateGame(config)
-        });
-
-        files.push({
-            path: 'src/components/PositionComponent.ts',
-            content: generatePositionComponent()
-        });
-
-        files.push({
-            path: 'src/systems/MovementSystem.ts',
-            content: generateMovementSystem()
-        });
-
-        files.push({
-            path: 'tsconfig.json',
-            content: generateTsConfig()
-        });
-
-        files.push({
-            path: 'README.md',
-            content: generateReadme(config)
-        });
-
-        return files;
+        return [
+            { path: 'src/index.ts', content: generateIndex(config) },
+            { path: 'src/server/GameServer.ts', content: generateGameServer(config) },
+            { path: 'src/game/Game.ts', content: generateGame(config) },
+            { path: 'src/game/scenes/MainScene.ts', content: generateMainScene(config) },
+            { path: 'src/game/components/PositionComponent.ts', content: generatePositionComponent() },
+            { path: 'src/game/components/VelocityComponent.ts', content: generateVelocityComponent() },
+            { path: 'src/game/systems/MovementSystem.ts', content: generateMovementSystem() },
+            { path: 'tsconfig.json', content: generateTsConfig() },
+            { path: 'README.md', content: generateReadme(config) }
+        ];
     }
 };
 
 function generateIndex(config: ProjectConfig): string {
-    return `import { Game } from './Game.js';
+    return `import { createGameServer } from './server/GameServer';
 
-const game = new Game();
+const PORT = Number(process.env.PORT) || 3000;
 
-// Handle graceful shutdown
+async function main() {
+    const server = createGameServer({ port: PORT });
+    await server.start();
+
+    console.log('========================================');
+    console.log('  ${config.name} Server');
+    console.log('========================================');
+    console.log(\`  WebSocket: ws://localhost:\${PORT}\`);
+    console.log('  Press Ctrl+C to stop');
+    console.log('========================================');
+}
+
 process.on('SIGINT', () => {
     console.log('\\nShutting down...');
-    game.stop();
     process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-    game.stop();
-    process.exit(0);
-});
+main().catch(console.error);
+`;
+}
 
-// Start the game
-game.start();
+function generateGameServer(config: ProjectConfig): string {
+    return `import { GameServer, type IServerConfig } from '@esengine/network-server';
+import { Game } from '../game/Game';
 
-console.log('[${config.name}] Game started. Press Ctrl+C to stop.');
+/**
+ * @zh 创建游戏服务器
+ * @en Create game server
+ */
+export function createGameServer(config: Partial<IServerConfig> = {}): GameServer {
+    const server = new GameServer({
+        port: config.port ?? 3000,
+        roomConfig: {
+            maxPlayers: 16,
+            tickRate: 20,
+            ...config.roomConfig
+        }
+    });
+
+    // 初始化 ECS 游戏逻辑
+    const game = new Game();
+    game.start();
+
+    return server;
+}
 `;
 }
 
 function generateGame(config: ProjectConfig): string {
-    return `import { Core, Scene, type ICoreConfig } from '@esengine/ecs-framework';
-import { MovementSystem } from './systems/MovementSystem.js';
+    return `import { Core, type ICoreConfig } from '@esengine/ecs-framework';
+import { MainScene } from './scenes/MainScene';
 
 /**
- * Game configuration options
- */
-export interface GameOptions {
-    /** @zh 调试模式 @en Debug mode */
-    debug?: boolean;
-    /** @zh 目标帧率 @en Target FPS */
-    targetFPS?: number;
-    /** @zh 远程调试配置 @en Remote debug configuration */
-    remoteDebug?: {
-        /** @zh 启用远程调试 @en Enable remote debugging */
-        enabled: boolean;
-        /** @zh WebSocket地址 @en WebSocket URL */
-        url: string;
-        /** @zh 自动重连 @en Auto reconnect */
-        autoReconnect?: boolean;
-    };
-}
-
-/**
- * Game Scene - Define your game systems here
- */
-class GameScene extends Scene {
-    initialize(): void {
-        this.name = '${config.name}';
-        this.addSystem(new MovementSystem());
-        // Add more systems here...
-    }
-
-    onStart(): void {
-        // Create your initial entities here
-    }
-}
-
-/**
- * Main game class with ECS game loop
- *
- * Features:
- * - Configurable debug mode and FPS
- * - Remote debugging via WebSocket
- * - Fixed timestep game loop
- * - Graceful start/stop
+ * @zh 游戏主类
+ * @en Main game class
  */
 export class Game {
-    private readonly _scene: GameScene;
-    private readonly _targetFPS: number;
+    private _scene: MainScene;
     private _running = false;
     private _tickInterval: ReturnType<typeof setInterval> | null = null;
     private _lastTime = 0;
+    private _targetFPS = 60;
 
-    get scene() { return this._scene; }
-    get running() { return this._running; }
-
-    constructor(options: GameOptions = {}) {
-        const { debug = false, targetFPS = 60, remoteDebug } = options;
+    constructor(options: { debug?: boolean; targetFPS?: number } = {}) {
+        const { debug = false, targetFPS = 60 } = options;
         this._targetFPS = targetFPS;
 
         const config: ICoreConfig = { debug };
-
-        // 配置远程调试
-        if (remoteDebug?.enabled && remoteDebug.url) {
-            config.debugConfig = {
-                enabled: true,
-                websocketUrl: remoteDebug.url,
-                autoReconnect: remoteDebug.autoReconnect ?? true,
-                channels: {
-                    entities: true,
-                    systems: true,
-                    performance: true,
-                    components: true,
-                    scenes: true
-                }
-            };
-        }
-
         Core.create(config);
-        this._scene = new GameScene();
+
+        this._scene = new MainScene();
         Core.setScene(this._scene);
     }
 
@@ -203,11 +153,38 @@ export class Game {
 `;
 }
 
+function generateMainScene(config: ProjectConfig): string {
+    return `import { Scene } from '@esengine/ecs-framework';
+import { MovementSystem } from '../systems/MovementSystem';
+
+/**
+ * @zh 主场景
+ * @en Main scene
+ */
+export class MainScene extends Scene {
+    initialize(): void {
+        this.name = '${config.name}';
+
+        // 注册系统
+        this.addSystem(new MovementSystem());
+
+        // 添加更多系统...
+    }
+
+    onStart(): void {
+        // 创建初始实体
+        console.log('[MainScene] Scene started');
+    }
+}
+`;
+}
+
 function generatePositionComponent(): string {
     return `import { Component, ECSComponent } from '@esengine/ecs-framework';
 
 /**
- * Position component - stores entity position
+ * @zh 位置组件
+ * @en Position component
  */
 @ECSComponent('Position')
 export class PositionComponent extends Component {
@@ -219,31 +196,61 @@ export class PositionComponent extends Component {
         this.x = x;
         this.y = y;
     }
+
+    reset(): void {
+        this.x = 0;
+        this.y = 0;
+    }
+}
+`;
+}
+
+function generateVelocityComponent(): string {
+    return `import { Component, ECSComponent } from '@esengine/ecs-framework';
+
+/**
+ * @zh 速度组件
+ * @en Velocity component
+ */
+@ECSComponent('Velocity')
+export class VelocityComponent extends Component {
+    vx = 0;
+    vy = 0;
+
+    constructor(vx = 0, vy = 0) {
+        super();
+        this.vx = vx;
+        this.vy = vy;
+    }
+
+    reset(): void {
+        this.vx = 0;
+        this.vy = 0;
+    }
 }
 `;
 }
 
 function generateMovementSystem(): string {
-    return `import { EntitySystem, Matcher, Entity, Time, ECSSystem } from '@esengine/ecs-framework';
-import { PositionComponent } from '../components/PositionComponent.js';
+    return `import { EntitySystem, Matcher, Entity, Time } from '@esengine/ecs-framework';
+import { PositionComponent } from '../components/PositionComponent';
+import { VelocityComponent } from '../components/VelocityComponent';
 
 /**
- * Movement system - processes entities with PositionComponent
- *
- * Customize this system for your game logic.
+ * @zh 移动系统
+ * @en Movement system
  */
-@ECSSystem('MovementSystem')
 export class MovementSystem extends EntitySystem {
     constructor() {
-        super(Matcher.empty().all(PositionComponent));
+        super(Matcher.empty().all(PositionComponent, VelocityComponent));
     }
 
-    protected process(entities: readonly Entity[]): void {
-        for (const entity of entities) {
-            const position = entity.getComponent(PositionComponent)!;
-            // Update position using Time.deltaTime
-            // position.x += velocity.dx * Time.deltaTime;
-        }
+    protected processEntity(entity: Entity, dt: number): void {
+        const pos = entity.getComponent(PositionComponent)!;
+        const vel = entity.getComponent(VelocityComponent)!;
+
+        pos.x += vel.vx * dt;
+        pos.y += vel.vy * dt;
     }
 }
 `;
@@ -253,8 +260,8 @@ function generateTsConfig(): string {
     return `{
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -263,7 +270,9 @@ function generateTsConfig(): string {
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
@@ -274,75 +283,54 @@ function generateTsConfig(): string {
 function generateReadme(config: ProjectConfig): string {
     return `# ${config.name}
 
-A Node.js project using ESEngine ECS framework.
+Node.js 游戏服务器，基于 ESEngine ECS 框架。
 
-## Quick Start
+## 快速开始
 
 \`\`\`bash
-# Install dependencies
+# 安装依赖
 npm install
 
-# Run in development mode (with hot reload)
+# 开发模式（热重载）
 npm run dev
 
-# Build and run
+# 构建并运行
 npm run build:start
 \`\`\`
 
-## Project Structure
+## 项目结构
 
 \`\`\`
 src/
-├── index.ts              # Entry point
-├── Game.ts               # Game loop and ECS setup
-├── components/           # ECS components (data)
-│   └── PositionComponent.ts
-└── systems/              # ECS systems (logic)
-    └── MovementSystem.ts
+├── index.ts                    # 入口文件
+├── server/
+│   └── GameServer.ts           # 网络服务器配置
+└── game/
+    ├── Game.ts                 # ECS 游戏主类
+    ├── scenes/
+    │   └── MainScene.ts        # 主场景
+    ├── components/             # ECS 组件
+    │   ├── PositionComponent.ts
+    │   └── VelocityComponent.ts
+    └── systems/                # ECS 系统
+        └── MovementSystem.ts
 \`\`\`
 
-## Creating Components
+## 客户端连接
 
 \`\`\`typescript
-import { Component } from '@esengine/ecs-framework';
+import { NetworkPlugin } from '@esengine/network';
 
-export class HealthComponent extends Component {
-    current = 100;
-    max = 100;
+const networkPlugin = new NetworkPlugin({
+    serverUrl: 'ws://localhost:3000'
+});
 
-    reset(): void {
-        this.current = this.max;
-    }
-}
+await networkPlugin.connect('PlayerName');
 \`\`\`
 
-## Creating Systems
+## 文档
 
-\`\`\`typescript
-import { EntitySystem, Matcher, Entity } from '@esengine/ecs-framework';
-import { HealthComponent } from '../components/HealthComponent.js';
-
-export class HealthSystem extends EntitySystem {
-    constructor() {
-        super(Matcher.all(HealthComponent));
-    }
-
-    protected processEntity(entity: Entity, dt: number): void {
-        const health = entity.getComponent(HealthComponent)!;
-        // Your logic here
-    }
-}
-\`\`\`
-
-## Use Cases
-
-- Game servers
-- CLI tools with complex logic
-- Simulations
-- Automated testing
-
-## Documentation
-
-- [ESEngine ECS Framework](https://github.com/esengine/esengine)
+- [ESEngine 文档](https://esengine.github.io/esengine/)
+- [Network 模块](https://esengine.github.io/esengine/modules/network/)
 `;
 }
