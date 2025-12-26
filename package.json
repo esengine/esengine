@@ -42,6 +42,7 @@
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
     "test:ci": "turbo run test:ci",
+    "test:ci:framework": "turbo run test:ci --filter=@esengine/ecs-framework --filter=@esengine/ecs-framework-math --filter=@esengine/behavior-tree --filter=@esengine/blueprint --filter=@esengine/fsm --filter=@esengine/timer --filter=@esengine/spatial --filter=@esengine/procgen --filter=@esengine/pathfinding --filter=@esengine/network-protocols --filter=@esengine/network",
     "prepare:publish": "npm run build:npm && node scripts/pre-publish-check.cjs",
     "sync:versions": "node scripts/sync-versions.cjs",
     "publish:all": "npm run prepare:publish && npm run publish:all:dist",

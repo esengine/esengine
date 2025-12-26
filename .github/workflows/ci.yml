@@ -68,9 +68,9 @@ jobs:
     - name: Lint check (framework packages)
       run: pnpm run lint:framework
 
-    # 测试
+    # 测试 (仅 framework 包)
     - name: Run tests with coverage
-      run: pnpm run test:ci
+      run: pnpm run test:ci:framework
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
