@@ -1,7 +1,6 @@
 name: Release NPM Packages
 
 on:
-  # 标签触发：支�?v* �?{package}-v* 格式
   # Tag trigger: supports v* and {package}-v* formats
   push:
     tags:
@@ -15,12 +14,11 @@ on:
       - 'physics-rapier2d-v*'
       - 'worker-generator-v*'
 
-  # 保留手动触发选项
-  # Keep manual trigger option
+  # Manual trigger option
   workflow_dispatch:
     inputs:
       package:
-        description: '选择要发布的�?| Select package to publish'
+        description: 'Select package to publish'
         required: true
         type: choice
         options:
@@ -33,7 +31,7 @@ on:
           - physics-rapier2d
           - worker-generator
       version_type:
-        description: '版本更新类型 | Version bump type'
+        description: 'Version bump type'
         required: true
         type: choice
         options:
@@ -61,11 +59,10 @@ jobs:
         id: parse
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
-            # 从标签解析包名和版本 | Parse package and version from tag
+            # Parse package and version from tag
             TAG="${GITHUB_REF#refs/tags/}"
             echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-            # 解析格式：v1.0.0 �?package-v1.0.0
             # Parse format: v1.0.0 or package-v1.0.0
             if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
               PACKAGE="core"
@@ -82,10 +79,9 @@ jobs:
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "mode=tag" >> $GITHUB_OUTPUT
-            echo "📦 Package: $PACKAGE"
-            echo "📌 Version: $VERSION"
+            echo "Package: $PACKAGE"
+            echo "Version: $VERSION"
           else
-            # 手动触发：从 package.json 读取�?bump 版本
             # Manual trigger: read from package.json and bump version
             PACKAGE="${{ github.event.inputs.package }}"
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
@@ -112,7 +108,6 @@ jobs:
           PACKAGE="${{ steps.parse.outputs.package }}"
           EXPECTED_VERSION="${{ steps.parse.outputs.version }}"
 
-          # 获取 package.json 中的版本
           # Get version from package.json
           ACTUAL_VERSION=$(node -p "require('./packages/$PACKAGE/package.json').version")
 
@@ -125,7 +120,7 @@ jobs:
             exit 1
           fi
 
-          echo "�?Version verified: $EXPECTED_VERSION"
+          echo "Version verified: $EXPECTED_VERSION"
 
       - name: Bump version (manual mode)
         if: steps.parse.outputs.mode == 'manual'
@@ -147,7 +142,7 @@ jobs:
           node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json')); pkg.version='$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)+'\n')"
 
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "📌 Bumped version: $CURRENT �?$NEW_VERSION"
+          echo "Bumped version: $CURRENT -> $NEW_VERSION"
 
       - name: Set final version
         id: version
@@ -188,19 +183,18 @@ jobs:
         with:
           tag_name: ${{ steps.parse.outputs.tag }}
           name: "${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}"
-          # 不设置为 latest，latest 保留给编辑器热更新使�?          # Don't mark as latest, reserve latest for editor auto-update
           make_latest: false
           body: |
-            ## 🚀 @esengine/${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}
+            ## @esengine/${{ steps.parse.outputs.package }} v${{ steps.version.outputs.value }}
 
-            📦 **NPM**: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
+            **NPM**: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
 
             ```bash
             npm install @esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}
             ```
 
             ---
-            *自动发布 | Auto-released by GitHub Actions*
+            *Auto-released by GitHub Actions*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -215,15 +209,16 @@ jobs:
           delete-branch: true
           title: "chore(${{ steps.parse.outputs.package }}): Release v${{ steps.version.outputs.value }}"
           body: |
-            ## 🚀 Release v${{ steps.version.outputs.value }}
+            ## Release v${{ steps.version.outputs.value }}
 
-            �?PR 更新 `@esengine/${{ steps.parse.outputs.package }}` 包的版本�?
-            ### 变更
-            - �?已发布到 npm: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
-            - �?更新 `packages/${{ steps.parse.outputs.package }}/package.json` �?`${{ steps.version.outputs.value }}`
+            This PR updates `@esengine/${{ steps.parse.outputs.package }}` package version.
+
+            ### Changes
+            - Published to npm: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
+            - Updated `packages/${{ steps.parse.outputs.package }}/package.json` to `${{ steps.version.outputs.value }}`
 
             ---
-            *�?PR 由发布工作流自动创建*
+            *This PR was automatically created by the release workflow*
           labels: |
             release
             ${{ steps.parse.outputs.package }}
