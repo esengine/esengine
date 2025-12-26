@@ -45,7 +45,7 @@ jobs:
     - name: Install dependencies
       run: pnpm install --no-frozen-lockfile
 
-    # 构建 framework 包 (可独立发布的通用库)
+    # 构建 framework 包 (可独立发布的通用库，无外部依赖)
     - name: Build framework packages
       run: |
         pnpm --filter @esengine/ecs-framework build
@@ -57,6 +57,7 @@ jobs:
         pnpm --filter @esengine/spatial build
         pnpm --filter @esengine/procgen build
         pnpm --filter @esengine/pathfinding build
+        pnpm --filter @esengine/network-protocols build
         pnpm --filter @esengine/network build
 
     # 类型检查 (仅 framework 包)
