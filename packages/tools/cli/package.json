@@ -1,0 +1,51 @@
+{
+  "name": "@esengine/cli",
+  "version": "1.0.0",
+  "description": "CLI tool for adding ESEngine ECS framework to existing projects",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "esengine": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "dev": "ts-node src/cli.ts",
+    "clean": "rimraf dist",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "esengine",
+    "ecs",
+    "cli",
+    "cocos",
+    "laya",
+    "game-framework"
+  ],
+  "author": "yhh",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/prompts": "^2.4.9",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
