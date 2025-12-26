@@ -12,7 +12,8 @@ permissions:
 jobs:
   ai-helper:
     runs-on: ubuntu-latest
-    # 只在真实用户提到 @ai-helper 时触发，忽略机器人评�?    if: |
+    # Only trigger when real users mention @ai-helper, ignore bots
+    if: |
       contains(github.event.comment.body, '@ai-helper') &&
       github.event.comment.user.type != 'Bot'
     steps:
@@ -30,11 +31,11 @@ jobs:
               issue_number: context.issue.number
             });
 
-            // 限制长度，避免超�?token 限制
+            // Limit length to avoid token limit
             const maxLength = 1000;
             const truncate = (str, max) => {
               if (!str) return '';
-              return str.length > max ? str.substring(0, max) + '...[内容过长已截断]' : str;
+              return str.length > max ? str.substring(0, max) + '...[truncated]' : str;
             };
 
             core.exportVariable('ISSUE_TITLE', truncate(issue.data.title || '', 200));
@@ -48,13 +49,14 @@ jobs:
           cat > prompt.txt << 'PROMPT_EOF'
           Issue #${{ env.ISSUE_NUMBER }}
 
-          标题: ${{ env.ISSUE_TITLE }}
+          Title: ${{ env.ISSUE_TITLE }}
 
-          内容: ${{ env.ISSUE_BODY }}
+          Content: ${{ env.ISSUE_BODY }}
 
-          评论: ${{ env.COMMENT_BODY }}
+          Comment: ${{ env.COMMENT_BODY }}
 
-          请搜索项目代码并提供解决方案�?          PROMPT_EOF
+          Please search the project code and provide a solution.
+          PROMPT_EOF
 
       - name: AI Analysis
         uses: actions/ai-inference@v1
@@ -64,7 +66,11 @@ jobs:
           enable-github-mcp: true
           max-tokens: 1500
           system-prompt: |
-            你是 ECS Framework (TypeScript ECS 框架) �?AI 助手�?            主要代码�?packages/framework/core/src�?            搜索相关代码后，用中文简洁回答问题，包含问题分析、解决方案和代码引用�?          prompt-file: prompt.txt
+            You are an AI assistant for the ECS Framework (TypeScript ECS framework).
+            Main code is in packages/framework/core/src.
+            After searching relevant code, answer questions concisely in Chinese,
+            including problem analysis, solution, and code references.
+          prompt-file: prompt.txt
 
       - name: Post AI Response
         env:
