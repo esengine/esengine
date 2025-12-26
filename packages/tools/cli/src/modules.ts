@@ -94,6 +94,34 @@ export const AVAILABLE_MODULES: ModuleInfo[] = [
         version: 'latest',
         description: '可视化脚本系统 | Visual scripting system',
         category: 'utility'
+    },
+
+    // Network
+    {
+        id: 'network',
+        name: 'Network',
+        package: '@esengine/network',
+        version: 'latest',
+        description: '网络同步客户端 | Network sync client',
+        category: 'network',
+        dependencies: ['network-protocols']
+    },
+    {
+        id: 'network-protocols',
+        name: 'Network Protocols',
+        package: '@esengine/network-protocols',
+        version: 'latest',
+        description: '网络共享协议 | Shared network protocols',
+        category: 'network'
+    },
+    {
+        id: 'network-server',
+        name: 'Network Server',
+        package: '@esengine/network-server',
+        version: 'latest',
+        description: '网络游戏服务器 | Network game server',
+        category: 'network',
+        dependencies: ['network-protocols']
     }
 ];
 
