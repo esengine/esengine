@@ -2,23 +2,24 @@
   color-scheme: dark;
   --vp-nav-height: 64px;
 
-  --es-bg-base: #1e1e1e;
-  --es-bg-elevated: #252526;
-  --es-bg-overlay: #2d2d2d;
-  --es-bg-input: #3c3c3c;
-  --es-bg-inset: #181818;
+  --es-bg-base: #1a1a1a;
+  --es-bg-elevated: #222222;
+  --es-bg-overlay: #2a2a2a;
+  --es-bg-input: #333333;
+  --es-bg-inset: #151515;
   --es-bg-hover: #2a2d2e;
   --es-bg-active: #37373d;
-  --es-bg-sidebar: #262626;
-  --es-bg-card: #2a2a2a;
-  --es-bg-header: #2d2d2d;
+  --es-bg-sidebar: #1e1e1e;
+  --es-bg-card: #242424;
+  --es-bg-header: #1e1e1e;
 
-  --es-text-primary: #cccccc;
-  --es-text-secondary: #9d9d9d;
-  --es-text-tertiary: #6a6a6a;
+  /* 提高文字对比度 | Improve text contrast */
+  --es-text-primary: #e0e0e0;
+  --es-text-secondary: #b0b0b0;
+  --es-text-tertiary: #888888;
   --es-text-inverse: #ffffff;
-  --es-text-muted: #aaaaaa;
-  --es-text-dim: #6a6a6a;
+  --es-text-muted: #c0c0c0;
+  --es-text-dim: #888888;
 
   --es-font-xs: 11px;
   --es-font-sm: 12px;
