@@ -15,13 +15,13 @@
   ],
   "references": [
     {
-      "path": "../../framework/core"
+      "path": "../core"
     },
     {
-      "path": "../../network-ext/network-protocols"
+      "path": "../network-protocols"
     },
     {
-      "path": "../../framework/blueprint"
+      "path": "../blueprint"
     }
   ]
 }
