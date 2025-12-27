@@ -404,3 +404,11 @@ async function loadBlueprint(path: string): Promise<BlueprintAsset> {
 5. **Performance optimization**
    - Pure nodes (`isPure: true`) cache outputs
    - Avoid heavy computation in Tick
+
+## Documentation
+
+- [Virtual Machine API](./vm) - BlueprintVM execution and context
+- [Custom Nodes](./custom-nodes) - Creating custom nodes
+- [Built-in Nodes](./nodes) - Built-in node reference
+- [Blueprint Composition](./composition) - Fragments and composer
+- [Examples](./examples) - ECS integration and best practices

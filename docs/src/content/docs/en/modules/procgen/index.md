@@ -396,3 +396,10 @@ class LootSystem {
    - `octaves`: More = richer detail, higher cost
    - `persistence`: 0.5 is common, higher = more high-frequency detail
    - `lacunarity`: Usually 2, controls frequency growth
+
+## Documentation
+
+- [Noise Functions](./noise) - Perlin, Simplex, Worley, FBM
+- [Seeded Random](./random) - SeededRandom API and distribution methods
+- [Sampling Utilities](./sampling) - Weighted random, shuffle, sampling
+- [Examples](./examples) - Terrain, loot, level generation

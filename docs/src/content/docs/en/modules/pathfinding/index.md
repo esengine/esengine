@@ -299,3 +299,10 @@ for (let y = 30; y < 35; y++) {
 | Precision | Grid-aligned | Continuous coordinates |
 | Dynamic Updates | Easy | Requires rebuild |
 | Setup Complexity | Simple | More complex |
+
+## Documentation
+
+- [Grid Map API](./grid-map) - Grid operations and A* pathfinder
+- [Navigation Mesh API](./navmesh) - NavMesh building and querying
+- [Path Smoothing](./smoothing) - Line of sight and curve smoothing
+- [Examples](./examples) - Game movement, dynamic obstacles, hierarchical pathfinding

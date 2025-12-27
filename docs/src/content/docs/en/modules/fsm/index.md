@@ -316,3 +316,8 @@ The FSM module provides blueprint nodes for visual scripting:
 - `GetStateDuration` - Get state duration
 - `EvaluateTransitions` - Evaluate transition conditions
 - `ResetStateMachine` - Reset state machine
+
+## Documentation
+
+- [API Reference](./api) - Complete API documentation
+- [Examples](./examples) - Character FSM, AI behavior, ECS integration
