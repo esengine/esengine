@@ -116,7 +116,17 @@ export default defineConfig({
               ],
             },
             { label: '插件系统', slug: 'guide/plugin-system', translations: { en: 'Plugin System' } },
-            { label: 'Worker 系统', slug: 'guide/worker-system', translations: { en: 'Worker System' } },
+            {
+              label: 'Worker 系统',
+              translations: { en: 'Worker System' },
+              items: [
+                { label: '概述', slug: 'guide/worker-system', translations: { en: 'Overview' } },
+                { label: '配置选项', slug: 'guide/worker-system/configuration', translations: { en: 'Configuration' } },
+                { label: '完整示例', slug: 'guide/worker-system/examples', translations: { en: 'Examples' } },
+                { label: '微信小游戏', slug: 'guide/worker-system/wechat', translations: { en: 'WeChat' } },
+                { label: '最佳实践', slug: 'guide/worker-system/best-practices', translations: { en: 'Best Practices' } },
+              ],
+            },
           ],
         },
         {
