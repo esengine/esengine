@@ -39,7 +39,16 @@ export default defineConfig({
           label: '核心概念',
           translations: { en: 'Core Concepts' },
           items: [
-            { label: '实体', slug: 'guide/entity', translations: { en: 'Entity' } },
+            {
+              label: '实体',
+              translations: { en: 'Entity' },
+              items: [
+                { label: '概述', slug: 'guide/entity', translations: { en: 'Overview' } },
+                { label: '组件操作', slug: 'guide/entity/component-operations', translations: { en: 'Component Operations' } },
+                { label: '实体句柄', slug: 'guide/entity/entity-handle', translations: { en: 'Entity Handle' } },
+                { label: '生命周期', slug: 'guide/entity/lifecycle', translations: { en: 'Lifecycle' } },
+              ],
+            },
             { label: '层级结构', slug: 'guide/hierarchy', translations: { en: 'Hierarchy' } },
             {
               label: '组件',
@@ -132,7 +141,17 @@ export default defineConfig({
             { label: '寻路', slug: 'modules/pathfinding', translations: { en: 'Pathfinding' } },
             { label: '蓝图', slug: 'modules/blueprint', translations: { en: 'Blueprint' } },
             { label: '程序生成', slug: 'modules/procgen', translations: { en: 'Procgen' } },
-            { label: '网络', slug: 'modules/network', translations: { en: 'Network' } },
+            {
+              label: '网络',
+              translations: { en: 'Network' },
+              items: [
+                { label: '概述', slug: 'modules/network', translations: { en: 'Overview' } },
+                { label: '客户端', slug: 'modules/network/client', translations: { en: 'Client' } },
+                { label: '服务器', slug: 'modules/network/server', translations: { en: 'Server' } },
+                { label: '状态同步', slug: 'modules/network/sync', translations: { en: 'State Sync' } },
+                { label: 'API 参考', slug: 'modules/network/api', translations: { en: 'API Reference' } },
+              ],
+            },
           ],
         },
         {
