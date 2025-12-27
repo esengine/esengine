@@ -1,5 +1,11 @@
 # @esengine/ecs-framework
 
+## 2.4.4
+
+### Patch Changes
+
+- [`7d74623`](https://github.com/esengine/esengine/commit/7d746237100084ac3456f1af92ff664db4e50cc8) Thanks [@esengine](https://github.com/esengine)! - fix(core): 修复 npm 发布目录配置，确保从 dist 目录发布以保持与 Cocos Creator 的兼容性
+
 ## 2.4.3
 
 ### Patch Changes
