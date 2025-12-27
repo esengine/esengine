@@ -1,5 +1,6 @@
 ---
 title: "Spatial Index System"
+description: "Efficient spatial queries and AOI management"
 ---
 
 `@esengine/spatial` provides efficient spatial querying and indexing, including range queries, nearest neighbor queries, raycasting, and AOI (Area of Interest) management.
@@ -76,7 +77,9 @@ const visible = aoi.getEntitiesInView(player);
 | Direction | One-way query | Two-way tracking |
 | Use Cases | Collision, range attacks | MMO sync, NPC AI perception |
 
-### IBounds
+### Core Interfaces
+
+#### IBounds
 
 ```typescript
 interface IBounds {
@@ -87,7 +90,7 @@ interface IBounds {
 }
 ```
 
-### IRaycastHit
+#### IRaycastHit
 
 ```typescript
 interface IRaycastHit<T> {
@@ -98,227 +101,9 @@ interface IRaycastHit<T> {
 }
 ```
 
-## Spatial Index API
+## Documentation
 
-### createGridSpatialIndex
-
-```typescript
-function createGridSpatialIndex<T>(cellSize?: number): GridSpatialIndex<T>
-```
-
-**Choosing cellSize:**
-- Too small: High memory, reduced query efficiency
-- Too large: Many objects per cell, slow iteration
-- Recommended: 1-2x average object spacing
-
-### Management Methods
-
-```typescript
-spatialIndex.insert(entity, position);
-spatialIndex.remove(entity);
-spatialIndex.update(entity, newPosition);
-spatialIndex.clear();
-```
-
-### Query Methods
-
-#### findInRadius
-
-```typescript
-const enemies = spatialIndex.findInRadius(
-    { x: 100, y: 200 },
-    50,
-    (entity) => entity.type === 'enemy' // Optional filter
-);
-```
-
-#### findInRect
-
-```typescript
-import { createBounds } from '@esengine/spatial';
-
-const bounds = createBounds(0, 0, 200, 200);
-const entities = spatialIndex.findInRect(bounds);
-```
-
-#### findNearest
-
-```typescript
-const nearest = spatialIndex.findNearest(
-    playerPosition,
-    500, // maxDistance
-    (entity) => entity.type === 'enemy'
-);
-```
-
-#### findKNearest
-
-```typescript
-const nearestEnemies = spatialIndex.findKNearest(
-    playerPosition,
-    5,    // k
-    500,  // maxDistance
-    (entity) => entity.type === 'enemy'
-);
-```
-
-#### raycast / raycastFirst
-
-```typescript
-const hits = spatialIndex.raycast(origin, direction, maxDistance);
-const firstHit = spatialIndex.raycastFirst(origin, direction, maxDistance);
-```
-
-## AOI API
-
-### createGridAOI
-
-```typescript
-function createGridAOI<T>(cellSize?: number): GridAOI<T>
-```
-
-### Observer Management
-
-```typescript
-// Add observer
-aoi.addObserver(player, position, {
-    viewRange: 200,
-    observable: true  // Can be seen by others
-});
-
-// Remove observer
-aoi.removeObserver(player);
-
-// Update position
-aoi.updatePosition(player, newPosition);
-
-// Update view range
-aoi.updateViewRange(player, 300);
-```
-
-### Query Methods
-
-```typescript
-// Get entities in observer's view
-const visible = aoi.getEntitiesInView(player);
-
-// Get observers who can see entity
-const observers = aoi.getObserversOf(monster);
-
-// Check visibility
-if (aoi.canSee(player, enemy)) { ... }
-```
-
-### Event System
-
-```typescript
-// Global event listener
-aoi.addListener((event) => {
-    switch (event.type) {
-        case 'enter': /* entered view */ break;
-        case 'exit': /* left view */ break;
-    }
-});
-
-// Entity-specific listener
-aoi.addEntityListener(player, (event) => {
-    if (event.type === 'enter') {
-        sendToClient(player, 'entity_enter', event.target);
-    }
-});
-```
-
-## Utility Functions
-
-### Bounds Creation
-
-```typescript
-import {
-    createBounds,
-    createBoundsFromCenter,
-    createBoundsFromCircle
-} from '@esengine/spatial';
-
-const bounds1 = createBounds(0, 0, 100, 100);
-const bounds2 = createBoundsFromCenter({ x: 50, y: 50 }, 100, 100);
-const bounds3 = createBoundsFromCircle({ x: 50, y: 50 }, 50);
-```
-
-### Geometry Checks
-
-```typescript
-import {
-    isPointInBounds,
-    boundsIntersect,
-    boundsIntersectsCircle,
-    distance,
-    distanceSquared
-} from '@esengine/spatial';
-
-if (isPointInBounds(point, bounds)) { ... }
-if (boundsIntersect(boundsA, boundsB)) { ... }
-if (boundsIntersectsCircle(bounds, center, radius)) { ... }
-const dist = distance(pointA, pointB);
-const distSq = distanceSquared(pointA, pointB); // Faster
-```
-
-## Practical Examples
-
-### Range Attack Detection
-
-```typescript
-class CombatSystem {
-    private spatialIndex: ISpatialIndex<Entity>;
-
-    dealAreaDamage(center: IVector2, radius: number, damage: number): void {
-        const targets = this.spatialIndex.findInRadius(
-            center, radius,
-            (entity) => entity.hasComponent(HealthComponent)
-        );
-
-        for (const target of targets) {
-            target.getComponent(HealthComponent).takeDamage(damage);
-        }
-    }
-}
-```
-
-### MMO Sync System
-
-```typescript
-class SyncSystem {
-    private aoi: IAOIManager<Player>;
-
-    constructor() {
-        this.aoi = createGridAOI<Player>(100);
-
-        this.aoi.addListener((event) => {
-            const packet = this.createSyncPacket(event);
-            this.sendToPlayer(event.observer, packet);
-        });
-    }
-
-    onPlayerMove(player: Player, newPosition: IVector2): void {
-        this.aoi.updatePosition(player, newPosition);
-    }
-}
-```
-
-## Blueprint Nodes
-
-### Spatial Query Nodes
-- `FindInRadius`, `FindInRect`, `FindNearest`, `FindKNearest`
-- `Raycast`, `RaycastFirst`
-
-### AOI Nodes
-- `GetEntitiesInView`, `GetObserversOf`, `CanSee`
-- `OnEntityEnterView`, `OnEntityExitView`
-
-## Service Tokens
-
-```typescript
-import { SpatialIndexToken, AOIManagerToken } from '@esengine/spatial';
-
-services.register(SpatialIndexToken, createGridSpatialIndex(100));
-services.register(AOIManagerToken, createGridAOI(100));
-```
+- [Spatial Index API](./spatial-index) - Grid index, range queries, raycasting
+- [AOI (Area of Interest)](./aoi) - View management, enter/exit events
+- [Examples](./examples) - Area attacks, MMO sync, AI perception
+- [Utilities & Optimization](./utilities) - Geometry detection, performance tips
