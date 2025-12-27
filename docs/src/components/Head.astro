@@ -1,0 +1,20 @@
+---
+import type { Props } from '@astrojs/starlight/props';
+import Default from '@astrojs/starlight/components/Head.astro';
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<!-- Preload fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
+
+<!-- Force dark mode -->
+<script is:inline>
+  document.documentElement.dataset.theme = 'dark';
+  localStorage.setItem('starlight-theme', 'dark');
+</script>

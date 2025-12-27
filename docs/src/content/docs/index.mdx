@@ -1,0 +1,67 @@
+---
+title: ESEngine
+description: 高性能 TypeScript ECS 框架 - 为游戏开发而生
+template: splash
+hero:
+  tagline: 基于 TypeScript 的高性能 ECS 游戏框架，支持多平台、模块化设计
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: 快速开始
+      link: /guide/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/esengine/esengine
+      icon: external
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## 核心特性
+
+<CardGrid stagger>
+  <Card title="高性能 ECS 架构" icon="rocket">
+    基于数据驱动的实体组件系统，支持大规模实体处理，缓存友好的内存布局。
+  </Card>
+  <Card title="完整类型支持" icon="seti:typescript">
+    100% TypeScript 编写，完整的类型定义和编译时检查，提供最佳的开发体验。
+  </Card>
+  <Card title="可视化行为树" icon="puzzle">
+    内置 AI 行为树系统，提供可视化编辑器，支持自定义节点和实时调试。
+  </Card>
+  <Card title="多平台支持" icon="laptop">
+    支持浏览器、Node.js、微信小游戏等多平台，可与主流游戏引擎无缝集成。
+  </Card>
+  <Card title="模块化设计" icon="setting">
+    核心功能独立打包，按需引入。支持自定义插件扩展，灵活适配不同项目。
+  </Card>
+  <Card title="开发者工具" icon="open-book">
+    内置性能监控、调试工具、序列化系统等，提供完整的开发工具链。
+  </Card>
+</CardGrid>
+
+## 快速入口
+
+<CardGrid>
+  <LinkCard
+    title="5 分钟上手"
+    description="从安装到创建第一个 ECS 应用，快速了解核心概念。"
+    href="/guide/getting-started/"
+  />
+  <LinkCard
+    title="行为树系统"
+    description="内置 AI 行为树系统，支持可视化编辑和实时调试。"
+    href="/modules/behavior-tree/"
+  />
+  <LinkCard
+    title="API 参考"
+    description="完整的 API 文档，了解每个类和方法的详细用法。"
+    href="/api/"
+  />
+  <LinkCard
+    title="示例项目"
+    description="查看完整的示例项目，学习最佳实践。"
+    href="/examples/"
+  />
+</CardGrid>

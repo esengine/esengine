@@ -1,0 +1,67 @@
+---
+title: ESEngine
+description: High-performance TypeScript ECS Framework for Game Development
+template: splash
+hero:
+  tagline: High-performance ECS game framework based on TypeScript, with multi-platform support and modular design
+  image:
+    file: ../../../assets/logo.svg
+  actions:
+    - text: Quick Start
+      link: /en/guide/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/esengine/esengine
+      icon: external
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Core Features
+
+<CardGrid stagger>
+  <Card title="High-Performance ECS Architecture" icon="rocket">
+    Data-driven entity component system supporting large-scale entity processing with cache-friendly memory layout.
+  </Card>
+  <Card title="Full TypeScript Support" icon="seti:typescript">
+    100% TypeScript with complete type definitions and compile-time checks for the best development experience.
+  </Card>
+  <Card title="Visual Behavior Tree" icon="puzzle">
+    Built-in AI behavior tree system with visual editor, custom nodes and real-time debugging support.
+  </Card>
+  <Card title="Multi-Platform Support" icon="laptop">
+    Supports browsers, Node.js, WeChat Mini Games, and integrates seamlessly with mainstream game engines.
+  </Card>
+  <Card title="Modular Design" icon="setting">
+    Core features packaged independently. Import on demand with custom plugin extensions for flexible project adaptation.
+  </Card>
+  <Card title="Developer Tools" icon="open-book">
+    Built-in performance monitoring, debugging tools, serialization system and complete development toolchain.
+  </Card>
+</CardGrid>
+
+## Quick Links
+
+<CardGrid>
+  <LinkCard
+    title="5-Minute Start"
+    description="From installation to creating your first ECS application, quickly understand core concepts."
+    href="/en/guide/getting-started/"
+  />
+  <LinkCard
+    title="Behavior Tree System"
+    description="Built-in AI behavior tree system with visual editing and real-time debugging."
+    href="/en/modules/behavior-tree/"
+  />
+  <LinkCard
+    title="API Reference"
+    description="Complete API documentation with detailed usage for every class and method."
+    href="/en/api/"
+  />
+  <LinkCard
+    title="Example Projects"
+    description="View complete example projects and learn best practices."
+    href="/en/examples/"
+  />
+</CardGrid>
