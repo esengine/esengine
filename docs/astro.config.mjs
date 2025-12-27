@@ -186,7 +186,15 @@ export default defineConfig({
                 { label: 'Node.js 使用', slug: 'modules/behavior-tree/nodejs-usage', translations: { en: 'Node.js Usage' } },
               ],
             },
-            { label: '状态机', slug: 'modules/fsm', translations: { en: 'FSM' } },
+            {
+              label: '状态机',
+              translations: { en: 'FSM' },
+              items: [
+                { label: '概述', slug: 'modules/fsm', translations: { en: 'Overview' } },
+                { label: 'API 参考', slug: 'modules/fsm/api', translations: { en: 'API Reference' } },
+                { label: '实际示例', slug: 'modules/fsm/examples', translations: { en: 'Examples' } },
+              ],
+            },
             {
               label: '定时器',
               translations: { en: 'Timer' },
@@ -208,9 +216,40 @@ export default defineConfig({
                 { label: '工具与优化', slug: 'modules/spatial/utilities', translations: { en: 'Utilities' } },
               ],
             },
-            { label: '寻路', slug: 'modules/pathfinding', translations: { en: 'Pathfinding' } },
-            { label: '蓝图', slug: 'modules/blueprint', translations: { en: 'Blueprint' } },
-            { label: '程序生成', slug: 'modules/procgen', translations: { en: 'Procgen' } },
+            {
+              label: '寻路',
+              translations: { en: 'Pathfinding' },
+              items: [
+                { label: '概述', slug: 'modules/pathfinding', translations: { en: 'Overview' } },
+                { label: '网格地图 API', slug: 'modules/pathfinding/grid-map', translations: { en: 'Grid Map API' } },
+                { label: '导航网格 API', slug: 'modules/pathfinding/navmesh', translations: { en: 'NavMesh API' } },
+                { label: '路径平滑', slug: 'modules/pathfinding/smoothing', translations: { en: 'Path Smoothing' } },
+                { label: '实际示例', slug: 'modules/pathfinding/examples', translations: { en: 'Examples' } },
+              ],
+            },
+            {
+              label: '蓝图',
+              translations: { en: 'Blueprint' },
+              items: [
+                { label: '概述', slug: 'modules/blueprint', translations: { en: 'Overview' } },
+                { label: '虚拟机 API', slug: 'modules/blueprint/vm', translations: { en: 'VM API' } },
+                { label: '自定义节点', slug: 'modules/blueprint/custom-nodes', translations: { en: 'Custom Nodes' } },
+                { label: '内置节点', slug: 'modules/blueprint/nodes', translations: { en: 'Built-in Nodes' } },
+                { label: '蓝图组合', slug: 'modules/blueprint/composition', translations: { en: 'Composition' } },
+                { label: '实际示例', slug: 'modules/blueprint/examples', translations: { en: 'Examples' } },
+              ],
+            },
+            {
+              label: '程序生成',
+              translations: { en: 'Procgen' },
+              items: [
+                { label: '概述', slug: 'modules/procgen', translations: { en: 'Overview' } },
+                { label: '噪声函数', slug: 'modules/procgen/noise', translations: { en: 'Noise Functions' } },
+                { label: '种子随机数', slug: 'modules/procgen/random', translations: { en: 'Seeded Random' } },
+                { label: '采样工具', slug: 'modules/procgen/sampling', translations: { en: 'Sampling' } },
+                { label: '实际示例', slug: 'modules/procgen/examples', translations: { en: 'Examples' } },
+              ],
+            },
             {
               label: '网络',
               translations: { en: 'Network' },
