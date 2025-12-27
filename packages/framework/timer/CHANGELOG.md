@@ -1,5 +1,13 @@
 # @esengine/timer
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`7d74623`](https://github.com/esengine/esengine/commit/7d746237100084ac3456f1af92ff664db4e50cc8)]:
+    - @esengine/ecs-framework@2.4.4
+    - @esengine/blueprint@1.0.2
+
 ## 1.0.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
     "name": "@esengine/behavior-tree",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "ECS-based AI behavior tree system - works with any ECS framework (ESEngine, Cocos, Laya, etc.)",
     "main": "dist/index.js",
     "module": "dist/index.js",
