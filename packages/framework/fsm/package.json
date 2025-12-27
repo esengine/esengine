@@ -1,6 +1,6 @@
 {
     "name": "@esengine/fsm",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Finite State Machine for ECS Framework / ECS 框架的有限状态机",
     "type": "module",
     "main": "./dist/index.js",
