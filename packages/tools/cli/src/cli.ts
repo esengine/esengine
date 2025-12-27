@@ -606,7 +606,14 @@ function getLatestVersion(packageName: string): string | null {
  * @en Compare versions, return true if newer version available
  */
 function isNewerVersion(current: string, latest: string): boolean {
-    const currentParts = current.replace(/^\^|~/, '').split('.').map(Number);
+    const cleanCurrent = current.replace(/^\^|~/, '');
+
+    // "latest" 标签视为需要更新（固定到具体版本）
+    if (cleanCurrent === 'latest' || cleanCurrent === '*') {
+        return true;
+    }
+
+    const currentParts = cleanCurrent.split('.').map(Number);
     const latestParts = latest.split('.').map(Number);
 
     for (let i = 0; i < 3; i++) {
@@ -672,12 +679,18 @@ async function updateCommand(moduleIds: string[], options: { yes?: boolean; chec
     console.log(chalk.bold('  Package Status:\n'));
     for (const pkg of esenginePackages) {
         const currentClean = pkg.current.replace(/^\^|~/, '');
+        const isLatestTag = currentClean === 'latest' || currentClean === '*';
+
         if (pkg.latest === null) {
             console.log(`    ${chalk.gray(pkg.name)}`);
             console.log(`      ${chalk.red('✗')} Unable to fetch latest version`);
         } else if (isNewerVersion(pkg.current, pkg.latest)) {
             console.log(`    ${chalk.cyan(pkg.name)}`);
-            console.log(`      ${chalk.yellow(currentClean)} → ${chalk.green(pkg.latest)}`);
+            if (isLatestTag) {
+                console.log(`      ${chalk.yellow(currentClean)} → ${chalk.green(`^${pkg.latest}`)} ${chalk.gray('(pin version)')}`);
+            } else {
+                console.log(`      ${chalk.yellow(currentClean)} → ${chalk.green(pkg.latest)}`);
+            }
             updatable.push({ name: pkg.name, current: pkg.current, latest: pkg.latest });
         } else {
             console.log(`    ${chalk.gray(pkg.name)}`);
@@ -717,9 +730,12 @@ async function updateCommand(moduleIds: string[], options: { yes?: boolean; chec
     console.log(chalk.bold('\n  Updating packages...\n'));
 
     for (const upd of updatable) {
-        const prefix = upd.current.startsWith('^') ? '^' : upd.current.startsWith('~') ? '~' : '';
+        const cleanCurrent = upd.current.replace(/^\^|~/, '');
+        const isLatestTag = cleanCurrent === 'latest' || cleanCurrent === '*';
+        // 对于 "latest" 固定到 ^version，否则保留原有前缀
+        const prefix = isLatestTag ? '^' : (upd.current.startsWith('^') ? '^' : upd.current.startsWith('~') ? '~' : '');
         deps[upd.name] = `${prefix}${upd.latest}`;
-        console.log(`    ${chalk.green('↑')} ${upd.name} → ${upd.latest}`);
+        console.log(`    ${chalk.green('↑')} ${upd.name} → ${prefix}${upd.latest}`);
     }
 
     pkg.dependencies = deps;
