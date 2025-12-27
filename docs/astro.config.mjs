@@ -83,7 +83,19 @@ export default defineConfig({
                 { label: '最佳实践', slug: 'guide/system/best-practices', translations: { en: 'Best Practices' } },
               ],
             },
-            { label: '场景', slug: 'guide/scene', translations: { en: 'Scene' } },
+            {
+              label: '场景',
+              translations: { en: 'Scene' },
+              items: [
+                { label: '概述', slug: 'guide/scene', translations: { en: 'Overview' } },
+                { label: '生命周期', slug: 'guide/scene/lifecycle', translations: { en: 'Lifecycle' } },
+                { label: '实体管理', slug: 'guide/scene/entity-management', translations: { en: 'Entity Management' } },
+                { label: '系统管理', slug: 'guide/scene/system-management', translations: { en: 'System Management' } },
+                { label: '事件系统', slug: 'guide/scene/events', translations: { en: 'Events' } },
+                { label: '调试与监控', slug: 'guide/scene/debugging', translations: { en: 'Debugging' } },
+                { label: '最佳实践', slug: 'guide/scene/best-practices', translations: { en: 'Best Practices' } },
+              ],
+            },
             {
               label: '序列化',
               translations: { en: 'Serialization' },
