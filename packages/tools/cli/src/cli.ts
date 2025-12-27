@@ -738,10 +738,12 @@ async function updateCommand(moduleIds: string[], options: { yes?: boolean; chec
         console.log(`    ${chalk.green('↑')} ${upd.name} → ${prefix}${upd.latest}`);
     }
 
-    // Re-read and apply updates atomically to minimize race window
+    // Atomic update: write to temp file then rename
+    const tempPath = `${packageJsonPath}.tmp`;
     const freshPkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     freshPkg.dependencies = { ...freshPkg.dependencies, ...updates };
-    fs.writeFileSync(packageJsonPath, JSON.stringify(freshPkg, null, 2), 'utf-8');
+    fs.writeFileSync(tempPath, JSON.stringify(freshPkg, null, 2), 'utf-8');
+    fs.renameSync(tempPath, packageJsonPath);
 
     // Run install
     const pm = detectPackageManager(cwd);
