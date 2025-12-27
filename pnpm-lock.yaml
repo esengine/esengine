@@ -185,7 +185,7 @@ importers:
         version: link:../../engine/ecs-engine-bindgen
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../editor-core
@@ -385,7 +385,7 @@ importers:
         version: link:../plugins/asset-system-editor
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../../engine/engine-core
@@ -476,7 +476,7 @@ importers:
     devDependencies:
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -550,7 +550,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -596,7 +596,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -639,7 +639,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -676,7 +676,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -713,7 +713,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -756,7 +756,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -833,7 +833,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -876,7 +876,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -913,7 +913,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -953,7 +953,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -993,7 +993,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -1036,7 +1036,7 @@ importers:
         version: link:../../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../../framework/core
+        version: link:../../../framework/core/dist
       '@esengine/editor-core':
         specifier: workspace:*
         version: link:../../editor-core
@@ -1079,7 +1079,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
@@ -1100,7 +1100,7 @@ importers:
         version: link:../asset-system
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -1135,7 +1135,7 @@ importers:
     dependencies:
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -1166,7 +1166,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
@@ -1215,7 +1215,7 @@ importers:
         version: link:../asset-system
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
@@ -1251,7 +1251,7 @@ importers:
     dependencies:
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/platform-common':
         specifier: workspace:*
         version: link:../platform-common
@@ -1291,7 +1291,7 @@ importers:
         version: link:../ecs-engine-bindgen
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -1329,7 +1329,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../engine-core
@@ -1357,7 +1357,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -1391,7 +1391,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@types/node':
         specifier: ^20.19.17
         version: 20.19.27
@@ -1474,6 +1474,7 @@ importers:
       typescript-eslint:
         specifier: ^8.46.1
         version: 8.50.1(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+    publishDirectory: dist
 
   packages/framework/fsm:
     dependencies:
@@ -1489,7 +1490,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@types/node':
         specifier: ^20.19.17
         version: 20.19.27
@@ -1559,7 +1560,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       rimraf:
         specifier: ^5.0.5
         version: 5.0.10
@@ -1599,7 +1600,7 @@ importers:
         version: link:../blueprint
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../math
@@ -1624,7 +1625,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@types/node':
         specifier: ^20.19.17
         version: 20.19.27
@@ -1652,7 +1653,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../math
@@ -1683,7 +1684,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../core
+        version: link:../core/dist
       '@types/node':
         specifier: ^20.19.17
         version: 20.19.27
@@ -1730,7 +1731,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -1766,7 +1767,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../../engine/engine-core
@@ -1787,7 +1788,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -1818,7 +1819,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@types/node':
         specifier: ^20.19.17
         version: 20.19.27
@@ -1849,7 +1850,7 @@ importers:
         version: link:../../engine/ecs-engine-bindgen
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../../engine/engine-core
@@ -1879,7 +1880,7 @@ importers:
         version: link:../../engine/ecs-engine-bindgen
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../../engine/engine-core
@@ -1910,7 +1911,7 @@ importers:
         version: link:../../engine/ecs-engine-bindgen
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -1940,7 +1941,7 @@ importers:
         version: link:../../tools/build-config
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../../engine/engine-core
@@ -1974,7 +1975,7 @@ importers:
         version: link:../../engine/ecs-engine-bindgen
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
@@ -2004,7 +2005,7 @@ importers:
     dependencies:
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/engine-core':
         specifier: workspace:*
         version: link:../../engine/engine-core
@@ -2100,7 +2101,7 @@ importers:
         version: link:../../rendering/camera
       '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/core
+        version: link:../../framework/core/dist
       '@esengine/ecs-framework-math':
         specifier: workspace:*
         version: link:../../framework/math
