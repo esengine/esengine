@@ -127,7 +127,19 @@ export default defineConfig({
                 { label: '高级用法', slug: 'guide/service-container/advanced', translations: { en: 'Advanced' } },
               ],
             },
-            { label: '插件系统', slug: 'guide/plugin-system', translations: { en: 'Plugin System' } },
+            {
+              label: '插件系统',
+              translations: { en: 'Plugin System' },
+              items: [
+                { label: '概述', slug: 'guide/plugin-system', translations: { en: 'Overview' } },
+                { label: '插件开发', slug: 'guide/plugin-system/development', translations: { en: 'Development' } },
+                { label: '服务与系统', slug: 'guide/plugin-system/services-systems', translations: { en: 'Services & Systems' } },
+                { label: '依赖管理', slug: 'guide/plugin-system/dependencies', translations: { en: 'Dependencies' } },
+                { label: '插件管理', slug: 'guide/plugin-system/management', translations: { en: 'Management' } },
+                { label: '示例插件', slug: 'guide/plugin-system/examples', translations: { en: 'Examples' } },
+                { label: '最佳实践', slug: 'guide/plugin-system/best-practices', translations: { en: 'Best Practices' } },
+              ],
+            },
             {
               label: 'Worker 系统',
               translations: { en: 'Worker System' },
