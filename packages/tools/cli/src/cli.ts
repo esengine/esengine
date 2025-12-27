@@ -10,7 +10,7 @@ import { getPlatformChoices, getPlatforms, getAdapter } from './adapters/index.j
 import type { PlatformType, ProjectConfig } from './adapters/types.js';
 import { AVAILABLE_MODULES, getModuleById, getAllModuleIds, type ModuleInfo } from './modules.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.4.0';
 
 /**
  * @zh 打印 Logo
@@ -585,6 +585,182 @@ async function removeCommand(moduleIds: string[], options: { yes?: boolean }): P
     console.log();
 }
 
+/**
+ * @zh 获取 npm 包的最新版本
+ * @en Get latest version of npm package
+ */
+function getLatestVersion(packageName: string): string | null {
+    try {
+        const result = execSync(`npm view ${packageName} version`, {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe']
+        }).trim();
+        return result || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * @zh 比较版本号，返回是否有更新
+ * @en Compare versions, return true if newer version available
+ */
+function isNewerVersion(current: string, latest: string): boolean {
+    const cleanCurrent = current.replace(/^\^|~/, '');
+
+    // "latest" 标签视为需要更新（固定到具体版本）
+    if (cleanCurrent === 'latest' || cleanCurrent === '*') {
+        return true;
+    }
+
+    const currentParts = cleanCurrent.split('.').map(Number);
+    const latestParts = latest.split('.').map(Number);
+
+    for (let i = 0; i < 3; i++) {
+        const c = currentParts[i] || 0;
+        const l = latestParts[i] || 0;
+        if (l > c) return true;
+        if (l < c) return false;
+    }
+    return false;
+}
+
+/**
+ * @zh 更新项目中的 ESEngine 模块
+ * @en Update ESEngine modules in project
+ */
+async function updateCommand(moduleIds: string[], options: { yes?: boolean; check?: boolean }): Promise<void> {
+    printLogo();
+
+    const cwd = process.cwd();
+    const packageJsonPath = path.join(cwd, 'package.json');
+
+    if (!fs.existsSync(packageJsonPath)) {
+        console.log(chalk.red('  ✗ No package.json found.'));
+        process.exit(1);
+    }
+
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const deps = pkg.dependencies || {};
+
+    // Find installed @esengine packages
+    const esenginePackages: { name: string; current: string; latest: string | null }[] = [];
+
+    console.log(chalk.gray('  Checking for updates...\n'));
+
+    for (const [name, version] of Object.entries(deps)) {
+        if (name.startsWith('@esengine/')) {
+            // If specific modules provided, filter
+            if (moduleIds.length > 0) {
+                const mod = getModuleById(moduleIds.find(id => {
+                    const m = getModuleById(id);
+                    return m?.package === name;
+                }) || '');
+                if (!mod || mod.package !== name) continue;
+            }
+
+            const latest = getLatestVersion(name);
+            esenginePackages.push({
+                name,
+                current: version as string,
+                latest
+            });
+        }
+    }
+
+    if (esenginePackages.length === 0) {
+        console.log(chalk.yellow('  No ESEngine packages found in dependencies.'));
+        return;
+    }
+
+    // Display update status
+    const updatable: { name: string; current: string; latest: string }[] = [];
+
+    console.log(chalk.bold('  Package Status:\n'));
+    for (const pkg of esenginePackages) {
+        const currentClean = pkg.current.replace(/^\^|~/, '');
+        const isLatestTag = currentClean === 'latest' || currentClean === '*';
+
+        if (pkg.latest === null) {
+            console.log(`    ${chalk.gray(pkg.name)}`);
+            console.log(`      ${chalk.red('✗')} Unable to fetch latest version`);
+        } else if (isNewerVersion(pkg.current, pkg.latest)) {
+            console.log(`    ${chalk.cyan(pkg.name)}`);
+            if (isLatestTag) {
+                console.log(`      ${chalk.yellow(currentClean)} → ${chalk.green(`^${pkg.latest}`)} ${chalk.gray('(pin version)')}`);
+            } else {
+                console.log(`      ${chalk.yellow(currentClean)} → ${chalk.green(pkg.latest)}`);
+            }
+            updatable.push({ name: pkg.name, current: pkg.current, latest: pkg.latest });
+        } else {
+            console.log(`    ${chalk.gray(pkg.name)}`);
+            console.log(`      ${chalk.green('✓')} ${currentClean} (up to date)`);
+        }
+    }
+
+    if (updatable.length === 0) {
+        console.log(chalk.bold('\n  All packages are up to date!'));
+        return;
+    }
+
+    // Check-only mode
+    if (options.check) {
+        console.log(chalk.bold(`\n  ${updatable.length} package(s) can be updated.`));
+        console.log(chalk.gray('  Run `esengine update` to update.'));
+        return;
+    }
+
+    // Confirm update
+    if (!options.yes) {
+        console.log();
+        const confirm = await prompts({
+            type: 'confirm',
+            name: 'proceed',
+            message: `Update ${updatable.length} package(s)?`,
+            initial: true
+        });
+
+        if (!confirm.proceed) {
+            console.log(chalk.yellow('\n  Cancelled.'));
+            return;
+        }
+    }
+
+    // Update package.json (re-read to minimize race condition)
+    console.log(chalk.bold('\n  Updating packages...\n'));
+
+    const updates: Record<string, string> = {};
+    for (const upd of updatable) {
+        const cleanCurrent = upd.current.replace(/^\^|~/, '');
+        const isLatestTag = cleanCurrent === 'latest' || cleanCurrent === '*';
+        const prefix = isLatestTag ? '^' : (upd.current.startsWith('^') ? '^' : upd.current.startsWith('~') ? '~' : '');
+        updates[upd.name] = `${prefix}${upd.latest}`;
+        console.log(`    ${chalk.green('↑')} ${upd.name} → ${prefix}${upd.latest}`);
+    }
+
+    // Atomic update: write to temp file then rename
+    const tempPath = `${packageJsonPath}.tmp`;
+    const freshPkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    freshPkg.dependencies = { ...freshPkg.dependencies, ...updates };
+    fs.writeFileSync(tempPath, JSON.stringify(freshPkg, null, 2), 'utf-8');
+    fs.renameSync(tempPath, packageJsonPath);
+
+    // Run install
+    const pm = detectPackageManager(cwd);
+    const installCmd = pm === 'pnpm' ? 'pnpm install' : pm === 'yarn' ? 'yarn' : 'npm install';
+
+    console.log(chalk.gray(`\n  Running ${installCmd}...`));
+
+    try {
+        execSync(installCmd, { cwd, stdio: 'inherit' });
+        console.log(chalk.bold('\n  Done! All packages updated.'));
+    } catch {
+        console.log(chalk.yellow(`\n  ⚠ Failed to run install. package.json has been updated.`));
+        console.log(chalk.gray(`    Run \`${installCmd}\` manually.`));
+    }
+    console.log();
+}
+
 // =========================================================================
 // CLI Setup
 // =========================================================================
@@ -622,6 +798,14 @@ program
     .description('Remove modules from your project')
     .option('-y, --yes', 'Skip confirmation')
     .action(removeCommand);
+
+program
+    .command('update [modules...]')
+    .alias('up')
+    .description('Update ESEngine packages to latest versions')
+    .option('-y, --yes', 'Skip confirmation')
+    .option('-c, --check', 'Only check for updates, do not install')
+    .action(updateCommand);
 
 // Default command: show help
 program
