@@ -39,7 +39,16 @@ export default defineConfig({
           label: '核心概念',
           translations: { en: 'Core Concepts' },
           items: [
-            { label: '实体', slug: 'guide/entity', translations: { en: 'Entity' } },
+            {
+              label: '实体',
+              translations: { en: 'Entity' },
+              items: [
+                { label: '概述', slug: 'guide/entity', translations: { en: 'Overview' } },
+                { label: '组件操作', slug: 'guide/entity/component-operations', translations: { en: 'Component Operations' } },
+                { label: '实体句柄', slug: 'guide/entity/entity-handle', translations: { en: 'Entity Handle' } },
+                { label: '生命周期', slug: 'guide/entity/lifecycle', translations: { en: 'Lifecycle' } },
+              ],
+            },
             { label: '层级结构', slug: 'guide/hierarchy', translations: { en: 'Hierarchy' } },
             {
               label: '组件',

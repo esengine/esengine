@@ -9,3 +9,4 @@ packages:
   - 'packages/editor/plugins/*'
   - 'packages/rust/*'
   - 'packages/tools/*'
+  - 'docs'
