@@ -726,20 +726,22 @@ async function updateCommand(moduleIds: string[], options: { yes?: boolean; chec
         }
     }
 
-    // Update package.json
+    // Update package.json (re-read to minimize race condition)
     console.log(chalk.bold('\n  Updating packages...\n'));
 
+    const updates: Record<string, string> = {};
     for (const upd of updatable) {
         const cleanCurrent = upd.current.replace(/^\^|~/, '');
         const isLatestTag = cleanCurrent === 'latest' || cleanCurrent === '*';
-        // 对于 "latest" 固定到 ^version，否则保留原有前缀
         const prefix = isLatestTag ? '^' : (upd.current.startsWith('^') ? '^' : upd.current.startsWith('~') ? '~' : '');
-        deps[upd.name] = `${prefix}${upd.latest}`;
+        updates[upd.name] = `${prefix}${upd.latest}`;
         console.log(`    ${chalk.green('↑')} ${upd.name} → ${prefix}${upd.latest}`);
     }
 
-    pkg.dependencies = deps;
-    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2), 'utf-8');
+    // Re-read and apply updates atomically to minimize race window
+    const freshPkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    freshPkg.dependencies = { ...freshPkg.dependencies, ...updates };
+    fs.writeFileSync(packageJsonPath, JSON.stringify(freshPkg, null, 2), 'utf-8');
 
     // Run install
     const pm = detectPackageManager(cwd);
