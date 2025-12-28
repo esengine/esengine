@@ -3,25 +3,12 @@
   "compilerOptions": {
     "composite": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "moduleResolution": "node"
+    "rootDir": "./src"
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"],
   "references": [
-    {
-      "path": "../core"
-    },
-    {
-      "path": "../network-protocols"
-    },
-    {
-      "path": "../blueprint"
-    }
+    { "path": "../core" },
+    { "path": "../blueprint" }
   ]
 }

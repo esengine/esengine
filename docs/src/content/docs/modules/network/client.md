@@ -5,7 +5,7 @@ description: "NetworkPlugin、组件和系统的客户端使用指南"
 
 ## NetworkPlugin
 
-NetworkPlugin 是客户端网络功能的核心入口。
+NetworkPlugin 是客户端网络功能的核心入口，基于 `@esengine/rpc` 提供类型安全的网络通信。
 
 ### 基本用法
 
@@ -18,7 +18,11 @@ const networkPlugin = new NetworkPlugin();
 await Core.installPlugin(networkPlugin);
 
 // 连接服务器
-const success = await networkPlugin.connect('ws://localhost:3000', 'PlayerName');
+const success = await networkPlugin.connect({
+    url: 'ws://localhost:3000',
+    playerName: 'PlayerName',
+    roomId: 'room-1'  // 可选
+});
 
 // 断开连接
 await networkPlugin.disconnect();
@@ -32,14 +36,19 @@ class NetworkPlugin {
     readonly version: string;
 
     // 访问器
-    get networkService(): NetworkService;
+    get networkService(): GameNetworkService;
     get syncSystem(): NetworkSyncSystem;
     get spawnSystem(): NetworkSpawnSystem;
     get inputSystem(): NetworkInputSystem;
+    get localPlayerId(): number;
     get isConnected(): boolean;
 
     // 连接服务器
-    connect(serverUrl: string, playerName: string, roomId?: string): Promise<boolean>;
+    connect(options: {
+        url: string;
+        playerName: string;
+        roomId?: string;
+    }): Promise<boolean>;
 
     // 断开连接
     disconnect(): Promise<void>;
@@ -77,7 +86,7 @@ networkPlugin.registerPrefab('player', (scene, spawn) => {
     const identity = entity.addComponent(new NetworkIdentity());
     identity.netId = spawn.netId;
     identity.ownerId = spawn.ownerId;
-    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.networkService.clientId;
+    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.localPlayerId;
 
     return entity;
 });
@@ -156,7 +165,7 @@ networkPlugin.registerPrefab('player', (scene, spawn) => {
     const identity = entity.addComponent(new NetworkIdentity());
     identity.netId = spawn.netId;
     identity.ownerId = spawn.ownerId;
-    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.networkService.clientId;
+    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.localPlayerId;
 
     entity.addComponent(new NetworkTransform());
 
@@ -230,18 +239,33 @@ class LocalInputHandler extends EntitySystem {
 
 ## 连接状态监听
 
+使用 `GameNetworkService` 的链式 API 监听消息：
+
 ```typescript
-networkPlugin.networkService.setCallbacks({
-    onConnected: (clientId, roomId) => {
-        console.log(`已连接: 客户端 ${clientId}, 房间 ${roomId}`);
-    },
-    onDisconnected: () => {
-        console.log('已断开');
-        // 处理重连逻辑
-    },
-    onError: (error) => {
-        console.error('网络错误:', error);
-    }
+const { networkService } = networkPlugin;
+
+// 监听状态同步
+networkService.onSync((data) => {
+    console.log('收到同步数据:', data.entities.length, '个实体');
+});
+
+// 监听实体生成
+networkService.onSpawn((data) => {
+    console.log('生成实体:', data.prefab, 'netId:', data.netId);
+});
+
+// 监听实体销毁
+networkService.onDespawn((data) => {
+    console.log('销毁实体:', data.netId);
+});
+
+// 通过连接选项设置回调
+await networkPlugin.connect({
+    url: 'ws://localhost:3000',
+    playerName: 'Player1',
+    onConnect: () => console.log('已连接'),
+    onDisconnect: (reason) => console.log('已断开:', reason),
+    onError: (error) => console.error('网络错误:', error)
 });
 ```
 

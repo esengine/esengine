@@ -1,41 +1,38 @@
 ---
 title: "网络同步系统 (Network)"
-description: "基于 TSRPC 的多人游戏网络同步解决方案"
+description: "基于 @esengine/rpc 的多人游戏网络同步解决方案"
 ---
 
-`@esengine/network` 提供基于 TSRPC 的客户端-服务器网络同步解决方案，用于多人游戏的实体同步、输入处理和状态插值。
+`@esengine/network` 提供基于 `@esengine/rpc` 的类型安全网络同步解决方案，用于多人游戏的实体同步、输入处理和状态插值。
 
 ## 概述
 
-网络模块由三个包组成：
+网络模块由两个核心包组成：
 
 | 包名 | 描述 |
 |------|------|
-| `@esengine/network` | 客户端 ECS 插件 |
-| `@esengine/network-protocols` | 共享协议定义 |
-| `@esengine/network-server` | 服务器端实现 |
+| `@esengine/rpc` | 类型安全的 RPC 通信库 |
+| `@esengine/network` | 基于 RPC 的游戏网络插件 |
 
 ## 安装
 
 ```bash
-# 客户端
 npm install @esengine/network
-
-# 服务器端
-npm install @esengine/network-server
 ```
+
+> `@esengine/rpc` 会作为依赖自动安装。
 
 ## 架构
 
 ```
 客户端                              服务器
-┌────────────────┐                ┌────────────────┐
-│ NetworkPlugin  │◄──── WS ────► │  GameServer    │
-│ ├─ Service     │                │  ├─ Room       │
-│ ├─ SyncSystem  │                │  └─ Players    │
-│ ├─ SpawnSystem │                └────────────────┘
-│ └─ InputSystem │
-└────────────────┘
+┌────────────────────┐            ┌────────────────┐
+│ NetworkPlugin      │◄── WS ───►│  RpcServer     │
+│ ├─ NetworkService  │            │  ├─ Protocol   │
+│ ├─ SyncSystem      │            │  └─ Handlers   │
+│ ├─ SpawnSystem     │            └────────────────┘
+│ └─ InputSystem     │
+└────────────────────┘
 ```
 
 ## 快速开始
@@ -69,61 +66,81 @@ networkPlugin.registerPrefab('player', (scene, spawn) => {
     const identity = entity.addComponent(new NetworkIdentity());
     identity.netId = spawn.netId;
     identity.ownerId = spawn.ownerId;
-    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.networkService.clientId;
+    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.localPlayerId;
 
     entity.addComponent(new NetworkTransform());
     return entity;
 });
 
 // 连接服务器
-const success = await networkPlugin.connect('ws://localhost:3000', 'PlayerName');
+const success = await networkPlugin.connect({
+    url: 'ws://localhost:3000',
+    playerName: 'Player1',
+    roomId: 'room-1'  // 可选
+});
+
 if (success) {
-    console.log('Connected!');
+    console.log('Connected! Player ID:', networkPlugin.localPlayerId);
 }
 ```
 
 ### 服务器端
 
 ```typescript
-import { GameServer } from '@esengine/network-server';
+import { RpcServer } from '@esengine/rpc/server';
+import { gameProtocol } from '@esengine/network';
 
-const server = new GameServer({
+const server = new RpcServer(gameProtocol, {
     port: 3000,
-    roomConfig: {
-        maxPlayers: 16,
-        tickRate: 20
-    }
+    onStart: (port) => console.log(`Server running on ws://localhost:${port}`)
+});
+
+// 注册 API 处理器
+server.handle('join', async (input, ctx) => {
+    const playerId = generatePlayerId();
+    return { playerId, roomId: input.roomId ?? 'default' };
+});
+
+server.handle('leave', async (input, ctx) => {
+    // 处理玩家离开
 });
 
 await server.start();
-console.log('Server started on ws://localhost:3000');
 ```
 
-## 使用 CLI 快速创建
+## 自定义协议
 
-推荐使用 ESEngine CLI 快速创建完整的游戏服务端项目：
+你可以基于 `@esengine/rpc` 定义自己的协议：
 
-```bash
-mkdir my-game-server && cd my-game-server
-npm init -y
-npx @esengine/cli init -p nodejs
-```
+```typescript
+import { rpc } from '@esengine/rpc';
 
-生成的项目结构：
+// 定义自定义协议
+export const myProtocol = rpc.define({
+    api: {
+        login: rpc.api<{ username: string }, { token: string }>(),
+        getData: rpc.api<{ id: number }, { data: object }>(),
+    },
+    msg: {
+        chat: rpc.msg<{ from: string; text: string }>(),
+        notification: rpc.msg<{ type: string; content: string }>(),
+    },
+});
 
-```
-my-game-server/
-├── src/
-│   ├── index.ts
-│   ├── server/
-│   │   └── GameServer.ts
-│   └── game/
-│       ├── Game.ts
-│       ├── scenes/
-│       ├── components/
-│       └── systems/
-├── tsconfig.json
-└── package.json
+// 使用自定义协议创建服务
+import { RpcService } from '@esengine/network';
+
+const service = new RpcService(myProtocol);
+await service.connect({ url: 'ws://localhost:3000' });
+
+// 类型安全的 API 调用
+const result = await service.call('login', { username: 'test' });
+console.log(result.token);
+
+// 类型安全的消息监听
+service.on('chat', (data) => {
+    console.log(`${data.from}: ${data.text}`);
+});
 ```
 
 ## 文档导航

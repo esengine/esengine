@@ -1,28 +1,43 @@
 /**
- * @esengine/network
+ * @zh @esengine/network 网络同步模块
+ * @en @esengine/network Network synchronization module
  *
- * 基于 TSRPC 的网络同步模块（客户端）
- * TSRPC-based network synchronization module (client)
+ * @zh 基于 @esengine/rpc 的网络同步模块，提供类型安全的多人游戏网络通信
+ * @en Network synchronization module based on @esengine/rpc for type-safe multiplayer game communication
  */
 
 // ============================================================================
-// Re-export from protocols | 从协议包重新导出
+// Re-export from RPC | 从 RPC 包重新导出
 // ============================================================================
 
+export { rpc } from '@esengine/rpc'
 export type {
-    ServiceType,
-    Vec2,
-    IEntityState,
-    IPlayerInput,
-    MsgSync,
-    MsgInput,
-    MsgSpawn,
-    MsgDespawn,
-    ReqJoin,
-    ResJoin
-} from '@esengine/network-protocols';
+    ProtocolDef,
+    ApiDef,
+    MsgDef,
+    ApiInput,
+    ApiOutput,
+    MsgData,
+    ApiNames,
+    MsgNames,
+    RpcError,
+} from '@esengine/rpc'
 
-export { serviceProto } from '@esengine/network-protocols';
+// ============================================================================
+// Protocol | 协议
+// ============================================================================
+
+export {
+    gameProtocol,
+    type GameProtocol,
+    type PlayerInput,
+    type EntitySyncState,
+    type SyncData,
+    type SpawnData,
+    type DespawnData,
+    type JoinRequest,
+    type JoinResponse,
+} from './protocol'
 
 // ============================================================================
 // Tokens | 服务令牌
@@ -32,37 +47,44 @@ export {
     NetworkServiceToken,
     NetworkSyncSystemToken,
     NetworkSpawnSystemToken,
-    NetworkInputSystemToken
-} from './tokens';
+    NetworkInputSystemToken,
+} from './tokens'
 
 // ============================================================================
 // Plugin | 插件
 // ============================================================================
 
-export { NetworkPlugin } from './NetworkPlugin';
+export { NetworkPlugin } from './NetworkPlugin'
 
 // ============================================================================
 // Services | 服务
 // ============================================================================
 
-export { NetworkService, ENetworkState } from './services/NetworkService';
-export type { INetworkCallbacks } from './services/NetworkService';
+export {
+    RpcService,
+    GameNetworkService,
+    NetworkService,
+    NetworkState,
+    createNetworkService,
+} from './services/NetworkService'
+export type { NetworkServiceOptions } from './services/NetworkService'
 
 // ============================================================================
 // Components | 组件
 // ============================================================================
 
-export { NetworkIdentity } from './components/NetworkIdentity';
-export { NetworkTransform } from './components/NetworkTransform';
+export { NetworkIdentity } from './components/NetworkIdentity'
+export { NetworkTransform } from './components/NetworkTransform'
 
 // ============================================================================
 // Systems | 系统
 // ============================================================================
 
-export { NetworkSyncSystem } from './systems/NetworkSyncSystem';
-export { NetworkSpawnSystem } from './systems/NetworkSpawnSystem';
-export type { PrefabFactory } from './systems/NetworkSpawnSystem';
-export { NetworkInputSystem } from './systems/NetworkInputSystem';
+export { NetworkSyncSystem } from './systems/NetworkSyncSystem'
+export type { SyncMessage } from './systems/NetworkSyncSystem'
+export { NetworkSpawnSystem } from './systems/NetworkSpawnSystem'
+export type { PrefabFactory, SpawnMessage, DespawnMessage } from './systems/NetworkSpawnSystem'
+export { NetworkInputSystem } from './systems/NetworkInputSystem'
 
 // ============================================================================
 // State Sync | 状态同步
@@ -73,8 +95,8 @@ export type {
     ITransformState,
     ITransformStateWithVelocity,
     ISnapshotBufferConfig,
-    ISnapshotBuffer
-} from './sync';
+    ISnapshotBuffer,
+} from './sync'
 
 export type {
     IInterpolator,
@@ -82,8 +104,8 @@ export type {
     IInputSnapshot,
     IPredictedState,
     IPredictor,
-    ClientPredictionConfig
-} from './sync';
+    ClientPredictionConfig,
+} from './sync'
 
 export {
     lerp,
@@ -96,8 +118,8 @@ export {
     createTransformInterpolator,
     createHermiteTransformInterpolator,
     ClientPrediction,
-    createClientPrediction
-} from './sync';
+    createClientPrediction,
+} from './sync'
 
 // ============================================================================
 // Blueprint Nodes | 蓝图节点
@@ -114,5 +136,5 @@ export {
     HasAuthorityExecutor,
     GetNetworkIdExecutor,
     GetLocalPlayerIdExecutor,
-    NetworkNodeDefinitions
-} from './nodes';
+    NetworkNodeDefinitions,
+} from './nodes'

@@ -1,172 +1,274 @@
-import { WsClient } from 'tsrpc-browser';
+/**
+ * @zh 网络服务模块
+ * @en Network Service Module
+ */
+
 import {
-    serviceProto,
-    type ServiceType,
-    type MsgSync,
-    type MsgSpawn,
-    type MsgDespawn,
-    type IPlayerInput
-} from '@esengine/network-protocols';
+    RpcClient,
+    type ProtocolDef,
+    type ApiNames,
+    type MsgNames,
+    type ApiInput,
+    type ApiOutput,
+    type MsgData,
+    type RpcClientOptions,
+} from '@esengine/rpc/client'
+import { gameProtocol, type GameProtocol, type PlayerInput } from '../protocol'
+
+// ============================================================================
+// Types | 类型定义
+// ============================================================================
 
 /**
- * 连接状态
- * Connection state
+ * @zh 连接状态
+ * @en Connection state
  */
-export const enum ENetworkState {
+export const enum NetworkState {
     Disconnected = 0,
     Connecting = 1,
-    Connected = 2
+    Connected = 2,
 }
 
 /**
- * 网络事件回调
- * Network event callbacks
+ * @zh 网络服务配置
+ * @en Network service options
  */
-export interface INetworkCallbacks {
-    onConnected?: (clientId: number, roomId: string) => void;
-    onDisconnected?: () => void;
-    onSync?: (msg: MsgSync) => void;
-    onSpawn?: (msg: MsgSpawn) => void;
-    onDespawn?: (msg: MsgDespawn) => void;
-    onError?: (error: Error) => void;
+export interface NetworkServiceOptions extends RpcClientOptions {
+    /**
+     * @zh 服务器地址
+     * @en Server URL
+     */
+    url: string
 }
 
-/**
- * 创建 TSRPC 客户端
- * Create TSRPC client
- */
-function createClient(serverUrl: string): WsClient<ServiceType> {
-    return new WsClient(serviceProto, {
-        server: serverUrl,
-        json: true,
-        logLevel: 'warn'
-    });
-}
+// ============================================================================
+// RpcService - Base Class | RPC 服务基类
+// ============================================================================
 
 /**
- * 网络服务
- * Network service
+ * @zh RPC 服务基类
+ * @en RPC Service base class
  *
- * 基于 TSRPC 的网络服务封装，提供类型安全的网络通信。
- * TSRPC-based network service wrapper with type-safe communication.
+ * @zh 纯粹的 RPC 客户端封装，不包含任何游戏特定逻辑
+ * @en Pure RPC client wrapper without any game-specific logic
+ *
+ * @typeParam P - @zh 协议定义类型 @en Protocol definition type
  */
-export class NetworkService {
-    private _client: WsClient<ServiceType> | null = null;
-    private _state: ENetworkState = ENetworkState.Disconnected;
-    private _clientId: number = 0;
-    private _roomId: string = '';
-    private _callbacks: INetworkCallbacks = {};
+export class RpcService<P extends ProtocolDef> {
+    protected _client: RpcClient<P> | null = null
+    protected _state: NetworkState = NetworkState.Disconnected
 
-    get state(): ENetworkState {
-        return this._state;
+    constructor(protected readonly _protocol: P) {}
+
+    /**
+     * @zh 获取连接状态
+     * @en Get connection state
+     */
+    get state(): NetworkState {
+        return this._state
     }
 
-    get clientId(): number {
-        return this._clientId;
-    }
-
-    get roomId(): string {
-        return this._roomId;
-    }
-
+    /**
+     * @zh 是否已连接
+     * @en Whether connected
+     */
     get isConnected(): boolean {
-        return this._state === ENetworkState.Connected;
+        return this._state === NetworkState.Connected
     }
 
     /**
-     * 设置回调
-     * Set callbacks
+     * @zh 获取底层 RPC 客户端
+     * @en Get underlying RPC client
      */
-    setCallbacks(callbacks: INetworkCallbacks): void {
-        this._callbacks = { ...this._callbacks, ...callbacks };
+    get client(): RpcClient<P> | null {
+        return this._client
     }
 
     /**
-     * 连接到服务器
-     * Connect to server
+     * @zh 连接到服务器
+     * @en Connect to server
      */
-    async connect(serverUrl: string, playerName: string, roomId?: string): Promise<boolean> {
-        if (this._state !== ENetworkState.Disconnected) {
-            return false;
+    async connect(options: NetworkServiceOptions): Promise<void> {
+        if (this._state !== NetworkState.Disconnected) {
+            throw new Error('Already connected or connecting')
         }
 
-        this._state = ENetworkState.Connecting;
-        this._client = createClient(serverUrl);
-        this._setupListeners();
+        this._state = NetworkState.Connecting
 
-        // 连接
-        // Connect
-        const connectResult = await this._client.connect();
-        if (!connectResult.isSucc) {
-            this._state = ENetworkState.Disconnected;
-            this._callbacks.onError?.(new Error(connectResult.errMsg));
-            return false;
+        try {
+            this._client = new RpcClient(this._protocol, options.url, {
+                ...options,
+                onConnect: () => {
+                    this._state = NetworkState.Connected
+                    options.onConnect?.()
+                },
+                onDisconnect: (reason) => {
+                    this._state = NetworkState.Disconnected
+                    options.onDisconnect?.(reason)
+                },
+                onError: options.onError,
+            })
+            await this._client.connect()
+            this._state = NetworkState.Connected
+        } catch (err) {
+            this._state = NetworkState.Disconnected
+            this._client = null
+            throw err
         }
-
-        // 加入房间
-        // Join room
-        const joinResult = await this._client.callApi('Join', {
-            playerName,
-            roomId
-        });
-
-        if (!joinResult.isSucc) {
-            await this._client.disconnect();
-            this._state = ENetworkState.Disconnected;
-            this._callbacks.onError?.(new Error(joinResult.err.message));
-            return false;
-        }
-
-        this._clientId = joinResult.res.clientId;
-        this._roomId = joinResult.res.roomId;
-        this._state = ENetworkState.Connected;
-        this._callbacks.onConnected?.(this._clientId, this._roomId);
-
-        return true;
     }
 
     /**
-     * 断开连接
-     * Disconnect
+     * @zh 断开连接
+     * @en Disconnect
      */
-    async disconnect(): Promise<void> {
-        if (this._client) {
-            await this._client.disconnect();
-        }
-        this._state = ENetworkState.Disconnected;
-        this._clientId = 0;
-        this._roomId = '';
-        this._client = null;
+    disconnect(): void {
+        this._client?.disconnect()
+        this._client = null
+        this._state = NetworkState.Disconnected
     }
 
     /**
-     * 发送输入
-     * Send input
+     * @zh 调用 API
+     * @en Call API
      */
-    sendInput(input: IPlayerInput): void {
-        if (!this.isConnected || !this._client) return;
-        this._client.sendMsg('Input', { input });
+    call<K extends ApiNames<P>>(
+        name: K,
+        input: ApiInput<P['api'][K]>
+    ): Promise<ApiOutput<P['api'][K]>> {
+        if (!this._client) {
+            return Promise.reject(new Error('Not connected'))
+        }
+        return this._client.call(name, input)
     }
 
-    private _setupListeners(): void {
-        if (!this._client) return;
-
-        this._client.listenMsg('Sync', (msg) => {
-            this._callbacks.onSync?.(msg);
-        });
-
-        this._client.listenMsg('Spawn', (msg) => {
-            this._callbacks.onSpawn?.(msg);
-        });
-
-        this._client.listenMsg('Despawn', (msg) => {
-            this._callbacks.onDespawn?.(msg);
-        });
-
-        this._client.flows.postDisconnectFlow.push((v) => {
-            this._state = ENetworkState.Disconnected;
-            this._callbacks.onDisconnected?.();
-            return v;
-        });
+    /**
+     * @zh 发送消息
+     * @en Send message
+     */
+    send<K extends MsgNames<P>>(name: K, data: MsgData<P['msg'][K]>): void {
+        this._client?.send(name, data)
     }
+
+    /**
+     * @zh 监听消息
+     * @en Listen to message
+     */
+    on<K extends MsgNames<P>>(
+        name: K,
+        handler: (data: MsgData<P['msg'][K]>) => void
+    ): this {
+        this._client?.on(name, handler)
+        return this
+    }
+
+    /**
+     * @zh 取消监听消息
+     * @en Remove message listener
+     */
+    off<K extends MsgNames<P>>(
+        name: K,
+        handler?: (data: MsgData<P['msg'][K]>) => void
+    ): this {
+        this._client?.off(name, handler)
+        return this
+    }
+
+    /**
+     * @zh 监听消息（只触发一次）
+     * @en Listen to message (once)
+     */
+    once<K extends MsgNames<P>>(
+        name: K,
+        handler: (data: MsgData<P['msg'][K]>) => void
+    ): this {
+        this._client?.once(name, handler)
+        return this
+    }
+}
+
+// ============================================================================
+// GameNetworkService - Game-specific Class | 游戏网络服务
+// ============================================================================
+
+/**
+ * @zh 游戏网络服务
+ * @en Game network service
+ *
+ * @zh 基于默认游戏协议的网络服务，提供游戏特定的便捷方法
+ * @en Network service based on default game protocol with game-specific convenience methods
+ *
+ * @example
+ * ```typescript
+ * const network = new GameNetworkService()
+ * await network.connect({ url: 'ws://localhost:3000' })
+ *
+ * // 游戏特定的便捷方法
+ * network.sendInput({ frame: 1, moveDir: { x: 1, y: 0 } })
+ *
+ * network.onSync((data) => {
+ *     for (const entity of data.entities) {
+ *         // 更新实体状态
+ *     }
+ * })
+ * ```
+ */
+export class GameNetworkService extends RpcService<GameProtocol> {
+    constructor() {
+        super(gameProtocol)
+    }
+
+    /**
+     * @zh 发送玩家输入
+     * @en Send player input
+     */
+    sendInput(input: PlayerInput): void {
+        this.send('input', input)
+    }
+
+    /**
+     * @zh 监听状态同步
+     * @en Listen to state sync
+     */
+    onSync(handler: (data: MsgData<GameProtocol['msg']['sync']>) => void): this {
+        return this.on('sync', handler)
+    }
+
+    /**
+     * @zh 监听实体生成
+     * @en Listen to entity spawn
+     */
+    onSpawn(handler: (data: MsgData<GameProtocol['msg']['spawn']>) => void): this {
+        return this.on('spawn', handler)
+    }
+
+    /**
+     * @zh 监听实体销毁
+     * @en Listen to entity despawn
+     */
+    onDespawn(handler: (data: MsgData<GameProtocol['msg']['despawn']>) => void): this {
+        return this.on('despawn', handler)
+    }
+}
+
+// ============================================================================
+// Exports & Factories | 导出与工厂函数
+// ============================================================================
+
+/**
+ * @zh 网络服务（GameNetworkService 的别名）
+ * @en Network service (alias for GameNetworkService)
+ */
+export { GameNetworkService as NetworkService }
+
+/**
+ * @zh 创建网络服务
+ * @en Create network service
+ */
+export function createNetworkService(): GameNetworkService
+export function createNetworkService<P extends ProtocolDef>(protocol: P): RpcService<P>
+export function createNetworkService<P extends ProtocolDef>(protocol?: P): RpcService<P> | GameNetworkService {
+    if (protocol) {
+        return new RpcService(protocol)
+    }
+    return new GameNetworkService()
 }

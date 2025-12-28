@@ -1,153 +1,199 @@
-import { type IPlugin, Core, type ServiceContainer, type Scene } from '@esengine/ecs-framework';
-import { NetworkService } from './services/NetworkService';
-import { NetworkSyncSystem } from './systems/NetworkSyncSystem';
-import { NetworkSpawnSystem, type PrefabFactory } from './systems/NetworkSpawnSystem';
-import { NetworkInputSystem } from './systems/NetworkInputSystem';
+/**
+ * @zh 网络插件
+ * @en Network Plugin
+ */
+
+import { type IPlugin, Core, type ServiceContainer, type Scene } from '@esengine/ecs-framework'
+import { GameNetworkService, type NetworkServiceOptions } from './services/NetworkService'
+import { NetworkSyncSystem } from './systems/NetworkSyncSystem'
+import { NetworkSpawnSystem, type PrefabFactory } from './systems/NetworkSpawnSystem'
+import { NetworkInputSystem } from './systems/NetworkInputSystem'
 
 /**
- * 网络插件
- * Network plugin
+ * @zh 网络插件
+ * @en Network plugin
  *
- * 提供基于 TSRPC 的网络同步功能。
- * Provides TSRPC-based network synchronization.
+ * @zh 提供基于 @esengine/rpc 的网络同步功能
+ * @en Provides @esengine/rpc based network synchronization
  *
  * @example
  * ```typescript
- * import { Core } from '@esengine/ecs-framework';
- * import { NetworkPlugin } from '@esengine/network';
+ * import { Core } from '@esengine/ecs-framework'
+ * import { NetworkPlugin } from '@esengine/network'
  *
- * const networkPlugin = new NetworkPlugin();
- * await Core.installPlugin(networkPlugin);
+ * const networkPlugin = new NetworkPlugin()
+ * await Core.installPlugin(networkPlugin)
  *
- * // 连接到服务器 | Connect to server
- * await networkPlugin.connect('ws://localhost:3000', 'Player1');
+ * // 连接到服务器
+ * await networkPlugin.connect({ url: 'ws://localhost:3000', playerName: 'Player1' })
  *
- * // 注册预制体 | Register prefab
+ * // 注册预制体
  * networkPlugin.registerPrefab('player', (scene, spawn) => {
- *     const entity = scene.createEntity('Player');
- *     return entity;
- * });
+ *     const entity = scene.createEntity('Player')
+ *     return entity
+ * })
  * ```
  */
 export class NetworkPlugin implements IPlugin {
-    public readonly name = '@esengine/network';
-    public readonly version = '1.0.0';
+    public readonly name = '@esengine/network'
+    public readonly version = '2.0.0'
 
-    private _networkService!: NetworkService;
-    private _syncSystem!: NetworkSyncSystem;
-    private _spawnSystem!: NetworkSpawnSystem;
-    private _inputSystem!: NetworkInputSystem;
+    private _networkService!: GameNetworkService
+    private _syncSystem!: NetworkSyncSystem
+    private _spawnSystem!: NetworkSpawnSystem
+    private _inputSystem!: NetworkInputSystem
+    private _localPlayerId: number = 0
 
     /**
-     * 网络服务
-     * Network service
+     * @zh 网络服务
+     * @en Network service
      */
-    get networkService(): NetworkService {
-        return this._networkService;
+    get networkService(): GameNetworkService {
+        return this._networkService
     }
 
     /**
-     * 同步系统
-     * Sync system
+     * @zh 同步系统
+     * @en Sync system
      */
     get syncSystem(): NetworkSyncSystem {
-        return this._syncSystem;
+        return this._syncSystem
     }
 
     /**
-     * 生成系统
-     * Spawn system
+     * @zh 生成系统
+     * @en Spawn system
      */
     get spawnSystem(): NetworkSpawnSystem {
-        return this._spawnSystem;
+        return this._spawnSystem
     }
 
     /**
-     * 输入系统
-     * Input system
+     * @zh 输入系统
+     * @en Input system
      */
     get inputSystem(): NetworkInputSystem {
-        return this._inputSystem;
+        return this._inputSystem
     }
 
     /**
-     * 是否已连接
-     * Is connected
+     * @zh 本地玩家 ID
+     * @en Local player ID
+     */
+    get localPlayerId(): number {
+        return this._localPlayerId
+    }
+
+    /**
+     * @zh 是否已连接
+     * @en Is connected
      */
     get isConnected(): boolean {
-        return this._networkService?.isConnected ?? false;
+        return this._networkService?.isConnected ?? false
     }
 
     /**
-     * 安装插件
-     * Install plugin
+     * @zh 安装插件
+     * @en Install plugin
      */
     install(_core: Core, _services: ServiceContainer): void {
-        this._networkService = new NetworkService();
+        this._networkService = new GameNetworkService()
 
-        // 当场景加载时添加系统
-        // Add systems when scene loads
-        const scene = Core.scene;
+        const scene = Core.scene
         if (scene) {
-            this._setupSystems(scene as Scene);
+            this._setupSystems(scene as Scene)
         }
     }
 
     /**
-     * 卸载插件
-     * Uninstall plugin
+     * @zh 卸载插件
+     * @en Uninstall plugin
      */
     uninstall(): void {
-        this._networkService?.disconnect();
+        this._networkService?.disconnect()
     }
 
     private _setupSystems(scene: Scene): void {
-        this._syncSystem = new NetworkSyncSystem(this._networkService);
-        this._spawnSystem = new NetworkSpawnSystem(this._networkService, this._syncSystem);
-        this._inputSystem = new NetworkInputSystem(this._networkService);
+        this._syncSystem = new NetworkSyncSystem()
+        this._spawnSystem = new NetworkSpawnSystem(this._syncSystem)
+        this._inputSystem = new NetworkInputSystem(this._networkService)
 
-        scene.addSystem(this._syncSystem);
-        scene.addSystem(this._spawnSystem);
-        scene.addSystem(this._inputSystem);
+        scene.addSystem(this._syncSystem)
+        scene.addSystem(this._spawnSystem)
+        scene.addSystem(this._inputSystem)
+
+        this._setupMessageHandlers()
+    }
+
+    private _setupMessageHandlers(): void {
+        this._networkService
+            .onSync((data) => {
+                this._syncSystem.handleSync({ entities: data.entities })
+            })
+            .onSpawn((data) => {
+                this._spawnSystem.handleSpawn(data)
+            })
+            .onDespawn((data) => {
+                this._spawnSystem.handleDespawn(data)
+            })
     }
 
     /**
-     * 连接到服务器
-     * Connect to server
+     * @zh 连接到服务器
+     * @en Connect to server
      */
-    public async connect(serverUrl: string, playerName: string, roomId?: string): Promise<boolean> {
-        return this._networkService.connect(serverUrl, playerName, roomId);
+    public async connect(options: NetworkServiceOptions & { playerName: string; roomId?: string }): Promise<boolean> {
+        try {
+            await this._networkService.connect(options)
+
+            const result = await this._networkService.call('join', {
+                playerName: options.playerName,
+                roomId: options.roomId,
+            })
+
+            this._localPlayerId = result.playerId
+            this._spawnSystem.setLocalPlayerId(this._localPlayerId)
+
+            return true
+        } catch (err) {
+            return false
+        }
     }
 
     /**
-     * 断开连接
-     * Disconnect
+     * @zh 断开连接
+     * @en Disconnect
      */
     public async disconnect(): Promise<void> {
-        await this._networkService.disconnect();
+        try {
+            await this._networkService.call('leave', undefined)
+        } catch {
+            // ignore
+        }
+        this._networkService.disconnect()
     }
 
     /**
-     * 注册预制体工厂
-     * Register prefab factory
+     * @zh 注册预制体工厂
+     * @en Register prefab factory
      */
     public registerPrefab(prefabType: string, factory: PrefabFactory): void {
-        this._spawnSystem?.registerPrefab(prefabType, factory);
+        this._spawnSystem?.registerPrefab(prefabType, factory)
     }
 
     /**
-     * 发送移动输入
-     * Send move input
+     * @zh 发送移动输入
+     * @en Send move input
      */
     public sendMoveInput(x: number, y: number): void {
-        this._inputSystem?.addMoveInput(x, y);
+        this._inputSystem?.addMoveInput(x, y)
     }
 
     /**
-     * 发送动作输入
-     * Send action input
+     * @zh 发送动作输入
+     * @en Send action input
      */
     public sendActionInput(action: string): void {
-        this._inputSystem?.addActionInput(action);
+        this._inputSystem?.addActionInput(action)
     }
 }

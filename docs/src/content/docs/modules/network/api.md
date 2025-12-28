@@ -13,10 +13,11 @@ class NetworkPlugin implements IPlugin {
     readonly version: string;
 
     // 访问器
-    get networkService(): NetworkService;
+    get networkService(): GameNetworkService;
     get syncSystem(): NetworkSyncSystem;
     get spawnSystem(): NetworkSpawnSystem;
     get inputSystem(): NetworkInputSystem;
+    get localPlayerId(): number;
     get isConnected(): boolean;
 
     // 生命周期
@@ -24,7 +25,10 @@ class NetworkPlugin implements IPlugin {
     uninstall(): void;
 
     // 连接管理
-    connect(serverUrl: string, playerName: string, roomId?: string): Promise<boolean>;
+    connect(options: NetworkServiceOptions & {
+        playerName: string;
+        roomId?: string;
+    }): Promise<boolean>;
     disconnect(): Promise<void>;
 
     // 预制体注册
@@ -36,36 +40,65 @@ class NetworkPlugin implements IPlugin {
 }
 ```
 
-## NetworkService
+## RpcService
 
-网络服务，管理 WebSocket 连接。
+通用 RPC 服务基类，支持自定义协议。
 
 ```typescript
-class NetworkService {
+class RpcService<P extends ProtocolDef> {
     // 访问器
-    get state(): ENetworkState;
+    get state(): NetworkState;
     get isConnected(): boolean;
-    get clientId(): number;
-    get roomId(): string;
+    get client(): RpcClient<P> | null;
+
+    constructor(protocol: P);
 
     // 连接管理
-    connect(serverUrl: string, playerName: string, roomId?: string): Promise<boolean>;
-    disconnect(): Promise<void>;
+    connect(options: NetworkServiceOptions): Promise<void>;
+    disconnect(): void;
 
-    // 输入发送
-    sendInput(input: IPlayerInput): void;
+    // RPC 调用
+    call<K extends ApiNames<P>>(
+        name: K,
+        input: ApiInput<P['api'][K]>
+    ): Promise<ApiOutput<P['api'][K]>>;
 
-    // 回调设置
-    setCallbacks(callbacks: INetworkCallbacks): void;
+    // 消息发送
+    send<K extends MsgNames<P>>(name: K, data: MsgData<P['msg'][K]>): void;
+
+    // 消息监听
+    on<K extends MsgNames<P>>(name: K, handler: (data: MsgData<P['msg'][K]>) => void): this;
+    off<K extends MsgNames<P>>(name: K, handler?: (data: MsgData<P['msg'][K]>) => void): this;
+    once<K extends MsgNames<P>>(name: K, handler: (data: MsgData<P['msg'][K]>) => void): this;
+}
+```
+
+## GameNetworkService
+
+游戏网络服务，继承自 RpcService，提供游戏特定的便捷方法。
+
+```typescript
+class GameNetworkService extends RpcService<GameProtocol> {
+    // 发送玩家输入
+    sendInput(input: PlayerInput): void;
+
+    // 监听状态同步（链式调用）
+    onSync(handler: (data: SyncData) => void): this;
+
+    // 监听实体生成
+    onSpawn(handler: (data: SpawnData) => void): this;
+
+    // 监听实体销毁
+    onDespawn(handler: (data: DespawnData) => void): this;
 }
 ```
 
 ## 枚举类型
 
-### ENetworkState
+### NetworkState
 
 ```typescript
-const enum ENetworkState {
+const enum NetworkState {
     Disconnected = 0,
     Connecting = 1,
     Connected = 2
@@ -74,15 +107,21 @@ const enum ENetworkState {
 
 ## 接口类型
 
-### INetworkCallbacks
+### NetworkServiceOptions
 
 ```typescript
-interface INetworkCallbacks {
-    onConnected?: (clientId: number, roomId: string) => void;
-    onDisconnected?: () => void;
-    onSync?: (msg: MsgSync) => void;
-    onSpawn?: (msg: MsgSpawn) => void;
-    onDespawn?: (msg: MsgDespawn) => void;
+interface NetworkServiceOptions extends RpcClientOptions {
+    url: string;
+}
+```
+
+### RpcClientOptions
+
+```typescript
+interface RpcClientOptions {
+    codec?: Codec;
+    onConnect?: () => void;
+    onDisconnect?: (reason?: string) => void;
     onError?: (error: Error) => void;
 }
 ```
@@ -90,15 +129,15 @@ interface INetworkCallbacks {
 ### PrefabFactory
 
 ```typescript
-type PrefabFactory = (scene: Scene, spawn: MsgSpawn) => Entity;
+type PrefabFactory = (scene: Scene, spawn: SpawnData) => Entity;
 ```
 
-### IPlayerInput
+### PlayerInput
 
 ```typescript
-interface IPlayerInput {
-    seq?: number;
-    moveDir?: Vec2;
+interface PlayerInput {
+    frame: number;
+    moveDir?: { x: number; y: number };
     actions?: string[];
 }
 ```
@@ -170,86 +209,128 @@ const networkService = services.get(NetworkServiceToken);
 
 ## 服务器端 API
 
-### GameServer
+### RpcServer
 
 ```typescript
-class GameServer {
-    constructor(config: IGameServerConfig);
+class RpcServer<P extends ProtocolDef> {
+    constructor(protocol: P, options: RpcServerOptions);
 
+    // 启动/停止服务器
     start(): Promise<void>;
-    stop(): Promise<void>;
+    stop(): void;
 
-    getOrCreateRoom(roomId: string): Room;
-    getRoom(roomId: string): Room | undefined;
-    destroyRoom(roomId: string): void;
+    // 注册 API 处理器
+    handle<K extends ApiNames<P>>(
+        name: K,
+        handler: (input: ApiInput<P['api'][K]>, ctx: RpcContext) => Promise<ApiOutput<P['api'][K]>>
+    ): void;
+
+    // 广播消息
+    broadcast<K extends MsgNames<P>>(name: K, data: MsgData<P['msg'][K]>): void;
+
+    // 发送给特定客户端
+    sendTo<K extends MsgNames<P>>(clientId: string, name: K, data: MsgData<P['msg'][K]>): void;
 }
 ```
 
-### Room
+### RpcServerOptions
 
 ```typescript
-class Room {
-    readonly id: string;
-    readonly playerCount: number;
-    readonly isFull: boolean;
-
-    addPlayer(name: string, connection: Connection): IPlayer | null;
-    removePlayer(clientId: number): void;
-    getPlayer(clientId: number): IPlayer | undefined;
-    handleInput(clientId: number, input: IPlayerInput): void;
-    destroy(): void;
+interface RpcServerOptions {
+    port: number;
+    codec?: Codec;
+    onStart?: (port: number) => void;
+    onConnection?: (clientId: string) => void;
+    onDisconnection?: (clientId: string, reason?: string) => void;
+    onError?: (error: Error) => void;
 }
 ```
 
-### IPlayer
+### RpcContext
 
 ```typescript
-interface IPlayer {
-    clientId: number;
-    name: string;
-    connection: Connection;
-    netId: number;
+interface RpcContext {
+    clientId: string;
 }
 ```
 
-## 协议消息
+## 协议定义
 
-### MsgSync
+### gameProtocol
+
+默认游戏协议，包含加入/离开 API 和状态同步消息：
 
 ```typescript
-interface MsgSync {
+const gameProtocol = rpc.define({
+    api: {
+        join: rpc.api<JoinRequest, JoinResponse>(),
+        leave: rpc.api<void, void>(),
+    },
+    msg: {
+        input: rpc.msg<PlayerInput>(),
+        sync: rpc.msg<SyncData>(),
+        spawn: rpc.msg<SpawnData>(),
+        despawn: rpc.msg<DespawnData>(),
+    },
+});
+```
+
+## 协议消息类型
+
+### SyncData
+
+```typescript
+interface SyncData {
     time: number;
     entities: IEntityState[];
 }
 ```
 
-### MsgSpawn
+### SpawnData
 
 ```typescript
-interface MsgSpawn {
+interface SpawnData {
     netId: number;
     ownerId: number;
     prefab: string;
-    pos: Vec2;
-    rot: number;
+    position: { x: number; y: number };
+    rotation: number;
 }
 ```
 
-### MsgDespawn
+### DespawnData
 
 ```typescript
-interface MsgDespawn {
+interface DespawnData {
     netId: number;
 }
 ```
 
-### IEntityState
+### JoinRequest
 
 ```typescript
-interface IEntityState {
+interface JoinRequest {
+    playerName: string;
+    roomId?: string;
+}
+```
+
+### JoinResponse
+
+```typescript
+interface JoinResponse {
+    playerId: number;
+    roomId: string;
+}
+```
+
+### EntitySyncState
+
+```typescript
+interface EntitySyncState {
     netId: number;
-    pos?: Vec2;
-    rot?: number;
+    position?: { x: number; y: number };
+    rotation?: number;
 }
 ```
 
