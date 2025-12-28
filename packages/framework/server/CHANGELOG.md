@@ -1,5 +1,13 @@
 # @esengine/server
 
+## 1.1.3
+
+### Patch Changes
+
+- [#372](https://github.com/esengine/esengine/pull/372) [`9c41181`](https://github.com/esengine/esengine/commit/9c4118187539e39ead48ef2fa7af3ff45285fde5) Thanks [@esengine](https://github.com/esengine)! - fix: expose `id` property on ServerConnection type
+
+    TypeScript was not properly resolving the inherited `id` property from the base `Connection` interface in some module resolution scenarios. This fix explicitly declares the `id` property on `ServerConnection` to ensure it's always visible to consumers.
+
 ## 1.1.2
 
 ### Patch Changes
