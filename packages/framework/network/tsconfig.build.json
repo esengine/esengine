@@ -8,10 +8,5 @@
         "rootDir": "./src"
     },
     "include": ["src/**/*"],
-    "exclude": ["node_modules", "dist", "**/*.test.ts"],
-    "references": [
-        { "path": "../core" },
-        { "path": "../rpc" },
-        { "path": "../blueprint" }
-    ]
+    "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
