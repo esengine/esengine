@@ -1,6 +1,6 @@
 {
   "name": "@esengine/world-streaming",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "World streaming and chunk management system for open world games",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -12,6 +12,10 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist",
+    "module.json"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"
@@ -34,9 +38,18 @@
     "ecs",
     "streaming",
     "chunk",
-    "open-world"
+    "open-world",
+    "esengine"
   ],
   "author": "ESEngine",
   "license": "MIT",
-  "private": true
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/esengine/esengine.git",
+    "directory": "packages/framework/world-streaming"
+  }
 }
