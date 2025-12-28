@@ -40,3 +40,7 @@
 
 export { rpc } from './define'
 export * from './types'
+
+// Re-export client for browser/bundler compatibility
+export { RpcClient, connect } from './client/index'
+export type { RpcClientOptions, WebSocketAdapter, WebSocketFactory } from './client/index'
