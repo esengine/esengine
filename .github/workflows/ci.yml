@@ -72,6 +72,7 @@ jobs:
         pnpm --filter @esengine/procgen build
         pnpm --filter @esengine/pathfinding build
         pnpm --filter @esengine/network-protocols build
+        pnpm --filter @esengine/rpc build
         pnpm --filter @esengine/network build
 
     # 类型检查 (仅 framework 包)
