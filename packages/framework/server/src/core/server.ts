@@ -91,8 +91,10 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
     let tickInterval: ReturnType<typeof setInterval> | null = null
     let rpcServer: RpcServer<typeof protocol, Record<string, unknown>> | null = null
 
-    // 房间管理器
-    let roomManager: RoomManager | null = null
+    // 房间管理器（立即初始化，以便 define() 可在 start() 前调用）
+    const roomManager = new RoomManager((conn, type, data) => {
+        rpcServer?.send(conn, 'RoomMessage' as any, { type, data } as any)
+    })
 
     // 构建 API 处理器映射
     const apiMap: Record<string, LoadedApiHandler> = {}
@@ -108,7 +110,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
     // 游戏服务器实例
     const gameServer: GameServer & {
-        rooms: RoomManager | null
+        rooms: RoomManager
     } = {
         get connections() {
             return (rpcServer?.connections ?? []) as ReadonlyArray<ServerConnection>
@@ -127,18 +129,10 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
          * @en Define room type
          */
         define(name: string, roomClass: new () => unknown): void {
-            if (!roomManager) {
-                throw new Error('Server not started. Call define() after createServer().')
-            }
             roomManager.define(name, roomClass as RoomClass)
         },
 
         async start() {
-            // 初始化房间管理器
-            roomManager = new RoomManager((conn, type, data) => {
-                rpcServer?.send(conn, 'RoomMessage' as any, { type, data } as any)
-            })
-
             // 构建 API handlers
             const apiHandlersObj: Record<string, (input: unknown, conn: any) => Promise<unknown>> = {}
 
@@ -151,7 +145,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 }
 
                 if (roomId) {
-                    const result = await roomManager!.joinById(roomId, conn.id, conn)
+                    const result = await roomManager.joinById(roomId, conn.id, conn)
                     if (!result) {
                         throw new Error('Failed to join room')
                     }
@@ -159,7 +153,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 }
 
                 if (roomType) {
-                    const result = await roomManager!.joinOrCreate(roomType, conn.id, conn, options)
+                    const result = await roomManager.joinOrCreate(roomType, conn.id, conn, options)
                     if (!result) {
                         throw new Error('Failed to join or create room')
                     }
@@ -171,7 +165,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
             // 内置 LeaveRoom API
             apiHandlersObj['LeaveRoom'] = async (_input, conn) => {
-                await roomManager!.leave(conn.id)
+                await roomManager.leave(conn.id)
                 return { success: true }
             }
 
@@ -192,7 +186,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             // 内置 RoomMessage 处理
             msgHandlersObj['RoomMessage'] = async (data: any, conn) => {
                 const { type, payload } = data as { type: string; payload: unknown }
-                roomManager!.handleMessage(conn.id, type, payload)
+                roomManager.handleMessage(conn.id, type, payload)
             }
 
             // 文件路由消息
