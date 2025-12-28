@@ -1679,6 +1679,31 @@ importers:
         specifier: ^1.11.0
         version: 1.11.8
 
+  packages/framework/server:
+    dependencies:
+      '@esengine/rpc':
+        specifier: workspace:*
+        version: link:../rpc
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.27
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@20.19.27))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      ws:
+        specifier: ^8.18.0
+        version: 8.18.3
+
   packages/framework/spatial:
     dependencies:
       tslib:
@@ -2098,6 +2123,31 @@ importers:
         version: 5.0.10
       typescript:
         specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/tools/create-esengine-server:
+    dependencies:
+      chalk:
+        specifier: ^5.3.0
+        version: 5.6.2
+      commander:
+        specifier: ^11.0.0
+        version: 11.1.0
+      prompts:
+        specifier: ^2.4.2
+        version: 2.4.2
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.27
+      '@types/prompts':
+        specifier: ^2.4.9
+        version: 2.4.9
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@20.19.27))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.7.0
         version: 5.9.3
 
   packages/tools/demos:

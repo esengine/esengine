@@ -1,0 +1,21 @@
+{
+  "id": "server",
+  "name": "@esengine/server",
+  "globalKey": "server",
+  "displayName": "Game Server",
+  "description": "Game server framework with file-based routing | 基于文件路由的游戏服务器框架",
+  "version": "1.0.0",
+  "category": "Network",
+  "icon": "Server",
+  "tags": ["server", "rpc", "websocket", "network"],
+  "isCore": false,
+  "defaultEnabled": false,
+  "isEngineModule": true,
+  "canContainContent": false,
+  "platforms": ["nodejs"],
+  "dependencies": ["rpc"],
+  "exports": {
+    "functions": ["createServer", "defineApi", "defineMsg"]
+  },
+  "outputPath": "dist/index.js"
+}
