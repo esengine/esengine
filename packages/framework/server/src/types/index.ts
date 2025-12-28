@@ -71,6 +71,12 @@ export interface ServerConfig {
  */
 export interface ServerConnection<TData = Record<string, unknown>> extends Connection<TData> {
     /**
+     * @zh 连接唯一标识（继承自 Connection）
+     * @en Connection unique identifier (inherited from Connection)
+     */
+    readonly id: string
+
+    /**
      * @zh 用户自定义数据
      * @en User-defined data
      */
