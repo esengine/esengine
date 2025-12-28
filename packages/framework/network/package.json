@@ -1,7 +1,7 @@
 {
     "name": "@esengine/network",
-    "version": "1.0.0",
-    "description": "Network synchronization for multiplayer games based on TSRPC",
+    "version": "2.0.0",
+    "description": "Network synchronization for multiplayer games",
     "esengine": {
         "plugin": true,
         "pluginExport": "NetworkPlugin",
@@ -22,14 +22,13 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsup && tsc --project tsconfig.build.json --declaration --emitDeclarationOnly --outDir dist",
+        "build": "tsup && tsc -p tsconfig.build.json --emitDeclarationOnly",
         "build:watch": "tsup --watch",
         "type-check": "tsc --noEmit",
         "clean": "rimraf dist"
     },
     "dependencies": {
-        "@esengine/network-protocols": "workspace:*",
-        "tsrpc-browser": "^3.4.16"
+        "@esengine/rpc": "workspace:*"
     },
     "devDependencies": {
         "@esengine/blueprint": "workspace:*",

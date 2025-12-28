@@ -1,0 +1,20 @@
+{
+  "id": "rpc",
+  "name": "@esengine/rpc",
+  "globalKey": "rpc",
+  "displayName": "RPC",
+  "description": "类型安全的 RPC 通信库 | Type-safe RPC communication library",
+  "version": "1.0.0",
+  "category": "Network",
+  "icon": "Network",
+  "tags": ["rpc", "websocket", "network", "multiplayer"],
+  "isCore": false,
+  "defaultEnabled": true,
+  "isEngineModule": true,
+  "canContainContent": false,
+  "platforms": ["web", "desktop", "node"],
+  "dependencies": [],
+  "exports": {},
+  "requiresWasm": false,
+  "outputPath": "dist/index.js"
+}

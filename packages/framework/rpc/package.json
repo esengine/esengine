@@ -1,0 +1,60 @@
+{
+  "name": "@esengine/rpc",
+  "version": "1.0.0",
+  "description": "Elegant type-safe RPC library for ESEngine",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server/index.js",
+      "types": "./dist/server/index.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client/index.js",
+      "types": "./dist/client/index.d.ts"
+    },
+    "./codec": {
+      "import": "./dist/codec/index.js",
+      "types": "./dist/codec/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "module.json"
+  ],
+  "scripts": {
+    "build": "tsup && tsc --emitDeclarationOnly",
+    "build:watch": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {},
+  "optionalDependencies": {
+    "msgpackr": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "msgpackr": "^1.11.0",
+    "ws": "^8.18.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0",
+    "ws": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

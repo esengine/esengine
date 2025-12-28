@@ -1,10 +1,10 @@
 {
     "name": "@esengine/network",
     "displayName": "Network",
-    "description": "TSRPC-based network synchronization for multiplayer games",
-    "version": "1.0.0",
+    "description": "RPC-based network synchronization for multiplayer games",
+    "version": "2.0.0",
     "category": "network",
-    "dependencies": [],
+    "dependencies": ["@esengine/rpc"],
     "components": [
         {
             "name": "NetworkIdentity",

@@ -251,7 +251,14 @@ export default defineConfig({
               ],
             },
             {
-              label: '网络',
+              label: 'RPC 通信',
+              translations: { en: 'RPC' },
+              items: [
+                { label: '概述', slug: 'modules/rpc', translations: { en: 'Overview' } },
+              ],
+            },
+            {
+              label: '网络同步',
               translations: { en: 'Network' },
               items: [
                 { label: '概述', slug: 'modules/network', translations: { en: 'Overview' } },

@@ -1,41 +1,38 @@
 ---
 title: "Network System"
-description: "TSRPC-based multiplayer game network synchronization solution"
+description: "Type-safe multiplayer game network synchronization based on @esengine/rpc"
 ---
 
-`@esengine/network` provides a TSRPC-based client-server network synchronization solution for multiplayer games, including entity synchronization, input handling, and state interpolation.
+`@esengine/network` provides a type-safe network synchronization solution based on `@esengine/rpc` for multiplayer games, including entity synchronization, input handling, and state interpolation.
 
 ## Overview
 
-The network module consists of three packages:
+The network module consists of two core packages:
 
 | Package | Description |
 |---------|-------------|
-| `@esengine/network` | Client-side ECS plugin |
-| `@esengine/network-protocols` | Shared protocol definitions |
-| `@esengine/network-server` | Server-side implementation |
+| `@esengine/rpc` | Type-safe RPC communication library |
+| `@esengine/network` | RPC-based game networking plugin |
 
 ## Installation
 
 ```bash
-# Client
 npm install @esengine/network
-
-# Server
-npm install @esengine/network-server
 ```
+
+> `@esengine/rpc` is automatically installed as a dependency.
 
 ## Architecture
 
 ```
 Client                              Server
-┌────────────────┐                ┌────────────────┐
-│ NetworkPlugin  │◄──── WS ────► │  GameServer    │
-│ ├─ Service     │                │  ├─ Room       │
-│ ├─ SyncSystem  │                │  └─ Players    │
-│ ├─ SpawnSystem │                └────────────────┘
-│ └─ InputSystem │
-└────────────────┘
+┌────────────────────┐            ┌────────────────┐
+│ NetworkPlugin      │◄── WS ───►│  RpcServer     │
+│ ├─ NetworkService  │            │  ├─ Protocol   │
+│ ├─ SyncSystem      │            │  └─ Handlers   │
+│ ├─ SpawnSystem     │            └────────────────┘
+│ └─ InputSystem     │
+└────────────────────┘
 ```
 
 ## Quick Start
@@ -69,61 +66,81 @@ networkPlugin.registerPrefab('player', (scene, spawn) => {
     const identity = entity.addComponent(new NetworkIdentity());
     identity.netId = spawn.netId;
     identity.ownerId = spawn.ownerId;
-    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.networkService.clientId;
+    identity.bIsLocalPlayer = spawn.ownerId === networkPlugin.localPlayerId;
 
     entity.addComponent(new NetworkTransform());
     return entity;
 });
 
 // Connect to server
-const success = await networkPlugin.connect('ws://localhost:3000', 'PlayerName');
+const success = await networkPlugin.connect({
+    url: 'ws://localhost:3000',
+    playerName: 'Player1',
+    roomId: 'room-1'  // optional
+});
+
 if (success) {
-    console.log('Connected!');
+    console.log('Connected! Player ID:', networkPlugin.localPlayerId);
 }
 ```
 
 ### Server
 
 ```typescript
-import { GameServer } from '@esengine/network-server';
+import { RpcServer } from '@esengine/rpc/server';
+import { gameProtocol } from '@esengine/network';
 
-const server = new GameServer({
+const server = new RpcServer(gameProtocol, {
     port: 3000,
-    roomConfig: {
-        maxPlayers: 16,
-        tickRate: 20
-    }
+    onStart: (port) => console.log(`Server running on ws://localhost:${port}`)
+});
+
+// Register API handlers
+server.handle('join', async (input, ctx) => {
+    const playerId = generatePlayerId();
+    return { playerId, roomId: input.roomId ?? 'default' };
+});
+
+server.handle('leave', async (input, ctx) => {
+    // Handle player leaving
 });
 
 await server.start();
-console.log('Server started on ws://localhost:3000');
 ```
 
-## Quick Setup with CLI
+## Custom Protocol
 
-We recommend using ESEngine CLI to quickly create a complete game server project:
+You can define your own protocol using `@esengine/rpc`:
 
-```bash
-mkdir my-game-server && cd my-game-server
-npm init -y
-npx @esengine/cli init -p nodejs
-```
+```typescript
+import { rpc } from '@esengine/rpc';
 
-Generated project structure:
+// Define custom protocol
+export const myProtocol = rpc.define({
+    api: {
+        login: rpc.api<{ username: string }, { token: string }>(),
+        getData: rpc.api<{ id: number }, { data: object }>(),
+    },
+    msg: {
+        chat: rpc.msg<{ from: string; text: string }>(),
+        notification: rpc.msg<{ type: string; content: string }>(),
+    },
+});
 
-```
-my-game-server/
-├── src/
-│   ├── index.ts
-│   ├── server/
-│   │   └── GameServer.ts
-│   └── game/
-│       ├── Game.ts
-│       ├── scenes/
-│       ├── components/
-│       └── systems/
-├── tsconfig.json
-└── package.json
+// Create service with custom protocol
+import { RpcService } from '@esengine/network';
+
+const service = new RpcService(myProtocol);
+await service.connect({ url: 'ws://localhost:3000' });
+
+// Type-safe API calls
+const result = await service.call('login', { username: 'test' });
+console.log(result.token);
+
+// Type-safe message listening
+service.on('chat', (data) => {
+    console.log(`${data.from}: ${data.text}`);
+});
 ```
 
 ## Documentation
