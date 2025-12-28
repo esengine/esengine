@@ -1,5 +1,11 @@
 # create-esengine-server
 
+## 1.1.1
+
+### Patch Changes
+
+- [#368](https://github.com/esengine/esengine/pull/368) [`66d5dc2`](https://github.com/esengine/esengine/commit/66d5dc27f740cc81b0645bde61dabf665743a5a0) Thanks [@esengine](https://github.com/esengine)! - fix: 修复发布缺少 dist 目录 | fix missing dist in published packages
+
 ## 1.1.0
 
 ### Minor Changes
