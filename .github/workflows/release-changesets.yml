@@ -56,7 +56,9 @@ jobs:
           pnpm --filter "@esengine/network-protocols" build
           pnpm --filter "@esengine/rpc" build
           pnpm --filter "@esengine/network" build
+          pnpm --filter "@esengine/server" build
           pnpm --filter "@esengine/cli" build
+          pnpm --filter "create-esengine-server" build
 
       - name: Create Release Pull Request or Publish
         id: changesets
