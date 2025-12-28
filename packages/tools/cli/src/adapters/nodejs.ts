@@ -12,13 +12,16 @@ export const nodejsAdapter: PlatformAdapter = {
     getDependencies() {
         return {
             '@esengine/ecs-framework': 'latest',
-            '@esengine/network-server': 'latest'
+            '@esengine/rpc': 'latest',
+            '@esengine/network': 'latest',
+            'ws': '^8.18.0'
         };
     },
 
     getDevDependencies() {
         return {
             '@types/node': '^20.0.0',
+            '@types/ws': '^8.5.13',
             'tsx': '^4.0.0',
             'typescript': '^5.0.0'
         };
@@ -54,7 +57,7 @@ function generateIndex(config: ProjectConfig): string {
 const PORT = Number(process.env.PORT) || 3000;
 
 async function main() {
-    const server = createGameServer({ port: PORT });
+    const { server } = createGameServer({ port: PORT });
     await server.start();
 
     console.log('========================================');
@@ -75,28 +78,73 @@ main().catch(console.error);
 }
 
 function generateGameServer(config: ProjectConfig): string {
-    return `import { GameServer, type IServerConfig } from '@esengine/network-server';
+    return `import { RpcServer } from '@esengine/rpc/server';
+import { gameProtocol, type JoinRequest, type JoinResponse } from '@esengine/network';
 import { Game } from '../game/Game';
+
+/**
+ * @zh 服务器配置
+ * @en Server configuration
+ */
+export interface ServerConfig {
+    port: number;
+    maxPlayers?: number;
+    tickRate?: number;
+}
 
 /**
  * @zh 创建游戏服务器
  * @en Create game server
  */
-export function createGameServer(config: Partial<IServerConfig> = {}): GameServer {
-    const server = new GameServer({
-        port: config.port ?? 3000,
-        roomConfig: {
-            maxPlayers: 16,
-            tickRate: 20,
-            ...config.roomConfig
+export function createGameServer(config: Partial<ServerConfig> = {}) {
+    const port = config.port ?? 3000;
+    const maxPlayers = config.maxPlayers ?? 16;
+    const tickRate = config.tickRate ?? 20;
+
+    // 创建 RPC 服务器
+    const server = new RpcServer(gameProtocol, {
+        port,
+        onStart: (p) => console.log(\`[Server] Started on ws://localhost:\${p}\`),
+        onConnection: (id) => console.log(\`[Server] Client connected: \${id}\`),
+        onDisconnection: (id) => console.log(\`[Server] Client disconnected: \${id}\`),
+    });
+
+    // 玩家管理
+    const players = new Map<string, { id: number; name: string }>();
+    let nextPlayerId = 1;
+
+    // 注册 API 处理器
+    server.handle('join', async (input: JoinRequest, ctx): Promise<JoinResponse> => {
+        const playerId = nextPlayerId++;
+        players.set(ctx.clientId, { id: playerId, name: input.playerName });
+
+        console.log(\`[Server] Player joined: \${input.playerName} (ID: \${playerId})\`);
+
+        return {
+            playerId,
+            roomId: input.roomId ?? 'default',
+        };
+    });
+
+    server.handle('leave', async (_input, ctx) => {
+        const player = players.get(ctx.clientId);
+        if (player) {
+            console.log(\`[Server] Player left: \${player.name}\`);
+            players.delete(ctx.clientId);
         }
     });
 
     // 初始化 ECS 游戏逻辑
-    const game = new Game();
+    const game = new Game({ targetFPS: tickRate });
     game.start();
 
-    return server;
+    // 游戏循环：广播状态同步
+    setInterval(() => {
+        // 在这里广播游戏状态
+        // server.broadcast('sync', { entities: [...] });
+    }, 1000 / tickRate);
+
+    return { server, game, players };
 }
 `;
 }
@@ -319,18 +367,24 @@ src/
 ## 客户端连接
 
 \`\`\`typescript
+import { Core } from '@esengine/ecs-framework';
 import { NetworkPlugin } from '@esengine/network';
 
-const networkPlugin = new NetworkPlugin({
-    serverUrl: 'ws://localhost:3000'
-});
+// 安装网络插件
+const networkPlugin = new NetworkPlugin();
+await Core.installPlugin(networkPlugin);
 
-await networkPlugin.connect('PlayerName');
+// 连接服务器
+await networkPlugin.connect({
+    url: 'ws://localhost:3000',
+    playerName: 'Player1'
+});
 \`\`\`
 
 ## 文档
 
 - [ESEngine 文档](https://esengine.github.io/esengine/)
+- [RPC 模块](https://esengine.github.io/esengine/modules/rpc/)
 - [Network 模块](https://esengine.github.io/esengine/modules/network/)
 `;
 }
