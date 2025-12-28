@@ -1,6 +1,7 @@
 ---
 "@esengine/rpc": minor
 "@esengine/network": minor
+"@esengine/cli": minor
 ---
 
 ## @esengine/rpc
@@ -40,3 +41,19 @@
 - Add type-safe convenience methods: sendInput(), onSync(), onSpawn(), onDespawn()
 - Update NetworkPlugin to use new service architecture
 - Remove TSRPC dependency, migrate to @esengine/rpc
+
+## @esengine/cli
+
+### 变更 | Changed
+
+- 更新 Node.js 适配器使用 `@esengine/rpc` 和 `@esengine/network`
+- 生成的服务器代码改用 `RpcServer` + `gameProtocol`
+- 添加 `ws` 和 `@types/ws` 依赖
+- 更新 README 模板中的客户端连接示例
+
+---
+
+- Update Node.js adapter to use `@esengine/rpc` and `@esengine/network`
+- Generated server code now uses `RpcServer` + `gameProtocol`
+- Add `ws` and `@types/ws` dependencies
+- Update client connection example in README template
