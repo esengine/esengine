@@ -268,6 +268,17 @@ export default defineConfig({
                 { label: 'API 参考', slug: 'modules/network/api', translations: { en: 'API Reference' } },
               ],
             },
+            {
+              label: '世界流式加载',
+              translations: { en: 'World Streaming' },
+              items: [
+                { label: '概述', slug: 'modules/world-streaming', translations: { en: 'Overview' } },
+                { label: '区块管理', slug: 'modules/world-streaming/chunk-manager', translations: { en: 'Chunk Manager' } },
+                { label: '流式系统', slug: 'modules/world-streaming/streaming-system', translations: { en: 'Streaming System' } },
+                { label: '序列化', slug: 'modules/world-streaming/serialization', translations: { en: 'Serialization' } },
+                { label: '实际示例', slug: 'modules/world-streaming/examples', translations: { en: 'Examples' } },
+              ],
+            },
           ],
         },
         {
