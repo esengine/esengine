@@ -51,3 +51,4 @@ export type {
 
 // Module
 export { WorldStreamingModule, worldStreamingModule } from './WorldStreamingModule';
+export type { IWorldStreamingSetupOptions } from './WorldStreamingModule';

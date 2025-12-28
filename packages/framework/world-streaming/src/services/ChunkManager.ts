@@ -1,5 +1,4 @@
 import type { Entity, IScene, IService } from '@esengine/ecs-framework';
-import { TransformComponent } from '@esengine/engine-core';
 import type { IChunkCoord, IChunkData, IChunkInfo, IChunkLoadRequest, IChunkBounds } from '../types';
 import { EChunkState, EChunkPriority } from '../types';
 import { SpatialHashGrid } from './SpatialHashGrid';
@@ -285,11 +284,6 @@ export class ChunkManager implements IService {
         const chunkComponent = chunkEntity.addComponent(new ChunkComponent());
         chunkComponent.initialize(coord, bounds);
         chunkComponent.setState(EChunkState.Loaded);
-
-        const transform = chunkEntity.getComponent(TransformComponent);
-        if (transform) {
-            transform.setPosition(bounds.minX, bounds.minY);
-        }
 
         return [chunkEntity];
     }

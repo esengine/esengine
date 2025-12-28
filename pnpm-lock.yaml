@@ -1053,7 +1053,7 @@ importers:
     dependencies:
       '@esengine/world-streaming':
         specifier: workspace:*
-        version: link:../../../streaming/world-streaming
+        version: link:../../../framework/world-streaming
     devDependencies:
       '@esengine/build-config':
         specifier: workspace:*
@@ -1763,24 +1763,24 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  packages/network-ext/network-server:
+  packages/framework/world-streaming:
     dependencies:
-      '@esengine/network-protocols':
+      '@esengine/ecs-framework':
         specifier: workspace:*
-        version: link:../../framework/network-protocols
-      tsrpc:
-        specifier: ^3.4.15
-        version: 3.4.21
-      ws:
-        specifier: ^8.18.0
-        version: 8.18.3
+        version: link:../core/dist
+      '@esengine/ecs-framework-math':
+        specifier: workspace:*
+        version: link:../math
+      '@esengine/spatial':
+        specifier: workspace:*
+        version: link:../spatial
     devDependencies:
       tsup:
-        specifier: ^8.5.1
+        specifier: ^8.0.1
         version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@22.19.3))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-      tsx:
-        specifier: ^4.19.0
-        version: 4.21.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
 
   packages/physics/physics-rapier2d:
     dependencies:
@@ -2065,22 +2065,6 @@ importers:
       rimraf:
         specifier: ^5.0.0
         version: 5.0.10
-
-  packages/streaming/world-streaming:
-    dependencies:
-      '@esengine/ecs-framework':
-        specifier: workspace:*
-        version: link:../../framework/core/dist
-      '@esengine/engine-core':
-        specifier: workspace:*
-        version: link:../../engine/engine-core
-    devDependencies:
-      tsup:
-        specifier: ^8.0.1
-        version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@22.19.3))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
 
   packages/tools/build-config:
     devDependencies:
@@ -5253,9 +5237,6 @@ packages:
 
   '@types/web-bluetooth@0.0.21':
     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
-
-  '@types/ws@7.4.7':
-    resolution: {integrity: sha512-JQbbmxZTZehdc2iszGKs5oC3NFnjeay7mtAWrdt7qNtAVK0g19muApzAy4bm9byz79xa2ZnO/BOBC2R8RC5Lww==}
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
@@ -10267,18 +10248,12 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
-  tsrpc-base-client@2.1.17:
-    resolution: {integrity: sha512-z3Ei2jgJUWt4Mmf9AWXk0BctXE2FzfVRLitbDgZ9byixjuIQ2rDyDxjR8ae7kiR17Dx4YVIEJ8FW/2180lA5iw==}
-
   tsrpc-cli@2.4.5:
     resolution: {integrity: sha512-/3MMyGAAuSnZLQVfoRZXI5sfyGakRTk2AfrllvVSUSfGPTr06iU1YAgOATNYEHl+uAj1+QFz3dKT8g3J+wCIcw==}
     hasBin: true
 
   tsrpc-proto@1.4.3:
     resolution: {integrity: sha512-qtkk5i34m9/K1258EdyXAEikU/ADPELHCCXN/oFJ4XwH+kN3kXnKYmwCDblUuMA73V2+A/EwkgUGyAgPa335Hw==}
-
-  tsrpc@3.4.21:
-    resolution: {integrity: sha512-8NdFmEkB5t1raKPuWzwl/qwivbacxsuFzpTDv2nlHPVNBP7fwmIOY6uZT8g/SSaAEUMAKt8fCeOYYtwsvjwjqw==}
 
   tsup@8.5.1:
     resolution: {integrity: sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing==}
@@ -10685,10 +10660,6 @@ packages:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
     hasBin: true
 
-  uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
-    hasBin: true
-
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
 
@@ -11004,18 +10975,6 @@ packages:
   write-pkg@4.0.0:
     resolution: {integrity: sha512-v2UQ+50TNf2rNHJ8NyWttfm/EJUBWMJcx6ZTYZr6Qp52uuegWw/lBkCtCbnYZEmPRNL61m+u67dAmGxo+HTULA==}
     engines: {node: '>=8'}
-
-  ws@7.5.10:
-    resolution: {integrity: sha512-+dbF1tHwZpXcbOJdVOkzLDxZP1ailvSxM6ZweXTegylPny803bFhA+vqBYw4s31NSAk4S2Qz+AKXK9a4wkdjcQ==}
-    engines: {node: '>=8.3.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: ^5.0.2
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
 
   ws@8.18.3:
     resolution: {integrity: sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==}
@@ -14772,10 +14731,6 @@ snapshots:
   '@types/unist@3.0.3': {}
 
   '@types/web-bluetooth@0.0.21': {}
-
-  '@types/ws@7.4.7':
-    dependencies:
-      '@types/node': 20.19.27
 
   '@types/ws@8.18.1':
     dependencies:
@@ -21020,13 +20975,6 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  tsrpc-base-client@2.1.17:
-    dependencies:
-      k8w-extend-native: 1.4.6
-      tsbuffer: 2.2.23
-      tslib: 2.8.1
-      tsrpc-proto: 1.4.3
-
   tsrpc-cli@2.4.5(@swc/core@1.15.7(@swc/helpers@0.5.18))(@swc/wasm@1.15.7)(@types/node@22.19.3):
     dependencies:
       chalk: 4.1.2
@@ -21054,19 +21002,6 @@ snapshots:
     dependencies:
       tsbuffer-schema: 2.2.0
       tslib: 2.8.1
-
-  tsrpc@3.4.21:
-    dependencies:
-      '@types/ws': 7.4.7
-      chalk: 4.1.2
-      tsbuffer: 2.2.23
-      tsrpc-base-client: 2.1.17
-      tsrpc-proto: 1.4.3
-      uuid: 8.3.2
-      ws: 7.5.10
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   tsup@8.5.1(@microsoft/api-extractor@7.55.2(@types/node@20.19.27))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2):
     dependencies:
@@ -21423,8 +21358,6 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   uuid@10.0.0: {}
-
-  uuid@8.3.2: {}
 
   v8-compile-cache-lib@3.0.1: {}
 
@@ -21813,8 +21746,6 @@ snapshots:
       sort-keys: 2.0.0
       type-fest: 0.4.1
       write-json-file: 3.2.0
-
-  ws@7.5.10: {}
 
   ws@8.18.3: {}
 

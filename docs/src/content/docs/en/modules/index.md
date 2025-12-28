@@ -20,6 +20,7 @@ ESEngine provides a rich set of modules that can be imported as needed.
 | [Timer](/en/modules/timer/) | `@esengine/timer` | Timer and cooldown system |
 | [Spatial](/en/modules/spatial/) | `@esengine/spatial` | Spatial queries, AOI management |
 | [Pathfinding](/en/modules/pathfinding/) | `@esengine/pathfinding` | A* pathfinding, NavMesh navigation |
+| [World Streaming](/en/modules/world-streaming/) | `@esengine/world-streaming` | Chunk-based world streaming for open worlds |
 
 ### Tools
 
