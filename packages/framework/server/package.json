@@ -1,0 +1,50 @@
+{
+  "name": "@esengine/server",
+  "version": "1.0.0",
+  "description": "Game server framework for ESEngine with file-based routing",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "module.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@esengine/rpc": "workspace:*"
+  },
+  "peerDependencies": {
+    "ws": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "ws": "^8.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "esengine",
+    "game-server",
+    "rpc",
+    "websocket",
+    "ecs"
+  ]
+}
