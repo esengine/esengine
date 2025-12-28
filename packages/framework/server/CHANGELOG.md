@@ -1,5 +1,12 @@
 # @esengine/server
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`a000cc0`](https://github.com/esengine/esengine/commit/a000cc07d7cebe8ccbfa983fde610296bfba2f1b)]:
+    - @esengine/rpc@1.1.1
+
 ## 1.1.3
 
 ### Patch Changes
