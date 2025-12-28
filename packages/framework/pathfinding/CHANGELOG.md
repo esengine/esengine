@@ -1,5 +1,11 @@
 # @esengine/pathfinding
 
+## 1.0.4
+
+### Patch Changes
+
+- [#376](https://github.com/esengine/esengine/pull/376) [`0662b07`](https://github.com/esengine/esengine/commit/0662b074454906ad7c0264fe1d3a241f13730ba1) Thanks [@esengine](https://github.com/esengine)! - fix: update pathfinding package to resolve npm version conflict
+
 ## 1.0.3
 
 ### Patch Changes
