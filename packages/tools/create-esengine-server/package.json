@@ -1,6 +1,6 @@
 {
   "name": "create-esengine-server",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Create ESEngine game server projects",
   "type": "module",
   "bin": {
