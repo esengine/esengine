@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@esengine/ecs-framework": "workspace:*",
-    "@esengine/engine-core": "workspace:*"
+    "@esengine/ecs-framework-math": "workspace:*",
+    "@esengine/spatial": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.0.1",
@@ -26,7 +27,8 @@
   },
   "peerDependencies": {
     "@esengine/ecs-framework": "workspace:*",
-    "@esengine/engine-core": "workspace:*"
+    "@esengine/ecs-framework-math": "workspace:*",
+    "@esengine/spatial": "workspace:*"
   },
   "keywords": [
     "ecs",

@@ -1,6 +1,5 @@
 import { EntitySystem, Matcher, Time, ECSSystem } from '@esengine/ecs-framework';
 import type { Entity, Scene } from '@esengine/ecs-framework';
-import { TransformComponent } from '@esengine/engine-core';
 import { StreamingAnchorComponent } from '../components/StreamingAnchorComponent';
 import { ChunkLoaderComponent } from '../components/ChunkLoaderComponent';
 import { ChunkManager } from '../services/ChunkManager';
@@ -21,7 +20,7 @@ export class ChunkStreamingSystem extends EntitySystem {
     private _lastAnchorChunks: Map<Entity, IChunkCoord> = new Map();
 
     constructor() {
-        super(Matcher.all(StreamingAnchorComponent, TransformComponent));
+        super(Matcher.all(StreamingAnchorComponent));
     }
 
     /**
@@ -83,12 +82,10 @@ export class ChunkStreamingSystem extends EntitySystem {
     private updateAnchors(entities: readonly Entity[], deltaTime: number): void {
         for (const entity of entities) {
             const anchor = entity.getComponent(StreamingAnchorComponent);
-            const transform = entity.getComponent(TransformComponent);
+            if (!anchor) continue;
 
-            if (!anchor || !transform) continue;
-
-            const currentX = transform.position.x;
-            const currentY = transform.position.y;
+            const currentX = anchor.x;
+            const currentY = anchor.y;
 
             if (deltaTime > 0) {
                 anchor.velocityX = (currentX - anchor.previousX) / deltaTime;
@@ -111,10 +108,10 @@ export class ChunkStreamingSystem extends EntitySystem {
         const centerCoords: IChunkCoord[] = [];
 
         for (const entity of entities) {
-            const transform = entity.getComponent(TransformComponent);
-            if (!transform) continue;
+            const anchor = entity.getComponent(StreamingAnchorComponent);
+            if (!anchor) continue;
 
-            const coord = loader.worldToChunk(transform.position.x, transform.position.y);
+            const coord = loader.worldToChunk(anchor.x, anchor.y);
             centerCoords.push(coord);
 
             const lastCoord = this._lastAnchorChunks.get(entity);

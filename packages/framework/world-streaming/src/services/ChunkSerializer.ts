@@ -1,5 +1,5 @@
 import type { Entity, IScene } from '@esengine/ecs-framework';
-import { TransformComponent } from '@esengine/engine-core';
+import type { IPositionable } from '@esengine/spatial';
 import type { IChunkCoord, IChunkData, ISerializedEntity, IChunkBounds } from '../types';
 
 /**
@@ -30,14 +30,14 @@ export class ChunkSerializer implements IChunkSerializer {
         const serializedEntities: ISerializedEntity[] = [];
 
         for (const entity of entities) {
-            const transform = entity.getComponent(TransformComponent);
-            if (!transform) continue;
+            const positionable = this.getPositionable(entity);
+            if (!positionable) continue;
 
             const serialized: ISerializedEntity = {
                 name: entity.name,
                 localPosition: {
-                    x: transform.position.x - bounds.minX,
-                    y: transform.position.y - bounds.minY
+                    x: positionable.position.x - bounds.minX,
+                    y: positionable.position.y - bounds.minY
                 },
                 components: this.serializeComponents(entity)
             };
@@ -53,9 +53,25 @@ export class ChunkSerializer implements IChunkSerializer {
     }
 
     /**
+     * 获取实体的可定位组件
+     *
+     * Get positionable component from entity.
+     * Override to use custom position component.
+     */
+    protected getPositionable(entity: Entity): IPositionable | null {
+        for (const component of entity.components) {
+            if ('position' in component && typeof (component as IPositionable).position === 'object') {
+                return component as IPositionable;
+            }
+        }
+        return null;
+    }
+
+    /**
      * 反序列化区块
      *
      * Deserialize chunk data and create entities.
+     * Override setEntityPosition to set position on your custom component.
      */
     deserialize(data: IChunkData, scene: IScene): Entity[] {
         const entities: Entity[] = [];
@@ -64,19 +80,25 @@ export class ChunkSerializer implements IChunkSerializer {
         for (const entityData of data.entities) {
             const entity = scene.createEntity(entityData.name);
 
-            const transform = entity.getComponent(TransformComponent);
-            if (transform) {
-                transform.setPosition(
-                    bounds.minX + entityData.localPosition.x,
-                    bounds.minY + entityData.localPosition.y
-                );
-            }
+            const worldX = bounds.minX + entityData.localPosition.x;
+            const worldY = bounds.minY + entityData.localPosition.y;
+            this.setEntityPosition(entity, worldX, worldY);
 
             this.deserializeComponents(entity, entityData.components);
             entities.push(entity);
         }
 
         return entities;
+    }
+
+    /**
+     * 设置实体位置
+     *
+     * Set entity position after deserialization.
+     * Override to use your custom position component.
+     */
+    protected setEntityPosition(_entity: Entity, _x: number, _y: number): void {
+        // Override in subclass to set position on your position component
     }
 
     /**
@@ -113,7 +135,7 @@ export class ChunkSerializer implements IChunkSerializer {
      * Check if component should be serialized.
      */
     protected shouldSerializeComponent(componentName: string): boolean {
-        const excludeList = ['TransformComponent', 'ChunkComponent', 'StreamingAnchorComponent'];
+        const excludeList = ['ChunkComponent', 'StreamingAnchorComponent'];
         return !excludeList.includes(componentName);
     }
 

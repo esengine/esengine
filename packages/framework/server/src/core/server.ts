@@ -185,7 +185,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
             // 内置 RoomMessage 处理
             msgHandlersObj['RoomMessage'] = async (data: any, conn) => {
-                const { type, payload } = data as { type: string; payload: unknown }
+                const { type, data: payload } = data as { type: string; data: unknown }
                 roomManager.handleMessage(conn.id, type, payload)
             }
 
