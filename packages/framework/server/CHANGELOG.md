@@ -1,5 +1,19 @@
 # @esengine/server
 
+## 1.1.2
+
+### Patch Changes
+
+- [#370](https://github.com/esengine/esengine/pull/370) [`18df9d1`](https://github.com/esengine/esengine/commit/18df9d1cda4d4cf3095841d93125f9d41ce214f1) Thanks [@esengine](https://github.com/esengine)! - fix: allow define() to be called before start()
+
+    Previously, calling `server.define()` before `server.start()` would throw an error because `roomManager` was initialized inside `start()`. This fix moves the `roomManager` initialization to `createServer()`, allowing the expected usage pattern:
+
+    ```typescript
+    const server = await createServer({ port: 3000 });
+    server.define('world', WorldRoom); // Now works correctly
+    await server.start();
+    ```
+
 ## 1.1.1
 
 ### Patch Changes

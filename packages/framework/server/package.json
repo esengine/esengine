@@ -1,6 +1,6 @@
 {
   "name": "@esengine/server",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Game server framework for ESEngine with file-based routing",
   "type": "module",
   "main": "./dist/index.js",
