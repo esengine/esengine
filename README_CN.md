@@ -49,7 +49,12 @@ npm install @esengine/ecs-framework
 | **定时器** | 定时器和冷却系统 | 否 |
 | **空间索引** | 空间查询（四叉树、网格） | 否 |
 | **寻路** | A* 和导航网格寻路 | 否 |
-| **网络** | 客户端/服务端网络通信 (TSRPC) | 否 |
+| **程序化生成** | 噪声、随机、采样等生成算法 | 否 |
+| **RPC** | 高性能 RPC 通信框架 | 否 |
+| **服务端** | 游戏服务器框架，支持房间、认证、速率限制 | 否 |
+| **网络** | 客户端网络，支持预测、AOI、增量压缩 | 否 |
+| **事务系统** | 游戏事务系统，支持 Redis/内存存储 | 否 |
+| **世界流送** | 开放世界分块加载和流送 | 否 |
 
 > 所有框架模块都可以独立使用，无需依赖特定渲染引擎。
 
@@ -199,7 +204,12 @@ npm install @esengine/fsm                # 状态机
 npm install @esengine/timer              # 定时器和冷却
 npm install @esengine/spatial            # 空间索引
 npm install @esengine/pathfinding        # 寻路
-npm install @esengine/network            # 网络
+npm install @esengine/procgen            # 程序化生成
+npm install @esengine/rpc                # RPC 框架
+npm install @esengine/server             # 游戏服务器
+npm install @esengine/network            # 客户端网络
+npm install @esengine/transaction        # 事务系统
+npm install @esengine/world-streaming    # 世界流送
 ```
 
 ### ESEngine 运行时（可选）
@@ -235,7 +245,11 @@ esengine/
 │   │   ├── spatial/       # 空间查询
 │   │   ├── pathfinding/   # 寻路
 │   │   ├── procgen/       # 程序化生成
-│   │   └── network/       # 网络
+│   │   ├── rpc/           # RPC 框架
+│   │   ├── server/        # 游戏服务器
+│   │   ├── network/       # 客户端网络
+│   │   ├── transaction/   # 事务系统
+│   │   └── world-streaming/ # 世界流送
 │   │
 │   ├── engine/            # ESEngine 运行时
 │   ├── rendering/         # 渲染模块

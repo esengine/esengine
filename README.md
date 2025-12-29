@@ -49,7 +49,12 @@ npm install @esengine/ecs-framework
 | **Timer** | Timer and cooldown systems | No |
 | **Spatial** | Spatial indexing and queries (QuadTree, Grid) | No |
 | **Pathfinding** | A* and navigation mesh pathfinding | No |
-| **Network** | Client/server networking with TSRPC | No |
+| **Procgen** | Procedural generation (noise, random, sampling) | No |
+| **RPC** | High-performance RPC communication framework | No |
+| **Server** | Game server framework with rooms, auth, rate limiting | No |
+| **Network** | Client networking with prediction, AOI, delta compression | No |
+| **Transaction** | Game transaction system with Redis/Memory storage | No |
+| **World Streaming** | Open world chunk loading and streaming | No |
 
 > All framework modules can be used standalone with any rendering engine.
 
@@ -199,7 +204,12 @@ npm install @esengine/fsm                # State machines
 npm install @esengine/timer              # Timers & cooldowns
 npm install @esengine/spatial            # Spatial indexing
 npm install @esengine/pathfinding        # Pathfinding
-npm install @esengine/network            # Networking
+npm install @esengine/procgen            # Procedural generation
+npm install @esengine/rpc                # RPC framework
+npm install @esengine/server             # Game server
+npm install @esengine/network            # Client networking
+npm install @esengine/transaction        # Transaction system
+npm install @esengine/world-streaming    # World streaming
 ```
 
 ### ESEngine Runtime (Optional)
@@ -235,7 +245,11 @@ esengine/
 │   │   ├── spatial/       # Spatial queries
 │   │   ├── pathfinding/   # Pathfinding
 │   │   ├── procgen/       # Procedural generation
-│   │   └── network/       # Networking
+│   │   ├── rpc/           # RPC framework
+│   │   ├── server/        # Game server
+│   │   ├── network/       # Client networking
+│   │   ├── transaction/   # Transaction system
+│   │   └── world-streaming/ # World streaming
 │   │
 │   ├── engine/            # ESEngine runtime
 │   ├── rendering/         # Rendering modules
