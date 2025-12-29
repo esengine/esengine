@@ -1,7 +1,79 @@
 ---
 title: "State Sync"
-description: "Interpolation, prediction and snapshot buffers"
+description: "Component sync, interpolation, prediction and snapshot buffers"
 ---
+
+## Component Sync System
+
+ECS component state synchronization based on `@sync` decorator.
+
+### Define Sync Component
+
+```typescript
+import { Component, ECSComponent, sync } from '@esengine/ecs-framework';
+
+@ECSComponent('Player')
+class PlayerComponent extends Component {
+    @sync("string") name: string = "";
+    @sync("uint16") score: number = 0;
+    @sync("float32") x: number = 0;
+    @sync("float32") y: number = 0;
+
+    // Fields without @sync won't be synced
+    localData: any;
+}
+```
+
+### Server-side Encoding
+
+```typescript
+import { ComponentSyncSystem } from '@esengine/network';
+
+const syncSystem = new ComponentSyncSystem({}, true);
+scene.addSystem(syncSystem);
+
+// Encode all entities (initial connection)
+const fullData = syncSystem.encodeAllEntities(true);
+sendToClient(fullData);
+
+// Encode delta (only send changes)
+const deltaData = syncSystem.encodeDelta();
+if (deltaData) {
+    broadcast(deltaData);
+}
+```
+
+### Client-side Decoding
+
+```typescript
+const syncSystem = new ComponentSyncSystem();
+scene.addSystem(syncSystem);
+
+// Register component types
+syncSystem.registerComponent(PlayerComponent);
+
+// Listen for sync events
+syncSystem.addSyncListener((event) => {
+    if (event.type === 'entitySpawned') {
+        console.log('New entity:', event.entityId);
+    }
+});
+
+// Apply state
+syncSystem.applySnapshot(data);
+```
+
+### Sync Types
+
+| Type | Description | Bytes |
+|------|-------------|-------|
+| `"boolean"` | Boolean | 1 |
+| `"int8"` / `"uint8"` | 8-bit integer | 1 |
+| `"int16"` / `"uint16"` | 16-bit integer | 2 |
+| `"int32"` / `"uint32"` | 32-bit integer | 4 |
+| `"float32"` | 32-bit float | 4 |
+| `"float64"` | 64-bit float | 8 |
+| `"string"` | String | Variable |
 
 ## Snapshot Buffer
 

@@ -62,3 +62,19 @@ export {
     StateDeltaCompressor,
     createStateDeltaCompressor
 } from './StateDelta';
+
+// =============================================================================
+// 组件同步 | Component Sync (@sync decorator based)
+// =============================================================================
+
+export type {
+    ComponentSyncEventType,
+    ComponentSyncEvent,
+    ComponentSyncEventListener,
+    ComponentSyncConfig
+} from './ComponentSync';
+
+export {
+    ComponentSyncSystem,
+    createComponentSyncSystem
+} from './ComponentSync';

@@ -133,6 +133,11 @@ export type {
     EntityDeltaState,
     DeltaSyncData,
     DeltaCompressionConfig,
+    // Component sync types
+    ComponentSyncEventType,
+    ComponentSyncEvent,
+    ComponentSyncEventListener,
+    ComponentSyncConfig,
 } from './sync'
 
 export {
@@ -150,6 +155,9 @@ export {
     DeltaFlags,
     StateDeltaCompressor,
     createStateDeltaCompressor,
+    // Component sync
+    ComponentSyncSystem,
+    createComponentSyncSystem,
 } from './sync'
 
 // ============================================================================

@@ -26,6 +26,10 @@
     "./testing": {
       "import": "./dist/testing/index.js",
       "types": "./dist/testing/index.d.ts"
+    },
+    "./ecs": {
+      "import": "./dist/ecs/index.js",
+      "types": "./dist/ecs/index.d.ts"
     }
   },
   "files": [
@@ -46,14 +50,19 @@
   },
   "peerDependencies": {
     "ws": ">=8.0.0",
-    "jsonwebtoken": ">=9.0.0"
+    "jsonwebtoken": ">=9.0.0",
+    "@esengine/ecs-framework": ">=2.0.0"
   },
   "peerDependenciesMeta": {
     "jsonwebtoken": {
       "optional": true
+    },
+    "@esengine/ecs-framework": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@esengine/ecs-framework": "workspace:*",
     "@types/jsonwebtoken": "^9.0.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.13",

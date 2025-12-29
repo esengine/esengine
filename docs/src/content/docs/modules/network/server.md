@@ -311,6 +311,93 @@ client.send('RoomMessage', {
 })
 ```
 
+## ECSRoom
+
+`ECSRoom` 是带有 ECS World 支持的房间基类，适用于需要 ECS 架构的游戏。
+
+### 服务端启动
+
+```typescript
+import { Core } from '@esengine/ecs-framework';
+import { createServer } from '@esengine/server';
+import { GameRoom } from './rooms/GameRoom.js';
+
+// 初始化 Core
+Core.create();
+
+// 全局游戏循环
+setInterval(() => Core.update(1/60), 16);
+
+// 创建服务器
+const server = await createServer({ port: 3000 });
+server.define('game', GameRoom);
+await server.start();
+```
+
+### 定义 ECSRoom
+
+```typescript
+import { ECSRoom, Player } from '@esengine/server/ecs';
+import { Component, ECSComponent, sync } from '@esengine/ecs-framework';
+
+// 定义同步组件
+@ECSComponent('Player')
+class PlayerComponent extends Component {
+    @sync("string") name: string = "";
+    @sync("uint16") score: number = 0;
+    @sync("float32") x: number = 0;
+    @sync("float32") y: number = 0;
+}
+
+// 定义房间
+class GameRoom extends ECSRoom {
+    onCreate() {
+        this.addSystem(new MovementSystem());
+    }
+
+    onJoin(player: Player) {
+        const entity = this.createPlayerEntity(player.id);
+        const comp = entity.addComponent(new PlayerComponent());
+        comp.name = player.id;
+    }
+}
+```
+
+### ECSRoom API
+
+```typescript
+abstract class ECSRoom<TState, TPlayerData> extends Room<TState, TPlayerData> {
+    protected readonly world: World;     // ECS World
+    protected readonly scene: Scene;     // 主场景
+
+    // 场景管理
+    protected addSystem(system: EntitySystem): void;
+    protected createEntity(name?: string): Entity;
+    protected createPlayerEntity(playerId: string, name?: string): Entity;
+    protected getPlayerEntity(playerId: string): Entity | undefined;
+    protected destroyPlayerEntity(playerId: string): void;
+
+    // 状态同步
+    protected sendFullState(player: Player): void;
+    protected broadcastSpawn(entity: Entity, prefabType?: string): void;
+    protected broadcastDelta(): void;
+}
+```
+
+### @sync 装饰器
+
+标记需要网络同步的组件字段：
+
+| 类型 | 描述 | 字节数 |
+|------|------|--------|
+| `"boolean"` | 布尔值 | 1 |
+| `"int8"` / `"uint8"` | 8位整数 | 1 |
+| `"int16"` / `"uint16"` | 16位整数 | 2 |
+| `"int32"` / `"uint32"` | 32位整数 | 4 |
+| `"float32"` | 32位浮点 | 4 |
+| `"float64"` | 64位浮点 | 8 |
+| `"string"` | 字符串 | 变长 |
+
 ## 最佳实践
 
 1. **合理设置 Tick 频率**

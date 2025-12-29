@@ -1,7 +1,79 @@
 ---
 title: "状态同步"
-description: "插值、预测和快照缓冲区"
+description: "组件同步、插值、预测和快照缓冲区"
 ---
+
+## 组件同步系统
+
+基于 `@sync` 装饰器的 ECS 组件状态同步。
+
+### 定义同步组件
+
+```typescript
+import { Component, ECSComponent, sync } from '@esengine/ecs-framework';
+
+@ECSComponent('Player')
+class PlayerComponent extends Component {
+    @sync("string") name: string = "";
+    @sync("uint16") score: number = 0;
+    @sync("float32") x: number = 0;
+    @sync("float32") y: number = 0;
+
+    // 不带 @sync 的字段不会同步
+    localData: any;
+}
+```
+
+### 服务端编码
+
+```typescript
+import { ComponentSyncSystem } from '@esengine/network';
+
+const syncSystem = new ComponentSyncSystem({}, true);
+scene.addSystem(syncSystem);
+
+// 编码所有实体（首次连接）
+const fullData = syncSystem.encodeAllEntities(true);
+sendToClient(fullData);
+
+// 编码增量（只发送变更）
+const deltaData = syncSystem.encodeDelta();
+if (deltaData) {
+    broadcast(deltaData);
+}
+```
+
+### 客户端解码
+
+```typescript
+const syncSystem = new ComponentSyncSystem();
+scene.addSystem(syncSystem);
+
+// 注册组件类型
+syncSystem.registerComponent(PlayerComponent);
+
+// 监听同步事件
+syncSystem.addSyncListener((event) => {
+    if (event.type === 'entitySpawned') {
+        console.log('New entity:', event.entityId);
+    }
+});
+
+// 应用状态
+syncSystem.applySnapshot(data);
+```
+
+### 同步类型
+
+| 类型 | 描述 | 字节数 |
+|------|------|--------|
+| `"boolean"` | 布尔值 | 1 |
+| `"int8"` / `"uint8"` | 8位整数 | 1 |
+| `"int16"` / `"uint16"` | 16位整数 | 2 |
+| `"int32"` / `"uint32"` | 32位整数 | 4 |
+| `"float32"` | 32位浮点 | 4 |
+| `"float64"` | 64位浮点 | 8 |
+| `"string"` | 字符串 | 变长 |
 
 ## 快照缓冲区
 

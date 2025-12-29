@@ -1688,6 +1688,9 @@ importers:
         specifier: workspace:*
         version: link:../rpc
     devDependencies:
+      '@esengine/ecs-framework':
+        specifier: workspace:*
+        version: link:../core/dist
       '@types/jsonwebtoken':
         specifier: ^9.0.0
         version: 9.0.10
