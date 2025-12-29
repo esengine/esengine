@@ -10,8 +10,8 @@ import type {
     ITransactionStorage,
     TransactionLog,
     TransactionState,
-    OperationLog,
-} from '../core/types.js'
+    OperationLog
+} from '../core/types.js';
 
 /**
  * @zh Redis 客户端接口（兼容 ioredis）
@@ -28,7 +28,14 @@ export interface RedisClient {
     hgetall(key: string): Promise<Record<string, string>>
     keys(pattern: string): Promise<string[]>
     expire(key: string, seconds: number): Promise<number>
+    quit(): Promise<string>
 }
+
+/**
+ * @zh Redis 连接工厂
+ * @en Redis connection factory
+ */
+export type RedisClientFactory = () => RedisClient | Promise<RedisClient>
 
 /**
  * @zh Redis 存储配置
@@ -36,10 +43,18 @@ export interface RedisClient {
  */
 export interface RedisStorageConfig {
     /**
-     * @zh Redis 客户端实例
-     * @en Redis client instance
+     * @zh Redis 客户端工厂（惰性连接）
+     * @en Redis client factory (lazy connection)
+     *
+     * @example
+     * ```typescript
+     * import Redis from 'ioredis'
+     * const storage = new RedisStorage({
+     *     factory: () => new Redis('redis://localhost:6379')
+     * })
+     * ```
      */
-    client: RedisClient
+    factory: RedisClientFactory
 
     /**
      * @zh 键前缀
@@ -60,32 +75,88 @@ if redis.call("get", KEYS[1]) == ARGV[1] then
 else
     return 0
 end
-`
+`;
 
 /**
  * @zh Redis 存储
  * @en Redis storage
  *
- * @zh 基于 Redis 的分布式事务存储，支持分布式锁
- * @en Redis-based distributed transaction storage with distributed locking support
+ * @zh 基于 Redis 的分布式事务存储，支持分布式锁和惰性连接
+ * @en Redis-based distributed transaction storage with distributed locking and lazy connection
  *
  * @example
  * ```typescript
  * import Redis from 'ioredis'
  *
- * const redis = new Redis('redis://localhost:6379')
- * const storage = new RedisStorage({ client: redis })
+ * // 创建存储（惰性连接，首次操作时才连接）
+ * const storage = new RedisStorage({
+ *     factory: () => new Redis('redis://localhost:6379')
+ * })
+ *
+ * // 使用后手动关闭
+ * await storage.close()
+ *
+ * // 或使用 await using 自动关闭 (TypeScript 5.2+)
+ * await using storage = new RedisStorage({
+ *     factory: () => new Redis('redis://localhost:6379')
+ * })
+ * // 作用域结束时自动关闭
  * ```
  */
 export class RedisStorage implements ITransactionStorage {
-    private _client: RedisClient
-    private _prefix: string
-    private _transactionTTL: number
+    private _client: RedisClient | null = null;
+    private _factory: RedisClientFactory;
+    private _prefix: string;
+    private _transactionTTL: number;
+    private _closed: boolean = false;
 
     constructor(config: RedisStorageConfig) {
-        this._client = config.client
-        this._prefix = config.prefix ?? 'tx:'
-        this._transactionTTL = config.transactionTTL ?? 86400 // 24 hours
+        this._factory = config.factory;
+        this._prefix = config.prefix ?? 'tx:';
+        this._transactionTTL = config.transactionTTL ?? 86400; // 24 hours
+    }
+
+    // =========================================================================
+    // 生命周期 | Lifecycle
+    // =========================================================================
+
+    /**
+     * @zh 获取 Redis 客户端（惰性连接）
+     * @en Get Redis client (lazy connection)
+     */
+    private async _getClient(): Promise<RedisClient> {
+        if (this._closed) {
+            throw new Error('RedisStorage is closed');
+        }
+
+        if (!this._client) {
+            this._client = await this._factory();
+        }
+
+        return this._client;
+    }
+
+    /**
+     * @zh 关闭存储连接
+     * @en Close storage connection
+     */
+    async close(): Promise<void> {
+        if (this._closed) return;
+
+        this._closed = true;
+
+        if (this._client) {
+            await this._client.quit();
+            this._client = null;
+        }
+    }
+
+    /**
+     * @zh 支持 await using 语法
+     * @en Support await using syntax
+     */
+    async [Symbol.asyncDispose](): Promise<void> {
+        await this.close();
     }
 
     // =========================================================================
@@ -93,20 +164,22 @@ export class RedisStorage implements ITransactionStorage {
     // =========================================================================
 
     async acquireLock(key: string, ttl: number): Promise<string | null> {
-        const lockKey = `${this._prefix}lock:${key}`
-        const token = `${Date.now()}_${Math.random().toString(36).substring(2)}`
-        const ttlSeconds = Math.ceil(ttl / 1000)
+        const client = await this._getClient();
+        const lockKey = `${this._prefix}lock:${key}`;
+        const token = `${Date.now()}_${Math.random().toString(36).substring(2)}`;
+        const ttlSeconds = Math.ceil(ttl / 1000);
 
-        const result = await this._client.set(lockKey, token, 'NX', 'EX', String(ttlSeconds))
+        const result = await client.set(lockKey, token, 'NX', 'EX', String(ttlSeconds));
 
-        return result === 'OK' ? token : null
+        return result === 'OK' ? token : null;
     }
 
     async releaseLock(key: string, token: string): Promise<boolean> {
-        const lockKey = `${this._prefix}lock:${key}`
+        const client = await this._getClient();
+        const lockKey = `${this._prefix}lock:${key}`;
 
-        const result = await this._client.eval(LOCK_SCRIPT, 1, lockKey, token)
-        return result === 1
+        const result = await client.eval(LOCK_SCRIPT, 1, lockKey, token);
+        return result === 1;
     }
 
     // =========================================================================
@@ -114,30 +187,32 @@ export class RedisStorage implements ITransactionStorage {
     // =========================================================================
 
     async saveTransaction(tx: TransactionLog): Promise<void> {
-        const key = `${this._prefix}tx:${tx.id}`
+        const client = await this._getClient();
+        const key = `${this._prefix}tx:${tx.id}`;
 
-        await this._client.set(key, JSON.stringify(tx))
-        await this._client.expire(key, this._transactionTTL)
+        await client.set(key, JSON.stringify(tx));
+        await client.expire(key, this._transactionTTL);
 
         if (tx.metadata?.serverId) {
-            const serverKey = `${this._prefix}server:${tx.metadata.serverId}:txs`
-            await this._client.hset(serverKey, tx.id, String(tx.createdAt))
+            const serverKey = `${this._prefix}server:${tx.metadata.serverId}:txs`;
+            await client.hset(serverKey, tx.id, String(tx.createdAt));
         }
     }
 
     async getTransaction(id: string): Promise<TransactionLog | null> {
-        const key = `${this._prefix}tx:${id}`
-        const data = await this._client.get(key)
+        const client = await this._getClient();
+        const key = `${this._prefix}tx:${id}`;
+        const data = await client.get(key);
 
-        return data ? JSON.parse(data) : null
+        return data ? JSON.parse(data) : null;
     }
 
     async updateTransactionState(id: string, state: TransactionState): Promise<void> {
-        const tx = await this.getTransaction(id)
+        const tx = await this.getTransaction(id);
         if (tx) {
-            tx.state = state
-            tx.updatedAt = Date.now()
-            await this.saveTransaction(tx)
+            tx.state = state;
+            tx.updatedAt = Date.now();
+            await this.saveTransaction(tx);
         }
     }
 
@@ -147,62 +222,64 @@ export class RedisStorage implements ITransactionStorage {
         state: OperationLog['state'],
         error?: string
     ): Promise<void> {
-        const tx = await this.getTransaction(transactionId)
+        const tx = await this.getTransaction(transactionId);
         if (tx && tx.operations[operationIndex]) {
-            tx.operations[operationIndex].state = state
+            tx.operations[operationIndex].state = state;
             if (error) {
-                tx.operations[operationIndex].error = error
+                tx.operations[operationIndex].error = error;
             }
             if (state === 'executed') {
-                tx.operations[operationIndex].executedAt = Date.now()
+                tx.operations[operationIndex].executedAt = Date.now();
             } else if (state === 'compensated') {
-                tx.operations[operationIndex].compensatedAt = Date.now()
+                tx.operations[operationIndex].compensatedAt = Date.now();
             }
-            tx.updatedAt = Date.now()
-            await this.saveTransaction(tx)
+            tx.updatedAt = Date.now();
+            await this.saveTransaction(tx);
         }
     }
 
     async getPendingTransactions(serverId?: string): Promise<TransactionLog[]> {
-        const result: TransactionLog[] = []
+        const client = await this._getClient();
+        const result: TransactionLog[] = [];
 
         if (serverId) {
-            const serverKey = `${this._prefix}server:${serverId}:txs`
-            const txIds = await this._client.hgetall(serverKey)
+            const serverKey = `${this._prefix}server:${serverId}:txs`;
+            const txIds = await client.hgetall(serverKey);
 
             for (const id of Object.keys(txIds)) {
-                const tx = await this.getTransaction(id)
+                const tx = await this.getTransaction(id);
                 if (tx && (tx.state === 'pending' || tx.state === 'executing')) {
-                    result.push(tx)
+                    result.push(tx);
                 }
             }
         } else {
-            const pattern = `${this._prefix}tx:*`
-            const keys = await this._client.keys(pattern)
+            const pattern = `${this._prefix}tx:*`;
+            const keys = await client.keys(pattern);
 
             for (const key of keys) {
-                const data = await this._client.get(key)
+                const data = await client.get(key);
                 if (data) {
-                    const tx: TransactionLog = JSON.parse(data)
+                    const tx: TransactionLog = JSON.parse(data);
                     if (tx.state === 'pending' || tx.state === 'executing') {
-                        result.push(tx)
+                        result.push(tx);
                     }
                 }
             }
         }
 
-        return result
+        return result;
     }
 
     async deleteTransaction(id: string): Promise<void> {
-        const key = `${this._prefix}tx:${id}`
-        const tx = await this.getTransaction(id)
+        const client = await this._getClient();
+        const key = `${this._prefix}tx:${id}`;
+        const tx = await this.getTransaction(id);
 
-        await this._client.del(key)
+        await client.del(key);
 
         if (tx?.metadata?.serverId) {
-            const serverKey = `${this._prefix}server:${tx.metadata.serverId}:txs`
-            await this._client.hdel(serverKey, id)
+            const serverKey = `${this._prefix}server:${tx.metadata.serverId}:txs`;
+            await client.hdel(serverKey, id);
         }
     }
 
@@ -211,27 +288,30 @@ export class RedisStorage implements ITransactionStorage {
     // =========================================================================
 
     async get<T>(key: string): Promise<T | null> {
-        const fullKey = `${this._prefix}data:${key}`
-        const data = await this._client.get(fullKey)
+        const client = await this._getClient();
+        const fullKey = `${this._prefix}data:${key}`;
+        const data = await client.get(fullKey);
 
-        return data ? JSON.parse(data) : null
+        return data ? JSON.parse(data) : null;
     }
 
     async set<T>(key: string, value: T, ttl?: number): Promise<void> {
-        const fullKey = `${this._prefix}data:${key}`
+        const client = await this._getClient();
+        const fullKey = `${this._prefix}data:${key}`;
 
         if (ttl) {
-            const ttlSeconds = Math.ceil(ttl / 1000)
-            await this._client.set(fullKey, JSON.stringify(value), 'EX', String(ttlSeconds))
+            const ttlSeconds = Math.ceil(ttl / 1000);
+            await client.set(fullKey, JSON.stringify(value), 'EX', String(ttlSeconds));
         } else {
-            await this._client.set(fullKey, JSON.stringify(value))
+            await client.set(fullKey, JSON.stringify(value));
         }
     }
 
     async delete(key: string): Promise<boolean> {
-        const fullKey = `${this._prefix}data:${key}`
-        const result = await this._client.del(fullKey)
-        return result > 0
+        const client = await this._getClient();
+        const fullKey = `${this._prefix}data:${key}`;
+        const result = await client.del(fullKey);
+        return result > 0;
     }
 }
 
@@ -240,5 +320,5 @@ export class RedisStorage implements ITransactionStorage {
  * @en Create Redis storage
  */
 export function createRedisStorage(config: RedisStorageConfig): RedisStorage {
-    return new RedisStorage(config)
+    return new RedisStorage(config);
 }

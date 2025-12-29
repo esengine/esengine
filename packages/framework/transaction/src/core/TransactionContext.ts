@@ -12,15 +12,15 @@ import type {
     TransactionOptions,
     TransactionLog,
     OperationLog,
-    OperationResult,
-} from './types.js'
+    OperationResult
+} from './types.js';
 
 /**
  * @zh 生成唯一 ID
  * @en Generate unique ID
  */
 function generateId(): string {
-    return `tx_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 11)}`
+    return `tx_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**
@@ -39,22 +39,22 @@ function generateId(): string {
  * ```
  */
 export class TransactionContext implements ITransactionContext {
-    private _id: string
-    private _state: TransactionState = 'pending'
-    private _timeout: number
-    private _operations: ITransactionOperation[] = []
-    private _storage: ITransactionStorage | null
-    private _metadata: Record<string, unknown>
-    private _contextData: Map<string, unknown> = new Map()
-    private _startTime: number = 0
-    private _distributed: boolean
+    private _id: string;
+    private _state: TransactionState = 'pending';
+    private _timeout: number;
+    private _operations: ITransactionOperation[] = [];
+    private _storage: ITransactionStorage | null;
+    private _metadata: Record<string, unknown>;
+    private _contextData: Map<string, unknown> = new Map();
+    private _startTime: number = 0;
+    private _distributed: boolean;
 
     constructor(options: TransactionOptions & { storage?: ITransactionStorage } = {}) {
-        this._id = generateId()
-        this._timeout = options.timeout ?? 30000
-        this._storage = options.storage ?? null
-        this._metadata = options.metadata ?? {}
-        this._distributed = options.distributed ?? false
+        this._id = generateId();
+        this._timeout = options.timeout ?? 30000;
+        this._storage = options.storage ?? null;
+        this._metadata = options.metadata ?? {};
+        this._distributed = options.distributed ?? false;
     }
 
     // =========================================================================
@@ -62,27 +62,27 @@ export class TransactionContext implements ITransactionContext {
     // =========================================================================
 
     get id(): string {
-        return this._id
+        return this._id;
     }
 
     get state(): TransactionState {
-        return this._state
+        return this._state;
     }
 
     get timeout(): number {
-        return this._timeout
+        return this._timeout;
     }
 
     get operations(): ReadonlyArray<ITransactionOperation> {
-        return this._operations
+        return this._operations;
     }
 
     get storage(): ITransactionStorage | null {
-        return this._storage
+        return this._storage;
     }
 
     get metadata(): Record<string, unknown> {
-        return this._metadata
+        return this._metadata;
     }
 
     // =========================================================================
@@ -95,10 +95,10 @@ export class TransactionContext implements ITransactionContext {
      */
     addOperation<T extends ITransactionOperation>(operation: T): this {
         if (this._state !== 'pending') {
-            throw new Error(`Cannot add operation to transaction in state: ${this._state}`)
+            throw new Error(`Cannot add operation to transaction in state: ${this._state}`);
         }
-        this._operations.push(operation)
-        return this
+        this._operations.push(operation);
+        return this;
     }
 
     /**
@@ -112,64 +112,64 @@ export class TransactionContext implements ITransactionContext {
                 transactionId: this._id,
                 results: [],
                 error: `Transaction already in state: ${this._state}`,
-                duration: 0,
-            }
+                duration: 0
+            };
         }
 
-        this._startTime = Date.now()
-        this._state = 'executing'
+        this._startTime = Date.now();
+        this._state = 'executing';
 
-        const results: OperationResult[] = []
-        let executedCount = 0
+        const results: OperationResult[] = [];
+        let executedCount = 0;
 
         try {
-            await this._saveLog()
+            await this._saveLog();
 
             for (let i = 0; i < this._operations.length; i++) {
                 if (this._isTimedOut()) {
-                    throw new Error('Transaction timed out')
+                    throw new Error('Transaction timed out');
                 }
 
-                const op = this._operations[i]
+                const op = this._operations[i];
 
-                const isValid = await op.validate(this)
+                const isValid = await op.validate(this);
                 if (!isValid) {
-                    throw new Error(`Validation failed for operation: ${op.name}`)
+                    throw new Error(`Validation failed for operation: ${op.name}`);
                 }
 
-                const result = await op.execute(this)
-                results.push(result)
-                executedCount++
+                const result = await op.execute(this);
+                results.push(result);
+                executedCount++;
 
-                await this._updateOperationLog(i, 'executed')
+                await this._updateOperationLog(i, 'executed');
 
                 if (!result.success) {
-                    throw new Error(result.error ?? `Operation ${op.name} failed`)
+                    throw new Error(result.error ?? `Operation ${op.name} failed`);
                 }
             }
 
-            this._state = 'committed'
-            await this._updateTransactionState('committed')
+            this._state = 'committed';
+            await this._updateTransactionState('committed');
 
             return {
                 success: true,
                 transactionId: this._id,
                 results,
                 data: this._collectResultData(results) as T,
-                duration: Date.now() - this._startTime,
-            }
+                duration: Date.now() - this._startTime
+            };
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
+            const errorMessage = error instanceof Error ? error.message : String(error);
 
-            await this._compensate(executedCount - 1)
+            await this._compensate(executedCount - 1);
 
             return {
                 success: false,
                 transactionId: this._id,
                 results,
                 error: errorMessage,
-                duration: Date.now() - this._startTime,
-            }
+                duration: Date.now() - this._startTime
+            };
         }
     }
 
@@ -179,10 +179,10 @@ export class TransactionContext implements ITransactionContext {
      */
     async rollback(): Promise<void> {
         if (this._state === 'committed' || this._state === 'rolledback') {
-            return
+            return;
         }
 
-        await this._compensate(this._operations.length - 1)
+        await this._compensate(this._operations.length - 1);
     }
 
     /**
@@ -190,7 +190,7 @@ export class TransactionContext implements ITransactionContext {
      * @en Get context data
      */
     get<T>(key: string): T | undefined {
-        return this._contextData.get(key) as T | undefined
+        return this._contextData.get(key) as T | undefined;
     }
 
     /**
@@ -198,7 +198,7 @@ export class TransactionContext implements ITransactionContext {
      * @en Set context data
      */
     set<T>(key: string, value: T): void {
-        this._contextData.set(key, value)
+        this._contextData.set(key, value);
     }
 
     // =========================================================================
@@ -206,28 +206,28 @@ export class TransactionContext implements ITransactionContext {
     // =========================================================================
 
     private _isTimedOut(): boolean {
-        return Date.now() - this._startTime > this._timeout
+        return Date.now() - this._startTime > this._timeout;
     }
 
     private async _compensate(fromIndex: number): Promise<void> {
-        this._state = 'rolledback'
+        this._state = 'rolledback';
 
         for (let i = fromIndex; i >= 0; i--) {
-            const op = this._operations[i]
+            const op = this._operations[i];
             try {
-                await op.compensate(this)
-                await this._updateOperationLog(i, 'compensated')
+                await op.compensate(this);
+                await this._updateOperationLog(i, 'compensated');
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error)
-                await this._updateOperationLog(i, 'failed', errorMessage)
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                await this._updateOperationLog(i, 'failed', errorMessage);
             }
         }
 
-        await this._updateTransactionState('rolledback')
+        await this._updateTransactionState('rolledback');
     }
 
     private async _saveLog(): Promise<void> {
-        if (!this._storage) return
+        if (!this._storage) return;
 
         const log: TransactionLog = {
             id: this._id,
@@ -238,19 +238,19 @@ export class TransactionContext implements ITransactionContext {
             operations: this._operations.map((op) => ({
                 name: op.name,
                 data: op.data,
-                state: 'pending' as const,
+                state: 'pending' as const
             })),
             metadata: this._metadata,
-            distributed: this._distributed,
-        }
+            distributed: this._distributed
+        };
 
-        await this._storage.saveTransaction(log)
+        await this._storage.saveTransaction(log);
     }
 
     private async _updateTransactionState(state: TransactionState): Promise<void> {
-        this._state = state
+        this._state = state;
         if (this._storage) {
-            await this._storage.updateTransactionState(this._id, state)
+            await this._storage.updateTransactionState(this._id, state);
         }
     }
 
@@ -260,18 +260,18 @@ export class TransactionContext implements ITransactionContext {
         error?: string
     ): Promise<void> {
         if (this._storage) {
-            await this._storage.updateOperationState(this._id, index, state, error)
+            await this._storage.updateOperationState(this._id, index, state, error);
         }
     }
 
     private _collectResultData(results: OperationResult[]): unknown {
-        const data: Record<string, unknown> = {}
+        const data: Record<string, unknown> = {};
         for (const result of results) {
             if (result.data !== undefined) {
-                Object.assign(data, result.data)
+                Object.assign(data, result.data);
             }
         }
-        return Object.keys(data).length > 0 ? data : undefined
+        return Object.keys(data).length > 0 ? data : undefined;
     }
 }
 
@@ -282,5 +282,5 @@ export class TransactionContext implements ITransactionContext {
 export function createTransactionContext(
     options: TransactionOptions & { storage?: ITransactionStorage } = {}
 ): ITransactionContext {
-    return new TransactionContext(options)
+    return new TransactionContext(options);
 }

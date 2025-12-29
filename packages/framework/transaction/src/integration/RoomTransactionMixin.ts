@@ -7,9 +7,9 @@ import type {
     ITransactionStorage,
     ITransactionContext,
     TransactionOptions,
-    TransactionResult,
-} from '../core/types.js'
-import { TransactionManager } from '../core/TransactionManager.js'
+    TransactionResult
+} from '../core/types.js';
+import { TransactionManager } from '../core/TransactionManager.js';
 
 /**
  * @zh 事务 Room 配置
@@ -96,32 +96,32 @@ export function withTransactions<TBase extends new (...args: any[]) => any>(
     config: TransactionRoomConfig = {}
 ): TBase & (new (...args: any[]) => ITransactionRoom) {
     return class TransactionRoom extends Base implements ITransactionRoom {
-        private _transactionManager: TransactionManager
+        private _transactionManager: TransactionManager;
 
         constructor(...args: any[]) {
-            super(...args)
+            super(...args);
             this._transactionManager = new TransactionManager({
                 storage: config.storage,
                 defaultTimeout: config.defaultTimeout,
-                serverId: config.serverId,
-            })
+                serverId: config.serverId
+            });
         }
 
         get transactions(): TransactionManager {
-            return this._transactionManager
+            return this._transactionManager;
         }
 
         beginTransaction(options?: TransactionOptions): ITransactionContext {
-            return this._transactionManager.begin(options)
+            return this._transactionManager.begin(options);
         }
 
         runTransaction<T = unknown>(
             builder: (ctx: ITransactionContext) => void | Promise<void>,
             options?: TransactionOptions
         ): Promise<TransactionResult<T>> {
-            return this._transactionManager.run<T>(builder, options)
+            return this._transactionManager.run<T>(builder, options);
         }
-    }
+    };
 }
 
 /**
@@ -147,28 +147,28 @@ export function withTransactions<TBase extends new (...args: any[]) => any>(
  * ```
  */
 export abstract class TransactionRoom implements ITransactionRoom {
-    private _transactionManager: TransactionManager
+    private _transactionManager: TransactionManager;
 
     constructor(config: TransactionRoomConfig = {}) {
         this._transactionManager = new TransactionManager({
             storage: config.storage,
             defaultTimeout: config.defaultTimeout,
-            serverId: config.serverId,
-        })
+            serverId: config.serverId
+        });
     }
 
     get transactions(): TransactionManager {
-        return this._transactionManager
+        return this._transactionManager;
     }
 
     beginTransaction(options?: TransactionOptions): ITransactionContext {
-        return this._transactionManager.begin(options)
+        return this._transactionManager.begin(options);
     }
 
     runTransaction<T = unknown>(
         builder: (ctx: ITransactionContext) => void | Promise<void>,
         options?: TransactionOptions
     ): Promise<TransactionResult<T>> {
-        return this._transactionManager.run<T>(builder, options)
+        return this._transactionManager.run<T>(builder, options);
     }
 }

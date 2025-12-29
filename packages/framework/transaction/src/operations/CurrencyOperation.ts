@@ -3,8 +3,8 @@
  * @en Currency operation
  */
 
-import type { ITransactionContext, OperationResult } from '../core/types.js'
-import { BaseOperation } from './BaseOperation.js'
+import type { ITransactionContext, OperationResult } from '../core/types.js';
+import { BaseOperation } from './BaseOperation.js';
 
 /**
  * @zh 货币操作类型
@@ -112,89 +112,89 @@ export interface ICurrencyProvider {
  * ```
  */
 export class CurrencyOperation extends BaseOperation<CurrencyOperationData, CurrencyOperationResult> {
-    readonly name = 'currency'
+    readonly name = 'currency';
 
-    private _provider: ICurrencyProvider | null = null
-    private _beforeBalance: number = 0
+    private _provider: ICurrencyProvider | null = null;
+    private _beforeBalance: number = 0;
 
     /**
      * @zh 设置货币数据提供者
      * @en Set currency data provider
      */
     setProvider(provider: ICurrencyProvider): this {
-        this._provider = provider
-        return this
+        this._provider = provider;
+        return this;
     }
 
     async validate(ctx: ITransactionContext): Promise<boolean> {
         if (this.data.amount <= 0) {
-            return false
+            return false;
         }
 
         if (this.data.type === 'deduct') {
-            const balance = await this._getBalance(ctx)
-            return balance >= this.data.amount
+            const balance = await this._getBalance(ctx);
+            return balance >= this.data.amount;
         }
 
-        return true
+        return true;
     }
 
     async execute(ctx: ITransactionContext): Promise<OperationResult<CurrencyOperationResult>> {
-        const { type, playerId, currency, amount } = this.data
+        const { type, playerId, currency, amount } = this.data;
 
-        this._beforeBalance = await this._getBalance(ctx)
+        this._beforeBalance = await this._getBalance(ctx);
 
-        let afterBalance: number
+        let afterBalance: number;
 
         if (type === 'add') {
-            afterBalance = this._beforeBalance + amount
+            afterBalance = this._beforeBalance + amount;
         } else {
             if (this._beforeBalance < amount) {
-                return this.failure('Insufficient balance', 'INSUFFICIENT_BALANCE')
+                return this.failure('Insufficient balance', 'INSUFFICIENT_BALANCE');
             }
-            afterBalance = this._beforeBalance - amount
+            afterBalance = this._beforeBalance - amount;
         }
 
-        await this._setBalance(ctx, afterBalance)
+        await this._setBalance(ctx, afterBalance);
 
-        ctx.set(`currency:${playerId}:${currency}:before`, this._beforeBalance)
-        ctx.set(`currency:${playerId}:${currency}:after`, afterBalance)
+        ctx.set(`currency:${playerId}:${currency}:before`, this._beforeBalance);
+        ctx.set(`currency:${playerId}:${currency}:after`, afterBalance);
 
         return this.success({
             beforeBalance: this._beforeBalance,
-            afterBalance,
-        })
+            afterBalance
+        });
     }
 
     async compensate(ctx: ITransactionContext): Promise<void> {
-        await this._setBalance(ctx, this._beforeBalance)
+        await this._setBalance(ctx, this._beforeBalance);
     }
 
     private async _getBalance(ctx: ITransactionContext): Promise<number> {
-        const { playerId, currency } = this.data
+        const { playerId, currency } = this.data;
 
         if (this._provider) {
-            return this._provider.getBalance(playerId, currency)
+            return this._provider.getBalance(playerId, currency);
         }
 
         if (ctx.storage) {
-            const balance = await ctx.storage.get<number>(`player:${playerId}:currency:${currency}`)
-            return balance ?? 0
+            const balance = await ctx.storage.get<number>(`player:${playerId}:currency:${currency}`);
+            return balance ?? 0;
         }
 
-        return 0
+        return 0;
     }
 
     private async _setBalance(ctx: ITransactionContext, amount: number): Promise<void> {
-        const { playerId, currency } = this.data
+        const { playerId, currency } = this.data;
 
         if (this._provider) {
-            await this._provider.setBalance(playerId, currency, amount)
-            return
+            await this._provider.setBalance(playerId, currency, amount);
+            return;
         }
 
         if (ctx.storage) {
-            await ctx.storage.set(`player:${playerId}:currency:${currency}`, amount)
+            await ctx.storage.set(`player:${playerId}:currency:${currency}`, amount);
         }
     }
 }
@@ -204,5 +204,5 @@ export class CurrencyOperation extends BaseOperation<CurrencyOperationData, Curr
  * @en Create currency operation
  */
 export function createCurrencyOperation(data: CurrencyOperationData): CurrencyOperation {
-    return new CurrencyOperation(data)
+    return new CurrencyOperation(data);
 }
