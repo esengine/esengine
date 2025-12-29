@@ -34,6 +34,7 @@ ESEngine provides a rich set of modules that can be imported as needed.
 | Module | Package | Description |
 |--------|---------|-------------|
 | [Network](/en/modules/network/) | `@esengine/network` | Multiplayer game networking |
+| [Transaction](/en/modules/transaction/) | `@esengine/transaction` | Game transactions with distributed support |
 
 ## Installation
 
