@@ -46,3 +46,19 @@ export type {
 } from './ClientPrediction';
 
 export { ClientPrediction, createClientPrediction } from './ClientPrediction';
+
+// =============================================================================
+// 状态增量压缩 | State Delta Compression
+// =============================================================================
+
+export type {
+    EntityDeltaState,
+    DeltaSyncData,
+    DeltaCompressionConfig
+} from './StateDelta';
+
+export {
+    DeltaFlags,
+    StateDeltaCompressor,
+    createStateDeltaCompressor
+} from './StateDelta';

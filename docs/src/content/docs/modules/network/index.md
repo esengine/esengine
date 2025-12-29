@@ -147,7 +147,10 @@ service.on('chat', (data) => {
 
 - [客户端使用](/modules/network/client/) - NetworkPlugin、组件和系统
 - [服务器端](/modules/network/server/) - GameServer 和 Room 管理
-- [状态同步](/modules/network/sync/) - 插值、预测和快照
+- [状态同步](/modules/network/sync/) - 插值和快照缓冲
+- [客户端预测](/modules/network/prediction/) - 输入预测和服务器校正
+- [兴趣区域 (AOI)](/modules/network/aoi/) - 视野过滤和带宽优化
+- [增量压缩](/modules/network/delta/) - 状态增量同步
 - [API 参考](/modules/network/api/) - 完整 API 文档
 
 ## 服务令牌
@@ -159,10 +162,14 @@ import {
     NetworkServiceToken,
     NetworkSyncSystemToken,
     NetworkSpawnSystemToken,
-    NetworkInputSystemToken
+    NetworkInputSystemToken,
+    NetworkPredictionSystemToken,
+    NetworkAOISystemToken,
 } from '@esengine/network';
 
 const networkService = services.get(NetworkServiceToken);
+const predictionSystem = services.get(NetworkPredictionSystemToken);
+const aoiSystem = services.get(NetworkAOISystemToken);
 ```
 
 ## 蓝图节点

@@ -18,10 +18,22 @@ import { rpc } from '@esengine/rpc'
  */
 export interface PlayerInput {
     /**
+     * @zh 输入序列号（用于客户端预测）
+     * @en Input sequence number (for client prediction)
+     */
+    seq: number
+
+    /**
      * @zh 帧序号
      * @en Frame number
      */
     frame: number
+
+    /**
+     * @zh 客户端时间戳
+     * @en Client timestamp
+     */
+    timestamp: number
 
     /**
      * @zh 移动方向
@@ -41,9 +53,41 @@ export interface PlayerInput {
  * @en Entity sync state
  */
 export interface EntitySyncState {
+    /**
+     * @zh 网络实体 ID
+     * @en Network entity ID
+     */
     netId: number
+
+    /**
+     * @zh 位置
+     * @en Position
+     */
     pos?: { x: number; y: number }
+
+    /**
+     * @zh 旋转角度
+     * @en Rotation angle
+     */
     rot?: number
+
+    /**
+     * @zh 速度（用于外推）
+     * @en Velocity (for extrapolation)
+     */
+    vel?: { x: number; y: number }
+
+    /**
+     * @zh 角速度
+     * @en Angular velocity
+     */
+    angVel?: number
+
+    /**
+     * @zh 自定义数据
+     * @en Custom data
+     */
+    custom?: Record<string, unknown>
 }
 
 /**
@@ -56,6 +100,18 @@ export interface SyncData {
      * @en Server frame number
      */
     frame: number
+
+    /**
+     * @zh 服务器时间戳（用于插值）
+     * @en Server timestamp (for interpolation)
+     */
+    timestamp: number
+
+    /**
+     * @zh 已确认的输入序列号（用于客户端预测校正）
+     * @en Acknowledged input sequence (for client prediction reconciliation)
+     */
+    ackSeq?: number
 
     /**
      * @zh 实体状态列表
@@ -84,6 +140,30 @@ export interface DespawnData {
     netId: number
 }
 
+/**
+ * @zh 完整状态快照（用于重连）
+ * @en Full state snapshot (for reconnection)
+ */
+export interface FullStateData {
+    /**
+     * @zh 服务器帧号
+     * @en Server frame number
+     */
+    frame: number
+
+    /**
+     * @zh 服务器时间戳
+     * @en Server timestamp
+     */
+    timestamp: number
+
+    /**
+     * @zh 所有实体状态
+     * @en All entity states
+     */
+    entities: Array<SpawnData & { state?: EntitySyncState }>
+}
+
 // ============================================================================
 // API Types | API 类型
 // ============================================================================
@@ -104,6 +184,54 @@ export interface JoinRequest {
 export interface JoinResponse {
     playerId: number
     roomId: string
+}
+
+/**
+ * @zh 重连请求
+ * @en Reconnect request
+ */
+export interface ReconnectRequest {
+    /**
+     * @zh 之前的玩家 ID
+     * @en Previous player ID
+     */
+    playerId: number
+
+    /**
+     * @zh 房间 ID
+     * @en Room ID
+     */
+    roomId: string
+
+    /**
+     * @zh 重连令牌
+     * @en Reconnection token
+     */
+    token: string
+}
+
+/**
+ * @zh 重连响应
+ * @en Reconnect response
+ */
+export interface ReconnectResponse {
+    /**
+     * @zh 是否成功
+     * @en Whether successful
+     */
+    success: boolean
+
+    /**
+     * @zh 完整状态（成功时）
+     * @en Full state (when successful)
+     */
+    state?: FullStateData
+
+    /**
+     * @zh 错误信息（失败时）
+     * @en Error message (when failed)
+     */
+    error?: string
 }
 
 // ============================================================================
@@ -145,6 +273,12 @@ export const gameProtocol = rpc.define({
          * @en Leave room
          */
         leave: rpc.api<void, void>(),
+
+        /**
+         * @zh 重连
+         * @en Reconnect
+         */
+        reconnect: rpc.api<ReconnectRequest, ReconnectResponse>(),
     },
     msg: {
         /**
@@ -170,6 +304,12 @@ export const gameProtocol = rpc.define({
          * @en Entity despawn
          */
         despawn: rpc.msg<DespawnData>(),
+
+        /**
+         * @zh 完整状态快照
+         * @en Full state snapshot
+         */
+        fullState: rpc.msg<FullStateData>(),
     },
 })
 
