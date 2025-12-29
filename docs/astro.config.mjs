@@ -255,6 +255,9 @@ export default defineConfig({
               translations: { en: 'RPC' },
               items: [
                 { label: '概述', slug: 'modules/rpc', translations: { en: 'Overview' } },
+                { label: '服务端', slug: 'modules/rpc/server', translations: { en: 'Server' } },
+                { label: '客户端', slug: 'modules/rpc/client', translations: { en: 'Client' } },
+                { label: '编解码', slug: 'modules/rpc/codec', translations: { en: 'Codec' } },
               ],
             },
             {
@@ -265,7 +268,21 @@ export default defineConfig({
                 { label: '客户端', slug: 'modules/network/client', translations: { en: 'Client' } },
                 { label: '服务器', slug: 'modules/network/server', translations: { en: 'Server' } },
                 { label: '状态同步', slug: 'modules/network/sync', translations: { en: 'State Sync' } },
+                { label: '客户端预测', slug: 'modules/network/prediction', translations: { en: 'Prediction' } },
+                { label: 'AOI 兴趣区域', slug: 'modules/network/aoi', translations: { en: 'AOI' } },
+                { label: '增量压缩', slug: 'modules/network/delta', translations: { en: 'Delta Compression' } },
                 { label: 'API 参考', slug: 'modules/network/api', translations: { en: 'API Reference' } },
+              ],
+            },
+            {
+              label: '事务系统',
+              translations: { en: 'Transaction' },
+              items: [
+                { label: '概述', slug: 'modules/transaction', translations: { en: 'Overview' } },
+                { label: '核心概念', slug: 'modules/transaction/core', translations: { en: 'Core Concepts' } },
+                { label: '存储层', slug: 'modules/transaction/storage', translations: { en: 'Storage Layer' } },
+                { label: '操作', slug: 'modules/transaction/operations', translations: { en: 'Operations' } },
+                { label: '分布式事务', slug: 'modules/transaction/distributed', translations: { en: 'Distributed' } },
               ],
             },
             {
@@ -303,6 +320,8 @@ export default defineConfig({
             { label: '@esengine/fsm', link: 'https://github.com/esengine/esengine/blob/master/packages/framework/fsm/CHANGELOG.md', attrs: { target: '_blank' } },
             { label: '@esengine/timer', link: 'https://github.com/esengine/esengine/blob/master/packages/framework/timer/CHANGELOG.md', attrs: { target: '_blank' } },
             { label: '@esengine/network', link: 'https://github.com/esengine/esengine/blob/master/packages/framework/network/CHANGELOG.md', attrs: { target: '_blank' } },
+            { label: '@esengine/transaction', link: 'https://github.com/esengine/esengine/blob/master/packages/framework/transaction/CHANGELOG.md', attrs: { target: '_blank' } },
+            { label: '@esengine/rpc', link: 'https://github.com/esengine/esengine/blob/master/packages/framework/rpc/CHANGELOG.md', attrs: { target: '_blank' } },
             { label: '@esengine/cli', link: 'https://github.com/esengine/esengine/blob/master/packages/tools/cli/CHANGELOG.md', attrs: { target: '_blank' } },
           ],
         },
