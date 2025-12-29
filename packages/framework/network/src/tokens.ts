@@ -8,6 +8,8 @@ import type { NetworkService } from './services/NetworkService';
 import type { NetworkSyncSystem } from './systems/NetworkSyncSystem';
 import type { NetworkSpawnSystem } from './systems/NetworkSpawnSystem';
 import type { NetworkInputSystem } from './systems/NetworkInputSystem';
+import type { NetworkPredictionSystem } from './systems/NetworkPredictionSystem';
+import type { NetworkAOISystem } from './systems/NetworkAOISystem';
 
 // ============================================================================
 // Network 模块导出的令牌 | Tokens exported by Network module
@@ -36,3 +38,15 @@ export const NetworkSpawnSystemToken = createServiceToken<NetworkSpawnSystem>('n
  * Network input system token
  */
 export const NetworkInputSystemToken = createServiceToken<NetworkInputSystem>('networkInputSystem');
+
+/**
+ * 网络预测系统令牌
+ * Network prediction system token
+ */
+export const NetworkPredictionSystemToken = createServiceToken<NetworkPredictionSystem>('networkPredictionSystem');
+
+/**
+ * 网络 AOI 系统令牌
+ * Network AOI system token
+ */
+export const NetworkAOISystemToken = createServiceToken<NetworkAOISystem>('networkAOISystem');

@@ -35,8 +35,11 @@ export {
     type SyncData,
     type SpawnData,
     type DespawnData,
+    type FullStateData,
     type JoinRequest,
     type JoinResponse,
+    type ReconnectRequest,
+    type ReconnectResponse,
 } from './protocol'
 
 // ============================================================================
@@ -48,6 +51,8 @@ export {
     NetworkSyncSystemToken,
     NetworkSpawnSystemToken,
     NetworkInputSystemToken,
+    NetworkPredictionSystemToken,
+    NetworkAOISystemToken,
 } from './tokens'
 
 // ============================================================================
@@ -81,10 +86,30 @@ export { NetworkTransform } from './components/NetworkTransform'
 // ============================================================================
 
 export { NetworkSyncSystem } from './systems/NetworkSyncSystem'
-export type { SyncMessage } from './systems/NetworkSyncSystem'
+export type { SyncMessage, NetworkSyncConfig } from './systems/NetworkSyncSystem'
 export { NetworkSpawnSystem } from './systems/NetworkSpawnSystem'
 export type { PrefabFactory, SpawnMessage, DespawnMessage } from './systems/NetworkSpawnSystem'
-export { NetworkInputSystem } from './systems/NetworkInputSystem'
+export { NetworkInputSystem, createNetworkInputSystem } from './systems/NetworkInputSystem'
+export type { NetworkInputConfig } from './systems/NetworkInputSystem'
+export {
+    NetworkPredictionSystem,
+    createNetworkPredictionSystem,
+} from './systems/NetworkPredictionSystem'
+export type {
+    NetworkPredictionConfig,
+    MovementInput,
+    PredictedTransform,
+} from './systems/NetworkPredictionSystem'
+export {
+    NetworkAOISystem,
+    createNetworkAOISystem,
+} from './systems/NetworkAOISystem'
+export type {
+    NetworkAOIConfig,
+    NetworkAOIEvent,
+    NetworkAOIEventType,
+    NetworkAOIEventListener,
+} from './systems/NetworkAOISystem'
 
 // ============================================================================
 // State Sync | 状态同步
@@ -105,6 +130,9 @@ export type {
     IPredictedState,
     IPredictor,
     ClientPredictionConfig,
+    EntityDeltaState,
+    DeltaSyncData,
+    DeltaCompressionConfig,
 } from './sync'
 
 export {
@@ -119,6 +147,9 @@ export {
     createHermiteTransformInterpolator,
     ClientPrediction,
     createClientPrediction,
+    DeltaFlags,
+    StateDeltaCompressor,
+    createStateDeltaCompressor,
 } from './sync'
 
 // ============================================================================

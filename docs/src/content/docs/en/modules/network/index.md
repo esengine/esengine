@@ -147,7 +147,10 @@ service.on('chat', (data) => {
 
 - [Client Usage](/en/modules/network/client/) - NetworkPlugin, components and systems
 - [Server Side](/en/modules/network/server/) - GameServer and Room management
-- [State Sync](/en/modules/network/sync/) - Interpolation, prediction and snapshots
+- [State Sync](/en/modules/network/sync/) - Interpolation and snapshot buffering
+- [Client Prediction](/en/modules/network/prediction/) - Input prediction and server reconciliation
+- [Area of Interest (AOI)](/en/modules/network/aoi/) - View filtering and bandwidth optimization
+- [Delta Compression](/en/modules/network/delta/) - State delta synchronization
 - [API Reference](/en/modules/network/api/) - Complete API documentation
 
 ## Service Tokens
@@ -159,10 +162,14 @@ import {
     NetworkServiceToken,
     NetworkSyncSystemToken,
     NetworkSpawnSystemToken,
-    NetworkInputSystemToken
+    NetworkInputSystemToken,
+    NetworkPredictionSystemToken,
+    NetworkAOISystemToken,
 } from '@esengine/network';
 
 const networkService = services.get(NetworkServiceToken);
+const predictionSystem = services.get(NetworkPredictionSystemToken);
+const aoiSystem = services.get(NetworkAOISystemToken);
 ```
 
 ## Blueprint Nodes
