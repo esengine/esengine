@@ -3,6 +3,7 @@
  * @en Session authentication provider
  */
 
+import { randomBytes } from 'crypto';
 import type { IAuthProvider, AuthResult } from '../types.js';
 
 /**
@@ -255,14 +256,11 @@ export class SessionAuthProvider<TUser = unknown> implements IAuthProvider<TUser
     }
 
     /**
-     * @zh 生成 Session ID
-     * @en Generate session ID
+     * @zh 生成 Session ID（使用加密安全的随机数）
+     * @en Generate session ID (using cryptographically secure random)
      */
     private _generateSessionId(): string {
-        const timestamp = Date.now().toString(36);
-        const random = Math.random().toString(36).substring(2, 15);
-        const random2 = Math.random().toString(36).substring(2, 15);
-        return `${timestamp}${random}${random2}`;
+        return randomBytes(32).toString('hex');
     }
 }
 

@@ -12,7 +12,7 @@ import type {
     IAuthContext,
     ConnectionRequest
 } from '../types.js';
-import { AuthContext, createGuestContext } from '../context.js';
+import { AuthContext } from '../context.js';
 
 /**
  * @zh 认证数据键
