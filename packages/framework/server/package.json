@@ -11,6 +11,14 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./auth": {
+      "import": "./dist/auth/index.js",
+      "types": "./dist/auth/index.d.ts"
+    },
+    "./auth/testing": {
+      "import": "./dist/auth/testing/index.js",
+      "types": "./dist/auth/testing/index.d.ts"
+    },
     "./testing": {
       "import": "./dist/testing/index.js",
       "types": "./dist/testing/index.d.ts"
@@ -33,11 +41,19 @@
     "@esengine/rpc": "workspace:*"
   },
   "peerDependencies": {
-    "ws": ">=8.0.0"
+    "ws": ">=8.0.0",
+    "jsonwebtoken": ">=9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "jsonwebtoken": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.13",
+    "jsonwebtoken": "^9.0.0",
     "rimraf": "^5.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0",
