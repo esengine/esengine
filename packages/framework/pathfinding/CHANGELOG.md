@@ -1,5 +1,13 @@
 # @esengine/pathfinding
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`1f297ac`](https://github.com/esengine/esengine/commit/1f297ac769e37700f72fb4425639af7090898256)]:
+    - @esengine/ecs-framework@2.5.0
+    - @esengine/blueprint@2.0.0
+
 ## 1.0.4
 
 ### Patch Changes
