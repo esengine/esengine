@@ -1,5 +1,12 @@
 # @esengine/transaction
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`afdeb00`](https://github.com/esengine/esengine/commit/afdeb00b4df9427e7f03b91558bf95804a837b70)]:
+    - @esengine/server@1.3.0
+
 ## 2.0.1
 
 ### Patch Changes
