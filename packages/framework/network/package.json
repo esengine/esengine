@@ -30,6 +30,15 @@
     "dependencies": {
         "@esengine/rpc": "workspace:*"
     },
+    "peerDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/blueprint": "workspace:*"
+    },
+    "peerDependenciesMeta": {
+        "@esengine/blueprint": {
+            "optional": true
+        }
+    },
     "devDependencies": {
         "@esengine/blueprint": "workspace:*",
         "@esengine/ecs-framework": "workspace:*",

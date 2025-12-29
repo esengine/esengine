@@ -240,18 +240,9 @@ export class SceneManager implements IService {
     }
 
     /**
-     * 更新场景
-     *
-     * 应该在每帧的游戏循环中调用。
-     * 会自动处理延迟场景切换。
-     *
-     * @example
-     * ```typescript
-     * function gameLoop(deltaTime: number) {
-     *     Core.update(deltaTime);
-     *     sceneManager.update();  // 每帧调用
-     * }
-     * ```
+     * @zh 更新场景
+     * @en Update scene
+     * @internal 由 Core.update() 调用，用户不应直接调用
      */
     public update(): void {
         // 处理延迟场景切换

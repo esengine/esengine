@@ -317,9 +317,7 @@ export class WorldManager implements IService {
     /**
      * @zh 更新所有活跃的World
      * @en Update all active Worlds
-     *
-     * @zh 应该在每帧的游戏循环中调用
-     * @en Should be called in each frame of game loop
+     * @internal 由 Core.update() 调用，用户不应直接调用
      */
     public updateAll(): void {
         if (!this._isRunning) return;

@@ -57,3 +57,6 @@ export { EpochManager } from './Core/EpochManager';
 // Compiled Query
 export { CompiledQuery } from './Core/Query/CompiledQuery';
 export type { InstanceTypes } from './Core/Query/CompiledQuery';
+
+// Network Synchronization
+export * from './Sync';

@@ -311,6 +311,93 @@ client.send('RoomMessage', {
 })
 ```
 
+## ECSRoom
+
+`ECSRoom` is a room base class with ECS World support, suitable for games that need ECS architecture.
+
+### Server Startup
+
+```typescript
+import { Core } from '@esengine/ecs-framework';
+import { createServer } from '@esengine/server';
+import { GameRoom } from './rooms/GameRoom.js';
+
+// Initialize Core
+Core.create();
+
+// Global game loop
+setInterval(() => Core.update(1/60), 16);
+
+// Create server
+const server = await createServer({ port: 3000 });
+server.define('game', GameRoom);
+await server.start();
+```
+
+### Define ECSRoom
+
+```typescript
+import { ECSRoom, Player } from '@esengine/server/ecs';
+import { Component, ECSComponent, sync } from '@esengine/ecs-framework';
+
+// Define sync component
+@ECSComponent('Player')
+class PlayerComponent extends Component {
+    @sync("string") name: string = "";
+    @sync("uint16") score: number = 0;
+    @sync("float32") x: number = 0;
+    @sync("float32") y: number = 0;
+}
+
+// Define room
+class GameRoom extends ECSRoom {
+    onCreate() {
+        this.addSystem(new MovementSystem());
+    }
+
+    onJoin(player: Player) {
+        const entity = this.createPlayerEntity(player.id);
+        const comp = entity.addComponent(new PlayerComponent());
+        comp.name = player.id;
+    }
+}
+```
+
+### ECSRoom API
+
+```typescript
+abstract class ECSRoom<TState, TPlayerData> extends Room<TState, TPlayerData> {
+    protected readonly world: World;     // ECS World
+    protected readonly scene: Scene;     // Main scene
+
+    // Scene management
+    protected addSystem(system: EntitySystem): void;
+    protected createEntity(name?: string): Entity;
+    protected createPlayerEntity(playerId: string, name?: string): Entity;
+    protected getPlayerEntity(playerId: string): Entity | undefined;
+    protected destroyPlayerEntity(playerId: string): void;
+
+    // State sync
+    protected sendFullState(player: Player): void;
+    protected broadcastSpawn(entity: Entity, prefabType?: string): void;
+    protected broadcastDelta(): void;
+}
+```
+
+### @sync Decorator
+
+Mark component fields that need network synchronization:
+
+| Type | Description | Bytes |
+|------|-------------|-------|
+| `"boolean"` | Boolean | 1 |
+| `"int8"` / `"uint8"` | 8-bit integer | 1 |
+| `"int16"` / `"uint16"` | 16-bit integer | 2 |
+| `"int32"` / `"uint32"` | 32-bit integer | 4 |
+| `"float32"` | 32-bit float | 4 |
+| `"float64"` | 64-bit float | 8 |
+| `"string"` | String | Variable |
+
 ## Best Practices
 
 1. **Set Appropriate Tick Rate**

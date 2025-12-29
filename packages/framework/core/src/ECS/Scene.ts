@@ -508,7 +508,9 @@ export class Scene implements IScene {
     }
 
     /**
-     * 更新场景
+     * @zh 更新场景
+     * @en Update scene
+     * @internal 由 SceneManager 或 World 调用，用户不应直接调用
      */
     public update() {
         this.epochManager.increment();
