@@ -13,8 +13,8 @@ export type {
     TransactionManagerConfig,
     ITransactionStorage,
     ITransactionOperation,
-    ITransactionContext,
-} from './types.js'
+    ITransactionContext
+} from './types.js';
 
-export { TransactionContext, createTransactionContext } from './TransactionContext.js'
-export { TransactionManager, createTransactionManager } from './TransactionManager.js'
+export { TransactionContext, createTransactionContext } from './TransactionContext.js';
+export { TransactionManager, createTransactionManager } from './TransactionManager.js';

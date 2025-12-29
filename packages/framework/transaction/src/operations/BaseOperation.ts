@@ -6,8 +6,8 @@
 import type {
     ITransactionOperation,
     ITransactionContext,
-    OperationResult,
-} from '../core/types.js'
+    OperationResult
+} from '../core/types.js';
 
 /**
  * @zh 操作基类
@@ -17,13 +17,13 @@ import type {
  * @en Provides common operation implementation template
  */
 export abstract class BaseOperation<TData = unknown, TResult = unknown>
-    implements ITransactionOperation<TData, TResult>
+implements ITransactionOperation<TData, TResult>
 {
     abstract readonly name: string
-    readonly data: TData
+    readonly data: TData;
 
     constructor(data: TData) {
-        this.data = data
+        this.data = data;
     }
 
     /**
@@ -31,7 +31,7 @@ export abstract class BaseOperation<TData = unknown, TResult = unknown>
      * @en Validate preconditions (passes by default)
      */
     async validate(_ctx: ITransactionContext): Promise<boolean> {
-        return true
+        return true;
     }
 
     /**
@@ -51,7 +51,7 @@ export abstract class BaseOperation<TData = unknown, TResult = unknown>
      * @en Create success result
      */
     protected success(data?: TResult): OperationResult<TResult> {
-        return { success: true, data }
+        return { success: true, data };
     }
 
     /**
@@ -59,6 +59,6 @@ export abstract class BaseOperation<TData = unknown, TResult = unknown>
      * @en Create failure result
      */
     protected failure(error: string, errorCode?: string): OperationResult<TResult> {
-        return { success: false, error, errorCode }
+        return { success: false, error, errorCode };
     }
 }

@@ -9,6 +9,9 @@ All storage implementations must implement the `ITransactionStorage` interface:
 
 ```typescript
 interface ITransactionStorage {
+    // Lifecycle
+    close?(): Promise<void>;
+
     // Distributed lock
     acquireLock(key: string, ttl: number): Promise<string | null>;
     releaseLock(key: string, token: string): Promise<boolean>;
@@ -62,21 +65,29 @@ console.log(storage.transactionCount);
 
 ## RedisStorage
 
-Redis storage, suitable for production distributed systems.
+Redis storage, suitable for production distributed systems. Uses factory pattern with lazy connection.
 
 ```typescript
 import Redis from 'ioredis';
 import { RedisStorage } from '@esengine/transaction';
 
-const redis = new Redis('redis://localhost:6379');
-
+// Factory pattern: lazy connection, connects on first operation
 const storage = new RedisStorage({
-    client: redis,
+    factory: () => new Redis('redis://localhost:6379'),
     prefix: 'tx:',              // Key prefix
     transactionTTL: 86400,      // Transaction log TTL (seconds)
 });
 
 const manager = new TransactionManager({ storage });
+
+// Close connection when done
+await storage.close();
+
+// Or use await using for automatic cleanup (TypeScript 5.2+)
+await using storage = new RedisStorage({
+    factory: () => new Redis('redis://localhost:6379')
+});
+// Automatically closed when scope ends
 ```
 
 ### Characteristics
@@ -114,18 +125,20 @@ tx:data:{key}           - Business data
 
 ## MongoStorage
 
-MongoDB storage, suitable for scenarios requiring persistence and complex queries.
+MongoDB storage, suitable for scenarios requiring persistence and complex queries. Uses factory pattern with lazy connection.
 
 ```typescript
 import { MongoClient } from 'mongodb';
 import { MongoStorage } from '@esengine/transaction';
 
-const client = new MongoClient('mongodb://localhost:27017');
-await client.connect();
-const db = client.db('game');
-
+// Factory pattern: lazy connection, connects on first operation
 const storage = new MongoStorage({
-    db,
+    factory: async () => {
+        const client = new MongoClient('mongodb://localhost:27017');
+        await client.connect();
+        return client;
+    },
+    database: 'game',
     transactionCollection: 'transactions',  // Transaction log collection
     dataCollection: 'transaction_data',     // Business data collection
     lockCollection: 'transaction_locks',    // Lock collection
@@ -135,6 +148,12 @@ const storage = new MongoStorage({
 await storage.ensureIndexes();
 
 const manager = new TransactionManager({ storage });
+
+// Close connection when done
+await storage.close();
+
+// Or use await using for automatic cleanup (TypeScript 5.2+)
+await using storage = new MongoStorage({ ... });
 ```
 
 ### Characteristics

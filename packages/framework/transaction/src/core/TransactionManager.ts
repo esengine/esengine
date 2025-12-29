@@ -9,9 +9,9 @@ import type {
     TransactionManagerConfig,
     TransactionOptions,
     TransactionLog,
-    TransactionResult,
-} from './types.js'
-import { TransactionContext } from './TransactionContext.js'
+    TransactionResult
+} from './types.js';
+import { TransactionContext } from './TransactionContext.js';
 
 /**
  * @zh 事务管理器
@@ -35,17 +35,17 @@ import { TransactionContext } from './TransactionContext.js'
  * ```
  */
 export class TransactionManager {
-    private _storage: ITransactionStorage | null
-    private _defaultTimeout: number
-    private _serverId: string
-    private _autoRecover: boolean
-    private _activeTransactions: Map<string, ITransactionContext> = new Map()
+    private _storage: ITransactionStorage | null;
+    private _defaultTimeout: number;
+    private _serverId: string;
+    private _autoRecover: boolean;
+    private _activeTransactions: Map<string, ITransactionContext> = new Map();
 
     constructor(config: TransactionManagerConfig = {}) {
-        this._storage = config.storage ?? null
-        this._defaultTimeout = config.defaultTimeout ?? 30000
-        this._serverId = config.serverId ?? this._generateServerId()
-        this._autoRecover = config.autoRecover ?? true
+        this._storage = config.storage ?? null;
+        this._defaultTimeout = config.defaultTimeout ?? 30000;
+        this._serverId = config.serverId ?? this._generateServerId();
+        this._autoRecover = config.autoRecover ?? true;
     }
 
     // =========================================================================
@@ -57,7 +57,7 @@ export class TransactionManager {
      * @en Server ID
      */
     get serverId(): string {
-        return this._serverId
+        return this._serverId;
     }
 
     /**
@@ -65,7 +65,7 @@ export class TransactionManager {
      * @en Storage instance
      */
     get storage(): ITransactionStorage | null {
-        return this._storage
+        return this._storage;
     }
 
     /**
@@ -73,7 +73,7 @@ export class TransactionManager {
      * @en Active transaction count
      */
     get activeCount(): number {
-        return this._activeTransactions.size
+        return this._activeTransactions.size;
     }
 
     // =========================================================================
@@ -93,14 +93,14 @@ export class TransactionManager {
             storage: this._storage ?? undefined,
             metadata: {
                 ...options.metadata,
-                serverId: this._serverId,
+                serverId: this._serverId
             },
-            distributed: options.distributed,
-        })
+            distributed: options.distributed
+        });
 
-        this._activeTransactions.set(ctx.id, ctx)
+        this._activeTransactions.set(ctx.id, ctx);
 
-        return ctx
+        return ctx;
     }
 
     /**
@@ -115,14 +115,14 @@ export class TransactionManager {
         builder: (ctx: ITransactionContext) => void | Promise<void>,
         options: TransactionOptions = {}
     ): Promise<TransactionResult<T>> {
-        const ctx = this.begin(options)
+        const ctx = this.begin(options);
 
         try {
-            await builder(ctx)
-            const result = await ctx.execute<T>()
-            return result
+            await builder(ctx);
+            const result = await ctx.execute<T>();
+            return result;
         } finally {
-            this._activeTransactions.delete(ctx.id)
+            this._activeTransactions.delete(ctx.id);
         }
     }
 
@@ -131,7 +131,7 @@ export class TransactionManager {
      * @en Get active transaction
      */
     getTransaction(id: string): ITransactionContext | undefined {
-        return this._activeTransactions.get(id)
+        return this._activeTransactions.get(id);
     }
 
     /**
@@ -139,21 +139,21 @@ export class TransactionManager {
      * @en Recover pending transactions
      */
     async recover(): Promise<number> {
-        if (!this._storage) return 0
+        if (!this._storage) return 0;
 
-        const pendingTransactions = await this._storage.getPendingTransactions(this._serverId)
-        let recoveredCount = 0
+        const pendingTransactions = await this._storage.getPendingTransactions(this._serverId);
+        let recoveredCount = 0;
 
         for (const log of pendingTransactions) {
             try {
-                await this._recoverTransaction(log)
-                recoveredCount++
+                await this._recoverTransaction(log);
+                recoveredCount++;
             } catch (error) {
-                console.error(`Failed to recover transaction ${log.id}:`, error)
+                console.error(`Failed to recover transaction ${log.id}:`, error);
             }
         }
 
-        return recoveredCount
+        return recoveredCount;
     }
 
     /**
@@ -161,8 +161,8 @@ export class TransactionManager {
      * @en Acquire distributed lock
      */
     async acquireLock(key: string, ttl: number = 10000): Promise<string | null> {
-        if (!this._storage) return null
-        return this._storage.acquireLock(key, ttl)
+        if (!this._storage) return null;
+        return this._storage.acquireLock(key, ttl);
     }
 
     /**
@@ -170,8 +170,8 @@ export class TransactionManager {
      * @en Release distributed lock
      */
     async releaseLock(key: string, token: string): Promise<boolean> {
-        if (!this._storage) return false
-        return this._storage.releaseLock(key, token)
+        if (!this._storage) return false;
+        return this._storage.releaseLock(key, token);
     }
 
     /**
@@ -183,15 +183,15 @@ export class TransactionManager {
         fn: () => Promise<T>,
         ttl: number = 10000
     ): Promise<T> {
-        const token = await this.acquireLock(key, ttl)
+        const token = await this.acquireLock(key, ttl);
         if (!token) {
-            throw new Error(`Failed to acquire lock for key: ${key}`)
+            throw new Error(`Failed to acquire lock for key: ${key}`);
         }
 
         try {
-            return await fn()
+            return await fn();
         } finally {
-            await this.releaseLock(key, token)
+            await this.releaseLock(key, token);
         }
     }
 
@@ -200,24 +200,24 @@ export class TransactionManager {
      * @en Clean up completed transaction logs
      */
     async cleanup(beforeTimestamp?: number): Promise<number> {
-        if (!this._storage) return 0
+        if (!this._storage) return 0;
 
-        const timestamp = beforeTimestamp ?? Date.now() - 24 * 60 * 60 * 1000 // 默认清理24小时前
+        const timestamp = beforeTimestamp ?? Date.now() - 24 * 60 * 60 * 1000; // 默认清理24小时前
 
-        const pendingTransactions = await this._storage.getPendingTransactions()
-        let cleanedCount = 0
+        const pendingTransactions = await this._storage.getPendingTransactions();
+        let cleanedCount = 0;
 
         for (const log of pendingTransactions) {
             if (
                 log.createdAt < timestamp &&
                 (log.state === 'committed' || log.state === 'rolledback')
             ) {
-                await this._storage.deleteTransaction(log.id)
-                cleanedCount++
+                await this._storage.deleteTransaction(log.id);
+                cleanedCount++;
             }
         }
 
-        return cleanedCount
+        return cleanedCount;
     }
 
     // =========================================================================
@@ -225,20 +225,20 @@ export class TransactionManager {
     // =========================================================================
 
     private _generateServerId(): string {
-        return `server_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`
+        return `server_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
     }
 
     private async _recoverTransaction(log: TransactionLog): Promise<void> {
         if (log.state === 'executing') {
-            const executedOps = log.operations.filter((op) => op.state === 'executed')
+            const executedOps = log.operations.filter((op) => op.state === 'executed');
 
             if (executedOps.length > 0 && this._storage) {
                 for (let i = executedOps.length - 1; i >= 0; i--) {
-                    await this._storage.updateOperationState(log.id, i, 'compensated')
+                    await this._storage.updateOperationState(log.id, i, 'compensated');
                 }
-                await this._storage.updateTransactionState(log.id, 'rolledback')
+                await this._storage.updateTransactionState(log.id, 'rolledback');
             } else {
-                await this._storage?.updateTransactionState(log.id, 'failed')
+                await this._storage?.updateTransactionState(log.id, 'failed');
             }
         }
     }
@@ -251,5 +251,5 @@ export class TransactionManager {
 export function createTransactionManager(
     config: TransactionManagerConfig = {}
 ): TransactionManager {
-    return new TransactionManager(config)
+    return new TransactionManager(config);
 }

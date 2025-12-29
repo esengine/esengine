@@ -3,10 +3,10 @@
  * @en Trade operation
  */
 
-import type { ITransactionContext, OperationResult } from '../core/types.js'
-import { BaseOperation } from './BaseOperation.js'
-import { CurrencyOperation, type CurrencyOperationData, type ICurrencyProvider } from './CurrencyOperation.js'
-import { InventoryOperation, type InventoryOperationData, type IInventoryProvider, type ItemData } from './InventoryOperation.js'
+import type { ITransactionContext, OperationResult } from '../core/types.js';
+import { BaseOperation } from './BaseOperation.js';
+import { CurrencyOperation, type CurrencyOperationData, type ICurrencyProvider } from './CurrencyOperation.js';
+import { InventoryOperation, type InventoryOperationData, type IInventoryProvider, type ItemData } from './InventoryOperation.js';
 
 /**
  * @zh 交易物品
@@ -148,67 +148,67 @@ export interface ITradeProvider {
  * ```
  */
 export class TradeOperation extends BaseOperation<TradeOperationData, TradeOperationResult> {
-    readonly name = 'trade'
+    readonly name = 'trade';
 
-    private _provider: ITradeProvider | null = null
-    private _subOperations: (CurrencyOperation | InventoryOperation)[] = []
-    private _executedCount = 0
+    private _provider: ITradeProvider | null = null;
+    private _subOperations: (CurrencyOperation | InventoryOperation)[] = [];
+    private _executedCount = 0;
 
     /**
      * @zh 设置交易数据提供者
      * @en Set trade data provider
      */
     setProvider(provider: ITradeProvider): this {
-        this._provider = provider
-        return this
+        this._provider = provider;
+        return this;
     }
 
     async validate(ctx: ITransactionContext): Promise<boolean> {
-        this._buildSubOperations()
+        this._buildSubOperations();
 
         for (const op of this._subOperations) {
-            const isValid = await op.validate(ctx)
+            const isValid = await op.validate(ctx);
             if (!isValid) {
-                return false
+                return false;
             }
         }
 
-        return true
+        return true;
     }
 
     async execute(ctx: ITransactionContext): Promise<OperationResult<TradeOperationResult>> {
-        this._buildSubOperations()
-        this._executedCount = 0
+        this._buildSubOperations();
+        this._executedCount = 0;
 
         try {
             for (const op of this._subOperations) {
-                const result = await op.execute(ctx)
+                const result = await op.execute(ctx);
                 if (!result.success) {
-                    await this._compensateExecuted(ctx)
-                    return this.failure(result.error ?? 'Trade operation failed', 'TRADE_FAILED')
+                    await this._compensateExecuted(ctx);
+                    return this.failure(result.error ?? 'Trade operation failed', 'TRADE_FAILED');
                 }
-                this._executedCount++
+                this._executedCount++;
             }
 
             return this.success({
                 tradeId: this.data.tradeId,
-                completed: true,
-            })
+                completed: true
+            });
         } catch (error) {
-            await this._compensateExecuted(ctx)
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            return this.failure(errorMessage, 'TRADE_ERROR')
+            await this._compensateExecuted(ctx);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return this.failure(errorMessage, 'TRADE_ERROR');
         }
     }
 
     async compensate(ctx: ITransactionContext): Promise<void> {
-        await this._compensateExecuted(ctx)
+        await this._compensateExecuted(ctx);
     }
 
     private _buildSubOperations(): void {
-        if (this._subOperations.length > 0) return
+        if (this._subOperations.length > 0) return;
 
-        const { partyA, partyB } = this.data
+        const { partyA, partyB } = this.data;
 
         if (partyA.items) {
             for (const item of partyA.items) {
@@ -217,22 +217,22 @@ export class TradeOperation extends BaseOperation<TradeOperationData, TradeOpera
                     playerId: partyA.playerId,
                     itemId: item.itemId,
                     quantity: item.quantity,
-                    reason: `trade:${this.data.tradeId}:give`,
-                })
+                    reason: `trade:${this.data.tradeId}:give`
+                });
                 const addOp = new InventoryOperation({
                     type: 'add',
                     playerId: partyB.playerId,
                     itemId: item.itemId,
                     quantity: item.quantity,
-                    reason: `trade:${this.data.tradeId}:receive`,
-                })
+                    reason: `trade:${this.data.tradeId}:receive`
+                });
 
                 if (this._provider?.inventoryProvider) {
-                    removeOp.setProvider(this._provider.inventoryProvider)
-                    addOp.setProvider(this._provider.inventoryProvider)
+                    removeOp.setProvider(this._provider.inventoryProvider);
+                    addOp.setProvider(this._provider.inventoryProvider);
                 }
 
-                this._subOperations.push(removeOp, addOp)
+                this._subOperations.push(removeOp, addOp);
             }
         }
 
@@ -243,22 +243,22 @@ export class TradeOperation extends BaseOperation<TradeOperationData, TradeOpera
                     playerId: partyA.playerId,
                     currency: curr.currency,
                     amount: curr.amount,
-                    reason: `trade:${this.data.tradeId}:give`,
-                })
+                    reason: `trade:${this.data.tradeId}:give`
+                });
                 const addOp = new CurrencyOperation({
                     type: 'add',
                     playerId: partyB.playerId,
                     currency: curr.currency,
                     amount: curr.amount,
-                    reason: `trade:${this.data.tradeId}:receive`,
-                })
+                    reason: `trade:${this.data.tradeId}:receive`
+                });
 
                 if (this._provider?.currencyProvider) {
-                    deductOp.setProvider(this._provider.currencyProvider)
-                    addOp.setProvider(this._provider.currencyProvider)
+                    deductOp.setProvider(this._provider.currencyProvider);
+                    addOp.setProvider(this._provider.currencyProvider);
                 }
 
-                this._subOperations.push(deductOp, addOp)
+                this._subOperations.push(deductOp, addOp);
             }
         }
 
@@ -269,22 +269,22 @@ export class TradeOperation extends BaseOperation<TradeOperationData, TradeOpera
                     playerId: partyB.playerId,
                     itemId: item.itemId,
                     quantity: item.quantity,
-                    reason: `trade:${this.data.tradeId}:give`,
-                })
+                    reason: `trade:${this.data.tradeId}:give`
+                });
                 const addOp = new InventoryOperation({
                     type: 'add',
                     playerId: partyA.playerId,
                     itemId: item.itemId,
                     quantity: item.quantity,
-                    reason: `trade:${this.data.tradeId}:receive`,
-                })
+                    reason: `trade:${this.data.tradeId}:receive`
+                });
 
                 if (this._provider?.inventoryProvider) {
-                    removeOp.setProvider(this._provider.inventoryProvider)
-                    addOp.setProvider(this._provider.inventoryProvider)
+                    removeOp.setProvider(this._provider.inventoryProvider);
+                    addOp.setProvider(this._provider.inventoryProvider);
                 }
 
-                this._subOperations.push(removeOp, addOp)
+                this._subOperations.push(removeOp, addOp);
             }
         }
 
@@ -295,29 +295,29 @@ export class TradeOperation extends BaseOperation<TradeOperationData, TradeOpera
                     playerId: partyB.playerId,
                     currency: curr.currency,
                     amount: curr.amount,
-                    reason: `trade:${this.data.tradeId}:give`,
-                })
+                    reason: `trade:${this.data.tradeId}:give`
+                });
                 const addOp = new CurrencyOperation({
                     type: 'add',
                     playerId: partyA.playerId,
                     currency: curr.currency,
                     amount: curr.amount,
-                    reason: `trade:${this.data.tradeId}:receive`,
-                })
+                    reason: `trade:${this.data.tradeId}:receive`
+                });
 
                 if (this._provider?.currencyProvider) {
-                    deductOp.setProvider(this._provider.currencyProvider)
-                    addOp.setProvider(this._provider.currencyProvider)
+                    deductOp.setProvider(this._provider.currencyProvider);
+                    addOp.setProvider(this._provider.currencyProvider);
                 }
 
-                this._subOperations.push(deductOp, addOp)
+                this._subOperations.push(deductOp, addOp);
             }
         }
     }
 
     private async _compensateExecuted(ctx: ITransactionContext): Promise<void> {
         for (let i = this._executedCount - 1; i >= 0; i--) {
-            await this._subOperations[i].compensate(ctx)
+            await this._subOperations[i].compensate(ctx);
         }
     }
 }
@@ -327,5 +327,5 @@ export class TradeOperation extends BaseOperation<TradeOperationData, TradeOpera
  * @en Create trade operation
  */
 export function createTradeOperation(data: TradeOperationData): TradeOperation {
-    return new TradeOperation(data)
+    return new TradeOperation(data);
 }

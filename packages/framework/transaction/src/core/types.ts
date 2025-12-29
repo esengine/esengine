@@ -280,6 +280,15 @@ export interface TransactionManagerConfig {
  */
 export interface ITransactionStorage {
     /**
+     * @zh 关闭存储连接
+     * @en Close storage connection
+     *
+     * @zh 释放所有资源，关闭数据库连接
+     * @en Release all resources, close database connections
+     */
+    close?(): Promise<void>
+
+    /**
      * @zh 获取分布式锁
      * @en Acquire distributed lock
      *

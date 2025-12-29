@@ -3,8 +3,8 @@
  * @en Inventory operation
  */
 
-import type { ITransactionContext, OperationResult } from '../core/types.js'
-import { BaseOperation } from './BaseOperation.js'
+import type { ITransactionContext, OperationResult } from '../core/types.js';
+import { BaseOperation } from './BaseOperation.js';
 
 /**
  * @zh 背包操作类型
@@ -147,136 +147,136 @@ export interface IInventoryProvider {
  * ```
  */
 export class InventoryOperation extends BaseOperation<InventoryOperationData, InventoryOperationResult> {
-    readonly name = 'inventory'
+    readonly name = 'inventory';
 
-    private _provider: IInventoryProvider | null = null
-    private _beforeItem: ItemData | null = null
+    private _provider: IInventoryProvider | null = null;
+    private _beforeItem: ItemData | null = null;
 
     /**
      * @zh 设置背包数据提供者
      * @en Set inventory data provider
      */
     setProvider(provider: IInventoryProvider): this {
-        this._provider = provider
-        return this
+        this._provider = provider;
+        return this;
     }
 
     async validate(ctx: ITransactionContext): Promise<boolean> {
-        const { type, quantity } = this.data
+        const { type, quantity } = this.data;
 
         if (quantity <= 0) {
-            return false
+            return false;
         }
 
         if (type === 'remove') {
-            const item = await this._getItem(ctx)
-            return item !== null && item.quantity >= quantity
+            const item = await this._getItem(ctx);
+            return item !== null && item.quantity >= quantity;
         }
 
         if (type === 'add' && this._provider?.hasCapacity) {
-            return this._provider.hasCapacity(this.data.playerId, 1)
+            return this._provider.hasCapacity(this.data.playerId, 1);
         }
 
-        return true
+        return true;
     }
 
     async execute(ctx: ITransactionContext): Promise<OperationResult<InventoryOperationResult>> {
-        const { type, playerId, itemId, quantity, properties } = this.data
+        const { type, playerId, itemId, quantity, properties } = this.data;
 
-        this._beforeItem = await this._getItem(ctx)
+        this._beforeItem = await this._getItem(ctx);
 
-        let afterItem: ItemData | null = null
+        let afterItem: ItemData | null = null;
 
         switch (type) {
             case 'add': {
                 if (this._beforeItem) {
                     afterItem = {
                         ...this._beforeItem,
-                        quantity: this._beforeItem.quantity + quantity,
-                    }
+                        quantity: this._beforeItem.quantity + quantity
+                    };
                 } else {
                     afterItem = {
                         itemId,
                         quantity,
-                        properties,
-                    }
+                        properties
+                    };
                 }
-                break
+                break;
             }
 
             case 'remove': {
                 if (!this._beforeItem || this._beforeItem.quantity < quantity) {
-                    return this.failure('Insufficient item quantity', 'INSUFFICIENT_ITEM')
+                    return this.failure('Insufficient item quantity', 'INSUFFICIENT_ITEM');
                 }
 
-                const newQuantity = this._beforeItem.quantity - quantity
+                const newQuantity = this._beforeItem.quantity - quantity;
                 if (newQuantity > 0) {
                     afterItem = {
                         ...this._beforeItem,
-                        quantity: newQuantity,
-                    }
+                        quantity: newQuantity
+                    };
                 } else {
-                    afterItem = null
+                    afterItem = null;
                 }
-                break
+                break;
             }
 
             case 'update': {
                 if (!this._beforeItem) {
-                    return this.failure('Item not found', 'ITEM_NOT_FOUND')
+                    return this.failure('Item not found', 'ITEM_NOT_FOUND');
                 }
 
                 afterItem = {
                     ...this._beforeItem,
                     quantity: quantity > 0 ? quantity : this._beforeItem.quantity,
-                    properties: properties ?? this._beforeItem.properties,
-                }
-                break
+                    properties: properties ?? this._beforeItem.properties
+                };
+                break;
             }
         }
 
-        await this._setItem(ctx, afterItem)
+        await this._setItem(ctx, afterItem);
 
-        ctx.set(`inventory:${playerId}:${itemId}:before`, this._beforeItem)
-        ctx.set(`inventory:${playerId}:${itemId}:after`, afterItem)
+        ctx.set(`inventory:${playerId}:${itemId}:before`, this._beforeItem);
+        ctx.set(`inventory:${playerId}:${itemId}:after`, afterItem);
 
         return this.success({
             beforeItem: this._beforeItem ?? undefined,
-            afterItem: afterItem ?? undefined,
-        })
+            afterItem: afterItem ?? undefined
+        });
     }
 
     async compensate(ctx: ITransactionContext): Promise<void> {
-        await this._setItem(ctx, this._beforeItem)
+        await this._setItem(ctx, this._beforeItem);
     }
 
     private async _getItem(ctx: ITransactionContext): Promise<ItemData | null> {
-        const { playerId, itemId } = this.data
+        const { playerId, itemId } = this.data;
 
         if (this._provider) {
-            return this._provider.getItem(playerId, itemId)
+            return this._provider.getItem(playerId, itemId);
         }
 
         if (ctx.storage) {
-            return ctx.storage.get<ItemData>(`player:${playerId}:inventory:${itemId}`)
+            return ctx.storage.get<ItemData>(`player:${playerId}:inventory:${itemId}`);
         }
 
-        return null
+        return null;
     }
 
     private async _setItem(ctx: ITransactionContext, item: ItemData | null): Promise<void> {
-        const { playerId, itemId } = this.data
+        const { playerId, itemId } = this.data;
 
         if (this._provider) {
-            await this._provider.setItem(playerId, itemId, item)
-            return
+            await this._provider.setItem(playerId, itemId, item);
+            return;
         }
 
         if (ctx.storage) {
             if (item) {
-                await ctx.storage.set(`player:${playerId}:inventory:${itemId}`, item)
+                await ctx.storage.set(`player:${playerId}:inventory:${itemId}`, item);
             } else {
-                await ctx.storage.delete(`player:${playerId}:inventory:${itemId}`)
+                await ctx.storage.delete(`player:${playerId}:inventory:${itemId}`);
             }
         }
     }
@@ -287,5 +287,5 @@ export class InventoryOperation extends BaseOperation<InventoryOperationData, In
  * @en Create inventory operation
  */
 export function createInventoryOperation(data: InventoryOperationData): InventoryOperation {
-    return new InventoryOperation(data)
+    return new InventoryOperation(data);
 }

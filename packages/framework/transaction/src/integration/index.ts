@@ -7,5 +7,5 @@ export {
     withTransactions,
     TransactionRoom,
     type TransactionRoomConfig,
-    type ITransactionRoom,
-} from './RoomTransactionMixin.js'
+    type ITransactionRoom
+} from './RoomTransactionMixin.js';

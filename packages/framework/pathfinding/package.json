@@ -20,6 +20,8 @@
         "build": "tsup",
         "build:watch": "tsup --watch",
         "type-check": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest",
         "clean": "rimraf dist"
     },
     "devDependencies": {
@@ -27,7 +29,8 @@
         "@esengine/ecs-framework-math": "workspace:*",
         "@esengine/blueprint": "workspace:*",
         "tsup": "^8.0.0",
-        "typescript": "^5.8.0"
+        "typescript": "^5.8.0",
+        "vitest": "^2.1.9"
     },
     "peerDependencies": {
         "@esengine/ecs-framework": "workspace:*",

@@ -197,9 +197,9 @@ export class RoomManager {
         )
     }
 
-    private _findAvailableRoom(name: string): Room | undefined {
+    private _findAvailableRoom(name: string): Room | null {
         const def = this._definitions.get(name)
-        if (!def) return undefined
+        if (!def) return null
 
         for (const room of this._rooms.values()) {
             if (
@@ -212,7 +212,7 @@ export class RoomManager {
             }
         }
 
-        return undefined
+        return null
     }
 
     private _generateRoomId(): string {

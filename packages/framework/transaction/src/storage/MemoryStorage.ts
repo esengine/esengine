@@ -10,8 +10,8 @@ import type {
     ITransactionStorage,
     TransactionLog,
     TransactionState,
-    OperationLog,
-} from '../core/types.js'
+    OperationLog
+} from '../core/types.js';
 
 /**
  * @zh 内存存储配置
@@ -33,13 +33,13 @@ export interface MemoryStorageConfig {
  * @en Suitable for single-machine development and testing, data is stored in memory only
  */
 export class MemoryStorage implements ITransactionStorage {
-    private _transactions: Map<string, TransactionLog> = new Map()
-    private _data: Map<string, { value: unknown; expireAt?: number }> = new Map()
-    private _locks: Map<string, { token: string; expireAt: number }> = new Map()
-    private _maxTransactions: number
+    private _transactions: Map<string, TransactionLog> = new Map();
+    private _data: Map<string, { value: unknown; expireAt?: number }> = new Map();
+    private _locks: Map<string, { token: string; expireAt: number }> = new Map();
+    private _maxTransactions: number;
 
     constructor(config: MemoryStorageConfig = {}) {
-        this._maxTransactions = config.maxTransactions ?? 1000
+        this._maxTransactions = config.maxTransactions ?? 1000;
     }
 
     // =========================================================================
@@ -47,30 +47,30 @@ export class MemoryStorage implements ITransactionStorage {
     // =========================================================================
 
     async acquireLock(key: string, ttl: number): Promise<string | null> {
-        this._cleanExpiredLocks()
+        this._cleanExpiredLocks();
 
-        const existing = this._locks.get(key)
+        const existing = this._locks.get(key);
         if (existing && existing.expireAt > Date.now()) {
-            return null
+            return null;
         }
 
-        const token = `lock_${Date.now()}_${Math.random().toString(36).substring(2)}`
+        const token = `lock_${Date.now()}_${Math.random().toString(36).substring(2)}`;
         this._locks.set(key, {
             token,
-            expireAt: Date.now() + ttl,
-        })
+            expireAt: Date.now() + ttl
+        });
 
-        return token
+        return token;
     }
 
     async releaseLock(key: string, token: string): Promise<boolean> {
-        const lock = this._locks.get(key)
+        const lock = this._locks.get(key);
         if (!lock || lock.token !== token) {
-            return false
+            return false;
         }
 
-        this._locks.delete(key)
-        return true
+        this._locks.delete(key);
+        return true;
     }
 
     // =========================================================================
@@ -79,22 +79,22 @@ export class MemoryStorage implements ITransactionStorage {
 
     async saveTransaction(tx: TransactionLog): Promise<void> {
         if (this._transactions.size >= this._maxTransactions) {
-            this._cleanOldTransactions()
+            this._cleanOldTransactions();
         }
 
-        this._transactions.set(tx.id, { ...tx })
+        this._transactions.set(tx.id, { ...tx });
     }
 
     async getTransaction(id: string): Promise<TransactionLog | null> {
-        const tx = this._transactions.get(id)
-        return tx ? { ...tx } : null
+        const tx = this._transactions.get(id);
+        return tx ? { ...tx } : null;
     }
 
     async updateTransactionState(id: string, state: TransactionState): Promise<void> {
-        const tx = this._transactions.get(id)
+        const tx = this._transactions.get(id);
         if (tx) {
-            tx.state = state
-            tx.updatedAt = Date.now()
+            tx.state = state;
+            tx.updatedAt = Date.now();
         }
     }
 
@@ -104,37 +104,37 @@ export class MemoryStorage implements ITransactionStorage {
         state: OperationLog['state'],
         error?: string
     ): Promise<void> {
-        const tx = this._transactions.get(transactionId)
+        const tx = this._transactions.get(transactionId);
         if (tx && tx.operations[operationIndex]) {
-            tx.operations[operationIndex].state = state
+            tx.operations[operationIndex].state = state;
             if (error) {
-                tx.operations[operationIndex].error = error
+                tx.operations[operationIndex].error = error;
             }
             if (state === 'executed') {
-                tx.operations[operationIndex].executedAt = Date.now()
+                tx.operations[operationIndex].executedAt = Date.now();
             } else if (state === 'compensated') {
-                tx.operations[operationIndex].compensatedAt = Date.now()
+                tx.operations[operationIndex].compensatedAt = Date.now();
             }
-            tx.updatedAt = Date.now()
+            tx.updatedAt = Date.now();
         }
     }
 
     async getPendingTransactions(serverId?: string): Promise<TransactionLog[]> {
-        const result: TransactionLog[] = []
+        const result: TransactionLog[] = [];
 
         for (const tx of this._transactions.values()) {
             if (tx.state === 'pending' || tx.state === 'executing') {
                 if (!serverId || tx.metadata?.serverId === serverId) {
-                    result.push({ ...tx })
+                    result.push({ ...tx });
                 }
             }
         }
 
-        return result
+        return result;
     }
 
     async deleteTransaction(id: string): Promise<void> {
-        this._transactions.delete(id)
+        this._transactions.delete(id);
     }
 
     // =========================================================================
@@ -142,28 +142,28 @@ export class MemoryStorage implements ITransactionStorage {
     // =========================================================================
 
     async get<T>(key: string): Promise<T | null> {
-        this._cleanExpiredData()
+        this._cleanExpiredData();
 
-        const entry = this._data.get(key)
-        if (!entry) return null
+        const entry = this._data.get(key);
+        if (!entry) return null;
 
         if (entry.expireAt && entry.expireAt < Date.now()) {
-            this._data.delete(key)
-            return null
+            this._data.delete(key);
+            return null;
         }
 
-        return entry.value as T
+        return entry.value as T;
     }
 
     async set<T>(key: string, value: T, ttl?: number): Promise<void> {
         this._data.set(key, {
             value,
-            expireAt: ttl ? Date.now() + ttl : undefined,
-        })
+            expireAt: ttl ? Date.now() + ttl : undefined
+        });
     }
 
     async delete(key: string): Promise<boolean> {
-        return this._data.delete(key)
+        return this._data.delete(key);
     }
 
     // =========================================================================
@@ -175,9 +175,9 @@ export class MemoryStorage implements ITransactionStorage {
      * @en Clear all data (for testing)
      */
     clear(): void {
-        this._transactions.clear()
-        this._data.clear()
-        this._locks.clear()
+        this._transactions.clear();
+        this._data.clear();
+        this._locks.clear();
     }
 
     /**
@@ -185,37 +185,37 @@ export class MemoryStorage implements ITransactionStorage {
      * @en Get transaction count
      */
     get transactionCount(): number {
-        return this._transactions.size
+        return this._transactions.size;
     }
 
     private _cleanExpiredLocks(): void {
-        const now = Date.now()
+        const now = Date.now();
         for (const [key, lock] of this._locks) {
             if (lock.expireAt < now) {
-                this._locks.delete(key)
+                this._locks.delete(key);
             }
         }
     }
 
     private _cleanExpiredData(): void {
-        const now = Date.now()
+        const now = Date.now();
         for (const [key, entry] of this._data) {
             if (entry.expireAt && entry.expireAt < now) {
-                this._data.delete(key)
+                this._data.delete(key);
             }
         }
     }
 
     private _cleanOldTransactions(): void {
         const sorted = Array.from(this._transactions.entries())
-            .sort((a, b) => a[1].createdAt - b[1].createdAt)
+            .sort((a, b) => a[1].createdAt - b[1].createdAt);
 
         const toRemove = sorted
             .slice(0, Math.floor(this._maxTransactions * 0.2))
-            .filter(([_, tx]) => tx.state === 'committed' || tx.state === 'rolledback')
+            .filter(([_, tx]) => tx.state === 'committed' || tx.state === 'rolledback');
 
         for (const [id] of toRemove) {
-            this._transactions.delete(id)
+            this._transactions.delete(id);
         }
     }
 }
@@ -225,5 +225,5 @@ export class MemoryStorage implements ITransactionStorage {
  * @en Create memory storage
  */
 export function createMemoryStorage(config: MemoryStorageConfig = {}): MemoryStorage {
-    return new MemoryStorage(config)
+    return new MemoryStorage(config);
 }

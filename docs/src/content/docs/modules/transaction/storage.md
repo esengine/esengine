@@ -9,6 +9,9 @@ description: "事务存储接口和实现：MemoryStorage、RedisStorage、Mongo
 
 ```typescript
 interface ITransactionStorage {
+    // 生命周期
+    close?(): Promise<void>;
+
     // 分布式锁
     acquireLock(key: string, ttl: number): Promise<string | null>;
     releaseLock(key: string, token: string): Promise<boolean>;
@@ -62,21 +65,29 @@ console.log(storage.transactionCount);
 
 ## RedisStorage
 
-Redis 存储，适用于生产环境的分布式系统。
+Redis 存储，适用于生产环境的分布式系统。使用工厂模式实现惰性连接。
 
 ```typescript
 import Redis from 'ioredis';
 import { RedisStorage } from '@esengine/transaction';
 
-const redis = new Redis('redis://localhost:6379');
-
+// 工厂模式：惰性连接，首次操作时才创建连接
 const storage = new RedisStorage({
-    client: redis,
+    factory: () => new Redis('redis://localhost:6379'),
     prefix: 'tx:',              // 键前缀
     transactionTTL: 86400,      // 事务日志过期时间（秒）
 });
 
 const manager = new TransactionManager({ storage });
+
+// 使用后关闭连接
+await storage.close();
+
+// 或使用 await using 自动关闭 (TypeScript 5.2+)
+await using storage = new RedisStorage({
+    factory: () => new Redis('redis://localhost:6379')
+});
+// 作用域结束时自动关闭
 ```
 
 ### 特点
@@ -114,18 +125,20 @@ tx:data:{key}           - 业务数据
 
 ## MongoStorage
 
-MongoDB 存储，适用于需要持久化和复杂查询的场景。
+MongoDB 存储，适用于需要持久化和复杂查询的场景。使用工厂模式实现惰性连接。
 
 ```typescript
 import { MongoClient } from 'mongodb';
 import { MongoStorage } from '@esengine/transaction';
 
-const client = new MongoClient('mongodb://localhost:27017');
-await client.connect();
-const db = client.db('game');
-
+// 工厂模式：惰性连接，首次操作时才创建连接
 const storage = new MongoStorage({
-    db,
+    factory: async () => {
+        const client = new MongoClient('mongodb://localhost:27017');
+        await client.connect();
+        return client;
+    },
+    database: 'game',
     transactionCollection: 'transactions',  // 事务日志集合
     dataCollection: 'transaction_data',     // 业务数据集合
     lockCollection: 'transaction_locks',    // 锁集合
@@ -135,6 +148,12 @@ const storage = new MongoStorage({
 await storage.ensureIndexes();
 
 const manager = new TransactionManager({ storage });
+
+// 使用后关闭连接
+await storage.close();
+
+// 或使用 await using 自动关闭 (TypeScript 5.2+)
+await using storage = new MongoStorage({ ... });
 ```
 
 ### 特点
