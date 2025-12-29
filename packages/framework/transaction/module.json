@@ -1,0 +1,23 @@
+{
+    "id": "transaction",
+    "name": "@esengine/transaction",
+    "globalKey": "transaction",
+    "displayName": "Transaction System",
+    "description": "游戏事务系统，支持商店购买、玩家交易、分布式事务 | Game transaction system for shop, trading, distributed transactions",
+    "version": "1.0.0",
+    "category": "Other",
+    "icon": "Receipt",
+    "tags": ["transaction", "distributed", "saga", "database"],
+    "isCore": false,
+    "defaultEnabled": false,
+    "isEngineModule": true,
+    "canContainContent": false,
+    "platforms": ["nodejs"],
+    "dependencies": ["core", "server"],
+    "exports": {
+        "services": ["TransactionManager"],
+        "interfaces": ["ITransactionStorage", "ITransactionOperation"]
+    },
+    "requiresWasm": false,
+    "outputPath": "dist/index.js"
+}

@@ -1,0 +1,50 @@
+{
+    "name": "@esengine/transaction",
+    "version": "1.0.0",
+    "description": "Game transaction system with distributed support | 游戏事务系统，支持分布式事务",
+    "type": "module",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist",
+        "module.json"
+    ],
+    "scripts": {
+        "build": "tsup && tsc -p tsconfig.build.json --emitDeclarationOnly",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@esengine/server": "workspace:*"
+    },
+    "peerDependencies": {
+        "ioredis": "^5.3.0",
+        "mongodb": "^6.0.0"
+    },
+    "peerDependenciesMeta": {
+        "ioredis": {
+            "optional": true
+        },
+        "mongodb": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/build-config": "workspace:*",
+        "tsup": "^8.0.0",
+        "typescript": "^5.8.0",
+        "rimraf": "^5.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

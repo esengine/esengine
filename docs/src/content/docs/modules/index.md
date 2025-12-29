@@ -35,6 +35,7 @@ ESEngine 提供了丰富的功能模块，可以按需引入到你的项目中�
 | 模块 | 包名 | 描述 |
 |------|------|------|
 | [网络同步](/modules/network/) | `@esengine/network` | 多人游戏网络同步 |
+| [事务系统](/modules/transaction/) | `@esengine/transaction` | 游戏事务处理，支持分布式事务 |
 
 ## 安装
 
