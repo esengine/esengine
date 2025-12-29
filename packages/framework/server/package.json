@@ -19,6 +19,10 @@
       "import": "./dist/auth/testing/index.js",
       "types": "./dist/auth/testing/index.d.ts"
     },
+    "./ratelimit": {
+      "import": "./dist/ratelimit/index.js",
+      "types": "./dist/ratelimit/index.d.ts"
+    },
     "./testing": {
       "import": "./dist/testing/index.js",
       "types": "./dist/testing/index.d.ts"

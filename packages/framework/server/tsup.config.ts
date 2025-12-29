@@ -5,6 +5,7 @@ export default defineConfig({
         'src/index.ts',
         'src/auth/index.ts',
         'src/auth/testing/index.ts',
+        'src/ratelimit/index.ts',
         'src/testing/index.ts'
     ],
     format: ['esm'],

@@ -268,6 +268,7 @@ export default defineConfig({
                 { label: '客户端', slug: 'modules/network/client', translations: { en: 'Client' } },
                 { label: '服务器', slug: 'modules/network/server', translations: { en: 'Server' } },
                 { label: '认证系统', slug: 'modules/network/auth', translations: { en: 'Authentication' } },
+                { label: '速率限制', slug: 'modules/network/rate-limit', translations: { en: 'Rate Limiting' } },
                 { label: '状态同步', slug: 'modules/network/sync', translations: { en: 'State Sync' } },
                 { label: '客户端预测', slug: 'modules/network/prediction', translations: { en: 'Prediction' } },
                 { label: 'AOI 兴趣区域', slug: 'modules/network/aoi', translations: { en: 'AOI' } },
