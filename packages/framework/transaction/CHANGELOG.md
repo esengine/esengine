@@ -1,5 +1,12 @@
 # @esengine/transaction
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`61a13ba`](https://github.com/esengine/esengine/commit/61a13baca2e1e8fba14e23d439521ec0e6b7ca6e)]:
+    - @esengine/server@1.2.0
+
 ## 2.0.0
 
 ### Major Changes
