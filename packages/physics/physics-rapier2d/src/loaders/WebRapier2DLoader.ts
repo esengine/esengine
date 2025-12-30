@@ -53,10 +53,9 @@ export class WebRapier2DLoader implements IWasmLibraryLoader<RapierModule> {
         // 动态导入标准版
         const RAPIER = await import('@esengine/rapier2d');
 
-        // 初始化 WASM - 标准版需要提供 WASM 路径
-        // 构建时 WASM 文件会被复制到 wasm/ 目录
-        const wasmPath = this._config.web?.wasmPath || 'wasm/rapier_wasm2d_bg.wasm';
-        await RAPIER.init(wasmPath);
+        // 初始化 WASM - WASM 已经作为 base64 嵌入到包中
+        // Initialize WASM - WASM is embedded as base64 in the package
+        await RAPIER.init();
 
         console.log(`[${this._config.name}] 加载完成`);
         return RAPIER;

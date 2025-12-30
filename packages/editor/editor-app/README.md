@@ -24,15 +24,7 @@ cd esengine
 pnpm install
 ```
 
-### 2. Clone Physics Dependencies (Optional)
-
-If you need physics support, clone the rapier.js dependency:
-
-```bash
-git clone https://github.com/esengine/rapier.js.git packages/thirdparty/rapier.js
-```
-
-### 3. Build Dependencies
+### 2. Build Dependencies
 
 From the project root:
 
@@ -40,7 +32,7 @@ From the project root:
 pnpm build:editor
 ```
 
-### 4. Run Editor
+### 3. Run Editor
 
 ```bash
 cd packages/editor/editor-app

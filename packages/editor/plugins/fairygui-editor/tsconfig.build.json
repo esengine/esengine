@@ -6,9 +6,7 @@
         "declarationMap": true,
         "outDir": "./dist",
         "rootDir": "./src",
-        "jsx": "react-jsx",
-        "skipLibCheck": true,
-        "moduleResolution": "bundler"
+        "jsx": "react-jsx"
     },
     "include": ["src/**/*"],
     "exclude": ["node_modules", "dist", "**/*.test.ts"]
