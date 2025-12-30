@@ -51,5 +51,15 @@ export {
     hasChanges
 } from './decorators';
 
+// Network Entity Decorator
+export {
+    NetworkEntity,
+    getNetworkEntityMetadata,
+    isNetworkEntity,
+    NETWORK_ENTITY_METADATA,
+    type NetworkEntityMetadata,
+    type NetworkEntityOptions
+} from './NetworkEntityDecorator';
+
 // Encoding
 export * from './encoding';
