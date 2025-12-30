@@ -53,7 +53,7 @@ describe('@sync 装饰器测试', () => {
             const metadata = getSyncMetadata(PlayerComponent);
 
             expect(metadata).not.toBeNull();
-            expect(metadata!.typeId).toBe('PlayerComponent');
+            expect(metadata!.typeId).toBe('SyncTest_PlayerComponent');
             expect(metadata!.fields.length).toBe(4);
         });
 

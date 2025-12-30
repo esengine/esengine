@@ -19,6 +19,7 @@ import {
     type ComponentEditorOptions,
     type ComponentType
 } from '../Core/ComponentStorage/ComponentTypeUtils';
+import { SYNC_METADATA, type SyncMetadata } from '../Sync/types';
 
 /**
  * 存储系统类型名称的Symbol键
@@ -136,6 +137,14 @@ export function ECSComponent(typeName: string, options?: ComponentOptions) {
         // Store editor options
         if (options?.editor) {
             metadata[COMPONENT_EDITOR_OPTIONS] = options.editor;
+        }
+
+        // 更新 @sync 装饰器创建的 SYNC_METADATA.typeId（如果存在）
+        // Update SYNC_METADATA.typeId created by @sync decorator (if exists)
+        // Property decorators execute before class decorators, so @sync may have used constructor.name
+        const syncMeta = (target as any)[SYNC_METADATA] as SyncMetadata | undefined;
+        if (syncMeta) {
+            syncMeta.typeId = typeName;
         }
 
         // 自动注册到全局 ComponentRegistry，使组件可以通过名称查找

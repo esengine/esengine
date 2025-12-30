@@ -10,10 +10,16 @@ import { Int32 } from './Core/SoAStorage';
  * @en Components in ECS architecture should be pure data containers.
  * All game logic should be implemented in EntitySystem, not inside components.
  *
+ * @zh **重要：所有 Component 子类都必须使用 @ECSComponent 装饰器！**
+ * @zh 该装饰器用于注册组件类型名称，是序列化、网络同步等功能正常工作的前提。
+ * @en **IMPORTANT: All Component subclasses MUST use the @ECSComponent decorator!**
+ * @en This decorator registers the component type name, which is required for serialization, network sync, etc.
+ *
  * @example
- * @zh 推荐做法：纯数据组件
- * @en Recommended: Pure data component
+ * @zh 正确做法：使用 @ECSComponent 装饰器
+ * @en Correct: Use @ECSComponent decorator
  * ```typescript
+ * @ECSComponent('HealthComponent')
  * class HealthComponent extends Component {
  *     public health: number = 100;
  *     public maxHealth: number = 100;

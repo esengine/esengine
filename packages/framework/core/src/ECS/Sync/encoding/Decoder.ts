@@ -12,39 +12,7 @@ import type { Scene } from '../../Scene';
 import type { SyncType, SyncMetadata } from '../types';
 import { SyncOperation, SYNC_METADATA } from '../types';
 import { BinaryReader } from './BinaryReader';
-
-/**
- * @zh 组件类型注册表
- * @en Component type registry
- */
-const componentRegistry = new Map<string, new () => Component>();
-
-/**
- * @zh 注册组件类型
- * @en Register component type
- *
- * @param typeId - @zh 组件类型 ID @en Component type ID
- * @param componentClass - @zh 组件类 @en Component class
- */
-export function registerSyncComponent<T extends Component>(
-    typeId: string,
-    componentClass: new () => T
-): void {
-    componentRegistry.set(typeId, componentClass);
-}
-
-/**
- * @zh 从 @ECSComponent 装饰器自动注册
- * @en Auto-register from @ECSComponent decorator
- *
- * @param componentClass - @zh 组件类 @en Component class
- */
-export function autoRegisterSyncComponent(componentClass: new () => Component): void {
-    const metadata: SyncMetadata | undefined = (componentClass as any)[SYNC_METADATA];
-    if (metadata) {
-        componentRegistry.set(metadata.typeId, componentClass);
-    }
-}
+import { GlobalComponentRegistry } from '../../Core/ComponentStorage/ComponentRegistry';
 
 /**
  * @zh 解码字段值
@@ -166,8 +134,8 @@ export function decodeEntity(
         const typeId = reader.readString();
         componentTypes.push(typeId);
 
-        // Find component class from registry
-        const componentClass = componentRegistry.get(typeId);
+        // Find component class from GlobalComponentRegistry
+        const componentClass = GlobalComponentRegistry.getComponentType(typeId) as (new () => Component) | null;
         if (!componentClass) {
             console.warn(`Unknown component type: ${typeId}`);
             // Skip component data - we need to read it to advance the reader
@@ -306,7 +274,7 @@ export function decodeSpawn(
         const typeId = reader.readString();
         componentTypes.push(typeId);
 
-        const componentClass = componentRegistry.get(typeId);
+        const componentClass = GlobalComponentRegistry.getComponentType(typeId) as (new () => Component) | null;
         if (!componentClass) {
             console.warn(`Unknown component type: ${typeId}`);
             // Try to skip
@@ -322,7 +290,7 @@ export function decodeSpawn(
             continue;
         }
 
-        const component = entity.addComponent(new componentClass());
+        const component = entity.addComponent(new (componentClass as new () => Component)());
         decodeComponent(component, metadata, reader);
     }
 

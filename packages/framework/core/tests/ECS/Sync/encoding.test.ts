@@ -13,8 +13,7 @@ import {
 import {
     decodeSnapshot,
     decodeSpawn,
-    processDespawn,
-    registerSyncComponent
+    processDespawn
 } from '../../../src/ECS/Sync/encoding/Decoder';
 import { SyncOperation } from '../../../src/ECS/Sync/types';
 
@@ -320,10 +319,7 @@ describe('BinaryWriter/BinaryReader - 二进制读写器测试', () => {
 describe('Encoder/Decoder - 实体编解码测试', () => {
     let scene: Scene;
 
-    beforeAll(() => {
-        registerSyncComponent('PlayerComponent', PlayerComponent);
-        registerSyncComponent('AllTypesComponent', AllTypesComponent);
-    });
+    // Components are auto-registered via @ECSComponent decorator
 
     beforeEach(() => {
         scene = new Scene();
@@ -414,7 +410,7 @@ describe('Encoder/Decoder - 实体编解码测试', () => {
 
             expect(result).not.toBeNull();
             expect(result!.prefabType).toBe('Player');
-            expect(result!.componentTypes).toContain('PlayerComponent');
+            expect(result!.componentTypes).toContain('EncodingTest_PlayerComponent');
 
             const decodedComp = result!.entity.getComponent(PlayerComponent);
             expect(decodedComp!.name).toBe("SpawnedPlayer");
@@ -470,10 +466,6 @@ describe('Encoder/Decoder - 实体编解码测试', () => {
     });
 
     describe('所有同步类型编解码', () => {
-        beforeAll(() => {
-            registerSyncComponent('AllTypesComponent', AllTypesComponent);
-        });
-
         test('应该正确编解码所有类型', () => {
             const entity = scene.createEntity('AllTypes');
             const comp = entity.addComponent(new AllTypesComponent());
