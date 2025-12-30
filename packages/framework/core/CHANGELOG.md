@@ -1,5 +1,16 @@
 # @esengine/ecs-framework
 
+## 2.7.1
+
+### Patch Changes
+
+- [#402](https://github.com/esengine/esengine/pull/402) [`3e5b778`](https://github.com/esengine/esengine/commit/3e5b7783beec08e247f7525184935401923ecde8) Thanks [@esengine](https://github.com/esengine)! - fix(ecs): 修复 ESM 环境下 require 不存在的问题
+    - 新增 `RuntimeConfig` 模块，作为运行时环境配置的独立存储
+    - `Core.runtimeEnvironment` 和 `Scene.runtimeEnvironment` 现在都从 `RuntimeConfig` 读取
+    - 移除 `Scene.ts` 中的 `require()` 调用，解决 Node.js ESM 环境下的兼容性问题
+
+    此修复解决了在 Node.js ESM 环境（如游戏服务端）中使用 `scene.isServer` 时报错 `ReferenceError: require is not defined` 的问题。
+
 ## 2.7.0
 
 ### Minor Changes

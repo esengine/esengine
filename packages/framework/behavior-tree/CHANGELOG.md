@@ -1,5 +1,12 @@
 # @esengine/behavior-tree
 
+## 4.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`3e5b778`](https://github.com/esengine/esengine/commit/3e5b7783beec08e247f7525184935401923ecde8)]:
+    - @esengine/ecs-framework@2.7.1
+
 ## 4.1.0
 
 ### Minor Changes
