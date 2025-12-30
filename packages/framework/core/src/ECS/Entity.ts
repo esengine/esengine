@@ -478,6 +478,7 @@ export class Entity {
             this.scene.eventSystem.emitSync(ECSEventType.COMPONENT_ADDED, {
                 timestamp: Date.now(),
                 source: 'Entity',
+                entity: this,
                 entityId: this.id,
                 entityName: this.name,
                 entityTag: this.tag?.toString(),
