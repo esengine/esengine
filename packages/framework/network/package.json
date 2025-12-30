@@ -1,6 +1,6 @@
 {
     "name": "@esengine/network",
-    "version": "4.0.1",
+    "version": "5.0.0",
     "description": "Network synchronization for multiplayer games",
     "esengine": {
         "plugin": true,
