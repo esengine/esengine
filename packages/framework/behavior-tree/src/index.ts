@@ -4,32 +4,44 @@
  * @zh AI 行为树系统，支持运行时执行和可视化编辑
  * @en AI Behavior Tree System with runtime execution and visual editor support
  *
- * @zh 此包是通用的行为树实现，可以与任何 ECS 框架配合使用。
- * 对于 ESEngine 集成，请从 '@esengine/behavior-tree/esengine' 导入插件。
+ * @zh 此包是通用的行为树实现，可以与任何基于 @esengine/ecs-framework 的引擎集成
+ * （Cocos Creator、LayaAir、Node.js 等）。
  *
- * @en This package is a generic behavior tree implementation that works with any ECS framework.
- * For ESEngine integration, import the plugin from '@esengine/behavior-tree/esengine'.
+ * @en This package is a generic behavior tree implementation that works with any engine
+ * based on @esengine/ecs-framework (Cocos Creator, LayaAir, Node.js, etc.).
  *
- * @example Cocos/Laya/通用 ECS 使用方式:
+ * @example
  * ```typescript
+ * import { Core, Scene } from '@esengine/ecs-framework';
  * import {
- *     BehaviorTreeAssetManager,
- *     BehaviorTreeExecutionSystem,
- *     BehaviorTreeRuntimeComponent
+ *     BehaviorTreePlugin,
+ *     BehaviorTreeBuilder,
+ *     BehaviorTreeStarter
  * } from '@esengine/behavior-tree';
  *
- * // 1. Register service
- * Core.services.registerSingleton(BehaviorTreeAssetManager);
+ * // 1. Initialize Core and install plugin
+ * Core.create();
+ * const plugin = new BehaviorTreePlugin();
+ * await Core.installPlugin(plugin);
  *
- * // 2. Load behavior tree from JSON
- * const assetManager = Core.services.resolve(BehaviorTreeAssetManager);
- * assetManager.loadFromEditorJSON(jsonContent);
+ * // 2. Create scene and setup behavior tree system
+ * const scene = new Scene();
+ * plugin.setupScene(scene);
+ * Core.setScene(scene);
  *
- * // 3. Add component to entity
- * entity.addComponent(new BehaviorTreeRuntimeComponent());
+ * // 3. Build behavior tree
+ * const tree = BehaviorTreeBuilder.create('MyAI')
+ *     .selector('Root')
+ *         .log('Hello!')
+ *     .end()
+ *     .build();
  *
- * // 4. Add system to scene
- * scene.addSystem(new BehaviorTreeExecutionSystem());
+ * // 4. Start behavior tree on entity
+ * const entity = scene.createEntity('AIEntity');
+ * BehaviorTreeStarter.start(entity, tree);
+ *
+ * // 5. Run game loop
+ * setInterval(() => Core.update(0.016), 16);
  * ```
  *
  * @packageDocumentation
@@ -65,3 +77,6 @@ export { BlackboardTypes } from './Blackboard/BlackboardTypes';
 
 // Service tokens (using ecs-framework's createServiceToken, not engine-core)
 export { BehaviorTreeSystemToken } from './tokens';
+
+// Plugin
+export { BehaviorTreePlugin } from './BehaviorTreePlugin';
