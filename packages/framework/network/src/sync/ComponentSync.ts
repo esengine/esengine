@@ -23,7 +23,7 @@ import {
     decodeSnapshot,
     decodeSpawn,
     processDespawn,
-    registerSyncComponent,
+    GlobalComponentRegistry,
     type DecodeSnapshotResult,
     type DecodeSpawnResult,
 } from '@esengine/ecs-framework';
@@ -166,10 +166,7 @@ export class ComponentSyncSystem extends EntitySystem {
      * @en Client needs to call this to register all component types to be synced
      */
     public registerComponent<T extends new () => any>(componentClass: T): void {
-        const metadata: SyncMetadata | undefined = (componentClass as any)[SYNC_METADATA];
-        if (metadata) {
-            registerSyncComponent(metadata.typeId, componentClass as any);
-        }
+        GlobalComponentRegistry.register(componentClass as any);
     }
 
     // =========================================================================

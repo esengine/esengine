@@ -9,6 +9,7 @@
 import type { SyncType, SyncFieldMetadata, SyncMetadata } from './types';
 import { SYNC_METADATA, CHANGE_TRACKER } from './types';
 import { ChangeTracker } from './ChangeTracker';
+import { getComponentTypeName } from '../Core/ComponentStorage/ComponentTypeUtils';
 
 /**
  * @zh 获取或创建组件的同步元数据
@@ -31,8 +32,9 @@ function getOrCreateSyncMetadata(target: any): SyncMetadata {
     const inheritedMetadata: SyncMetadata | undefined = constructor[SYNC_METADATA];
 
     // Create new metadata (copy from inherited if exists)
+    // Use getComponentTypeName to get @ECSComponent decorator name, or fall back to constructor.name
     const metadata: SyncMetadata = {
-        typeId: constructor.name,
+        typeId: getComponentTypeName(constructor),
         fields: inheritedMetadata ? [...inheritedMetadata.fields] : [],
         fieldIndexMap: inheritedMetadata ? new Map(inheritedMetadata.fieldIndexMap) : new Map()
     };

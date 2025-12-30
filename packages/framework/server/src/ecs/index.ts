@@ -32,6 +32,9 @@
 export { ECSRoom } from './ECSRoom.js';
 export type { ECSRoomConfig } from './ECSRoom.js';
 
+// Re-export Player for convenience
+export { Player, type IPlayer } from '../room/Player.js';
+
 // Re-export commonly used ECS types for convenience
 export type {
     Entity,

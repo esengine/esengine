@@ -34,8 +34,6 @@ export {
 
 // Decoder
 export {
-    registerSyncComponent,
-    autoRegisterSyncComponent,
     decodeComponent,
     decodeEntity,
     decodeSnapshot,
