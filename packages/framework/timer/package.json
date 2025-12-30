@@ -1,6 +1,6 @@
 {
     "name": "@esengine/timer",
-    "version": "3.0.1",
+    "version": "4.0.0",
     "description": "Timer and cooldown system for ECS Framework / ECS 框架的定时器和冷却系统",
     "type": "module",
     "main": "./dist/index.js",

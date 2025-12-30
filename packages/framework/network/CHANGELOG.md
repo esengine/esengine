@@ -1,5 +1,13 @@
 # @esengine/network
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`1f3a76a`](https://github.com/esengine/esengine/commit/1f3a76aabea2d3eb8a5eb8b73e29127da57e2028)]:
+    - @esengine/ecs-framework@2.7.0
+    - @esengine/blueprint@4.0.0
+
 ## 4.0.1
 
 ### Patch Changes
