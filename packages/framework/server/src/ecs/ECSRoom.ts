@@ -20,6 +20,11 @@ import {
     encodeSpawn,
     encodeDespawn,
     initChangeTracker,
+    // Network Entity
+    NETWORK_ENTITY_METADATA,
+    type NetworkEntityMetadata,
+    // Events
+    ECSEventType,
 } from '@esengine/ecs-framework';
 
 import { Room, type RoomOptions } from '../room/Room.js';
@@ -45,11 +50,19 @@ export interface ECSRoomConfig {
      * @en Whether to enable delta sync
      */
     enableDeltaSync: boolean;
+
+    /**
+     * @zh 是否启用自动网络实体广播（基于 @NetworkEntity 装饰器）
+     * @en Whether to enable automatic network entity broadcasting (based on @NetworkEntity decorator)
+     * @default true
+     */
+    enableAutoNetworkEntity: boolean;
 }
 
 const DEFAULT_ECS_CONFIG: ECSRoomConfig = {
     syncInterval: 50, // 20 Hz
     enableDeltaSync: true,
+    enableAutoNetworkEntity: true,
 };
 
 /**
@@ -117,6 +130,12 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
     private readonly _playerEntities: Map<string, Entity> = new Map();
 
     /**
+     * @zh 网络实体映射（实体 ID -> prefabType）
+     * @en Network entity mapping (entity ID -> prefabType)
+     */
+    private readonly _networkEntities: Map<number, string> = new Map();
+
+    /**
      * @zh 上次同步时间
      * @en Last sync time
      */
@@ -131,6 +150,47 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
         this.scene = this.world.createScene('game');
         this.world.setSceneActive('game', true);
         this.world.start();
+
+        // 设置自动网络实体广播
+        if (this.ecsConfig.enableAutoNetworkEntity) {
+            this._setupAutoNetworkEntity();
+        }
+    }
+
+    /**
+     * @zh 设置自动网络实体广播
+     * @en Setup automatic network entity broadcasting
+     */
+    private _setupAutoNetworkEntity(): void {
+        // 监听组件添加事件，自动广播 spawn
+        this.scene.eventSystem.on(ECSEventType.COMPONENT_ADDED, (event: any) => {
+            const { entity, component } = event;
+            const metadata: NetworkEntityMetadata | undefined =
+                (component.constructor as any)[NETWORK_ENTITY_METADATA];
+
+            if (metadata?.autoSpawn) {
+                // 避免重复广播同一实体
+                if (!this._networkEntities.has(entity.id)) {
+                    this._networkEntities.set(entity.id, metadata.prefabType);
+                    this.broadcastSpawn(entity, metadata.prefabType);
+                }
+            }
+
+            // 记录需要自动 despawn 的实体
+            if (metadata?.autoDespawn && !this._networkEntities.has(entity.id)) {
+                this._networkEntities.set(entity.id, metadata.prefabType);
+            }
+        });
+
+        // 监听实体销毁事件，自动广播 despawn
+        this.scene.eventSystem.on(ECSEventType.ENTITY_DESTROYED, (event: any) => {
+            const { entityId } = event;
+            if (this._networkEntities.has(entityId)) {
+                const despawnData = encodeDespawn(entityId);
+                this.broadcastBinary(despawnData);
+                this._networkEntities.delete(entityId);
+            }
+        });
     }
 
     // =========================================================================

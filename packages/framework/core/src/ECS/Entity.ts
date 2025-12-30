@@ -7,14 +7,7 @@ import { getComponentInstanceTypeName, getComponentTypeName } from './Decorators
 import { generateGUID } from '../Utils/GUID';
 import type { IScene } from './IScene';
 import { EntityHandle, NULL_HANDLE } from './Core/EntityHandle';
-
-/**
- * @zh 组件活跃状态变化接口
- * @en Interface for component active state change
- */
-interface IActiveChangeable {
-    onActiveChanged(): void;
-}
+import { ECSEventType } from './CoreEvents';
 
 /**
  * @zh 比较两个实体的优先级
@@ -482,7 +475,7 @@ export class Entity {
         }
 
         if (this.scene.eventSystem) {
-            this.scene.eventSystem.emitSync('component:added', {
+            this.scene.eventSystem.emitSync(ECSEventType.COMPONENT_ADDED, {
                 timestamp: Date.now(),
                 source: 'Entity',
                 entityId: this.id,
@@ -639,7 +632,7 @@ export class Entity {
         component.entityId = null;
 
         if (this.scene?.eventSystem) {
-            this.scene.eventSystem.emitSync('component:removed', {
+            this.scene.eventSystem.emitSync(ECSEventType.COMPONENT_REMOVED, {
                 timestamp: Date.now(),
                 source: 'Entity',
                 entityId: this.id,
@@ -770,19 +763,23 @@ export class Entity {
     }
 
     /**
-     * 活跃状态改变时的回调
+     * @zh 活跃状态改变时的回调
+     * @en Callback when active state changes
+     *
+     * @zh 通过事件系统发出 ENTITY_ENABLED 或 ENTITY_DISABLED 事件，
+     * 组件可以通过监听这些事件来响应实体状态变化。
+     * @en Emits ENTITY_ENABLED or ENTITY_DISABLED event through the event system.
+     * Components can listen to these events to respond to entity state changes.
      */
     private onActiveChanged(): void {
-        for (const component of this.components) {
-            if ('onActiveChanged' in component && typeof component.onActiveChanged === 'function') {
-                (component as IActiveChangeable).onActiveChanged();
-            }
-        }
+        if (this.scene?.eventSystem) {
+            const eventType = this._active
+                ? ECSEventType.ENTITY_ENABLED
+                : ECSEventType.ENTITY_DISABLED;
 
-        if (this.scene && this.scene.eventSystem) {
-            this.scene.eventSystem.emitSync('entity:activeChanged', {
+            this.scene.eventSystem.emitSync(eventType, {
                 entity: this,
-                active: this._active
+                scene: this.scene,
             });
         }
     }
@@ -800,6 +797,15 @@ export class Entity {
         }
 
         this._isDestroyed = true;
+
+        // 在清理之前发出销毁事件（组件仍然可访问）
+        if (this.scene?.eventSystem) {
+            this.scene.eventSystem.emitSync(ECSEventType.ENTITY_DESTROYED, {
+                entity: this,
+                entityId: this.id,
+                scene: this.scene,
+            });
+        }
 
         if (this.scene && this.scene.referenceTracker) {
             this.scene.referenceTracker.clearReferencesTo(this.id);

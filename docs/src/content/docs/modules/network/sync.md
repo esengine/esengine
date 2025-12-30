@@ -3,6 +3,102 @@ title: "状态同步"
 description: "组件同步、插值、预测和快照缓冲区"
 ---
 
+## @NetworkEntity 装饰器
+
+`@NetworkEntity` 装饰器用于标记需要自动广播生成/销毁的组件。当包含此组件的实体被创建或销毁时，ECSRoom 会自动广播相应的消息给所有客户端。
+
+### 基本用法
+
+```typescript
+import { Component, ECSComponent, sync, NetworkEntity } from '@esengine/ecs-framework';
+
+@ECSComponent('Enemy')
+@NetworkEntity('Enemy')
+class EnemyComponent extends Component {
+    @sync('float32') x: number = 0;
+    @sync('float32') y: number = 0;
+    @sync('uint16') health: number = 100;
+}
+```
+
+当添加此组件到实体时，ECSRoom 会自动广播 spawn 消息：
+
+```typescript
+// 服务端
+const entity = scene.createEntity('Enemy');
+entity.addComponent(new EnemyComponent()); // 自动广播 spawn
+
+// 销毁时自动广播 despawn
+entity.destroy(); // 自动广播 despawn
+```
+
+### 配置选项
+
+```typescript
+@NetworkEntity('Bullet', {
+    autoSpawn: true,    // 自动广播生成（默认 true）
+    autoDespawn: false  // 禁用自动广播销毁
+})
+class BulletComponent extends Component { }
+```
+
+| 选项 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `autoSpawn` | `boolean` | `true` | 添加组件时自动广播 spawn |
+| `autoDespawn` | `boolean` | `true` | 销毁实体时自动广播 despawn |
+
+### 初始化顺序
+
+使用 `@NetworkEntity` 时，应在添加组件**之前**初始化数据：
+
+```typescript
+// ✅ 正确：先初始化，再添加
+const comp = new PlayerComponent();
+comp.playerId = player.id;
+comp.x = 100;
+comp.y = 200;
+entity.addComponent(comp); // spawn 时数据已正确
+
+// ❌ 错误：先添加，再初始化
+const comp = entity.addComponent(new PlayerComponent());
+comp.playerId = player.id; // spawn 时数据是默认值
+```
+
+### 简化 GameRoom
+
+使用 `@NetworkEntity` 后，GameRoom 变得更加简洁：
+
+```typescript
+// 无需手动回调
+class GameRoom extends ECSRoom {
+    private setupSystems(): void {
+        // 敌人生成系统（自动广播 spawn）
+        this.addSystem(new EnemySpawnSystem());
+
+        // 敌人 AI 系统
+        const enemyAI = new EnemyAISystem();
+        enemyAI.onDeath((enemy) => {
+            enemy.destroy(); // 自动广播 despawn
+        });
+        this.addSystem(enemyAI);
+    }
+}
+```
+
+### ECSRoom 配置
+
+可以在 ECSRoom 中禁用自动网络实体功能：
+
+```typescript
+class GameRoom extends ECSRoom {
+    constructor() {
+        super({
+            enableAutoNetworkEntity: false // 禁用自动广播
+        });
+    }
+}
+```
+
 ## 组件同步系统
 
 基于 `@sync` 装饰器的 ECS 组件状态同步。
