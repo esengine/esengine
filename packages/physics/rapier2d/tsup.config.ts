@@ -7,4 +7,7 @@ export default defineConfig({
     sourcemap: true,
     clean: true,
     external: ["../pkg/rapier_wasm2d.js"],
+    loader: {
+        ".wasm": "base64",
+    },
 });

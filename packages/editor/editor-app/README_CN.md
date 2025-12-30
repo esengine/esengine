@@ -24,15 +24,7 @@ cd esengine
 pnpm install
 ```
 
-### 2. 克隆物理依赖（可选）
-
-如果需要物理引擎支持，需要克隆 rapier.js 依赖：
-
-```bash
-git clone https://github.com/esengine/rapier.js.git packages/thirdparty/rapier.js
-```
-
-### 3. 构建依赖
+### 2. 构建依赖
 
 在项目根目录执行：
 
@@ -40,7 +32,7 @@ git clone https://github.com/esengine/rapier.js.git packages/thirdparty/rapier.j
 pnpm build:editor
 ```
 
-### 4. 启动编辑器
+### 3. 启动编辑器
 
 ```bash
 cd packages/editor/editor-app

@@ -91,9 +91,8 @@ export class KinematicCharacterController {
      */
     public setUp(vector: Vector) {
         let rawVect = VectorOps.intoRaw(vector);
-        const result = this.raw.setUp(rawVect);
+        return this.raw.setUp(rawVect);
         rawVect.free();
-        return result;
     }
 
     public applyImpulsesToDynamicBodies(): boolean {

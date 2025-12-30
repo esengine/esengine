@@ -30,8 +30,11 @@ import {
     LocaleService,
 } from '@esengine/editor-runtime';
 
-// Runtime imports from @esengine/behavior-tree package
-import { BehaviorTreeRuntimeComponent, BehaviorTreeRuntimeModule } from '@esengine/behavior-tree';
+// Runtime imports
+import { BehaviorTreeRuntimeComponent, BehaviorTreeAssetType } from '@esengine/behavior-tree';
+import { AssetManagerToken } from '@esengine/asset-system';
+import { BehaviorTreeRuntimeModule } from './BehaviorTreeRuntimeModule';
+import { BehaviorTreeLoader } from './runtime/BehaviorTreeLoader';
 
 // Editor components and services
 import { BehaviorTreeService } from './services/BehaviorTreeService';
@@ -71,6 +74,10 @@ export class BehaviorTreeEditorModule implements IEditorModuleLoader {
         // 设置插件上下文
         PluginContext.setServices(services);
 
+        // 注册行为树资产加载器到 AssetManager
+        // Register behavior tree asset loader to AssetManager
+        this.registerAssetLoader();
+
         // 注册服务
         this.registerServices(services);
 
@@ -90,6 +97,22 @@ export class BehaviorTreeEditorModule implements IEditorModuleLoader {
         this.registerTranslations(services);
 
         logger.info('BehaviorTree editor module installed');
+    }
+
+    /**
+     * 注册行为树资产加载器
+     * Register behavior tree asset loader
+     */
+    private registerAssetLoader(): void {
+        try {
+            const assetManager = PluginAPI.resolve(AssetManagerToken);
+            if (assetManager) {
+                assetManager.registerLoader(BehaviorTreeAssetType, new BehaviorTreeLoader());
+                logger.info('BehaviorTree asset loader registered');
+            }
+        } catch (error) {
+            logger.warn('Failed to register asset loader:', error);
+        }
     }
 
     private registerAssetCreationMappings(services: ServiceContainer): void {
@@ -376,7 +399,7 @@ export const BehaviorTreePlugin: IEditorPlugin = {
     editorModule: new BehaviorTreeEditorModule(),
 };
 
-export { BehaviorTreeRuntimeModule };
+// BehaviorTreeRuntimeModule is internal, not re-exported
 
 // Re-exports for editor functionality
 export { PluginContext } from './PluginContext';

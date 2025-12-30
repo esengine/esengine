@@ -569,6 +569,9 @@ importers:
         specifier: workspace:*
         version: link:../../../framework/behavior-tree
     devDependencies:
+      '@esengine/asset-system':
+        specifier: workspace:*
+        version: link:../../../engine/asset-system
       '@esengine/build-config':
         specifier: workspace:*
         version: link:../../../tools/build-config
@@ -1861,6 +1864,9 @@ importers:
 
   packages/physics/rapier2d:
     devDependencies:
+      base64-js:
+        specifier: ^1.5.1
+        version: 1.5.1
       rimraf:
         specifier: ^5.0.0
         version: 5.0.10
