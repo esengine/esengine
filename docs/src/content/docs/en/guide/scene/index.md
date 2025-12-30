@@ -71,6 +71,55 @@ class ConfiguredScene extends Scene {
 }
 ```
 
+## Runtime Environment
+
+For networked games, you can configure the runtime environment to distinguish between server and client logic.
+
+### Global Configuration (Recommended)
+
+Set the runtime environment once at the Core level - all Scenes will inherit this setting:
+
+```typescript
+import { Core } from '@esengine/ecs-framework';
+
+// Method 1: Set in Core.create()
+Core.create({ runtimeEnvironment: 'server' });
+
+// Method 2: Set static property directly
+Core.runtimeEnvironment = 'server';
+```
+
+### Per-Scene Override
+
+Individual scenes can override the global setting:
+
+```typescript
+const clientScene = new Scene({ runtimeEnvironment: 'client' });
+```
+
+### Environment Types
+
+| Environment | Use Case |
+|-------------|----------|
+| `'standalone'` | Single-player games (default) |
+| `'server'` | Game server, authoritative logic |
+| `'client'` | Game client, rendering/input |
+
+### Checking Environment in Systems
+
+```typescript
+class CollectibleSpawnSystem extends EntitySystem {
+  private checkCollections(): void {
+    // Skip on client - only server handles authoritative logic
+    if (!this.scene.isServer) return;
+
+    // Server-authoritative spawn logic...
+  }
+}
+```
+
+See [System Runtime Decorators](/en/guide/system/index#runtime-environment-decorators) for decorator-based approach.
+
 ### Running a Scene
 
 ```typescript

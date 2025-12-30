@@ -160,6 +160,53 @@ scene.addSystem(new SystemA()); // addOrder = 0, executes first
 scene.addSystem(new SystemB()); // addOrder = 1, executes second
 ```
 
+## Runtime Environment Decorators
+
+For networked games, you can use decorators to control which environment a system method runs in.
+
+### Available Decorators
+
+| Decorator | Effect |
+|-----------|--------|
+| `@ServerOnly()` | Method only executes on server |
+| `@ClientOnly()` | Method only executes on client |
+| `@NotServer()` | Method skipped on server |
+| `@NotClient()` | Method skipped on client |
+
+### Usage Example
+
+```typescript
+import { EntitySystem, ServerOnly, ClientOnly } from '@esengine/ecs-framework';
+
+class GameSystem extends EntitySystem {
+  @ServerOnly()
+  private spawnEnemies(): void {
+    // Only runs on server - authoritative spawn logic
+  }
+
+  @ClientOnly()
+  private playEffects(): void {
+    // Only runs on client - visual effects
+  }
+}
+```
+
+### Simple Conditional Check
+
+For simple cases, a direct check is often clearer than decorators:
+
+```typescript
+class CollectibleSystem extends EntitySystem {
+  private checkCollections(): void {
+    if (!this.scene.isServer) return;  // Skip on client
+
+    // Server-authoritative logic...
+  }
+}
+```
+
+See [Scene Runtime Environment](/en/guide/scene/index#runtime-environment) for configuration details.
+
 ## Next Steps
 
 - [System Types](/en/guide/system/types) - Learn about different system base classes

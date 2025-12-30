@@ -12,6 +12,10 @@ import type { ServiceContainer, ServiceType } from '../Core/ServiceContainer';
 import type { TypedQueryBuilder } from './Core/Query/TypedQuery';
 import type { SceneSerializationOptions, SceneDeserializationOptions } from './Serialization/SceneSerializer';
 import type { IncrementalSnapshot, IncrementalSerializationOptions } from './Serialization/IncrementalSerializer';
+import type { RuntimeEnvironment } from '../Types';
+
+// Re-export for convenience
+export type { RuntimeEnvironment };
 
 /**
  * 场景接口定义
@@ -112,6 +116,27 @@ export type IScene = {
      * until begin() is called to start running the scene.
      */
     isEditorMode: boolean;
+
+    /**
+     * @zh 运行时环境
+     * @en Runtime environment
+     *
+     * @zh 标识场景运行在服务端、客户端还是单机模式
+     * @en Indicates whether scene runs on server, client, or standalone mode
+     */
+    readonly runtimeEnvironment: RuntimeEnvironment;
+
+    /**
+     * @zh 是否在服务端运行
+     * @en Whether running on server
+     */
+    readonly isServer: boolean;
+
+    /**
+     * @zh 是否在客户端运行
+     * @en Whether running on client
+     */
+    readonly isClient: boolean;
 
     /**
      * 获取系统列表
@@ -395,4 +420,18 @@ export type ISceneConfig = {
      * @default 10
      */
     maxSystemErrorCount?: number;
+
+    /**
+     * @zh 运行时环境
+     * @en Runtime environment
+     *
+     * @zh 用于区分场景运行在服务端、客户端还是单机模式。
+     * 配合 @ServerOnly / @ClientOnly 装饰器使用，可以让系统方法只在特定环境执行。
+     *
+     * @en Used to distinguish whether scene runs on server, client, or standalone mode.
+     * Works with @ServerOnly / @ClientOnly decorators to make system methods execute only in specific environments.
+     *
+     * @default 'standalone'
+     */
+    runtimeEnvironment?: RuntimeEnvironment;
 }

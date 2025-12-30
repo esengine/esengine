@@ -71,6 +71,55 @@ class ConfiguredScene extends Scene {
 }
 ```
 
+## 运行时环境
+
+对于网络游戏，你可以配置运行时环境来区分服务端和客户端逻辑。
+
+### 全局配置（推荐）
+
+在 Core 层级设置一次运行时环境，所有场景都会继承此设置：
+
+```typescript
+import { Core } from '@esengine/ecs-framework';
+
+// 方式1：在 Core.create() 中设置
+Core.create({ runtimeEnvironment: 'server' });
+
+// 方式2：直接设置静态属性
+Core.runtimeEnvironment = 'server';
+```
+
+### 单个场景覆盖
+
+个别场景可以覆盖全局设置：
+
+```typescript
+const clientScene = new Scene({ runtimeEnvironment: 'client' });
+```
+
+### 环境类型
+
+| 环境 | 使用场景 |
+|------|----------|
+| `'standalone'` | 单机游戏（默认） |
+| `'server'` | 游戏服务器，权威逻辑 |
+| `'client'` | 游戏客户端，渲染/输入 |
+
+### 在系统中检查环境
+
+```typescript
+class CollectibleSpawnSystem extends EntitySystem {
+  private checkCollections(): void {
+    // 客户端跳过 - 只有服务端处理权威逻辑
+    if (!this.scene.isServer) return;
+
+    // 服务端权威生成逻辑...
+  }
+}
+```
+
+参见 [系统运行时装饰器](/guide/system/index#运行时环境装饰器) 了解基于装饰器的方式。
+
 ### 运行场景
 
 ```typescript
