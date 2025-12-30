@@ -1,5 +1,13 @@
 # @esengine/ecs-framework
 
+## 2.6.1
+
+### Patch Changes
+
+- [#396](https://github.com/esengine/esengine/pull/396) [`04b08f3`](https://github.com/esengine/esengine/commit/04b08f3f073d69beb8f4be399c774bea0acb612e) Thanks [@esengine](https://github.com/esengine)! - fix(ecs): COMPONENT_ADDED 事件添加 entity 字段
+
+    修复 `ECSEventType.COMPONENT_ADDED` 事件缺少 `entity` 字段的问题，导致 ECSRoom 的 `@NetworkEntity` 自动广播功能报错。
+
 ## 2.6.0
 
 ### Minor Changes
