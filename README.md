@@ -228,6 +228,7 @@ If you want a complete engine solution with rendering:
 A visual editor built with Tauri for scene management:
 
 - Download from [Releases](https://github.com/esengine/esengine/releases)
+- [Build from source](./packages/editor/editor-app/README.md)
 - Supports behavior tree editing, tilemap painting, visual scripting
 
 ## Project Structure
@@ -281,6 +282,7 @@ pnpm test
 
 - [ECS Framework Guide](./packages/framework/core/README.md)
 - [Behavior Tree Guide](./packages/framework/behavior-tree/README.md)
+- [Editor Setup Guide](./packages/editor/editor-app/README.md)
 - [API Reference](https://esengine.cn/api/README)
 
 ## Community
