@@ -1,5 +1,13 @@
 # @esengine/spatial
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`a08a84b`](https://github.com/esengine/esengine/commit/a08a84b7db28e1140cbc637d442552747ad81c76)]:
+    - @esengine/ecs-framework@2.5.1
+    - @esengine/blueprint@2.0.1
+
 ## 2.0.0
 
 ### Patch Changes
