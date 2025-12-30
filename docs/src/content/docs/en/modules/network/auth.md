@@ -92,6 +92,355 @@ const token = jwtProvider.sign({
 const payload = jwtProvider.decode(token)
 ```
 
+### Custom Provider
+
+You can create custom authentication providers by implementing the `IAuthProvider` interface to integrate with any authentication system (OAuth, LDAP, custom database auth, etc.).
+
+#### IAuthProvider Interface
+
+```typescript
+interface IAuthProvider<TUser = unknown, TCredentials = unknown> {
+    /** Provider name */
+    readonly name: string;
+
+    /** Verify credentials */
+    verify(credentials: TCredentials): Promise<AuthResult<TUser>>;
+
+    /** Refresh token (optional) */
+    refresh?(token: string): Promise<AuthResult<TUser>>;
+
+    /** Revoke token (optional) */
+    revoke?(token: string): Promise<boolean>;
+}
+
+interface AuthResult<TUser> {
+    success: boolean;
+    user?: TUser;
+    error?: string;
+    errorCode?: AuthErrorCode;
+    token?: string;
+    expiresAt?: number;
+}
+
+type AuthErrorCode =
+    | 'INVALID_CREDENTIALS'
+    | 'EXPIRED_TOKEN'
+    | 'INVALID_TOKEN'
+    | 'USER_NOT_FOUND'
+    | 'ACCOUNT_DISABLED'
+    | 'RATE_LIMITED'
+    | 'INSUFFICIENT_PERMISSIONS';
+```
+
+#### Custom Provider Examples
+
+**Example 1: Database Password Authentication**
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface User {
+    id: string
+    username: string
+    roles: string[]
+}
+
+interface PasswordCredentials {
+    username: string
+    password: string
+}
+
+class DatabaseAuthProvider implements IAuthProvider<User, PasswordCredentials> {
+    readonly name = 'database'
+
+    async verify(credentials: PasswordCredentials): Promise<AuthResult<User>> {
+        const { username, password } = credentials
+
+        // Query user from database
+        const user = await db.users.findByUsername(username)
+        if (!user) {
+            return {
+                success: false,
+                error: 'User not found',
+                errorCode: 'USER_NOT_FOUND'
+            }
+        }
+
+        // Verify password (using bcrypt or similar)
+        const isValid = await bcrypt.compare(password, user.passwordHash)
+        if (!isValid) {
+            return {
+                success: false,
+                error: 'Invalid password',
+                errorCode: 'INVALID_CREDENTIALS'
+            }
+        }
+
+        // Check account status
+        if (user.disabled) {
+            return {
+                success: false,
+                error: 'Account is disabled',
+                errorCode: 'ACCOUNT_DISABLED'
+            }
+        }
+
+        return {
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                roles: user.roles
+            }
+        }
+    }
+}
+```
+
+**Example 2: OAuth/Third-party Authentication**
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface OAuthUser {
+    id: string
+    email: string
+    name: string
+    provider: string
+    roles: string[]
+}
+
+interface OAuthCredentials {
+    provider: 'google' | 'github' | 'discord'
+    accessToken: string
+}
+
+class OAuthProvider implements IAuthProvider<OAuthUser, OAuthCredentials> {
+    readonly name = 'oauth'
+
+    async verify(credentials: OAuthCredentials): Promise<AuthResult<OAuthUser>> {
+        const { provider, accessToken } = credentials
+
+        try {
+            // Verify token with provider
+            const profile = await this.fetchUserProfile(provider, accessToken)
+
+            // Find or create local user
+            let user = await db.users.findByOAuth(provider, profile.id)
+            if (!user) {
+                user = await db.users.create({
+                    oauthProvider: provider,
+                    oauthId: profile.id,
+                    email: profile.email,
+                    name: profile.name,
+                    roles: ['player']
+                })
+            }
+
+            return {
+                success: true,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    provider,
+                    roles: user.roles
+                }
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: 'OAuth verification failed',
+                errorCode: 'INVALID_TOKEN'
+            }
+        }
+    }
+
+    private async fetchUserProfile(provider: string, token: string) {
+        switch (provider) {
+            case 'google':
+                return fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).then(r => r.json())
+            case 'github':
+                return fetch('https://api.github.com/user', {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).then(r => r.json())
+            // Other providers...
+            default:
+                throw new Error(`Unsupported provider: ${provider}`)
+        }
+    }
+}
+```
+
+**Example 3: API Key Authentication**
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface ApiUser {
+    id: string
+    name: string
+    roles: string[]
+    rateLimit: number
+}
+
+class ApiKeyAuthProvider implements IAuthProvider<ApiUser, string> {
+    readonly name = 'api-key'
+
+    private revokedKeys = new Set<string>()
+
+    async verify(apiKey: string): Promise<AuthResult<ApiUser>> {
+        if (!apiKey || !apiKey.startsWith('sk_')) {
+            return {
+                success: false,
+                error: 'Invalid API Key format',
+                errorCode: 'INVALID_TOKEN'
+            }
+        }
+
+        if (this.revokedKeys.has(apiKey)) {
+            return {
+                success: false,
+                error: 'API Key has been revoked',
+                errorCode: 'INVALID_TOKEN'
+            }
+        }
+
+        // Query API Key from database
+        const keyData = await db.apiKeys.findByKey(apiKey)
+        if (!keyData) {
+            return {
+                success: false,
+                error: 'API Key not found',
+                errorCode: 'INVALID_CREDENTIALS'
+            }
+        }
+
+        // Check expiration
+        if (keyData.expiresAt && keyData.expiresAt < Date.now()) {
+            return {
+                success: false,
+                error: 'API Key has expired',
+                errorCode: 'EXPIRED_TOKEN'
+            }
+        }
+
+        return {
+            success: true,
+            user: {
+                id: keyData.userId,
+                name: keyData.name,
+                roles: keyData.roles,
+                rateLimit: keyData.rateLimit
+            },
+            expiresAt: keyData.expiresAt
+        }
+    }
+
+    async revoke(apiKey: string): Promise<boolean> {
+        this.revokedKeys.add(apiKey)
+        await db.apiKeys.revoke(apiKey)
+        return true
+    }
+}
+```
+
+#### Using Custom Providers
+
+```typescript
+import { createServer } from '@esengine/server'
+import { withAuth } from '@esengine/server/auth'
+
+// Create custom provider
+const dbAuthProvider = new DatabaseAuthProvider()
+
+// Or use OAuth provider
+const oauthProvider = new OAuthProvider()
+
+// Use custom provider
+const server = withAuth(await createServer({ port: 3000 }), {
+    provider: dbAuthProvider, // or oauthProvider
+
+    // Extract credentials from WebSocket connection request
+    extractCredentials: (req) => {
+        const url = new URL(req.url, 'http://localhost')
+
+        // For database auth: get from query params
+        const username = url.searchParams.get('username')
+        const password = url.searchParams.get('password')
+        if (username && password) {
+            return { username, password }
+        }
+
+        // For OAuth: get from token param
+        const provider = url.searchParams.get('provider')
+        const accessToken = url.searchParams.get('access_token')
+        if (provider && accessToken) {
+            return { provider, accessToken }
+        }
+
+        // For API Key: get from header
+        const apiKey = req.headers['x-api-key']
+        if (apiKey) {
+            return apiKey as string
+        }
+
+        return null
+    },
+
+    onAuthFailure: (conn, error) => {
+        console.log(`Auth failed: ${error.errorCode} - ${error.error}`)
+    }
+})
+
+await server.start()
+```
+
+#### Combining Multiple Providers
+
+You can create a composite provider to support multiple authentication methods:
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface MultiAuthCredentials {
+    type: 'jwt' | 'oauth' | 'apikey' | 'password'
+    data: unknown
+}
+
+class MultiAuthProvider implements IAuthProvider<User, MultiAuthCredentials> {
+    readonly name = 'multi'
+
+    constructor(
+        private jwtProvider: JwtAuthProvider<User>,
+        private oauthProvider: OAuthProvider,
+        private apiKeyProvider: ApiKeyAuthProvider,
+        private dbProvider: DatabaseAuthProvider
+    ) {}
+
+    async verify(credentials: MultiAuthCredentials): Promise<AuthResult<User>> {
+        switch (credentials.type) {
+            case 'jwt':
+                return this.jwtProvider.verify(credentials.data as string)
+            case 'oauth':
+                return this.oauthProvider.verify(credentials.data as OAuthCredentials)
+            case 'apikey':
+                return this.apiKeyProvider.verify(credentials.data as string)
+            case 'password':
+                return this.dbProvider.verify(credentials.data as PasswordCredentials)
+            default:
+                return {
+                    success: false,
+                    error: 'Unsupported authentication type',
+                    errorCode: 'INVALID_CREDENTIALS'
+                }
+        }
+    }
+}
+```
+
 ### Session Provider
 
 Use server-side sessions for stateful authentication:

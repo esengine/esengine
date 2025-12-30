@@ -92,6 +92,355 @@ const token = jwtProvider.sign({
 const payload = jwtProvider.decode(token)
 ```
 
+### 自定义提供者
+
+你可以通过实现 `IAuthProvider` 接口来创建自定义认证提供者，以集成任何认证系统（如 OAuth、LDAP、自定义数据库认证等）。
+
+#### IAuthProvider 接口
+
+```typescript
+interface IAuthProvider<TUser = unknown, TCredentials = unknown> {
+    /** 提供者名称 */
+    readonly name: string;
+
+    /** 验证凭证 */
+    verify(credentials: TCredentials): Promise<AuthResult<TUser>>;
+
+    /** 刷新令牌（可选） */
+    refresh?(token: string): Promise<AuthResult<TUser>>;
+
+    /** 撤销令牌（可选） */
+    revoke?(token: string): Promise<boolean>;
+}
+
+interface AuthResult<TUser> {
+    success: boolean;
+    user?: TUser;
+    error?: string;
+    errorCode?: AuthErrorCode;
+    token?: string;
+    expiresAt?: number;
+}
+
+type AuthErrorCode =
+    | 'INVALID_CREDENTIALS'
+    | 'EXPIRED_TOKEN'
+    | 'INVALID_TOKEN'
+    | 'USER_NOT_FOUND'
+    | 'ACCOUNT_DISABLED'
+    | 'RATE_LIMITED'
+    | 'INSUFFICIENT_PERMISSIONS';
+```
+
+#### 自定义提供者示例
+
+**示例 1：数据库密码认证**
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface User {
+    id: string
+    username: string
+    roles: string[]
+}
+
+interface PasswordCredentials {
+    username: string
+    password: string
+}
+
+class DatabaseAuthProvider implements IAuthProvider<User, PasswordCredentials> {
+    readonly name = 'database'
+
+    async verify(credentials: PasswordCredentials): Promise<AuthResult<User>> {
+        const { username, password } = credentials
+
+        // 从数据库查询用户
+        const user = await db.users.findByUsername(username)
+        if (!user) {
+            return {
+                success: false,
+                error: '用户不存在',
+                errorCode: 'USER_NOT_FOUND'
+            }
+        }
+
+        // 验证密码（使用 bcrypt 等库）
+        const isValid = await bcrypt.compare(password, user.passwordHash)
+        if (!isValid) {
+            return {
+                success: false,
+                error: '密码错误',
+                errorCode: 'INVALID_CREDENTIALS'
+            }
+        }
+
+        // 检查账号状态
+        if (user.disabled) {
+            return {
+                success: false,
+                error: '账号已禁用',
+                errorCode: 'ACCOUNT_DISABLED'
+            }
+        }
+
+        return {
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                roles: user.roles
+            }
+        }
+    }
+}
+```
+
+**示例 2：OAuth/第三方认证**
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface OAuthUser {
+    id: string
+    email: string
+    name: string
+    provider: string
+    roles: string[]
+}
+
+interface OAuthCredentials {
+    provider: 'google' | 'github' | 'discord'
+    accessToken: string
+}
+
+class OAuthProvider implements IAuthProvider<OAuthUser, OAuthCredentials> {
+    readonly name = 'oauth'
+
+    async verify(credentials: OAuthCredentials): Promise<AuthResult<OAuthUser>> {
+        const { provider, accessToken } = credentials
+
+        try {
+            // 根据提供商验证 token
+            const profile = await this.fetchUserProfile(provider, accessToken)
+
+            // 查找或创建本地用户
+            let user = await db.users.findByOAuth(provider, profile.id)
+            if (!user) {
+                user = await db.users.create({
+                    oauthProvider: provider,
+                    oauthId: profile.id,
+                    email: profile.email,
+                    name: profile.name,
+                    roles: ['player']
+                })
+            }
+
+            return {
+                success: true,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    provider,
+                    roles: user.roles
+                }
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: 'OAuth 验证失败',
+                errorCode: 'INVALID_TOKEN'
+            }
+        }
+    }
+
+    private async fetchUserProfile(provider: string, token: string) {
+        switch (provider) {
+            case 'google':
+                return fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).then(r => r.json())
+            case 'github':
+                return fetch('https://api.github.com/user', {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).then(r => r.json())
+            // 其他提供商...
+            default:
+                throw new Error(`不支持的提供商: ${provider}`)
+        }
+    }
+}
+```
+
+**示例 3：API Key 认证**
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface ApiUser {
+    id: string
+    name: string
+    roles: string[]
+    rateLimit: number
+}
+
+class ApiKeyAuthProvider implements IAuthProvider<ApiUser, string> {
+    readonly name = 'api-key'
+
+    private revokedKeys = new Set<string>()
+
+    async verify(apiKey: string): Promise<AuthResult<ApiUser>> {
+        if (!apiKey || !apiKey.startsWith('sk_')) {
+            return {
+                success: false,
+                error: 'API Key 格式无效',
+                errorCode: 'INVALID_TOKEN'
+            }
+        }
+
+        if (this.revokedKeys.has(apiKey)) {
+            return {
+                success: false,
+                error: 'API Key 已被撤销',
+                errorCode: 'INVALID_TOKEN'
+            }
+        }
+
+        // 从数据库查询 API Key
+        const keyData = await db.apiKeys.findByKey(apiKey)
+        if (!keyData) {
+            return {
+                success: false,
+                error: 'API Key 不存在',
+                errorCode: 'INVALID_CREDENTIALS'
+            }
+        }
+
+        // 检查过期
+        if (keyData.expiresAt && keyData.expiresAt < Date.now()) {
+            return {
+                success: false,
+                error: 'API Key 已过期',
+                errorCode: 'EXPIRED_TOKEN'
+            }
+        }
+
+        return {
+            success: true,
+            user: {
+                id: keyData.userId,
+                name: keyData.name,
+                roles: keyData.roles,
+                rateLimit: keyData.rateLimit
+            },
+            expiresAt: keyData.expiresAt
+        }
+    }
+
+    async revoke(apiKey: string): Promise<boolean> {
+        this.revokedKeys.add(apiKey)
+        await db.apiKeys.revoke(apiKey)
+        return true
+    }
+}
+```
+
+#### 使用自定义提供者
+
+```typescript
+import { createServer } from '@esengine/server'
+import { withAuth } from '@esengine/server/auth'
+
+// 创建自定义提供者
+const dbAuthProvider = new DatabaseAuthProvider()
+
+// 或使用 OAuth 提供者
+const oauthProvider = new OAuthProvider()
+
+// 使用自定义提供者
+const server = withAuth(await createServer({ port: 3000 }), {
+    provider: dbAuthProvider, // 或 oauthProvider
+
+    // 从 WebSocket 连接请求中提取凭证
+    extractCredentials: (req) => {
+        const url = new URL(req.url, 'http://localhost')
+
+        // 对于数据库认证：从查询参数获取
+        const username = url.searchParams.get('username')
+        const password = url.searchParams.get('password')
+        if (username && password) {
+            return { username, password }
+        }
+
+        // 对于 OAuth：从 token 参数获取
+        const provider = url.searchParams.get('provider')
+        const accessToken = url.searchParams.get('access_token')
+        if (provider && accessToken) {
+            return { provider, accessToken }
+        }
+
+        // 对于 API Key：从请求头获取
+        const apiKey = req.headers['x-api-key']
+        if (apiKey) {
+            return apiKey as string
+        }
+
+        return null
+    },
+
+    onAuthFailure: (conn, error) => {
+        console.log(`认证失败: ${error.errorCode} - ${error.error}`)
+    }
+})
+
+await server.start()
+```
+
+#### 组合多个提供者
+
+你可以创建一个复合提供者来支持多种认证方式：
+
+```typescript
+import type { IAuthProvider, AuthResult } from '@esengine/server/auth'
+
+interface MultiAuthCredentials {
+    type: 'jwt' | 'oauth' | 'apikey' | 'password'
+    data: unknown
+}
+
+class MultiAuthProvider implements IAuthProvider<User, MultiAuthCredentials> {
+    readonly name = 'multi'
+
+    constructor(
+        private jwtProvider: JwtAuthProvider<User>,
+        private oauthProvider: OAuthProvider,
+        private apiKeyProvider: ApiKeyAuthProvider,
+        private dbProvider: DatabaseAuthProvider
+    ) {}
+
+    async verify(credentials: MultiAuthCredentials): Promise<AuthResult<User>> {
+        switch (credentials.type) {
+            case 'jwt':
+                return this.jwtProvider.verify(credentials.data as string)
+            case 'oauth':
+                return this.oauthProvider.verify(credentials.data as OAuthCredentials)
+            case 'apikey':
+                return this.apiKeyProvider.verify(credentials.data as string)
+            case 'password':
+                return this.dbProvider.verify(credentials.data as PasswordCredentials)
+            default:
+                return {
+                    success: false,
+                    error: '不支持的认证类型',
+                    errorCode: 'INVALID_CREDENTIALS'
+                }
+        }
+    }
+}
+```
+
 ### Session 提供者
 
 使用服务端会话实现有状态认证：
