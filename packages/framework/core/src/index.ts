@@ -5,6 +5,7 @@
 
 // 核心模块
 export { Core } from './Core';
+export { RuntimeConfig } from './RuntimeConfig';
 export { ServiceContainer, ServiceLifetime } from './Core/ServiceContainer';
 export type { IService, ServiceType, ServiceIdentifier } from './Core/ServiceContainer';
 

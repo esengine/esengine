@@ -13,6 +13,7 @@ import { QuerySystem } from './Core/QuerySystem';
 import { TypeSafeEventSystem } from './Core/EventSystem';
 import { ReferenceTracker } from './Core/ReferenceTracker';
 import { IScene, ISceneConfig, RuntimeEnvironment } from './IScene';
+import { RuntimeConfig } from '../RuntimeConfig';
 import { getComponentInstanceTypeName, getSystemInstanceTypeName, getSystemMetadata, getSystemInstanceMetadata } from './Decorators';
 import { TypedQueryBuilder } from './Core/Query/TypedQuery';
 import {
@@ -200,10 +201,7 @@ export class Scene implements IScene {
         if (this._runtimeEnvironmentOverride) {
             return this._runtimeEnvironmentOverride;
         }
-        // 动态导入避免循环依赖
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { Core } = require('../Core') as typeof import('../Core');
-        return Core.runtimeEnvironment;
+        return RuntimeConfig.runtimeEnvironment;
     }
 
     /**
