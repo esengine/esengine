@@ -1,5 +1,13 @@
 # @esengine/fsm
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`04b08f3`](https://github.com/esengine/esengine/commit/04b08f3f073d69beb8f4be399c774bea0acb612e)]:
+    - @esengine/ecs-framework@2.6.1
+    - @esengine/blueprint@3.0.1
+
 ## 3.0.0
 
 ### Patch Changes

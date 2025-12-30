@@ -51,7 +51,7 @@
   "peerDependencies": {
     "ws": ">=8.0.0",
     "jsonwebtoken": ">=9.0.0",
-    "@esengine/ecs-framework": ">=2.6.0"
+    "@esengine/ecs-framework": ">=2.6.1"
   },
   "peerDependenciesMeta": {
     "jsonwebtoken": {
