@@ -19,11 +19,13 @@
   ],
   "scripts": {
     "gen:src": "node scripts/gen-src.mjs",
-    "build": "pnpm gen:src && tsup",
-    "clean": "rimraf dist src"
+    "build": "tsup",
+    "build:regen": "pnpm gen:src && tsup",
+    "clean": "rimraf dist"
   },
   "license": "Apache-2.0",
   "devDependencies": {
+    "base64-js": "^1.5.1",
     "rimraf": "^5.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"

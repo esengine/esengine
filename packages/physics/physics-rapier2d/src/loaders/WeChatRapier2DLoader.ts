@@ -121,9 +121,9 @@ export class WeChatRapier2DLoader implements IWasmLibraryLoader<RapierModule> {
             // 导入 Rapier2D 标准版
             const RAPIER = await import('@esengine/rapier2d');
 
-            // 初始化 WASM - 标准版需要提供 WASM 路径
-            const wasmPath = this._config.minigame?.wasmPath || 'wasm/rapier_wasm2d_bg.wasm';
-            await RAPIER.init(wasmPath);
+            // 初始化 WASM - WASM 已经作为 base64 嵌入到包中
+            // Initialize WASM - WASM is embedded as base64 in the package
+            await RAPIER.init();
 
             return RAPIER;
         } finally {

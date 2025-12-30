@@ -28,9 +28,6 @@ export class DynamicRayCastVehicleController {
         bodies: RigidBodySet,
         colliders: ColliderSet,
     ) {
-        if (typeof RawDynamicRayCastVehicleController === 'undefined') {
-            throw new Error('DynamicRayCastVehicleController is not available in 2D mode');
-        }
         this.raw = new RawDynamicRayCastVehicleController(chassis.handle);
         this.broadPhase = broadPhase;
         this.narrowPhase = narrowPhase;

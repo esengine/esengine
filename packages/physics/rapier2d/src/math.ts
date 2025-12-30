@@ -28,7 +28,7 @@ export class VectorOps {
     }
 
     // FIXME: type ram: RawVector?
-    public static fromRaw(raw: RawVector): Vector | null {
+    public static fromRaw(raw: RawVector): Vector {
         if (!raw) return null;
 
         let res = VectorOps.new(raw.x, raw.y);
@@ -56,7 +56,7 @@ export class RotationOps {
         return 0.0;
     }
 
-    public static fromRaw(raw: RawRotation): Rotation | null {
+    public static fromRaw(raw: RawRotation): Rotation {
         if (!raw) return null;
 
         let res = raw.angle;

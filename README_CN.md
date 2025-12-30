@@ -228,6 +228,7 @@ npm install @esengine/world-streaming    # 世界流送
 基于 Tauri 构建的可视化编辑器：
 
 - 从 [Releases](https://github.com/esengine/esengine/releases) 下载
+- [从源码构建](./packages/editor/editor-app/README.md)
 - 支持行为树编辑、Tilemap 绘制、可视化脚本
 
 ## 项目结构
@@ -281,6 +282,7 @@ pnpm test
 
 - [ECS 框架指南](./packages/framework/core/README.md)
 - [行为树指南](./packages/framework/behavior-tree/README.md)
+- [编辑器启动指南](./packages/editor/editor-app/README_CN.md) ([English](./packages/editor/editor-app/README.md))
 - [API 参考](https://esengine.cn/api/README)
 
 ## 社区
