@@ -1,5 +1,53 @@
 # @esengine/server
 
+## 3.0.0
+
+### Minor Changes
+
+- feat(ecs): 添加 @NetworkEntity 装饰器，支持自动广播实体生成/销毁
+
+    ### 新功能
+
+    **@NetworkEntity 装饰器**
+    - 标记组件为网络实体，自动广播 spawn/despawn 消息
+    - 支持 `autoSpawn` 和 `autoDespawn` 配置选项
+    - 通过事件系统（`ECSEventType.COMPONENT_ADDED` / `ECSEventType.ENTITY_DESTROYED`）实现
+
+    **ECSRoom 增强**
+    - 新增 `enableAutoNetworkEntity` 配置选项（默认启用）
+    - 自动监听组件添加和实体销毁事件
+    - 简化 GameRoom 实现，无需手动回调
+
+    ### 改进
+
+    **Entity 事件**
+    - `Entity.destroy()` 现在发出 `entity:destroyed` 事件
+    - `Entity.active` 变化时发出 `entity:enabled` / `entity:disabled` 事件
+    - 使用 `ECSEventType` 常量替代硬编码字符串
+
+    ### 使用示例
+
+    ```typescript
+    import { Component, ECSComponent, sync, NetworkEntity } from '@esengine/ecs-framework';
+
+    @ECSComponent('Enemy')
+    @NetworkEntity('Enemy')
+    class EnemyComponent extends Component {
+        @sync('float32') x: number = 0;
+        @sync('float32') y: number = 0;
+    }
+
+    // 服务端
+    const entity = scene.createEntity('Enemy');
+    entity.addComponent(new EnemyComponent()); // 自动广播 spawn
+    entity.destroy(); // 自动广播 despawn
+    ```
+
+### Patch Changes
+
+- Updated dependencies []:
+    - @esengine/ecs-framework@2.6.0
+
 ## 2.0.0
 
 ### Minor Changes

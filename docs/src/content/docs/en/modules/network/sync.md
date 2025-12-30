@@ -3,6 +3,102 @@ title: "State Sync"
 description: "Component sync, interpolation, prediction and snapshot buffers"
 ---
 
+## @NetworkEntity Decorator
+
+The `@NetworkEntity` decorator marks components for automatic spawn/despawn broadcasting. When an entity containing this component is created or destroyed, ECSRoom automatically broadcasts the corresponding message to all clients.
+
+### Basic Usage
+
+```typescript
+import { Component, ECSComponent, sync, NetworkEntity } from '@esengine/ecs-framework';
+
+@ECSComponent('Enemy')
+@NetworkEntity('Enemy')
+class EnemyComponent extends Component {
+    @sync('float32') x: number = 0;
+    @sync('float32') y: number = 0;
+    @sync('uint16') health: number = 100;
+}
+```
+
+When adding this component to an entity, ECSRoom automatically broadcasts the spawn message:
+
+```typescript
+// Server-side
+const entity = scene.createEntity('Enemy');
+entity.addComponent(new EnemyComponent()); // Auto-broadcasts spawn
+
+// Destroying auto-broadcasts despawn
+entity.destroy(); // Auto-broadcasts despawn
+```
+
+### Configuration Options
+
+```typescript
+@NetworkEntity('Bullet', {
+    autoSpawn: true,    // Auto-broadcast spawn (default true)
+    autoDespawn: false  // Disable auto-broadcast despawn
+})
+class BulletComponent extends Component { }
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `autoSpawn` | `boolean` | `true` | Auto-broadcast spawn when component is added |
+| `autoDespawn` | `boolean` | `true` | Auto-broadcast despawn when entity is destroyed |
+
+### Initialization Order
+
+When using `@NetworkEntity`, initialize data **before** adding the component:
+
+```typescript
+// ✅ Correct: Initialize first, then add
+const comp = new PlayerComponent();
+comp.playerId = player.id;
+comp.x = 100;
+comp.y = 200;
+entity.addComponent(comp); // Data is correct at spawn
+
+// ❌ Wrong: Add first, then initialize
+const comp = entity.addComponent(new PlayerComponent());
+comp.playerId = player.id; // Data has default values at spawn
+```
+
+### Simplified GameRoom
+
+With `@NetworkEntity`, GameRoom becomes much cleaner:
+
+```typescript
+// No manual callbacks needed
+class GameRoom extends ECSRoom {
+    private setupSystems(): void {
+        // Enemy spawn system (auto-broadcasts spawn)
+        this.addSystem(new EnemySpawnSystem());
+
+        // Enemy AI system
+        const enemyAI = new EnemyAISystem();
+        enemyAI.onDeath((enemy) => {
+            enemy.destroy(); // Auto-broadcasts despawn
+        });
+        this.addSystem(enemyAI);
+    }
+}
+```
+
+### ECSRoom Configuration
+
+You can disable the auto network entity feature in ECSRoom:
+
+```typescript
+class GameRoom extends ECSRoom {
+    constructor() {
+        super({
+            enableAutoNetworkEntity: false // Disable auto-broadcasting
+        });
+    }
+}
+```
+
 ## Component Sync System
 
 ECS component state synchronization based on `@sync` decorator.

@@ -1,6 +1,6 @@
 {
     "name": "@esengine/transaction",
-    "version": "2.0.3",
+    "version": "2.0.4",
     "description": "Game transaction system with distributed support | 游戏事务系统，支持分布式事务",
     "type": "module",
     "main": "./dist/index.js",
