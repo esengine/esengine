@@ -268,6 +268,12 @@ export type IECSDebugConfig = {
 }
 
 /**
+ * @zh 运行时环境类型
+ * @en Runtime environment type
+ */
+export type RuntimeEnvironment = 'server' | 'client' | 'standalone';
+
+/**
  * Core配置接口
  */
 export type ICoreConfig = {
@@ -277,6 +283,16 @@ export type ICoreConfig = {
     debugConfig?: IECSDebugConfig;
     /** WorldManager配置 */
     worldManagerConfig?: IWorldManagerConfig;
+    /**
+     * @zh 运行时环境
+     * @en Runtime environment
+     *
+     * @zh 设置后所有 Scene 默认继承此环境。服务端框架应设置为 'server'，客户端应用设置为 'client'。
+     * @en All Scenes inherit this environment by default. Server frameworks should set 'server', client apps should set 'client'.
+     *
+     * @default 'standalone'
+     */
+    runtimeEnvironment?: RuntimeEnvironment;
 }
 
 /**

@@ -5,7 +5,7 @@ import { Time } from './Utils/Time';
 import { PerformanceMonitor } from './Utils/PerformanceMonitor';
 import { PoolManager } from './Utils/Pool/PoolManager';
 import { DebugManager } from './Utils/Debug';
-import { ICoreConfig, IECSDebugConfig } from './Types';
+import { ICoreConfig, IECSDebugConfig, RuntimeEnvironment } from './Types';
 import { createLogger } from './Utils/Logger';
 import { SceneManager } from './ECS/SceneManager';
 import { IScene } from './ECS/IScene';
@@ -62,6 +62,47 @@ export class Core {
      * @en Game paused state, when set to true, game loop will pause execution
      */
     public static paused = false;
+
+    /**
+     * @zh 运行时环境
+     * @en Runtime environment
+     *
+     * @zh 全局运行时环境设置。所有 Scene 默认继承此值。
+     * 服务端框架（如 @esengine/server）应在启动时设置为 'server'。
+     * 客户端应用应设置为 'client'。
+     * 单机游戏使用默认值 'standalone'。
+     *
+     * @en Global runtime environment setting. All Scenes inherit this value by default.
+     * Server frameworks (like @esengine/server) should set this to 'server' at startup.
+     * Client apps should set this to 'client'.
+     * Standalone games use the default 'standalone'.
+     *
+     * @example
+     * ```typescript
+     * // @zh 服务端启动时设置 | @en Set at server startup
+     * Core.runtimeEnvironment = 'server';
+     *
+     * // @zh 或在 Core.create 时配置 | @en Or configure in Core.create
+     * Core.create({ runtimeEnvironment: 'server' });
+     * ```
+     */
+    public static runtimeEnvironment: RuntimeEnvironment = 'standalone';
+
+    /**
+     * @zh 是否在服务端运行
+     * @en Whether running on server
+     */
+    public static get isServer(): boolean {
+        return Core.runtimeEnvironment === 'server';
+    }
+
+    /**
+     * @zh 是否在客户端运行
+     * @en Whether running on client
+     */
+    public static get isClient(): boolean {
+        return Core.runtimeEnvironment === 'client';
+    }
 
     /**
      * @zh 全局核心实例，可能为null表示Core尚未初始化或已被销毁
@@ -132,6 +173,11 @@ export class Core {
         Core._instance = this;
         this._config = { debug: true, ...config };
         this._serviceContainer = new ServiceContainer();
+
+        // 设置全局运行时环境
+        if (config.runtimeEnvironment) {
+            Core.runtimeEnvironment = config.runtimeEnvironment;
+        }
 
         this._timerManager = new TimerManager();
         this._serviceContainer.registerInstance(TimerManager, this._timerManager);

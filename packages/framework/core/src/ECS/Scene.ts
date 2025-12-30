@@ -12,7 +12,7 @@ import type { IComponentRegistry } from './Core/ComponentStorage';
 import { QuerySystem } from './Core/QuerySystem';
 import { TypeSafeEventSystem } from './Core/EventSystem';
 import { ReferenceTracker } from './Core/ReferenceTracker';
-import { IScene, ISceneConfig } from './IScene';
+import { IScene, ISceneConfig, RuntimeEnvironment } from './IScene';
 import { getComponentInstanceTypeName, getSystemInstanceTypeName, getSystemMetadata, getSystemInstanceMetadata } from './Decorators';
 import { TypedQueryBuilder } from './Core/Query/TypedQuery';
 import {
@@ -179,6 +179,48 @@ export class Scene implements IScene {
      * until begin() is called to start running the scene.
      */
     public isEditorMode: boolean = false;
+
+    /**
+     * @zh 场景级别的运行时环境覆盖
+     * @en Scene-level runtime environment override
+     *
+     * @zh 如果未设置，则从 Core.runtimeEnvironment 读取
+     * @en If not set, reads from Core.runtimeEnvironment
+     */
+    private _runtimeEnvironmentOverride: RuntimeEnvironment | undefined;
+
+    /**
+     * @zh 获取运行时环境
+     * @en Get runtime environment
+     *
+     * @zh 优先返回场景级别设置，否则返回 Core 全局设置
+     * @en Returns scene-level setting if set, otherwise returns Core global setting
+     */
+    public get runtimeEnvironment(): RuntimeEnvironment {
+        if (this._runtimeEnvironmentOverride) {
+            return this._runtimeEnvironmentOverride;
+        }
+        // 动态导入避免循环依赖
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { Core } = require('../Core') as typeof import('../Core');
+        return Core.runtimeEnvironment;
+    }
+
+    /**
+     * @zh 是否在服务端运行
+     * @en Whether running on server
+     */
+    public get isServer(): boolean {
+        return this.runtimeEnvironment === 'server';
+    }
+
+    /**
+     * @zh 是否在客户端运行
+     * @en Whether running on client
+     */
+    public get isClient(): boolean {
+        return this.runtimeEnvironment === 'client';
+    }
 
     /**
      * 延迟的组件生命周期回调队列
@@ -397,6 +439,11 @@ export class Scene implements IScene {
         this._services = new ServiceContainer();
         this._logger = createLogger('Scene');
         this._maxErrorCount = config?.maxSystemErrorCount ?? 10;
+
+        // 只有显式指定时才覆盖，否则从 Core 读取
+        if (config?.runtimeEnvironment) {
+            this._runtimeEnvironmentOverride = config.runtimeEnvironment;
+        }
 
         if (config?.name) {
             this.name = config.name;

@@ -82,3 +82,14 @@ export {
     hasSchedulingMetadata,
     SCHEDULING_METADATA
 } from './SystemScheduling';
+
+// ============================================================================
+// Runtime Environment Decorators
+// 运行时环境装饰器
+// ============================================================================
+export {
+    ServerOnly,
+    ClientOnly,
+    NotServer,
+    NotClient
+} from './RuntimeEnvironment';

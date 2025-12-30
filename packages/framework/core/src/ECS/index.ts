@@ -7,7 +7,7 @@ export * from './Utils';
 export * from './Decorators';
 export * from './Components';
 export { Scene } from './Scene';
-export type { IScene, ISceneFactory, ISceneConfig } from './IScene';
+export type { IScene, ISceneFactory, ISceneConfig, RuntimeEnvironment } from './IScene';
 export { SceneManager } from './SceneManager';
 export { World } from './World';
 export type { IWorldConfig } from './World';

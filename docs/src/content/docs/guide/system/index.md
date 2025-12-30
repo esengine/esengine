@@ -160,6 +160,53 @@ scene.addSystem(new SystemA()); // addOrder = 0，先执行
 scene.addSystem(new SystemB()); // addOrder = 1，后执行
 ```
 
+## 运行时环境装饰器
+
+对于网络游戏，你可以使用装饰器来控制系统方法在哪个环境下执行。
+
+### 可用装饰器
+
+| 装饰器 | 效果 |
+|--------|------|
+| `@ServerOnly()` | 方法仅在服务端执行 |
+| `@ClientOnly()` | 方法仅在客户端执行 |
+| `@NotServer()` | 方法在服务端跳过 |
+| `@NotClient()` | 方法在客户端跳过 |
+
+### 使用示例
+
+```typescript
+import { EntitySystem, ServerOnly, ClientOnly } from '@esengine/ecs-framework';
+
+class GameSystem extends EntitySystem {
+  @ServerOnly()
+  private spawnEnemies(): void {
+    // 仅在服务端运行 - 权威生成逻辑
+  }
+
+  @ClientOnly()
+  private playEffects(): void {
+    // 仅在客户端运行 - 视觉效果
+  }
+}
+```
+
+### 简单条件检查
+
+对于简单场景，直接检查通常比装饰器更清晰：
+
+```typescript
+class CollectibleSystem extends EntitySystem {
+  private checkCollections(): void {
+    if (!this.scene.isServer) return;  // 客户端跳过
+
+    // 服务端权威逻辑...
+  }
+}
+```
+
+参见 [场景运行时环境](/guide/scene/index#运行时环境) 了解配置详情。
+
 ## 下一步
 
 - [系统类型](/guide/system/types) - 了解不同类型的系统基类
