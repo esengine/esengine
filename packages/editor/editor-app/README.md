@@ -1,14 +1,10 @@
 # ESEngine Editor
 
-ESEngine 可视化编辑器，基于 Tauri 2.x + React 18 构建的跨平台桌面应用。
-
 A cross-platform desktop visual editor built with Tauri 2.x + React 18.
 
-## Prerequisites | 前置条件
+## Prerequisites
 
 Before running the editor, ensure you have the following installed:
-
-运行编辑器前，请确保已安装以下环境：
 
 - **Node.js** >= 18.x
 - **pnpm** >= 10.x
@@ -16,11 +12,11 @@ Before running the editor, ensure you have the following installed:
 - **Platform-specific dependencies**:
   - **Windows**: Microsoft Visual Studio C++ Build Tools
   - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
-  - **Linux**: `webkit2gtk`, `libgtk-3-dev`, `libappindicator3-dev` (see [Tauri prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites))
+  - **Linux**: See [Tauri prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
 
-## Quick Start | 快速启动
+## Quick Start
 
-### 1. Clone and Install | 克隆并安装
+### 1. Clone and Install
 
 ```bash
 git clone https://github.com/esengine/esengine.git
@@ -28,117 +24,71 @@ cd esengine
 pnpm install
 ```
 
-### 2. Build Dependencies | 构建依赖
+### 2. Clone Physics Dependencies (Optional)
 
-Build the required packages before running the editor:
-
-在运行编辑器前，先构建所需的依赖包：
+If you need physics support, clone the rapier.js dependency:
 
 ```bash
-# Build all editor dependencies
-pnpm --filter @esengine/editor-app... build
+git clone https://github.com/esengine/rapier.js.git packages/thirdparty/rapier.js
 ```
 
-### 3. Run in Development Mode | 开发模式运行
+### 3. Build Dependencies
+
+From the project root:
+
+```bash
+pnpm build:editor
+```
+
+### 4. Run Editor
 
 ```bash
 cd packages/editor/editor-app
 pnpm tauri:dev
 ```
 
-This will:
-1. Build the editor SDK (`@esengine/editor-runtime`)
-2. Copy engine modules to the editor
-3. Start Tauri in development mode with hot-reload
-
-这将会：
-1. 构建编辑器 SDK (`@esengine/editor-runtime`)
-2. 复制引擎模块到编辑器
-3. 以热重载的开发模式启动 Tauri
-
-### 4. Build for Production | 生产构建
-
-```bash
-cd packages/editor/editor-app
-pnpm tauri:build
-```
-
-The built application will be in `src-tauri/target/release/`.
-
-构建的应用程序将位于 `src-tauri/target/release/` 目录。
-
-## Available Scripts | 可用脚本
+## Available Scripts
 
 | Script | Description |
 |--------|-------------|
 | `pnpm tauri:dev` | Run editor in development mode with hot-reload |
 | `pnpm tauri:build` | Build production application |
-| `pnpm build` | Build web assets only (without Tauri) |
 | `pnpm build:sdk` | Build editor-runtime SDK |
-| `pnpm copy-modules` | Copy engine modules to editor |
-| `pnpm bundle:runtime` | Bundle runtime for production |
 
-## Project Structure | 项目结构
+## Project Structure
 
 ```
 editor-app/
 ├── src/                    # React application source
 │   ├── components/         # UI components
-│   ├── panels/             # Editor panels (Hierarchy, Inspector, etc.)
-│   ├── services/           # Core services
-│   └── styles/             # CSS styles
+│   ├── panels/             # Editor panels
+│   └── services/           # Core services
 ├── src-tauri/              # Tauri (Rust) backend
-│   ├── src/                # Rust source code
-│   └── tauri.conf.json     # Tauri configuration
 ├── public/                 # Static assets
-├── scripts/                # Build scripts
-├── index.html              # Entry HTML
-├── vite.config.ts          # Vite configuration
-└── package.json
+└── scripts/                # Build scripts
 ```
 
-## Troubleshooting | 故障排除
+## Troubleshooting
 
-### Build Errors | 构建错误
-
-If you encounter build errors, try:
-
-如果遇到构建错误，请尝试：
+### Build Errors
 
 ```bash
-# Clean and rebuild all packages
 pnpm clean
 pnpm install
-pnpm --filter @esengine/editor-app... build
+pnpm build:editor
 ```
 
-### Rust/Tauri Errors | Rust/Tauri 错误
-
-Ensure Rust toolchain is up to date:
-
-确保 Rust 工具链是最新的：
+### Rust/Tauri Errors
 
 ```bash
 rustup update
 ```
 
-### Module Not Found | 模块未找到
-
-If engine modules are not found, manually copy them:
-
-如果找不到引擎模块，手动复制它们：
-
-```bash
-cd packages/editor/editor-app
-pnpm copy-modules
-```
-
-## Documentation | 文档
+## Documentation
 
 - [ESEngine Documentation](https://esengine.cn/)
 - [Tauri Documentation](https://tauri.app/)
-- [React Documentation](https://react.dev/)
 
-## License | 许可证
+## License
 
-MIT License - see [LICENSE](../../../LICENSE) for details.
+MIT License

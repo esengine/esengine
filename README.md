@@ -282,7 +282,7 @@ pnpm test
 
 - [ECS Framework Guide](./packages/framework/core/README.md)
 - [Behavior Tree Guide](./packages/framework/behavior-tree/README.md)
-- [Editor Setup Guide](./packages/editor/editor-app/README.md)
+- [Editor Setup Guide](./packages/editor/editor-app/README.md) ([中文](./packages/editor/editor-app/README_CN.md))
 - [API Reference](https://esengine.cn/api/README)
 
 ## Community
