@@ -8,11 +8,22 @@
 
 - **Node.js** >= 18.x
 - **pnpm** >= 10.x
-- **Rust** >= 1.70 (Tauri 需要)
+- **Rust** >= 1.70 (Tauri 和 WASM 构建需要)
+- **wasm-pack** (构建 Rapier2D 物理引擎需要)
 - **平台相关依赖**：
   - **Windows**: Microsoft Visual Studio C++ Build Tools
   - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
   - **Linux**: 参考 [Tauri 环境配置](https://tauri.app/v1/guides/getting-started/prerequisites)
+
+### 安装 wasm-pack
+
+```bash
+# 使用 cargo 安装
+cargo install wasm-pack
+
+# 或使用官方安装脚本 (Linux/macOS)
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+```
 
 ## 快速开始
 
@@ -24,7 +35,23 @@ cd esengine
 pnpm install
 ```
 
-### 2. 构建依赖
+### 2. 构建 Rapier2D WASM
+
+编辑器依赖 Rapier2D 物理引擎的 WASM 产物。首次构建只需执行一条命令：
+
+```bash
+pnpm build:rapier2d
+```
+
+该命令会自动完成以下步骤：
+1. 准备 Rust 项目
+2. 构建 WASM
+3. 复制产物到 `packages/physics/rapier2d/pkg`
+4. 生成 TypeScript 源码
+
+> **注意**：需要已安装 Rust 和 wasm-pack。
+
+### 3. 构建编辑器
 
 在项目根目录执行：
 
@@ -32,7 +59,7 @@ pnpm install
 pnpm build:editor
 ```
 
-### 3. 启动编辑器
+### 4. 启动编辑器
 
 ```bash
 cd packages/editor/editor-app
@@ -43,6 +70,8 @@ pnpm tauri:dev
 
 | 脚本 | 说明 |
 |------|------|
+| `pnpm build:rapier2d` | 构建 Rapier2D WASM（首次构建必须执行）|
+| `pnpm build:editor` | 构建编辑器及所有依赖 |
 | `pnpm tauri:dev` | 开发模式运行编辑器（支持热重载）|
 | `pnpm tauri:build` | 构建生产版本应用 |
 | `pnpm build:sdk` | 构建 editor-runtime SDK |
@@ -62,6 +91,17 @@ editor-app/
 
 ## 常见问题
 
+### Rapier2D WASM 构建失败
+
+**错误**: `Could not resolve "../pkg/rapier_wasm2d"`
+
+**原因**: 缺少 Rapier2D 的 WASM 产物。
+
+**解决方案**:
+1. 确保已安装 `wasm-pack`：`cargo install wasm-pack`
+2. 执行 `pnpm build:rapier2d`
+3. 确认 `packages/physics/rapier2d/pkg/` 目录存在且包含 `rapier_wasm2d_bg.wasm` 文件
+
 ### 构建错误
 
 ```bash
@@ -75,6 +115,12 @@ pnpm build:editor
 ```bash
 rustup update
 ```
+
+### Windows 用户构建 WASM
+
+`pnpm build:rapier2d` 脚本在 Windows 上可以直接运行。如果遇到问题：
+1. 使用 Git Bash 或 WSL
+2. 或从 [Releases](https://github.com/esengine/esengine/releases) 下载预编译的 WASM 产物
 
 ## 文档
 

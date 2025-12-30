@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(__dirname, '..');
-const rapierRoot = join(packageRoot, '..', '..', 'thirdparty', 'rapier.js');
+const rapierRoot = join(packageRoot, '..', '..', '..', 'thirdparty', 'rapier.js');
 const srcTsDir = join(rapierRoot, 'src.ts');
 const src2dDir = join(rapierRoot, 'rapier-compat', 'src2d');
 const outputDir = join(packageRoot, 'src');
