@@ -16,6 +16,7 @@ import { IPlugin } from './Core/Plugin';
 import { WorldManager } from './ECS/WorldManager';
 import { DebugConfigService } from './Utils/Debug/DebugConfigService';
 import { createInstance } from './Core/DI/Decorators';
+import { RuntimeConfig } from './RuntimeConfig';
 
 /**
  * @zh 游戏引擎核心类
@@ -86,14 +87,20 @@ export class Core {
      * Core.create({ runtimeEnvironment: 'server' });
      * ```
      */
-    public static runtimeEnvironment: RuntimeEnvironment = 'standalone';
+    public static get runtimeEnvironment(): RuntimeEnvironment {
+        return RuntimeConfig.runtimeEnvironment;
+    }
+
+    public static set runtimeEnvironment(value: RuntimeEnvironment) {
+        RuntimeConfig.runtimeEnvironment = value;
+    }
 
     /**
      * @zh 是否在服务端运行
      * @en Whether running on server
      */
     public static get isServer(): boolean {
-        return Core.runtimeEnvironment === 'server';
+        return RuntimeConfig.isServer;
     }
 
     /**
@@ -101,7 +108,7 @@ export class Core {
      * @en Whether running on client
      */
     public static get isClient(): boolean {
-        return Core.runtimeEnvironment === 'client';
+        return RuntimeConfig.isClient;
     }
 
     /**
