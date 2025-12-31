@@ -30,7 +30,7 @@
 export { createServer } from './core/server.js'
 
 // Helpers
-export { defineApi, defineMsg } from './helpers/define.js'
+export { defineApi, defineMsg, defineHttp } from './helpers/define.js'
 
 // Room System
 export { Room, type RoomOptions } from './room/Room.js'
@@ -46,7 +46,19 @@ export type {
     MsgContext,
     ApiDefinition,
     MsgDefinition,
+    HttpDefinition,
+    HttpMethod,
 } from './types/index.js'
+
+// HTTP
+export { createHttpRouter } from './http/router.js'
+export type {
+    HttpRequest,
+    HttpResponse,
+    HttpHandler,
+    HttpRoutes,
+    CorsOptions,
+} from './http/types.js'
 
 // Re-export useful types from @esengine/rpc
 export { RpcError, ErrorCode } from '@esengine/rpc'

@@ -4,6 +4,7 @@
  */
 
 import type { Connection, ProtocolDef } from '@esengine/rpc'
+import type { HttpRoutes, CorsOptions, HttpRequest, HttpResponse } from '../http/types.js'
 
 // ============================================================================
 // Server Config
@@ -36,11 +37,47 @@ export interface ServerConfig {
     msgDir?: string
 
     /**
+     * @zh HTTP 路由目录路径
+     * @en HTTP routes directory path
+     * @default 'src/http'
+     *
+     * @zh 文件命名规则：
+     * - `login.ts` → POST /api/login
+     * - `users/[id].ts` → /api/users/:id
+     * - `health.ts` (method: 'GET') → GET /api/health
+     * @en File naming convention:
+     * - `login.ts` → POST /api/login
+     * - `users/[id].ts` → /api/users/:id
+     * - `health.ts` (method: 'GET') → GET /api/health
+     */
+    httpDir?: string
+
+    /**
+     * @zh HTTP 路由前缀
+     * @en HTTP routes prefix
+     * @default '/api'
+     */
+    httpPrefix?: string
+
+    /**
      * @zh 游戏 Tick 速率 (每秒)
      * @en Game tick rate (per second)
      * @default 20
      */
     tickRate?: number
+
+    /**
+     * @zh HTTP 路由配置（内联定义，与 httpDir 文件路由合并）
+     * @en HTTP routes configuration (inline definition, merged with httpDir file routes)
+     */
+    http?: HttpRoutes
+
+    /**
+     * @zh CORS 配置
+     * @en CORS configuration
+     * @default true
+     */
+    cors?: CorsOptions | boolean
 
     /**
      * @zh 服务器启动回调
@@ -231,4 +268,81 @@ export interface LoadedMsgHandler {
     name: string
     path: string
     definition: MsgDefinition<any, any>
+}
+
+// ============================================================================
+// HTTP Definition
+// ============================================================================
+
+/**
+ * @zh HTTP 请求方法
+ * @en HTTP request method
+ */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+
+/**
+ * @zh HTTP 定义选项
+ * @en HTTP definition options
+ *
+ * @example
+ * ```typescript
+ * // src/http/login.ts
+ * import { defineHttp } from '@esengine/server'
+ *
+ * export default defineHttp({
+ *     method: 'POST',
+ *     handler: async (req, res) => {
+ *         const { username, password } = req.body
+ *         // ... authentication logic
+ *         res.json({ token: '...', userId: '...' })
+ *     }
+ * })
+ * ```
+ */
+export interface HttpDefinition<TBody = unknown> {
+    /**
+     * @zh 请求方法
+     * @en Request method
+     * @default 'POST'
+     */
+    method?: HttpMethod
+
+    /**
+     * @zh 处理函数
+     * @en Handler function
+     */
+    handler: (
+        req: HttpRequest & { body: TBody },
+        res: HttpResponse
+    ) => void | Promise<void>
+}
+
+/**
+ * @zh 已加载的 HTTP 处理器
+ * @en Loaded HTTP handler
+ */
+export interface LoadedHttpHandler {
+    /**
+     * @zh 路由路径（如 /api/login）
+     * @en Route path (e.g., /api/login)
+     */
+    route: string
+
+    /**
+     * @zh 请求方法
+     * @en Request method
+     */
+    method: HttpMethod
+
+    /**
+     * @zh 源文件路径
+     * @en Source file path
+     */
+    path: string
+
+    /**
+     * @zh 处理器定义
+     * @en Handler definition
+     */
+    definition: HttpDefinition<any>
 }

@@ -79,9 +79,139 @@ await server.start()
 | `tickRate` | `number` | `20` | 全局 Tick 频率 (Hz) |
 | `apiDir` | `string` | `'src/api'` | API 处理器目录 |
 | `msgDir` | `string` | `'src/msg'` | 消息处理器目录 |
+| `httpDir` | `string` | `'src/http'` | HTTP 路由目录 |
+| `httpPrefix` | `string` | `'/api'` | HTTP 路由前缀 |
+| `cors` | `boolean \| CorsOptions` | - | CORS 配置 |
 | `onStart` | `(port) => void` | - | 启动回调 |
 | `onConnect` | `(conn) => void` | - | 连接回调 |
 | `onDisconnect` | `(conn) => void` | - | 断开回调 |
+
+## HTTP 路由
+
+支持 HTTP API 与 WebSocket 共用端口，适用于登录、注册等场景。
+
+### 文件路由
+
+在 `httpDir` 目录下创建路由文件，自动映射为 HTTP 端点：
+
+```
+src/http/
+├── login.ts       → POST /api/login
+├── register.ts    → POST /api/register
+├── health.ts      → GET  /api/health (需设置 method: 'GET')
+└── users/
+    └── [id].ts    → POST /api/users/:id (动态路由)
+```
+
+### 定义路由
+
+使用 `defineHttp` 定义类型安全的路由处理器：
+
+```typescript
+// src/http/login.ts
+import { defineHttp } from '@esengine/server'
+
+interface LoginBody {
+    username: string
+    password: string
+}
+
+export default defineHttp<LoginBody>({
+    method: 'POST',  // 默认 POST，可选 GET/PUT/DELETE/PATCH
+    handler(req, res) {
+        const { username, password } = req.body
+
+        // 验证凭证...
+        if (!isValid(username, password)) {
+            res.error(401, 'Invalid credentials')
+            return
+        }
+
+        // 生成 token...
+        res.json({ token: '...', userId: '...' })
+    }
+})
+```
+
+### 请求对象 (HttpRequest)
+
+```typescript
+interface HttpRequest {
+    raw: IncomingMessage     // Node.js 原始请求
+    method: string           // 请求方法
+    path: string             // 请求路径
+    query: Record<string, string>  // 查询参数
+    headers: Record<string, string | string[] | undefined>
+    body: unknown            // 解析后的 JSON 请求体
+    ip: string               // 客户端 IP
+}
+```
+
+### 响应对象 (HttpResponse)
+
+```typescript
+interface HttpResponse {
+    raw: ServerResponse      // Node.js 原始响应
+    status(code: number): HttpResponse   // 设置状态码（链式）
+    header(name: string, value: string): HttpResponse  // 设置头（链式）
+    json(data: unknown): void            // 发送 JSON
+    text(data: string): void             // 发送文本
+    error(code: number, message: string): void  // 发送错误
+}
+```
+
+### 使用示例
+
+```typescript
+// 完整的登录服务器示例
+import { createServer, defineHttp } from '@esengine/server'
+import { createJwtAuthProvider, withAuth } from '@esengine/server/auth'
+
+const jwtProvider = createJwtAuthProvider({
+    secret: process.env.JWT_SECRET!,
+    expiresIn: 3600 * 24,
+})
+
+const server = await createServer({
+    port: 8080,
+    httpDir: 'src/http',
+    httpPrefix: '/api',
+    cors: true,
+})
+
+// 包装认证（WebSocket 连接验证 token）
+const authServer = withAuth(server, {
+    provider: jwtProvider,
+    extractCredentials: (req) => {
+        const url = new URL(req.url, 'http://localhost')
+        return url.searchParams.get('token')
+    },
+})
+
+await authServer.start()
+// HTTP: http://localhost:8080/api/*
+// WebSocket: ws://localhost:8080?token=xxx
+```
+
+### 内联路由
+
+也可以直接在配置中定义路由（与文件路由合并，内联优先）：
+
+```typescript
+const server = await createServer({
+    port: 8080,
+    http: {
+        '/health': {
+            GET: (req, res) => res.json({ status: 'ok' }),
+        },
+        '/webhook': async (req, res) => {
+            // 接受所有方法
+            await handleWebhook(req.body)
+            res.json({ received: true })
+        },
+    },
+})
+```
 
 ## Room 系统
 

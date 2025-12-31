@@ -4,6 +4,7 @@
  */
 
 import { WebSocketServer, WebSocket } from 'ws'
+import type { Server as HttpServer } from 'node:http'
 import type {
     ProtocolDef,
     ApiNames,
@@ -66,10 +67,19 @@ type MsgHandlers<P extends ProtocolDef, TConnData> = {
  */
 export interface ServeOptions<P extends ProtocolDef, TConnData = unknown> {
     /**
-     * @zh 监听端口
-     * @en Listen port
+     * @zh 监听端口（与 server 二选一）
+     * @en Listen port (mutually exclusive with server)
      */
-    port: number
+    port?: number
+
+    /**
+     * @zh 已有的 HTTP 服务器（与 port 二选一）
+     * @en Existing HTTP server (mutually exclusive with port)
+     *
+     * @zh 使用此选项可以在同一端口同时支持 HTTP 和 WebSocket
+     * @en Use this option to support both HTTP and WebSocket on the same port
+     */
+    server?: HttpServer
 
     /**
      * @zh API 处理器
@@ -280,7 +290,16 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
 
         async start() {
             return new Promise((resolve) => {
-                wss = new WebSocketServer({ port: options.port })
+                // 根据配置创建 WebSocketServer
+                if (options.server) {
+                    // 附加到已有的 HTTP 服务器
+                    wss = new WebSocketServer({ server: options.server })
+                } else if (options.port) {
+                    // 独立创建
+                    wss = new WebSocketServer({ port: options.port })
+                } else {
+                    throw new Error('Either port or server must be provided')
+                }
 
                 wss.on('connection', async (ws, req) => {
                     const id = String(++connIdCounter)
@@ -318,10 +337,16 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
                     await options.onConnect?.(conn)
                 })
 
-                wss.on('listening', () => {
-                    options.onStart?.(options.port)
+                // 如果使用已有的 HTTP 服务器，WebSocketServer 不会触发 listening 事件
+                if (options.server) {
+                    options.onStart?.(0) // 端口由 HTTP 服务器管理
                     resolve()
-                })
+                } else {
+                    wss.on('listening', () => {
+                        options.onStart?.(options.port!)
+                        resolve()
+                    })
+                }
             })
         },
 

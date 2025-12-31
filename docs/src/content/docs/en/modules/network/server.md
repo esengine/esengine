@@ -79,9 +79,139 @@ await server.start()
 | `tickRate` | `number` | `20` | Global tick rate (Hz) |
 | `apiDir` | `string` | `'src/api'` | API handlers directory |
 | `msgDir` | `string` | `'src/msg'` | Message handlers directory |
+| `httpDir` | `string` | `'src/http'` | HTTP routes directory |
+| `httpPrefix` | `string` | `'/api'` | HTTP routes prefix |
+| `cors` | `boolean \| CorsOptions` | - | CORS configuration |
 | `onStart` | `(port) => void` | - | Start callback |
 | `onConnect` | `(conn) => void` | - | Connection callback |
 | `onDisconnect` | `(conn) => void` | - | Disconnect callback |
+
+## HTTP Routing
+
+Supports HTTP API sharing the same port with WebSocket, ideal for login, registration, and similar scenarios.
+
+### File-based Routing
+
+Create route files in the `httpDir` directory, automatically mapped to HTTP endpoints:
+
+```
+src/http/
+├── login.ts       → POST /api/login
+├── register.ts    → POST /api/register
+├── health.ts      → GET  /api/health (set method: 'GET')
+└── users/
+    └── [id].ts    → POST /api/users/:id (dynamic route)
+```
+
+### Define Routes
+
+Use `defineHttp` to define type-safe route handlers:
+
+```typescript
+// src/http/login.ts
+import { defineHttp } from '@esengine/server'
+
+interface LoginBody {
+    username: string
+    password: string
+}
+
+export default defineHttp<LoginBody>({
+    method: 'POST',  // Default POST, options: GET/PUT/DELETE/PATCH
+    handler(req, res) {
+        const { username, password } = req.body
+
+        // Validate credentials...
+        if (!isValid(username, password)) {
+            res.error(401, 'Invalid credentials')
+            return
+        }
+
+        // Generate token...
+        res.json({ token: '...', userId: '...' })
+    }
+})
+```
+
+### Request Object (HttpRequest)
+
+```typescript
+interface HttpRequest {
+    raw: IncomingMessage     // Node.js raw request
+    method: string           // Request method
+    path: string             // Request path
+    query: Record<string, string>  // Query parameters
+    headers: Record<string, string | string[] | undefined>
+    body: unknown            // Parsed JSON body
+    ip: string               // Client IP
+}
+```
+
+### Response Object (HttpResponse)
+
+```typescript
+interface HttpResponse {
+    raw: ServerResponse      // Node.js raw response
+    status(code: number): HttpResponse   // Set status code (chainable)
+    header(name: string, value: string): HttpResponse  // Set header (chainable)
+    json(data: unknown): void            // Send JSON
+    text(data: string): void             // Send text
+    error(code: number, message: string): void  // Send error
+}
+```
+
+### Usage Example
+
+```typescript
+// Complete login server example
+import { createServer, defineHttp } from '@esengine/server'
+import { createJwtAuthProvider, withAuth } from '@esengine/server/auth'
+
+const jwtProvider = createJwtAuthProvider({
+    secret: process.env.JWT_SECRET!,
+    expiresIn: 3600 * 24,
+})
+
+const server = await createServer({
+    port: 8080,
+    httpDir: 'src/http',
+    httpPrefix: '/api',
+    cors: true,
+})
+
+// Wrap with auth (WebSocket connections validate token)
+const authServer = withAuth(server, {
+    provider: jwtProvider,
+    extractCredentials: (req) => {
+        const url = new URL(req.url, 'http://localhost')
+        return url.searchParams.get('token')
+    },
+})
+
+await authServer.start()
+// HTTP: http://localhost:8080/api/*
+// WebSocket: ws://localhost:8080?token=xxx
+```
+
+### Inline Routes
+
+Routes can also be defined directly in configuration (merged with file routes, inline takes priority):
+
+```typescript
+const server = await createServer({
+    port: 8080,
+    http: {
+        '/health': {
+            GET: (req, res) => res.json({ status: 'ok' }),
+        },
+        '/webhook': async (req, res) => {
+            // Accepts all methods
+            await handleWebhook(req.body)
+            res.json({ received: true })
+        },
+    },
+})
+```
 
 ## Room System
 

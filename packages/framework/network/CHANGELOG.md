@@ -1,5 +1,12 @@
 # @esengine/network
 
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies []:
+    - @esengine/rpc@1.1.2
+
 ## 5.0.1
 
 ### Patch Changes

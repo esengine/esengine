@@ -1,5 +1,49 @@
 # @esengine/rpc
 
+## 1.1.2
+
+### Patch Changes
+
+- feat(server): add HTTP file-based routing support
+
+    New feature that allows organizing HTTP routes in separate files, similar to API and message handlers:
+
+    ```typescript
+    // src/http/login.ts
+    import { defineHttp } from '@esengine/server';
+
+    export default defineHttp<{ username: string; password: string }>({
+        method: 'POST',
+        handler(req, res) {
+            const { username, password } = req.body;
+            // ... authentication logic
+            res.json({ token: '...', userId: '...' });
+        }
+    });
+    ```
+
+    Server configuration:
+
+    ```typescript
+    const server = await createServer({
+        port: 8080,
+        httpDir: 'src/http', // HTTP routes directory
+        httpPrefix: '/api', // Route prefix
+        cors: true
+    });
+    ```
+
+    File naming convention:
+    - `login.ts` → POST /api/login
+    - `users/profile.ts` → POST /api/users/profile
+    - `users/[id].ts` → POST /api/users/:id (dynamic routes)
+    - Set `method: 'GET'` in defineHttp for GET requests
+
+    Also includes:
+    - `defineHttp<TBody>()` helper function for type-safe route definitions
+    - Support for merging file routes with inline `http` config
+    - RPC server now supports attaching to existing HTTP server via `server` option
+
 ## 1.1.1
 
 ### Patch Changes

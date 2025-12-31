@@ -6,7 +6,15 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { ApiDefinition, MsgDefinition, LoadedApiHandler, LoadedMsgHandler } from '../types/index.js'
+import type {
+    ApiDefinition,
+    MsgDefinition,
+    HttpDefinition,
+    LoadedApiHandler,
+    LoadedMsgHandler,
+    LoadedHttpHandler,
+    HttpMethod,
+} from '../types/index.js'
 
 /**
  * @zh 将文件名转换为 API/消息名称
@@ -105,6 +113,109 @@ export async function loadMsgHandlers(msgDir: string): Promise<LoadedMsgHandler[
             }
         } catch (err) {
             console.warn(`[Server] Failed to load msg handler: ${filePath}`, err)
+        }
+    }
+
+    return handlers
+}
+
+/**
+ * @zh 递归扫描目录获取所有处理器文件
+ * @en Recursively scan directory for all handler files
+ */
+function scanDirectoryRecursive(dir: string, baseDir: string = dir): Array<{ filePath: string; relativePath: string }> {
+    if (!fs.existsSync(dir)) {
+        return []
+    }
+
+    const files: Array<{ filePath: string; relativePath: string }> = []
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+
+        if (entry.isDirectory()) {
+            files.push(...scanDirectoryRecursive(fullPath, baseDir))
+        } else if (entry.isFile() && /\.(ts|js|mts|mjs)$/.test(entry.name)) {
+            if (entry.name.startsWith('_') || entry.name.startsWith('index.')) {
+                continue
+            }
+            const relativePath = path.relative(baseDir, fullPath)
+            files.push({ filePath: fullPath, relativePath })
+        }
+    }
+
+    return files
+}
+
+/**
+ * @zh 将文件路径转换为路由路径
+ * @en Convert file path to route path
+ *
+ * @example
+ * 'login.ts' -> '/login'
+ * 'users/profile.ts' -> '/users/profile'
+ * 'users/[id].ts' -> '/users/:id'
+ */
+function filePathToRoute(relativePath: string, prefix: string): string {
+    let route = relativePath
+        .replace(/\.(ts|js|mts|mjs)$/, '')
+        .replace(/\\/g, '/')
+        .replace(/\[([^\]]+)\]/g, ':$1')
+
+    if (!route.startsWith('/')) {
+        route = '/' + route
+    }
+
+    const fullRoute = prefix.endsWith('/')
+        ? prefix.slice(0, -1) + route
+        : prefix + route
+
+    return fullRoute
+}
+
+/**
+ * @zh 加载 HTTP 路由处理器
+ * @en Load HTTP route handlers
+ *
+ * @example
+ * ```typescript
+ * // Directory structure:
+ * // src/http/
+ * //   login.ts      -> POST /api/login
+ * //   register.ts   -> POST /api/register
+ * //   users/
+ * //     [id].ts     -> GET /api/users/:id
+ *
+ * const handlers = await loadHttpHandlers('src/http', '/api')
+ * ```
+ */
+export async function loadHttpHandlers(
+    httpDir: string,
+    prefix: string = '/api'
+): Promise<LoadedHttpHandler[]> {
+    const files = scanDirectoryRecursive(httpDir)
+    const handlers: LoadedHttpHandler[] = []
+
+    for (const { filePath, relativePath } of files) {
+        try {
+            const fileUrl = pathToFileURL(filePath).href
+            const module = await import(fileUrl)
+            const definition = module.default as HttpDefinition<unknown>
+
+            if (definition && typeof definition.handler === 'function') {
+                const route = filePathToRoute(relativePath, prefix)
+                const method: HttpMethod = definition.method ?? 'POST'
+
+                handlers.push({
+                    route,
+                    method,
+                    path: filePath,
+                    definition,
+                })
+            }
+        } catch (err) {
+            console.warn(`[Server] Failed to load HTTP handler: ${filePath}`, err)
         }
     }
 

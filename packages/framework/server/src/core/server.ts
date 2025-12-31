@@ -4,6 +4,7 @@
  */
 
 import * as path from 'node:path'
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { serve, type RpcServer } from '@esengine/rpc/server'
 import { rpc } from '@esengine/rpc'
 import type {
@@ -14,18 +15,23 @@ import type {
     MsgContext,
     LoadedApiHandler,
     LoadedMsgHandler,
+    LoadedHttpHandler,
 } from '../types/index.js'
-import { loadApiHandlers, loadMsgHandlers } from '../router/loader.js'
+import type { HttpRoutes, HttpHandler } from '../http/types.js'
+import { loadApiHandlers, loadMsgHandlers, loadHttpHandlers } from '../router/loader.js'
 import { RoomManager, type RoomClass, type Room } from '../room/index.js'
+import { createHttpRouter } from '../http/router.js'
 
 /**
  * @zh 默认配置
  * @en Default configuration
  */
-const DEFAULT_CONFIG: Required<Omit<ServerConfig, 'onStart' | 'onConnect' | 'onDisconnect'>> = {
+const DEFAULT_CONFIG: Required<Omit<ServerConfig, 'onStart' | 'onConnect' | 'onDisconnect' | 'http' | 'cors' | 'httpDir' | 'httpPrefix'>> & { httpDir: string; httpPrefix: string } = {
     port: 3000,
     apiDir: 'src/api',
     msgDir: 'src/msg',
+    httpDir: 'src/http',
+    httpPrefix: '/api',
     tickRate: 20,
 }
 
@@ -56,12 +62,53 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
     const apiHandlers = await loadApiHandlers(path.resolve(cwd, opts.apiDir))
     const msgHandlers = await loadMsgHandlers(path.resolve(cwd, opts.msgDir))
 
+    // 加载 HTTP 文件路由
+    const httpDir = config.httpDir ?? opts.httpDir
+    const httpPrefix = config.httpPrefix ?? opts.httpPrefix
+    const httpHandlers = await loadHttpHandlers(path.resolve(cwd, httpDir), httpPrefix)
+
     if (apiHandlers.length > 0) {
         console.log(`[Server] Loaded ${apiHandlers.length} API handlers`)
     }
     if (msgHandlers.length > 0) {
         console.log(`[Server] Loaded ${msgHandlers.length} message handlers`)
     }
+    if (httpHandlers.length > 0) {
+        console.log(`[Server] Loaded ${httpHandlers.length} HTTP handlers`)
+    }
+
+    // 合并 HTTP 路由（文件路由 + 内联路由）
+    const mergedHttpRoutes: HttpRoutes = {}
+
+    // 先添加文件路由
+    for (const handler of httpHandlers) {
+        const existingRoute = mergedHttpRoutes[handler.route]
+        if (existingRoute && typeof existingRoute !== 'function') {
+            (existingRoute as Record<string, HttpHandler>)[handler.method] = handler.definition.handler
+        } else {
+            mergedHttpRoutes[handler.route] = {
+                [handler.method]: handler.definition.handler,
+            }
+        }
+    }
+
+    // 再添加内联路由（覆盖文件路由）
+    if (config.http) {
+        for (const [route, handlerOrMethods] of Object.entries(config.http)) {
+            if (typeof handlerOrMethods === 'function') {
+                mergedHttpRoutes[route] = handlerOrMethods
+            } else {
+                const existing = mergedHttpRoutes[route]
+                if (existing && typeof existing !== 'function') {
+                    Object.assign(existing, handlerOrMethods)
+                } else {
+                    mergedHttpRoutes[route] = handlerOrMethods
+                }
+            }
+        }
+    }
+
+    const hasHttpRoutes = Object.keys(mergedHttpRoutes).length > 0
 
     // 动态构建协议
     const apiDefs: Record<string, ReturnType<typeof rpc.api>> = {
@@ -90,6 +137,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
     let currentTick = 0
     let tickInterval: ReturnType<typeof setInterval> | null = null
     let rpcServer: RpcServer<typeof protocol, Record<string, unknown>> | null = null
+    let httpServer: HttpServer | null = null
 
     // 房间管理器（立即初始化，以便 define() 可在 start() 前调用）
     const roomManager = new RoomManager((conn, type, data) => {
@@ -200,26 +248,68 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 }
             }
 
-            rpcServer = serve(protocol, {
-                port: opts.port,
-                createConnData: () => ({}),
-                onStart: (p) => {
-                    console.log(`[Server] Started on ws://localhost:${p}`)
-                    opts.onStart?.(p)
-                },
-                onConnect: async (conn) => {
-                    await config.onConnect?.(conn as ServerConnection)
-                },
-                onDisconnect: async (conn) => {
-                    // 玩家断线时自动离开房间
-                    await roomManager?.leave(conn.id, 'disconnected')
-                    await config.onDisconnect?.(conn as ServerConnection)
-                },
-                api: apiHandlersObj as any,
-                msg: msgHandlersObj as any,
-            })
+            // 如果有 HTTP 路由，创建 HTTP 服务器
+            if (hasHttpRoutes) {
+                const httpRouter = createHttpRouter(mergedHttpRoutes, config.cors ?? true)
 
-            await rpcServer.start()
+                httpServer = createHttpServer(async (req, res) => {
+                    // 先尝试 HTTP 路由
+                    const handled = await httpRouter(req, res)
+                    if (!handled) {
+                        // 未匹配的请求返回 404
+                        res.statusCode = 404
+                        res.setHeader('Content-Type', 'application/json')
+                        res.end(JSON.stringify({ error: 'Not Found' }))
+                    }
+                })
+
+                // 使用 HTTP 服务器创建 RPC
+                rpcServer = serve(protocol, {
+                    server: httpServer,
+                    createConnData: () => ({}),
+                    onStart: () => {
+                        console.log(`[Server] Started on http://localhost:${opts.port}`)
+                        opts.onStart?.(opts.port)
+                    },
+                    onConnect: async (conn) => {
+                        await config.onConnect?.(conn as ServerConnection)
+                    },
+                    onDisconnect: async (conn) => {
+                        await roomManager?.leave(conn.id, 'disconnected')
+                        await config.onDisconnect?.(conn as ServerConnection)
+                    },
+                    api: apiHandlersObj as any,
+                    msg: msgHandlersObj as any,
+                })
+
+                await rpcServer.start()
+
+                // 启动 HTTP 服务器
+                await new Promise<void>((resolve) => {
+                    httpServer!.listen(opts.port, () => resolve())
+                })
+            } else {
+                // 仅 WebSocket 模式
+                rpcServer = serve(protocol, {
+                    port: opts.port,
+                    createConnData: () => ({}),
+                    onStart: (p) => {
+                        console.log(`[Server] Started on ws://localhost:${p}`)
+                        opts.onStart?.(p)
+                    },
+                    onConnect: async (conn) => {
+                        await config.onConnect?.(conn as ServerConnection)
+                    },
+                    onDisconnect: async (conn) => {
+                        await roomManager?.leave(conn.id, 'disconnected')
+                        await config.onDisconnect?.(conn as ServerConnection)
+                    },
+                    api: apiHandlersObj as any,
+                    msg: msgHandlersObj as any,
+                })
+
+                await rpcServer.start()
+            }
 
             // 启动 tick 循环
             if (opts.tickRate > 0) {
@@ -237,6 +327,15 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             if (rpcServer) {
                 await rpcServer.stop()
                 rpcServer = null
+            }
+            if (httpServer) {
+                await new Promise<void>((resolve, reject) => {
+                    httpServer!.close((err) => {
+                        if (err) reject(err)
+                        else resolve()
+                    })
+                })
+                httpServer = null
             }
         },
 
