@@ -267,6 +267,7 @@ export default defineConfig({
                 { label: '概述', slug: 'modules/network', translations: { en: 'Overview' } },
                 { label: '客户端', slug: 'modules/network/client', translations: { en: 'Client' } },
                 { label: '服务器', slug: 'modules/network/server', translations: { en: 'Server' } },
+                { label: 'HTTP 路由', slug: 'modules/network/http', translations: { en: 'HTTP Routing' } },
                 { label: '认证系统', slug: 'modules/network/auth', translations: { en: 'Authentication' } },
                 { label: '速率限制', slug: 'modules/network/rate-limit', translations: { en: 'Rate Limiting' } },
                 { label: '状态同步', slug: 'modules/network/sync', translations: { en: 'State Sync' } },
