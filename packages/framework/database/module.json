@@ -1,0 +1,23 @@
+{
+    "id": "database",
+    "name": "@esengine/database",
+    "globalKey": "database",
+    "displayName": "Database",
+    "description": "数据库 CRUD 操作和仓库模式，支持用户管理、通用数据存储 | Database CRUD operations and repository pattern with user management and generic data storage",
+    "version": "1.0.0",
+    "category": "Infrastructure",
+    "icon": "Database",
+    "tags": ["database", "crud", "repository", "user"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": false,
+    "canContainContent": false,
+    "platforms": ["server"],
+    "dependencies": ["database-drivers"],
+    "exports": {
+        "components": [],
+        "systems": []
+    },
+    "requiresWasm": false,
+    "outputPath": "dist/index.js"
+}
