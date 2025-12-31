@@ -1,6 +1,6 @@
 {
     "name": "@esengine/database",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Database CRUD operations and repositories for ESEngine | ESEngine 数据库 CRUD 操作和仓库",
     "type": "module",
     "main": "./dist/index.js",
