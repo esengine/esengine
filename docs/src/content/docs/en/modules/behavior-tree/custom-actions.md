@@ -182,6 +182,70 @@ export class IsHealthLow implements INodeExecutor {
 }
 ```
 
+## Using Custom Executors in BehaviorTreeBuilder
+
+After defining a custom executor with `@NodeExecutorMetadata`, use the `.action()` method in the builder:
+
+```typescript
+import { BehaviorTreeBuilder, BehaviorTreeStarter } from '@esengine/behavior-tree';
+
+// Use custom executor in behavior tree
+const tree = BehaviorTreeBuilder.create('CombatAI')
+    .defineBlackboardVariable('health', 100)
+    .defineBlackboardVariable('target', null)
+    .selector('Root')
+        .sequence('AttackSequence')
+            // Use custom action - matches implementationType in decorator
+            .action('AttackAction', 'Attack', { damage: 25 })
+            .action('MoveToTarget', 'Chase')
+        .end()
+        .action('WaitAction', 'Idle', { duration: 1000 })
+    .end()
+    .build();
+
+// Start the behavior tree
+const entity = scene.createEntity('Enemy');
+BehaviorTreeStarter.start(entity, tree);
+```
+
+### Builder Methods for Custom Nodes
+
+| Method | Description |
+|--------|-------------|
+| `.action(type, name?, config?)` | Add custom action node |
+| `.condition(type, name?, config?)` | Add custom condition node |
+| `.executeAction(name)` | Use blackboard function `action_{name}` |
+| `.executeCondition(name)` | Use blackboard function `condition_{name}` |
+
+### Complete Example
+
+```typescript
+// 1. Define custom executor
+@NodeExecutorMetadata({
+    implementationType: 'AttackAction',
+    nodeType: NodeType.Action,
+    displayName: 'Attack',
+    category: 'Combat',
+    configSchema: {
+        damage: { type: 'number', default: 10, supportBinding: true }
+    }
+})
+class AttackAction implements INodeExecutor {
+    execute(context: NodeExecutionContext): TaskStatus {
+        const damage = BindingHelper.getValue<number>(context, 'damage', 10);
+        console.log(`Attacking with ${damage} damage!`);
+        return TaskStatus.Success;
+    }
+}
+
+// 2. Build and use
+const tree = BehaviorTreeBuilder.create('AI')
+    .selector('Root')
+        .action('AttackAction', 'Attack', { damage: 50 })
+    .end()
+    .build();
+```
+
 ## Registering Custom Executors
 
 Executors are auto-registered via the decorator. To manually register:

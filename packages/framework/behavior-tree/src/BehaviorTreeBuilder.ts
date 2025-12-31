@@ -181,10 +181,71 @@ export class BehaviorTreeBuilder {
     }
 
     /**
-     * 添加执行动作
+     * 添加执行动作（通过黑板函数）
+     *
+     * @zh 使用黑板中的 action_{actionName} 函数执行动作
+     * @en Execute action using action_{actionName} function from blackboard
+     *
+     * @example
+     * ```typescript
+     * BehaviorTreeBuilder.create("AI")
+     *     .defineBlackboardVariable("action_Attack", (entity) => TaskStatus.Success)
+     *     .selector("Root")
+     *         .executeAction("Attack")
+     *     .end()
+     *     .build();
+     * ```
      */
     executeAction(actionName: string, name?: string): BehaviorTreeBuilder {
         return this.addActionNode('ExecuteAction', name || 'ExecuteAction', { actionName });
+    }
+
+    /**
+     * 添加自定义动作节点
+     *
+     * @zh 直接使用注册的执行器类型（通过 @NodeExecutorMetadata 装饰器注册的类）
+     * @en Use a registered executor type directly (class registered via @NodeExecutorMetadata decorator)
+     *
+     * @param implementationType - 执行器类型名称（@NodeExecutorMetadata 中的 implementationType）
+     * @param name - 节点显示名称
+     * @param config - 节点配置参数
+     *
+     * @example
+     * ```typescript
+     * // 1. 定义自定义执行器
+     * @NodeExecutorMetadata({
+     *     implementationType: 'AttackAction',
+     *     nodeType: NodeType.Action,
+     *     displayName: '攻击动作',
+     *     category: 'Action'
+     * })
+     * class AttackAction implements INodeExecutor {
+     *     execute(context: NodeExecutionContext): TaskStatus {
+     *         console.log("执行攻击！");
+     *         return TaskStatus.Success;
+     *     }
+     * }
+     *
+     * // 2. 在行为树中使用
+     * BehaviorTreeBuilder.create("AI")
+     *     .selector("Root")
+     *         .action("AttackAction", "Attack")
+     *     .end()
+     *     .build();
+     * ```
+     */
+    action(implementationType: string, name?: string, config?: Record<string, any>): BehaviorTreeBuilder {
+        return this.addActionNode(implementationType, name || implementationType, config || {});
+    }
+
+    /**
+     * 添加自定义条件节点
+     *
+     * @zh 直接使用注册的条件执行器类型
+     * @en Use a registered condition executor type directly
+     */
+    condition(implementationType: string, name?: string, config?: Record<string, any>): BehaviorTreeBuilder {
+        return this.addConditionNode(implementationType, name || implementationType, config || {});
     }
 
     /**
