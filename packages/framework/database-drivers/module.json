@@ -1,0 +1,23 @@
+{
+    "id": "database-drivers",
+    "name": "@esengine/database-drivers",
+    "globalKey": "database-drivers",
+    "displayName": "Database Drivers",
+    "description": "数据库连接驱动，提供 MongoDB、Redis 等数据库的连接管理 | Database connection drivers with connection pooling for MongoDB, Redis, etc.",
+    "version": "1.0.0",
+    "category": "Infrastructure",
+    "icon": "Database",
+    "tags": ["database", "mongodb", "redis", "connection"],
+    "isCore": false,
+    "defaultEnabled": true,
+    "isEngineModule": false,
+    "canContainContent": false,
+    "platforms": ["server"],
+    "dependencies": [],
+    "exports": {
+        "components": [],
+        "systems": []
+    },
+    "requiresWasm": false,
+    "outputPath": "dist/index.js"
+}

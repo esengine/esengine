@@ -88,9 +88,7 @@ export {
 export {
     MongoStorage,
     createMongoStorage,
-    type MongoStorageConfig,
-    type MongoDb,
-    type MongoCollection
+    type MongoStorageConfig
 } from './storage/MongoStorage.js';
 
 // =============================================================================

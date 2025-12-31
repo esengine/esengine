@@ -125,23 +125,24 @@ tx:data:{key}           - Business data
 
 ## MongoStorage
 
-MongoDB storage, suitable for scenarios requiring persistence and complex queries. Uses factory pattern with lazy connection.
+MongoDB storage, suitable for scenarios requiring persistence and complex queries. Uses shared connection from `@esengine/database-drivers`.
 
 ```typescript
-import { MongoClient } from 'mongodb';
-import { MongoStorage } from '@esengine/transaction';
+import { createMongoConnection } from '@esengine/database-drivers';
+import { createMongoStorage, TransactionManager } from '@esengine/transaction';
 
-// Factory pattern: lazy connection, connects on first operation
-const storage = new MongoStorage({
-    factory: async () => {
-        const client = new MongoClient('mongodb://localhost:27017');
-        await client.connect();
-        return client;
-    },
-    database: 'game',
-    transactionCollection: 'transactions',  // Transaction log collection
-    dataCollection: 'transaction_data',     // Business data collection
-    lockCollection: 'transaction_locks',    // Lock collection
+// Create shared connection
+const mongo = createMongoConnection({
+    uri: 'mongodb://localhost:27017',
+    database: 'game'
+});
+await mongo.connect();
+
+// Create storage using shared connection
+const storage = createMongoStorage(mongo, {
+    transactionCollection: 'transactions',  // Transaction log collection (optional)
+    dataCollection: 'transaction_data',     // Business data collection (optional)
+    lockCollection: 'transaction_locks',    // Lock collection (optional)
 });
 
 // Create indexes (run on first startup)
@@ -149,11 +150,14 @@ await storage.ensureIndexes();
 
 const manager = new TransactionManager({ storage });
 
-// Close connection when done
+// Close storage (does not close shared connection)
 await storage.close();
 
-// Or use await using for automatic cleanup (TypeScript 5.2+)
-await using storage = new MongoStorage({ ... });
+// Shared connection can continue to be used by other modules
+const userRepo = new UserRepository(mongo);  // @esengine/database
+
+// Finally close the shared connection
+await mongo.disconnect();
 ```
 
 ### Characteristics

@@ -1506,6 +1506,46 @@ importers:
         version: 8.50.1(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
     publishDirectory: dist
 
+  packages/framework/database:
+    dependencies:
+      '@esengine/database-drivers':
+        specifier: workspace:*
+        version: link:../database-drivers
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.27
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@20.19.27))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+
+  packages/framework/database-drivers:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.27
+      ioredis:
+        specifier: ^5.3.0
+        version: 5.8.2
+      mongodb:
+        specifier: ^6.12.0
+        version: 6.21.0(socks@2.8.7)
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@microsoft/api-extractor@7.55.2(@types/node@20.19.27))(@swc/core@1.15.7(@swc/helpers@0.5.18))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+
   packages/framework/fsm:
     dependencies:
       tslib:
@@ -1786,9 +1826,9 @@ importers:
 
   packages/framework/transaction:
     dependencies:
-      '@esengine/server':
+      '@esengine/database-drivers':
         specifier: workspace:*
-        version: link:../server
+        version: link:../database-drivers
       ioredis:
         specifier: ^5.3.0
         version: 5.8.2

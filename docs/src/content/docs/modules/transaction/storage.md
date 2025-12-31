@@ -125,23 +125,24 @@ tx:data:{key}           - 业务数据
 
 ## MongoStorage
 
-MongoDB 存储，适用于需要持久化和复杂查询的场景。使用工厂模式实现惰性连接。
+MongoDB 存储，适用于需要持久化和复杂查询的场景。使用 `@esengine/database-drivers` 的共享连接。
 
 ```typescript
-import { MongoClient } from 'mongodb';
-import { MongoStorage } from '@esengine/transaction';
+import { createMongoConnection } from '@esengine/database-drivers';
+import { createMongoStorage, TransactionManager } from '@esengine/transaction';
 
-// 工厂模式：惰性连接，首次操作时才创建连接
-const storage = new MongoStorage({
-    factory: async () => {
-        const client = new MongoClient('mongodb://localhost:27017');
-        await client.connect();
-        return client;
-    },
-    database: 'game',
-    transactionCollection: 'transactions',  // 事务日志集合
-    dataCollection: 'transaction_data',     // 业务数据集合
-    lockCollection: 'transaction_locks',    // 锁集合
+// 创建共享连接
+const mongo = createMongoConnection({
+    uri: 'mongodb://localhost:27017',
+    database: 'game'
+});
+await mongo.connect();
+
+// 使用共享连接创建存储
+const storage = createMongoStorage(mongo, {
+    transactionCollection: 'transactions',  // 事务日志集合（可选）
+    dataCollection: 'transaction_data',     // 业务数据集合（可选）
+    lockCollection: 'transaction_locks',    // 锁集合（可选）
 });
 
 // 创建索引（首次运行时执行）
@@ -149,11 +150,14 @@ await storage.ensureIndexes();
 
 const manager = new TransactionManager({ storage });
 
-// 使用后关闭连接
+// 关闭存储（不会关闭共享连接）
 await storage.close();
 
-// 或使用 await using 自动关闭 (TypeScript 5.2+)
-await using storage = new MongoStorage({ ... });
+// 共享连接可继续用于其他模块
+const userRepo = new UserRepository(mongo);  // @esengine/database
+
+// 最后关闭共享连接
+await mongo.disconnect();
 ```
 
 ### 特点

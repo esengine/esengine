@@ -1,0 +1,37 @@
+{
+    "name": "@esengine/database",
+    "version": "1.0.0",
+    "description": "Database CRUD operations and repositories for ESEngine | ESEngine 数据库 CRUD 操作和仓库",
+    "type": "module",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist",
+        "module.json"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:watch": "tsup --watch",
+        "type-check": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@esengine/database-drivers": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "tsup": "^8.0.0",
+        "typescript": "^5.8.0",
+        "rimraf": "^5.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

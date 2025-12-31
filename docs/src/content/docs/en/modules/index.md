@@ -36,6 +36,13 @@ ESEngine provides a rich set of modules that can be imported as needed.
 | [Network](/en/modules/network/) | `@esengine/network` | Multiplayer game networking |
 | [Transaction](/en/modules/transaction/) | `@esengine/transaction` | Game transactions with distributed support |
 
+### Database
+
+| Module | Package | Description |
+|--------|---------|-------------|
+| [Database Drivers](/en/modules/database-drivers/) | `@esengine/database-drivers` | MongoDB, Redis connection management |
+| [Database Repository](/en/modules/database/) | `@esengine/database` | Repository pattern data operations |
+
 ## Installation
 
 All modules can be installed independently:

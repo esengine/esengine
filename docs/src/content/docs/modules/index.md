@@ -37,6 +37,13 @@ ESEngine 提供了丰富的功能模块，可以按需引入到你的项目中�
 | [网络同步](/modules/network/) | `@esengine/network` | 多人游戏网络同步 |
 | [事务系统](/modules/transaction/) | `@esengine/transaction` | 游戏事务处理，支持分布式事务 |
 
+### 数据库模块
+
+| 模块 | 包名 | 描述 |
+|------|------|------|
+| [数据库驱动](/modules/database-drivers/) | `@esengine/database-drivers` | MongoDB、Redis 连接管理 |
+| [数据库仓库](/modules/database/) | `@esengine/database` | Repository 模式数据操作 |
+
 ## 安装
 
 所有模块都可以独立安装：
