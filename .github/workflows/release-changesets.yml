@@ -57,6 +57,9 @@ jobs:
           pnpm --filter "@esengine/rpc" build
           pnpm --filter "@esengine/network" build
           pnpm --filter "@esengine/server" build
+          pnpm --filter "@esengine/database-drivers" build
+          pnpm --filter "@esengine/database" build
+          pnpm --filter "@esengine/transaction" build
           pnpm --filter "@esengine/cli" build
           pnpm --filter "create-esengine-server" build
 
