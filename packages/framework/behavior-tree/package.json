@@ -29,7 +29,8 @@
         "clean": "rimraf dist tsconfig.tsbuildinfo",
         "build": "tsup",
         "build:watch": "tsup --watch",
-        "type-check": "tsc --noEmit"
+        "type-check": "tsc --noEmit",
+        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
     },
     "author": "yhh",
     "license": "MIT",

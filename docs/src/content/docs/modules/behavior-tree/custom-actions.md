@@ -606,6 +606,107 @@ export class RetryDecorator implements INodeExecutor {
 }
 ```
 
+## 在代码中使用自定义执行器
+
+定义了自定义执行器后，可以通过 `BehaviorTreeBuilder` 的 `.action()` 和 `.condition()` 方法在代码中使用：
+
+### 使用 action() 方法
+
+```typescript
+import { BehaviorTreeBuilder, BehaviorTreeStarter } from '@esengine/behavior-tree';
+
+// 使用自定义执行器构建行为树
+const tree = BehaviorTreeBuilder.create('CombatAI')
+    .defineBlackboardVariable('health', 100)
+    .defineBlackboardVariable('target', null)
+    .selector('Root')
+        .sequence('AttackSequence')
+            // 使用自定义动作 - implementationType 匹配装饰器中的定义
+            .action('AttackAction', 'Attack', { damage: 25 })
+            .action('MoveToPosition', 'Chase', { speed: 10 })
+        .end()
+        .action('DelayAction', 'Idle', { duration: 1.0 })
+    .end()
+    .build();
+
+// 启动行为树
+const entity = scene.createEntity('Enemy');
+BehaviorTreeStarter.start(entity, tree);
+```
+
+### 使用 condition() 方法
+
+```typescript
+const tree = BehaviorTreeBuilder.create('AI')
+    .selector('Root')
+        .sequence('AttackBranch')
+            // 使用自定义条件
+            .condition('CheckHealth', 'IsHealthy', { threshold: 50, operator: 'greater' })
+            .action('AttackAction', 'Attack')
+        .end()
+    .end()
+    .build();
+```
+
+### Builder 方法对照表
+
+| 方法 | 说明 | 使用场景 |
+|------|------|----------|
+| `.action(type, name?, config?)` | 使用自定义动作执行器 | 自定义 Action 类 |
+| `.condition(type, name?, config?)` | 使用自定义条件执行器 | 自定义 Condition 类 |
+| `.executeAction(name)` | 调用黑板函数 `action_{name}` | 简单逻辑、快速原型 |
+| `.executeCondition(name)` | 调用黑板函数 `condition_{name}` | 简单条件判断 |
+
+### 完整示例
+
+```typescript
+import {
+    BehaviorTreeBuilder,
+    BehaviorTreeStarter,
+    NodeExecutorMetadata,
+    INodeExecutor,
+    NodeExecutionContext,
+    TaskStatus,
+    NodeType,
+    BindingHelper
+} from '@esengine/behavior-tree';
+
+// 1. 定义自定义执行器
+@NodeExecutorMetadata({
+    implementationType: 'AttackAction',
+    nodeType: NodeType.Action,
+    displayName: '攻击',
+    category: 'Combat',
+    configSchema: {
+        damage: { type: 'number', default: 10, supportBinding: true }
+    }
+})
+class AttackAction implements INodeExecutor {
+    execute(context: NodeExecutionContext): TaskStatus {
+        const damage = BindingHelper.getValue<number>(context, 'damage', 10);
+        console.log(`执行攻击，造成 ${damage} 点伤害！`);
+        return TaskStatus.Success;
+    }
+}
+
+// 2. 构建行为树
+const enemyAI = BehaviorTreeBuilder.create('EnemyAI')
+    .defineBlackboardVariable('health', 100)
+    .defineBlackboardVariable('target', null)
+    .selector('MainBehavior')
+        .sequence('AttackBranch')
+            .condition('CheckHealth', 'HasEnoughHealth', { threshold: 20, operator: 'greater' })
+            .action('AttackAction', 'Attack', { damage: 50 })
+        .end()
+        .log('逃跑', 'Flee')
+    .end()
+    .build();
+
+// 3. 启动行为树
+const entity = scene.createEntity('Enemy');
+BehaviorTreeStarter.start(entity, enemyAI);
+```
+
 ## 注册执行器
 
 ### 自动注册
