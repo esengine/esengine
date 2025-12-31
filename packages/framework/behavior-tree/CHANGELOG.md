@@ -1,5 +1,18 @@
 # @esengine/behavior-tree
 
+## 4.1.2
+
+### Patch Changes
+
+- [#406](https://github.com/esengine/esengine/pull/406) [`0de4527`](https://github.com/esengine/esengine/commit/0de45279e612c04ae9be7fbd65ce496e4797a43c) Thanks [@esengine](https://github.com/esengine)! - fix(behavior-tree): export NodeExecutorMetadata as value instead of type
+
+    Fixed the export of `NodeExecutorMetadata` decorator in `execution/index.ts`.
+    Previously it was exported as `export type { NodeExecutorMetadata }` which only
+    exported the type signature, not the actual function. This caused runtime errors
+    in Cocos Creator: "TypeError: (intermediate value) is not a function".
+
+    Changed to `export { NodeExecutorMetadata }` to properly export the decorator function.
+
 ## 4.1.1
 
 ### Patch Changes
