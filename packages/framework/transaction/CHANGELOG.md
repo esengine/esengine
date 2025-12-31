@@ -1,5 +1,12 @@
 # @esengine/transaction
 
+## 2.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`85171a0`](https://github.com/esengine/esengine/commit/85171a0a5c073ef7883705ee4daaca8bb0218f20)]:
+    - @esengine/database-drivers@1.1.1
+
 ## 2.1.0
 
 ### Minor Changes
