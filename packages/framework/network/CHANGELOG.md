@@ -1,5 +1,12 @@
 # @esengine/network
 
+## 5.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`902c0a1`](https://github.com/esengine/esengine/commit/902c0a10749f80bd8f499b44154646379d359704)]:
+    - @esengine/rpc@1.1.3
+
 ## 5.0.2
 
 ### Patch Changes
