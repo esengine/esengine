@@ -288,6 +288,25 @@ export default defineConfig({
               ],
             },
             {
+              label: '数据库',
+              translations: { en: 'Database' },
+              items: [
+                { label: '概述', slug: 'modules/database', translations: { en: 'Overview' } },
+                { label: '仓储模式', slug: 'modules/database/repository', translations: { en: 'Repository' } },
+                { label: '用户仓储', slug: 'modules/database/user', translations: { en: 'User Repository' } },
+                { label: '查询构建器', slug: 'modules/database/query', translations: { en: 'Query Builder' } },
+              ],
+            },
+            {
+              label: '数据库驱动',
+              translations: { en: 'Database Drivers' },
+              items: [
+                { label: '概述', slug: 'modules/database-drivers', translations: { en: 'Overview' } },
+                { label: 'MongoDB', slug: 'modules/database-drivers/mongo', translations: { en: 'MongoDB' } },
+                { label: 'Redis', slug: 'modules/database-drivers/redis', translations: { en: 'Redis' } },
+              ],
+            },
+            {
               label: '世界流式加载',
               translations: { en: 'World Streaming' },
               items: [
