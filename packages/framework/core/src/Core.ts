@@ -742,6 +742,7 @@ export class Core {
         if (!this._instance) return;
 
         this._instance._debugManager?.stop();
+        this._instance._sceneManager.destroy();
         this._instance._serviceContainer.clear();
         Core._logger.info('Core destroyed');
         this._instance = null;
