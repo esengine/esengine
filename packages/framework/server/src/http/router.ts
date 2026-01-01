@@ -306,11 +306,20 @@ function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions)
         // 不在白名单中：不设置 origin 头
     } else if (!credentials) {
         // 通配符或反射模式：仅在无 credentials 时允许（无 credentials = 无凭证泄露风险）
+        // Wildcard or reflect mode: only allowed without credentials (no credentials = no credential leak risk)
         if (cors.origin === '*') {
             res.setHeader('Access-Control-Allow-Origin', '*');
         } else if (cors.origin === true) {
+            // 反射模式：将请求的 origin 反射回去（仅在无 credentials 时安全）
+            // Reflect mode: reflect request origin back (only safe without credentials)
             const requestOrigin = req.headers.origin;
-            res.setHeader('Access-Control-Allow-Origin', typeof requestOrigin === 'string' ? requestOrigin : '*');
+            // 安全：跳过 "null" origin（可能来自沙盒 iframe 或本地文件）
+            // Security: skip "null" origin (may come from sandboxed iframe or local files)
+            if (typeof requestOrigin === 'string' && requestOrigin !== 'null') {
+                res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+            } else {
+                res.setHeader('Access-Control-Allow-Origin', '*');
+            }
         }
     }
     // credentials + 通配符/反射：不设置任何 origin 头（安全拒绝）
