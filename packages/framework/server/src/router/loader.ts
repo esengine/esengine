@@ -164,7 +164,7 @@ function filePathToRoute(relativePath: string, prefix: string): string {
     let route = relativePath
         .replace(/\.(ts|js|mts|mjs)$/, '')
         .replace(/\\/g, '/')
-        .replace(/\[([^\]]+)\]/g, ':$1');
+        .replace(/\[(\w+)\]/g, ':$1');
 
     if (!route.startsWith('/')) {
         route = '/' + route;
