@@ -263,12 +263,27 @@ function createResponse(res: ServerResponse): HttpResponse {
 /**
  * @zh 应用 CORS 头
  * @en Apply CORS headers
+ *
+ * @zh 安全注意：当启用 credentials 时，不能使用通配符 origin
+ * @en Security note: When credentials enabled, wildcard origin is not allowed
  */
 function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions): void {
     const origin = req.headers.origin;
 
-    if (cors.origin === true || cors.origin === '*') {
+    // 当启用 credentials 时，不能使用通配符，必须指定具体 origin
+    // When credentials enabled, wildcard is not allowed, must specify exact origin
+    if (cors.credentials && (cors.origin === true || cors.origin === '*')) {
+        // 安全模式：只有当请求有 origin 头时才反射，否则不设置
+        // Safe mode: only reflect when request has origin header, otherwise don't set
+        if (origin) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+        }
+    } else if (cors.origin === true) {
+        // 无 credentials 时可以反射 origin
+        // Without credentials, can reflect origin
         res.setHeader('Access-Control-Allow-Origin', origin ?? '*');
+    } else if (cors.origin === '*') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
     } else if (typeof cors.origin === 'string') {
         res.setHeader('Access-Control-Allow-Origin', cors.origin);
     } else if (Array.isArray(cors.origin) && origin && cors.origin.includes(origin)) {
@@ -499,9 +514,11 @@ export function createHttpRouter(
     }
 
     // CORS 配置
+    // 安全默认：cors: true 时不启用 credentials，避免凭证泄露
+    // Safe default: cors: true doesn't enable credentials to prevent credential leak
     const corsOptions: CorsOptions | null =
         options.cors === true
-            ? { origin: true, credentials: true }
+            ? { origin: '*' }
             : options.cors === false
                 ? null
                 : options.cors ?? null;

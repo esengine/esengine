@@ -460,6 +460,26 @@ describe('HTTP Router', () => {
             await router(req, res);
 
             expect(res._statusCode).toBe(204);
+            // cors: true 使用通配符 '*'，安全默认不启用 credentials
+            expect(res._headers['access-control-allow-origin']).toBe('*');
+        });
+
+        it('should reflect origin when using origin: true without credentials', async () => {
+            const router = createHttpRouter(
+                { '/api/data': (req, res) => res.json({}) },
+                { cors: { origin: true } }
+            );
+
+            const req = createMockRequest({
+                method: 'OPTIONS',
+                url: '/api/data',
+                headers: { origin: 'http://example.com' }
+            });
+            const res = createMockResponse();
+
+            await router(req, res);
+
+            expect(res._statusCode).toBe(204);
             expect(res._headers['access-control-allow-origin']).toBe('http://example.com');
         });
 
