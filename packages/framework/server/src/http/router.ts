@@ -261,56 +261,43 @@ function createResponse(res: ServerResponse): HttpResponse {
 // ============================================================================
 
 /**
- * @zh 解析允许的 origin
- * @en Resolve allowed origin
- *
- * @zh 安全规则：credentials 只能与固定 origin 或白名单一起使用
- * @en Security rule: credentials can only be used with fixed origin or whitelist
- */
-function resolveAllowedOrigin(
-    corsOrigin: CorsOptions['origin'],
-    requestOrigin: string | undefined,
-    credentials: boolean
-): string | null {
-    // 固定字符串 origin：总是安全
-    if (typeof corsOrigin === 'string' && corsOrigin !== '*') {
-        return corsOrigin;
-    }
-
-    // 白名单模式：验证请求 origin
-    if (Array.isArray(corsOrigin)) {
-        return requestOrigin && corsOrigin.includes(requestOrigin) ? requestOrigin : null;
-    }
-
-    // 以下模式与 credentials 不兼容
-    if (credentials) {
-        return null;
-    }
-
-    // 通配符模式（无 credentials）
-    if (corsOrigin === '*') {
-        return '*';
-    }
-
-    // 反射模式（无 credentials）
-    if (corsOrigin === true) {
-        return requestOrigin ?? '*';
-    }
-
-    return null;
-}
-
-/**
  * @zh 应用 CORS 头
  * @en Apply CORS headers
+ *
+ * @zh 安全规则：credentials 只能与固定 origin 或白名单一起使用，不能使用通配符或反射
+ * @en Security rule: credentials can only be used with fixed origin or whitelist, not wildcard or reflect
  */
 function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions): void {
-    const requestOrigin = req.headers.origin as string | undefined;
-    const allowedOrigin = resolveAllowedOrigin(cors.origin, requestOrigin, cors.credentials ?? false);
+    const credentials = cors.credentials ?? false;
 
-    if (allowedOrigin) {
-        res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    // 设置 Access-Control-Allow-Origin
+    // 安全策略：当 credentials 为 true 时，只允许固定 origin 或白名单
+    if (typeof cors.origin === 'string' && cors.origin !== '*') {
+        // 固定字符串 origin（非通配符）：总是安全，直接使用配置值
+        res.setHeader('Access-Control-Allow-Origin', cors.origin);
+        if (credentials) {
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
+    } else if (Array.isArray(cors.origin)) {
+        // 白名单模式：只有在白名单中的 origin 才允许
+        const requestOrigin = req.headers.origin;
+        if (typeof requestOrigin === 'string' && cors.origin.includes(requestOrigin)) {
+            res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+            if (credentials) {
+                res.setHeader('Access-Control-Allow-Credentials', 'true');
+            }
+        }
+        // 不在白名单中：不设置 origin 头
+    } else if (!credentials) {
+        // 通配符或反射模式：仅在无 credentials 时允许
+        if (cors.origin === '*') {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+        } else if (cors.origin === true) {
+            const requestOrigin = req.headers.origin;
+            res.setHeader('Access-Control-Allow-Origin', typeof requestOrigin === 'string' ? requestOrigin : '*');
+        }
     }
+    // credentials + 通配符/反射：不设置任何 origin 头（安全拒绝）
 
     res.setHeader(
         'Access-Control-Allow-Methods',
@@ -321,11 +308,6 @@ function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions)
         'Access-Control-Allow-Headers',
         cors.allowedHeaders?.join(', ') ?? 'Content-Type, Authorization'
     );
-
-    // credentials 只在有有效 origin 且非通配符时设置
-    if (cors.credentials && allowedOrigin && allowedOrigin !== '*') {
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-    }
 
     if (cors.maxAge) {
         res.setHeader('Access-Control-Max-Age', String(cors.maxAge));
