@@ -517,6 +517,80 @@ describe('HTTP Router', () => {
 
             expect(res._headers['access-control-allow-origin']).toBeUndefined();
         });
+
+        it('should not allow credentials with wildcard origin (security)', async () => {
+            const router = createHttpRouter(
+                { '/api/data': (req, res) => res.json({}) },
+                { cors: { origin: '*', credentials: true } }
+            );
+
+            const req = createMockRequest({
+                url: '/api/data',
+                headers: { origin: 'http://evil.com' }
+            });
+            const res = createMockResponse();
+
+            await router(req, res);
+
+            // 安全：credentials + 通配符时不设置 origin 头
+            expect(res._headers['access-control-allow-origin']).toBeUndefined();
+            expect(res._headers['access-control-allow-credentials']).toBeUndefined();
+        });
+
+        it('should not allow credentials with origin: true (security)', async () => {
+            const router = createHttpRouter(
+                { '/api/data': (req, res) => res.json({}) },
+                { cors: { origin: true, credentials: true } }
+            );
+
+            const req = createMockRequest({
+                url: '/api/data',
+                headers: { origin: 'http://evil.com' }
+            });
+            const res = createMockResponse();
+
+            await router(req, res);
+
+            // 安全：credentials + 反射时不设置 origin 头
+            expect(res._headers['access-control-allow-origin']).toBeUndefined();
+            expect(res._headers['access-control-allow-credentials']).toBeUndefined();
+        });
+
+        it('should allow credentials with whitelist origin', async () => {
+            const router = createHttpRouter(
+                { '/api/data': (req, res) => res.json({}) },
+                { cors: { origin: ['http://trusted.com', 'http://also-trusted.com'], credentials: true } }
+            );
+
+            const req = createMockRequest({
+                url: '/api/data',
+                headers: { origin: 'http://trusted.com' }
+            });
+            const res = createMockResponse();
+
+            await router(req, res);
+
+            expect(res._headers['access-control-allow-origin']).toBe('http://trusted.com');
+            expect(res._headers['access-control-allow-credentials']).toBe('true');
+        });
+
+        it('should reject non-whitelisted origin with credentials', async () => {
+            const router = createHttpRouter(
+                { '/api/data': (req, res) => res.json({}) },
+                { cors: { origin: ['http://trusted.com'], credentials: true } }
+            );
+
+            const req = createMockRequest({
+                url: '/api/data',
+                headers: { origin: 'http://evil.com' }
+            });
+            const res = createMockResponse();
+
+            await router(req, res);
+
+            expect(res._headers['access-control-allow-origin']).toBeUndefined();
+            expect(res._headers['access-control-allow-credentials']).toBeUndefined();
+        });
     });
 
     describe('Response Methods', () => {
