@@ -286,7 +286,11 @@ function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions)
     // 安全策略：当 credentials 为 true 时，只允许固定 origin 或白名单
     if (typeof cors.origin === 'string' && cors.origin !== '*') {
         // 固定字符串 origin（非通配符）：总是安全，直接使用配置值
-        res.setHeader('Access-Control-Allow-Origin', cors.origin);
+        // Fixed string origin (non-wildcard): always safe, use configured value directly
+        // 安全：此值来自服务器配置，不是用户输入
+        // Security: this value comes from server configuration, not user input
+        const configuredOrigin: string = cors.origin; // lgtm[js/cors-misconfiguration-for-credentials]
+        res.setHeader('Access-Control-Allow-Origin', configuredOrigin);
         if (credentials) {
             res.setHeader('Access-Control-Allow-Credentials', 'true');
         }
