@@ -5,3 +5,4 @@
 
 export * from './types.js';
 export { createHttpRouter } from './router.js';
+export * from './middleware.js';

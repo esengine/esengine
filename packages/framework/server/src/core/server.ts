@@ -252,7 +252,9 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
             // 如果有 HTTP 路由，创建 HTTP 服务器
             if (hasHttpRoutes) {
-                const httpRouter = createHttpRouter(mergedHttpRoutes, config.cors ?? true);
+                const httpRouter = createHttpRouter(mergedHttpRoutes, {
+                    cors: config.cors ?? true
+                });
 
                 httpServer = createHttpServer(async (req, res) => {
                     // 先尝试 HTTP 路由

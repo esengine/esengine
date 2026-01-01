@@ -126,6 +126,9 @@ interface HttpRequest {
     /** 请求路径 */
     path: string
 
+    /** 路由参数（从 URL 路径提取，如 /users/:id） */
+    params: Record<string, string>
+
     /** 查询参数 */
     query: Record<string, string>
 
@@ -266,10 +269,24 @@ import { defineHttp } from '@esengine/server'
 export default defineHttp({
     method: 'GET',
     handler(req, res) {
-        // 从路径获取参数
-        // 注意：当前版本需要手动解析 path
-        const id = req.path.split('/').pop()
+        // 直接从 params 获取路由参数
+        const { id } = req.params
         res.json({ userId: id })
+    }
+})
+```
+
+多个参数的情况：
+
+```typescript
+// src/http/users/[userId]/posts/[postId].ts
+import { defineHttp } from '@esengine/server'
+
+export default defineHttp({
+    method: 'GET',
+    handler(req, res) {
+        const { userId, postId } = req.params
+        res.json({ userId, postId })
     }
 })
 ```
@@ -480,6 +497,176 @@ export default defineHttp({
 })
 ```
 
+## 中间件
+
+### 中间件类型
+
+中间件是在路由处理前后执行的函数：
+
+```typescript
+type HttpMiddleware = (
+    req: HttpRequest,
+    res: HttpResponse,
+    next: () => Promise<void>
+) => void | Promise<void>
+```
+
+### 内置中间件
+
+```typescript
+import {
+    requestLogger,
+    bodyLimit,
+    responseTime,
+    requestId,
+    securityHeaders
+} from '@esengine/server'
+
+const server = await createServer({
+    port: 3000,
+    http: { /* ... */ },
+    // 全局中间件通过 createHttpRouter 配置
+})
+```
+
+#### requestLogger - 请求日志
+
+```typescript
+import { requestLogger } from '@esengine/server'
+
+// 记录请求和响应时间
+requestLogger()
+
+// 同时记录请求体
+requestLogger({ logBody: true })
+```
+
+#### bodyLimit - 请求体大小限制
+
+```typescript
+import { bodyLimit } from '@esengine/server'
+
+// 限制请求体为 1MB
+bodyLimit(1024 * 1024)
+```
+
+#### responseTime - 响应时间头
+
+```typescript
+import { responseTime } from '@esengine/server'
+
+// 自动添加 X-Response-Time 响应头
+responseTime()
+```
+
+#### requestId - 请求 ID
+
+```typescript
+import { requestId } from '@esengine/server'
+
+// 自动生成并添加 X-Request-ID 响应头
+requestId()
+
+// 自定义头名称
+requestId('X-Trace-ID')
+```
+
+#### securityHeaders - 安全头
+
+```typescript
+import { securityHeaders } from '@esengine/server'
+
+// 添加常用安全响应头
+securityHeaders()
+
+// 自定义配置
+securityHeaders({
+    hidePoweredBy: true,
+    frameOptions: 'DENY',
+    noSniff: true
+})
+```
+
+### 自定义中间件
+
+```typescript
+import type { HttpMiddleware } from '@esengine/server'
+
+// 认证中间件
+const authMiddleware: HttpMiddleware = async (req, res, next) => {
+    const token = req.headers.authorization?.replace('Bearer ', '')
+
+    if (!token) {
+        res.error(401, 'Unauthorized')
+        return  // 不调用 next()，终止请求
+    }
+
+    // 验证 token...
+    (req as any).userId = 'decoded-user-id'
+
+    await next()  // 继续执行后续中间件和处理器
+}
+```
+
+### 使用中间件
+
+#### 使用 createHttpRouter
+
+```typescript
+import { createHttpRouter, requestLogger, bodyLimit } from '@esengine/server'
+
+const router = createHttpRouter({
+    '/api/users': (req, res) => res.json([]),
+    '/api/admin': {
+        GET: {
+            handler: (req, res) => res.json({ admin: true }),
+            middlewares: [adminAuthMiddleware]  // 路由级中间件
+        }
+    }
+}, {
+    middlewares: [requestLogger(), bodyLimit(1024 * 1024)],  // 全局中间件
+    timeout: 30000  // 全局超时 30 秒
+})
+```
+
+## 请求超时
+
+### 全局超时
+
+```typescript
+import { createHttpRouter } from '@esengine/server'
+
+const router = createHttpRouter({
+    '/api/data': async (req, res) => {
+        // 如果处理超过 30 秒，自动返回 408 Request Timeout
+        await someSlowOperation()
+        res.json({ data: 'result' })
+    }
+}, {
+    timeout: 30000  // 30 秒
+})
+```
+
+### 路由级超时
+
+```typescript
+const router = createHttpRouter({
+    '/api/quick': (req, res) => res.json({ fast: true }),
+
+    '/api/slow': {
+        POST: {
+            handler: async (req, res) => {
+                await verySlowOperation()
+                res.json({ done: true })
+            },
+            timeout: 120000  // 这个路由允许 2 分钟
+        }
+    }
+}, {
+    timeout: 10000  // 全局 10 秒（被路由级覆盖）
+})
+```
+
 ## 最佳实践
 
 1. **使用 defineHttp** - 获得更好的类型提示和代码组织
@@ -488,3 +675,5 @@ export default defineHttp({
 4. **目录组织** - 按功能模块组织 HTTP 路由文件
 5. **验证输入** - 始终验证 `req.body` 和 `req.query` 的内容
 6. **状态码规范** - 遵循 HTTP 状态码规范（200、201、400、401、404、500 等）
+7. **使用中间件** - 通过中间件实现认证、日志、限流等横切关注点
+8. **设置超时** - 避免慢请求阻塞服务器
