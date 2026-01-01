@@ -109,6 +109,50 @@ function setPlayerRateLimitContext(player: Player, context: IRateLimitContext): 
 }
 
 /**
+ * @zh 抽象构造器类型
+ * @en Abstract constructor type
+ */
+type AbstractConstructor<T = object> = abstract new (...args: any[]) => T;
+
+/**
+ * @zh 可混入的 Room 构造器类型（支持抽象和具体类）
+ * @en Mixable Room constructor type (supports both abstract and concrete classes)
+ */
+type RoomConstructor = AbstractConstructor<Room>;
+
+// ============================================================================
+// Mixin 类型辅助函数 | Mixin Type Helpers
+// ============================================================================
+// TypeScript 的 mixin 模式存在类型系统限制：
+// 1. ES6 class 语法不支持 `extends` 抽象类型参数
+// 2. 泛型类型参数无法直接用于 class extends 子句
+// 以下辅助函数封装了必要的类型转换，使 mixin 实现更清晰
+//
+// TypeScript mixin pattern has type system limitations:
+// 1. ES6 class syntax doesn't support `extends` with abstract type parameters
+// 2. Generic type parameters cannot be used directly in class extends clause
+// The following helpers encapsulate necessary type casts for cleaner mixin implementation
+// ============================================================================
+
+/**
+ * @zh 将抽象 Room 构造器转换为可继承的具体构造器
+ * @en Convert abstract Room constructor to extendable concrete constructor
+ */
+function toExtendable<T extends RoomConstructor>(Base: T): new (...args: any[]) => Room {
+    return Base as unknown as new (...args: any[]) => Room;
+}
+
+/**
+ * @zh 将 mixin 类转换为正确的返回类型
+ * @en Cast mixin class to correct return type
+ */
+function toMixinResult<TBase extends RoomConstructor, TInterface>(
+    MixinClass: AbstractConstructor<any>
+): TBase & AbstractConstructor<TInterface> {
+    return MixinClass as unknown as TBase & AbstractConstructor<TInterface>;
+}
+
+/**
  * @zh 包装房间类添加速率限制功能
  * @en Wrap room class with rate limit functionality
  *
@@ -148,10 +192,10 @@ function setPlayerRateLimitContext(player: Player, context: IRateLimitContext): 
  * }
  * ```
  */
-export function withRateLimit<TBase extends new (...args: any[]) => Room = new (...args: any[]) => Room>(
+export function withRateLimit<TBase extends RoomConstructor>(
     Base: TBase,
     config: RateLimitConfig = {}
-): TBase & (new (...args: any[]) => IRateLimitRoom) {
+): TBase & AbstractConstructor<IRateLimitRoom> {
     const {
         messagesPerSecond = 10,
         burstSize = 20,
@@ -163,7 +207,9 @@ export function withRateLimit<TBase extends new (...args: any[]) => Room = new (
         cleanupInterval = 60000
     } = config;
 
-    abstract class RateLimitRoom extends (Base as new (...args: any[]) => Room) implements IRateLimitRoom {
+    const BaseRoom = toExtendable(Base);
+
+    abstract class RateLimitRoom extends BaseRoom implements IRateLimitRoom {
         private _rateLimitStrategy: IRateLimitStrategy;
         private _playerContexts: WeakMap<Player, RateLimitContext> = new WeakMap();
         private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
@@ -381,5 +427,5 @@ export function withRateLimit<TBase extends new (...args: any[]) => Room = new (
         }
     }
 
-    return RateLimitRoom as unknown as TBase & (new (...args: any[]) => IRateLimitRoom);
+    return toMixinResult<TBase, IRateLimitRoom>(RateLimitRoom);
 }

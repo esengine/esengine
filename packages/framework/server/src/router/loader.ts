@@ -3,9 +3,10 @@
  * @en File-based router loader
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createLogger } from '../logger.js';
 import type {
     ApiDefinition,
     MsgDefinition,
@@ -13,8 +14,10 @@ import type {
     LoadedApiHandler,
     LoadedMsgHandler,
     LoadedHttpHandler,
-    HttpMethod,
-} from '../types/index.js'
+    HttpMethod
+} from '../types/index.js';
+
+const logger = createLogger('Server');
 
 /**
  * @zh 将文件名转换为 API/消息名称
@@ -26,12 +29,12 @@ import type {
  * 'save_blueprint.ts' -> 'SaveBlueprint'
  */
 function fileNameToHandlerName(fileName: string): string {
-    const baseName = fileName.replace(/\.(ts|js|mts|mjs)$/, '')
+    const baseName = fileName.replace(/\.(ts|js|mts|mjs)$/, '');
 
     return baseName
         .split(/[-_]/)
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join('')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join('');
 }
 
 /**
@@ -40,23 +43,23 @@ function fileNameToHandlerName(fileName: string): string {
  */
 function scanDirectory(dir: string): string[] {
     if (!fs.existsSync(dir)) {
-        return []
+        return [];
     }
 
-    const files: string[] = []
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const files: string[] = [];
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
         if (entry.isFile() && /\.(ts|js|mts|mjs)$/.test(entry.name)) {
             // 跳过 index 和下划线开头的文件
             if (entry.name.startsWith('_') || entry.name.startsWith('index.')) {
-                continue
+                continue;
             }
-            files.push(path.join(dir, entry.name))
+            files.push(path.join(dir, entry.name));
         }
     }
 
-    return files
+    return files;
 }
 
 /**
@@ -64,29 +67,29 @@ function scanDirectory(dir: string): string[] {
  * @en Load API handlers
  */
 export async function loadApiHandlers(apiDir: string): Promise<LoadedApiHandler[]> {
-    const files = scanDirectory(apiDir)
-    const handlers: LoadedApiHandler[] = []
+    const files = scanDirectory(apiDir);
+    const handlers: LoadedApiHandler[] = [];
 
     for (const filePath of files) {
         try {
-            const fileUrl = pathToFileURL(filePath).href
-            const module = await import(fileUrl)
-            const definition = module.default as ApiDefinition<unknown, unknown, unknown>
+            const fileUrl = pathToFileURL(filePath).href;
+            const module = await import(fileUrl);
+            const definition = module.default as ApiDefinition<unknown, unknown, unknown>;
 
             if (definition && typeof definition.handler === 'function') {
-                const name = fileNameToHandlerName(path.basename(filePath))
+                const name = fileNameToHandlerName(path.basename(filePath));
                 handlers.push({
                     name,
                     path: filePath,
-                    definition,
-                })
+                    definition
+                });
             }
         } catch (err) {
-            console.warn(`[Server] Failed to load API handler: ${filePath}`, err)
+            logger.warn(`Failed to load API handler: ${filePath}`, err);
         }
     }
 
-    return handlers
+    return handlers;
 }
 
 /**
@@ -94,29 +97,29 @@ export async function loadApiHandlers(apiDir: string): Promise<LoadedApiHandler[
  * @en Load message handlers
  */
 export async function loadMsgHandlers(msgDir: string): Promise<LoadedMsgHandler[]> {
-    const files = scanDirectory(msgDir)
-    const handlers: LoadedMsgHandler[] = []
+    const files = scanDirectory(msgDir);
+    const handlers: LoadedMsgHandler[] = [];
 
     for (const filePath of files) {
         try {
-            const fileUrl = pathToFileURL(filePath).href
-            const module = await import(fileUrl)
-            const definition = module.default as MsgDefinition<unknown, unknown>
+            const fileUrl = pathToFileURL(filePath).href;
+            const module = await import(fileUrl);
+            const definition = module.default as MsgDefinition<unknown, unknown>;
 
             if (definition && typeof definition.handler === 'function') {
-                const name = fileNameToHandlerName(path.basename(filePath))
+                const name = fileNameToHandlerName(path.basename(filePath));
                 handlers.push({
                     name,
                     path: filePath,
-                    definition,
-                })
+                    definition
+                });
             }
         } catch (err) {
-            console.warn(`[Server] Failed to load msg handler: ${filePath}`, err)
+            logger.warn(`Failed to load msg handler: ${filePath}`, err);
         }
     }
 
-    return handlers
+    return handlers;
 }
 
 /**
@@ -125,27 +128,27 @@ export async function loadMsgHandlers(msgDir: string): Promise<LoadedMsgHandler[
  */
 function scanDirectoryRecursive(dir: string, baseDir: string = dir): Array<{ filePath: string; relativePath: string }> {
     if (!fs.existsSync(dir)) {
-        return []
+        return [];
     }
 
-    const files: Array<{ filePath: string; relativePath: string }> = []
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const files: Array<{ filePath: string; relativePath: string }> = [];
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
+        const fullPath = path.join(dir, entry.name);
 
         if (entry.isDirectory()) {
-            files.push(...scanDirectoryRecursive(fullPath, baseDir))
+            files.push(...scanDirectoryRecursive(fullPath, baseDir));
         } else if (entry.isFile() && /\.(ts|js|mts|mjs)$/.test(entry.name)) {
             if (entry.name.startsWith('_') || entry.name.startsWith('index.')) {
-                continue
+                continue;
             }
-            const relativePath = path.relative(baseDir, fullPath)
-            files.push({ filePath: fullPath, relativePath })
+            const relativePath = path.relative(baseDir, fullPath);
+            files.push({ filePath: fullPath, relativePath });
         }
     }
 
-    return files
+    return files;
 }
 
 /**
@@ -161,17 +164,17 @@ function filePathToRoute(relativePath: string, prefix: string): string {
     let route = relativePath
         .replace(/\.(ts|js|mts|mjs)$/, '')
         .replace(/\\/g, '/')
-        .replace(/\[([^\]]+)\]/g, ':$1')
+        .replace(/\[(\w+)\]/g, ':$1');
 
     if (!route.startsWith('/')) {
-        route = '/' + route
+        route = '/' + route;
     }
 
     const fullRoute = prefix.endsWith('/')
         ? prefix.slice(0, -1) + route
-        : prefix + route
+        : prefix + route;
 
-    return fullRoute
+    return fullRoute;
 }
 
 /**
@@ -194,30 +197,30 @@ export async function loadHttpHandlers(
     httpDir: string,
     prefix: string = '/api'
 ): Promise<LoadedHttpHandler[]> {
-    const files = scanDirectoryRecursive(httpDir)
-    const handlers: LoadedHttpHandler[] = []
+    const files = scanDirectoryRecursive(httpDir);
+    const handlers: LoadedHttpHandler[] = [];
 
     for (const { filePath, relativePath } of files) {
         try {
-            const fileUrl = pathToFileURL(filePath).href
-            const module = await import(fileUrl)
-            const definition = module.default as HttpDefinition<unknown>
+            const fileUrl = pathToFileURL(filePath).href;
+            const module = await import(fileUrl);
+            const definition = module.default as HttpDefinition<unknown>;
 
             if (definition && typeof definition.handler === 'function') {
-                const route = filePathToRoute(relativePath, prefix)
-                const method: HttpMethod = definition.method ?? 'POST'
+                const route = filePathToRoute(relativePath, prefix);
+                const method: HttpMethod = definition.method ?? 'POST';
 
                 handlers.push({
                     route,
                     method,
                     path: filePath,
-                    definition,
-                })
+                    definition
+                });
             }
         } catch (err) {
-            console.warn(`[Server] Failed to load HTTP handler: ${filePath}`, err)
+            logger.warn(`Failed to load HTTP handler: ${filePath}`, err);
         }
     }
 
-    return handlers
+    return handlers;
 }

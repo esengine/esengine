@@ -42,7 +42,7 @@ describe('TokenBucketStrategy', () => {
                 strategy.consume('user-1');
             }
 
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise((resolve) => setTimeout(resolve, 150));
 
             const result = strategy.consume('user-1');
             expect(result.allowed).toBe(true);
@@ -92,7 +92,7 @@ describe('TokenBucketStrategy', () => {
         it('should clean up full buckets', async () => {
             strategy.consume('user-1');
 
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 100));
 
             strategy.cleanup();
         });
@@ -131,7 +131,7 @@ describe('SlidingWindowStrategy', () => {
                 strategy.consume('user-1');
             }
 
-            await new Promise(resolve => setTimeout(resolve, 1100));
+            await new Promise((resolve) => setTimeout(resolve, 1100));
 
             const result = strategy.consume('user-1');
             expect(result.allowed).toBe(true);
@@ -192,7 +192,7 @@ describe('FixedWindowStrategy', () => {
                 strategy.consume('user-1');
             }
 
-            await new Promise(resolve => setTimeout(resolve, 1100));
+            await new Promise((resolve) => setTimeout(resolve, 1100));
 
             const result = strategy.consume('user-1');
             expect(result.allowed).toBe(true);
@@ -224,7 +224,7 @@ describe('FixedWindowStrategy', () => {
         it('should clean up old windows', async () => {
             strategy.consume('user-1');
 
-            await new Promise(resolve => setTimeout(resolve, 2100));
+            await new Promise((resolve) => setTimeout(resolve, 2100));
 
             strategy.cleanup();
         });

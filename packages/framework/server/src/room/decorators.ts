@@ -3,7 +3,7 @@
  * @en Room decorators
  */
 
-import { registerMessageHandler } from './Room.js'
+import { registerMessageHandler } from './Room.js';
 
 /**
  * @zh 消息处理器装饰器
@@ -30,6 +30,6 @@ export function onMessage(type: string): MethodDecorator {
         propertyKey: string | symbol,
         _descriptor: PropertyDescriptor
     ) {
-        registerMessageHandler(target.constructor, type, propertyKey as string)
-    }
+        registerMessageHandler(target.constructor, type, propertyKey as string);
+    };
 }

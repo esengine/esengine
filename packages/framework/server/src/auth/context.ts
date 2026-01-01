@@ -138,7 +138,7 @@ export class AuthContext<TUser = unknown> implements IAuthContext<TUser> {
      * @en Check if has any of specified roles
      */
     hasAnyRole(roles: string[]): boolean {
-        return roles.some(role => this._roles.includes(role));
+        return roles.some((role) => this._roles.includes(role));
     }
 
     /**
@@ -146,7 +146,7 @@ export class AuthContext<TUser = unknown> implements IAuthContext<TUser> {
      * @en Check if has all specified roles
      */
     hasAllRoles(roles: string[]): boolean {
-        return roles.every(role => this._roles.includes(role));
+        return roles.every((role) => this._roles.includes(role));
     }
 
     /**

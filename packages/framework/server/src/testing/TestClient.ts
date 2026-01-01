@@ -3,9 +3,12 @@
  * @en Test client for server testing
  */
 
-import WebSocket from 'ws'
-import { json } from '@esengine/rpc/codec'
-import type { Codec } from '@esengine/rpc/codec'
+import WebSocket from 'ws';
+import { json } from '@esengine/rpc/codec';
+import type { Codec } from '@esengine/rpc/codec';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('TestClient');
 
 // ============================================================================
 // Types | 类型定义
@@ -65,8 +68,8 @@ const PacketType = {
     ApiRequest: 0,
     ApiResponse: 1,
     ApiError: 2,
-    Message: 3,
-} as const
+    Message: 3
+} as const;
 
 // ============================================================================
 // TestClient Class | 测试客户端类
@@ -106,26 +109,26 @@ interface PendingCall {
  * ```
  */
 export class TestClient {
-    private readonly _port: number
-    private readonly _codec: Codec
-    private readonly _timeout: number
-    private readonly _connectTimeout: number
+    private readonly _port: number;
+    private readonly _codec: Codec;
+    private readonly _timeout: number;
+    private readonly _connectTimeout: number;
 
-    private _ws: WebSocket | null = null
-    private _callIdCounter = 0
-    private _connected = false
-    private _currentRoomId: string | null = null
-    private _currentPlayerId: string | null = null
+    private _ws: WebSocket | null = null;
+    private _callIdCounter = 0;
+    private _connected = false;
+    private _currentRoomId: string | null = null;
+    private _currentPlayerId: string | null = null;
 
-    private readonly _pendingCalls = new Map<number, PendingCall>()
-    private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>()
-    private readonly _receivedMessages: ReceivedMessage[] = []
+    private readonly _pendingCalls = new Map<number, PendingCall>();
+    private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>();
+    private readonly _receivedMessages: ReceivedMessage[] = [];
 
     constructor(port: number, options: TestClientOptions = {}) {
-        this._port = port
-        this._codec = options.codec ?? json()
-        this._timeout = options.timeout ?? 5000
-        this._connectTimeout = options.connectTimeout ?? 5000
+        this._port = port;
+        this._codec = options.codec ?? json();
+        this._timeout = options.timeout ?? 5000;
+        this._connectTimeout = options.connectTimeout ?? 5000;
     }
 
     // ========================================================================
@@ -137,7 +140,7 @@ export class TestClient {
      * @en Whether connected
      */
     get isConnected(): boolean {
-        return this._connected
+        return this._connected;
     }
 
     /**
@@ -145,7 +148,7 @@ export class TestClient {
      * @en Current room ID
      */
     get roomId(): string | null {
-        return this._currentRoomId
+        return this._currentRoomId;
     }
 
     /**
@@ -153,7 +156,7 @@ export class TestClient {
      * @en Current player ID
      */
     get playerId(): string | null {
-        return this._currentPlayerId
+        return this._currentPlayerId;
     }
 
     /**
@@ -161,7 +164,7 @@ export class TestClient {
      * @en All received messages
      */
     get receivedMessages(): ReadonlyArray<ReceivedMessage> {
-        return this._receivedMessages
+        return this._receivedMessages;
     }
 
     // ========================================================================
@@ -174,36 +177,36 @@ export class TestClient {
      */
     connect(): Promise<this> {
         return new Promise((resolve, reject) => {
-            const url = `ws://localhost:${this._port}`
-            this._ws = new WebSocket(url)
+            const url = `ws://localhost:${this._port}`;
+            this._ws = new WebSocket(url);
 
             const timeout = setTimeout(() => {
-                this._ws?.close()
-                reject(new Error(`Connection timeout after ${this._connectTimeout}ms`))
-            }, this._connectTimeout)
+                this._ws?.close();
+                reject(new Error(`Connection timeout after ${this._connectTimeout}ms`));
+            }, this._connectTimeout);
 
             this._ws.on('open', () => {
-                clearTimeout(timeout)
-                this._connected = true
-                resolve(this)
-            })
+                clearTimeout(timeout);
+                this._connected = true;
+                resolve(this);
+            });
 
             this._ws.on('close', () => {
-                this._connected = false
-                this._rejectAllPending('Connection closed')
-            })
+                this._connected = false;
+                this._rejectAllPending('Connection closed');
+            });
 
             this._ws.on('error', (err) => {
-                clearTimeout(timeout)
+                clearTimeout(timeout);
                 if (!this._connected) {
-                    reject(err)
+                    reject(err);
                 }
-            })
+            });
 
             this._ws.on('message', (data: Buffer) => {
-                this._handleMessage(data)
-            })
-        })
+                this._handleMessage(data);
+            });
+        });
     }
 
     /**
@@ -213,18 +216,18 @@ export class TestClient {
     async disconnect(): Promise<void> {
         return new Promise((resolve) => {
             if (!this._ws || this._ws.readyState === WebSocket.CLOSED) {
-                resolve()
-                return
+                resolve();
+                return;
             }
 
             this._ws.once('close', () => {
-                this._connected = false
-                this._ws = null
-                resolve()
-            })
+                this._connected = false;
+                this._ws = null;
+                resolve();
+            });
 
-            this._ws.close()
-        })
+            this._ws.close();
+        });
     }
 
     // ========================================================================
@@ -236,10 +239,10 @@ export class TestClient {
      * @en Join a room
      */
     async joinRoom(roomType: string, options?: Record<string, unknown>): Promise<JoinRoomResult> {
-        const result = await this.call<JoinRoomResult>('JoinRoom', { roomType, options })
-        this._currentRoomId = result.roomId
-        this._currentPlayerId = result.playerId
-        return result
+        const result = await this.call<JoinRoomResult>('JoinRoom', { roomType, options });
+        this._currentRoomId = result.roomId;
+        this._currentPlayerId = result.playerId;
+        return result;
     }
 
     /**
@@ -247,10 +250,10 @@ export class TestClient {
      * @en Join a room by ID
      */
     async joinRoomById(roomId: string): Promise<JoinRoomResult> {
-        const result = await this.call<JoinRoomResult>('JoinRoom', { roomId })
-        this._currentRoomId = result.roomId
-        this._currentPlayerId = result.playerId
-        return result
+        const result = await this.call<JoinRoomResult>('JoinRoom', { roomId });
+        this._currentRoomId = result.roomId;
+        this._currentPlayerId = result.playerId;
+        return result;
     }
 
     /**
@@ -258,9 +261,9 @@ export class TestClient {
      * @en Leave room
      */
     async leaveRoom(): Promise<void> {
-        await this.call('LeaveRoom', {})
-        this._currentRoomId = null
-        this._currentPlayerId = null
+        await this.call('LeaveRoom', {});
+        this._currentRoomId = null;
+        this._currentPlayerId = null;
     }
 
     /**
@@ -268,7 +271,7 @@ export class TestClient {
      * @en Send message to room
      */
     sendToRoom(type: string, data: unknown): void {
-        this.send('RoomMessage', { type, data })
+        this.send('RoomMessage', { type, data });
     }
 
     // ========================================================================
@@ -282,26 +285,26 @@ export class TestClient {
     call<T = unknown>(name: string, input: unknown): Promise<T> {
         return new Promise((resolve, reject) => {
             if (!this._connected || !this._ws) {
-                reject(new Error('Not connected'))
-                return
+                reject(new Error('Not connected'));
+                return;
             }
 
-            const id = ++this._callIdCounter
+            const id = ++this._callIdCounter;
             const timer = setTimeout(() => {
-                this._pendingCalls.delete(id)
-                reject(new Error(`API call '${name}' timeout after ${this._timeout}ms`))
-            }, this._timeout)
+                this._pendingCalls.delete(id);
+                reject(new Error(`API call '${name}' timeout after ${this._timeout}ms`));
+            }, this._timeout);
 
             this._pendingCalls.set(id, {
                 resolve: resolve as (v: unknown) => void,
                 reject,
-                timer,
-            })
+                timer
+            });
 
-            const packet = [PacketType.ApiRequest, id, name, input]
+            const packet = [PacketType.ApiRequest, id, name, input];
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            this._ws.send(this._codec.encode(packet as any) as Buffer)
-        })
+            this._ws.send(this._codec.encode(packet as any) as Buffer);
+        });
     }
 
     /**
@@ -309,10 +312,10 @@ export class TestClient {
      * @en Send message
      */
     send(name: string, data: unknown): void {
-        if (!this._connected || !this._ws) return
-        const packet = [PacketType.Message, name, data]
+        if (!this._connected || !this._ws) return;
+        const packet = [PacketType.Message, name, data];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this._ws.send(this._codec.encode(packet as any) as Buffer)
+        this._ws.send(this._codec.encode(packet as any) as Buffer);
     }
 
     // ========================================================================
@@ -324,13 +327,13 @@ export class TestClient {
      * @en Listen for message
      */
     on(name: string, handler: (data: unknown) => void): this {
-        let handlers = this._msgHandlers.get(name)
+        let handlers = this._msgHandlers.get(name);
         if (!handlers) {
-            handlers = new Set()
-            this._msgHandlers.set(name, handlers)
+            handlers = new Set();
+            this._msgHandlers.set(name, handlers);
         }
-        handlers.add(handler)
-        return this
+        handlers.add(handler);
+        return this;
     }
 
     /**
@@ -339,11 +342,11 @@ export class TestClient {
      */
     off(name: string, handler?: (data: unknown) => void): this {
         if (handler) {
-            this._msgHandlers.get(name)?.delete(handler)
+            this._msgHandlers.get(name)?.delete(handler);
         } else {
-            this._msgHandlers.delete(name)
+            this._msgHandlers.delete(name);
         }
-        return this
+        return this;
     }
 
     /**
@@ -352,21 +355,21 @@ export class TestClient {
      */
     waitForMessage<T = unknown>(type: string, timeout?: number): Promise<T> {
         return new Promise((resolve, reject) => {
-            const timeoutMs = timeout ?? this._timeout
+            const timeoutMs = timeout ?? this._timeout;
 
             const timer = setTimeout(() => {
-                this.off(type, handler)
-                reject(new Error(`Timeout waiting for message '${type}' after ${timeoutMs}ms`))
-            }, timeoutMs)
+                this.off(type, handler);
+                reject(new Error(`Timeout waiting for message '${type}' after ${timeoutMs}ms`));
+            }, timeoutMs);
 
             const handler = (data: unknown) => {
-                clearTimeout(timer)
-                this.off(type, handler)
-                resolve(data as T)
-            }
+                clearTimeout(timer);
+                this.off(type, handler);
+                resolve(data as T);
+            };
 
-            this.on(type, handler)
-        })
+            this.on(type, handler);
+        });
     }
 
     /**
@@ -375,24 +378,24 @@ export class TestClient {
      */
     waitForRoomMessage<T = unknown>(type: string, timeout?: number): Promise<T> {
         return new Promise((resolve, reject) => {
-            const timeoutMs = timeout ?? this._timeout
+            const timeoutMs = timeout ?? this._timeout;
 
             const timer = setTimeout(() => {
-                this.off('RoomMessage', handler)
-                reject(new Error(`Timeout waiting for room message '${type}' after ${timeoutMs}ms`))
-            }, timeoutMs)
+                this.off('RoomMessage', handler);
+                reject(new Error(`Timeout waiting for room message '${type}' after ${timeoutMs}ms`));
+            }, timeoutMs);
 
             const handler = (data: unknown) => {
-                const msg = data as { type: string; data: unknown }
+                const msg = data as { type: string; data: unknown };
                 if (msg.type === type) {
-                    clearTimeout(timer)
-                    this.off('RoomMessage', handler)
-                    resolve(msg.data as T)
+                    clearTimeout(timer);
+                    this.off('RoomMessage', handler);
+                    resolve(msg.data as T);
                 }
-            }
+            };
 
-            this.on('RoomMessage', handler)
-        })
+            this.on('RoomMessage', handler);
+        });
     }
 
     // ========================================================================
@@ -404,7 +407,7 @@ export class TestClient {
      * @en Whether received a specific message
      */
     hasReceivedMessage(type: string): boolean {
-        return this._receivedMessages.some((m) => m.type === type)
+        return this._receivedMessages.some((m) => m.type === type);
     }
 
     /**
@@ -414,7 +417,7 @@ export class TestClient {
     getMessagesOfType<T = unknown>(type: string): T[] {
         return this._receivedMessages
             .filter((m) => m.type === type)
-            .map((m) => m.data as T)
+            .map((m) => m.data as T);
     }
 
     /**
@@ -424,10 +427,10 @@ export class TestClient {
     getLastMessage<T = unknown>(type: string): T | undefined {
         for (let i = this._receivedMessages.length - 1; i >= 0; i--) {
             if (this._receivedMessages[i].type === type) {
-                return this._receivedMessages[i].data as T
+                return this._receivedMessages[i].data as T;
             }
         }
-        return undefined
+        return undefined;
     }
 
     /**
@@ -435,7 +438,7 @@ export class TestClient {
      * @en Clear message records
      */
     clearMessages(): void {
-        this._receivedMessages.length = 0
+        this._receivedMessages.length = 0;
     }
 
     /**
@@ -444,9 +447,9 @@ export class TestClient {
      */
     getMessageCount(type?: string): number {
         if (type) {
-            return this._receivedMessages.filter((m) => m.type === type).length
+            return this._receivedMessages.filter((m) => m.type === type).length;
         }
-        return this._receivedMessages.length
+        return this._receivedMessages.length;
     }
 
     // ========================================================================
@@ -455,40 +458,40 @@ export class TestClient {
 
     private _handleMessage(raw: Buffer): void {
         try {
-            const packet = this._codec.decode(raw) as unknown[]
-            const type = packet[0] as number
+            const packet = this._codec.decode(raw) as unknown[];
+            const type = packet[0] as number;
 
             switch (type) {
                 case PacketType.ApiResponse:
-                    this._handleApiResponse([packet[0], packet[1], packet[2]] as [number, number, unknown])
-                    break
+                    this._handleApiResponse([packet[0], packet[1], packet[2]] as [number, number, unknown]);
+                    break;
                 case PacketType.ApiError:
-                    this._handleApiError([packet[0], packet[1], packet[2], packet[3]] as [number, number, string, string])
-                    break
+                    this._handleApiError([packet[0], packet[1], packet[2], packet[3]] as [number, number, string, string]);
+                    break;
                 case PacketType.Message:
-                    this._handleMsg([packet[0], packet[1], packet[2]] as [number, string, unknown])
-                    break
+                    this._handleMsg([packet[0], packet[1], packet[2]] as [number, string, unknown]);
+                    break;
             }
         } catch (err) {
-            console.error('[TestClient] Failed to handle message:', err)
+            logger.error('Failed to handle message:', err);
         }
     }
 
     private _handleApiResponse([, id, result]: [number, number, unknown]): void {
-        const pending = this._pendingCalls.get(id)
+        const pending = this._pendingCalls.get(id);
         if (pending) {
-            clearTimeout(pending.timer)
-            this._pendingCalls.delete(id)
-            pending.resolve(result)
+            clearTimeout(pending.timer);
+            this._pendingCalls.delete(id);
+            pending.resolve(result);
         }
     }
 
     private _handleApiError([, id, code, message]: [number, number, string, string]): void {
-        const pending = this._pendingCalls.get(id)
+        const pending = this._pendingCalls.get(id);
         if (pending) {
-            clearTimeout(pending.timer)
-            this._pendingCalls.delete(id)
-            pending.reject(new Error(`[${code}] ${message}`))
+            clearTimeout(pending.timer);
+            this._pendingCalls.delete(id);
+            pending.reject(new Error(`[${code}] ${message}`));
         }
     }
 
@@ -497,17 +500,17 @@ export class TestClient {
         this._receivedMessages.push({
             type: name,
             data,
-            timestamp: Date.now(),
-        })
+            timestamp: Date.now()
+        });
 
         // 触发处理器
-        const handlers = this._msgHandlers.get(name)
+        const handlers = this._msgHandlers.get(name);
         if (handlers) {
             for (const handler of handlers) {
                 try {
-                    handler(data)
+                    handler(data);
                 } catch (err) {
-                    console.error('[TestClient] Handler error:', err)
+                    logger.error('Handler error:', err);
                 }
             }
         }
@@ -515,9 +518,9 @@ export class TestClient {
 
     private _rejectAllPending(reason: string): void {
         for (const [, pending] of this._pendingCalls) {
-            clearTimeout(pending.timer)
-            pending.reject(new Error(reason))
+            clearTimeout(pending.timer);
+            pending.reject(new Error(reason));
         }
-        this._pendingCalls.clear()
+        this._pendingCalls.clear();
     }
 }

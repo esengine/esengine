@@ -27,11 +27,11 @@
  * ```
  */
 
-export { TestClient, type TestClientOptions } from './TestClient.js'
+export { TestClient, type TestClientOptions } from './TestClient.js';
 export {
     createTestServer,
     createTestEnv,
     type TestServerOptions,
-    type TestEnvironment,
-} from './TestServer.js'
-export { MockRoom } from './MockRoom.js'
+    type TestEnvironment
+} from './TestServer.js';
+export { MockRoom } from './MockRoom.js';

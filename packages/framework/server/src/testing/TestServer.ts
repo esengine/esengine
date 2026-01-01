@@ -3,9 +3,10 @@
  * @en Test server utilities
  */
 
-import { createServer } from '../core/server.js'
-import type { GameServer } from '../types/index.js'
-import { TestClient, type TestClientOptions } from './TestClient.js'
+import { createServer } from '../core/server.js';
+import type { GameServer } from '../types/index.js';
+import { TestClient, type TestClientOptions } from './TestClient.js';
+import { LoggerManager, LogLevel } from '@esengine/ecs-framework';
 
 // ============================================================================
 // Types | 类型定义
@@ -89,20 +90,20 @@ export interface TestEnvironment {
  * @en Get a random available port
  */
 async function getRandomPort(): Promise<number> {
-    const net = await import('node:net')
+    const net = await import('node:net');
     return new Promise((resolve, reject) => {
-        const server = net.createServer()
+        const server = net.createServer();
         server.listen(0, () => {
-            const address = server.address()
+            const address = server.address();
             if (address && typeof address === 'object') {
-                const port = address.port
-                server.close(() => resolve(port))
+                const port = address.port;
+                server.close(() => resolve(port));
             } else {
-                server.close(() => reject(new Error('Failed to get port')))
+                server.close(() => reject(new Error('Failed to get port')));
             }
-        })
-        server.on('error', reject)
-    })
+        });
+        server.on('error', reject);
+    });
 }
 
 /**
@@ -110,7 +111,7 @@ async function getRandomPort(): Promise<number> {
  * @en Wait for specified milliseconds
  */
 export function wait(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ============================================================================
@@ -137,36 +138,38 @@ export function wait(ms: number): Promise<void> {
 export async function createTestServer(
     options: TestServerOptions = {}
 ): Promise<{ server: GameServer; port: number; cleanup: () => Promise<void> }> {
-    const port = options.port || (await getRandomPort())
-    const silent = options.silent ?? true
+    const port = options.port || (await getRandomPort());
+    const silent = options.silent ?? true;
 
-    // 临时禁用 console.log
-    const originalLog = console.log
+    // 临时设置日志级别为 None（禁用所有日志）
+    const loggerManager = LoggerManager.getInstance();
+    let originalLevel: LogLevel | undefined;
     if (silent) {
-        console.log = () => {}
+        originalLevel = LogLevel.Info;
+        loggerManager.setGlobalLevel(LogLevel.None);
     }
 
     const server = await createServer({
         port,
         tickRate: options.tickRate ?? 0,
         apiDir: '__non_existent_api__',
-        msgDir: '__non_existent_msg__',
-    })
+        msgDir: '__non_existent_msg__'
+    });
 
-    await server.start()
+    await server.start();
 
-    // 恢复 console.log
-    if (silent) {
-        console.log = originalLog
+    // 恢复日志级别
+    if (silent && originalLevel !== undefined) {
+        loggerManager.setGlobalLevel(originalLevel);
     }
 
     return {
         server,
         port,
         cleanup: async () => {
-            await server.stop()
-        },
-    }
+            await server.stop();
+        }
+    };
 }
 
 /**
@@ -211,8 +214,8 @@ export async function createTestServer(
  * ```
  */
 export async function createTestEnv(options: TestServerOptions = {}): Promise<TestEnvironment> {
-    const { server, port, cleanup: serverCleanup } = await createTestServer(options)
-    const clients: TestClient[] = []
+    const { server, port, cleanup: serverCleanup } = await createTestServer(options);
+    const clients: TestClient[] = [];
 
     return {
         server,
@@ -220,30 +223,30 @@ export async function createTestEnv(options: TestServerOptions = {}): Promise<Te
         clients,
 
         async createClient(clientOptions?: TestClientOptions): Promise<TestClient> {
-            const client = new TestClient(port, clientOptions)
-            await client.connect()
-            clients.push(client)
-            return client
+            const client = new TestClient(port, clientOptions);
+            await client.connect();
+            clients.push(client);
+            return client;
         },
 
         async createClients(count: number, clientOptions?: TestClientOptions): Promise<TestClient[]> {
-            const newClients: TestClient[] = []
+            const newClients: TestClient[] = [];
             for (let i = 0; i < count; i++) {
-                const client = new TestClient(port, clientOptions)
-                await client.connect()
-                clients.push(client)
-                newClients.push(client)
+                const client = new TestClient(port, clientOptions);
+                await client.connect();
+                clients.push(client);
+                newClients.push(client);
             }
-            return newClients
+            return newClients;
         },
 
         async cleanup(): Promise<void> {
             // 断开所有客户端
-            await Promise.all(clients.map((c) => c.disconnect().catch(() => {})))
-            clients.length = 0
+            await Promise.all(clients.map((c) => c.disconnect().catch(() => {})));
+            clients.length = 0;
 
             // 停止服务器
-            await serverCleanup()
-        },
-    }
+            await serverCleanup();
+        }
+    };
 }

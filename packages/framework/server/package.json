@@ -46,23 +46,19 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@esengine/rpc": "workspace:*"
+    "@esengine/rpc": "workspace:*",
+    "@esengine/ecs-framework": "workspace:*"
   },
   "peerDependencies": {
     "ws": ">=8.0.0",
-    "jsonwebtoken": ">=9.0.0",
-    "@esengine/ecs-framework": ">=2.7.1"
+    "jsonwebtoken": ">=9.0.0"
   },
   "peerDependenciesMeta": {
     "jsonwebtoken": {
       "optional": true
-    },
-    "@esengine/ecs-framework": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@esengine/ecs-framework": "workspace:*",
     "@types/jsonwebtoken": "^9.0.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.13",

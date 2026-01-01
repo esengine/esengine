@@ -100,7 +100,7 @@ function getMessageTypeFromMethod(target: any, methodName: string): string | und
  */
 export function rateLimit(config?: MessageRateLimitConfig): MethodDecorator {
     return function (
-        target: Object,
+        target: object,
         propertyKey: string | symbol,
         descriptor: PropertyDescriptor
     ): PropertyDescriptor {
@@ -159,7 +159,7 @@ export function rateLimit(config?: MessageRateLimitConfig): MethodDecorator {
  */
 export function noRateLimit(): MethodDecorator {
     return function (
-        target: Object,
+        target: object,
         propertyKey: string | symbol,
         descriptor: PropertyDescriptor
     ): PropertyDescriptor {
@@ -202,7 +202,7 @@ export function rateLimitMessage(
     config?: MessageRateLimitConfig
 ): MethodDecorator {
     return function (
-        target: Object,
+        target: object,
         propertyKey: string | symbol,
         descriptor: PropertyDescriptor
     ): PropertyDescriptor {
@@ -232,7 +232,7 @@ export function rateLimitMessage(
  */
 export function noRateLimitMessage(messageType: string): MethodDecorator {
     return function (
-        target: Object,
+        target: object,
         propertyKey: string | symbol,
         descriptor: PropertyDescriptor
     ): PropertyDescriptor {

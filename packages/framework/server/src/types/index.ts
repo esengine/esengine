@@ -3,8 +3,8 @@
  * @en ESEngine Server type definitions
  */
 
-import type { Connection, ProtocolDef } from '@esengine/rpc'
-import type { HttpRoutes, CorsOptions, HttpRequest, HttpResponse } from '../http/types.js'
+import type { Connection, ProtocolDef } from '@esengine/rpc';
+import type { HttpRoutes, CorsOptions, HttpRequest, HttpResponse } from '../http/types.js';
 
 // ============================================================================
 // Server Config

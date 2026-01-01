@@ -168,9 +168,9 @@ describe('MockAuthProvider', () => {
         it('should get all users', () => {
             const users = provider.getUsers();
             expect(users).toHaveLength(3);
-            expect(users.map(u => u.id)).toContain('1');
-            expect(users.map(u => u.id)).toContain('2');
-            expect(users.map(u => u.id)).toContain('3');
+            expect(users.map((u) => u.id)).toContain('1');
+            expect(users.map((u) => u.id)).toContain('2');
+            expect(users.map((u) => u.id)).toContain('3');
         });
     });
 

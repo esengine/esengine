@@ -7,13 +7,16 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createLogger } from '../logger.js';
 import type {
     HttpRequest,
     HttpResponse,
     HttpHandler,
     HttpRoutes,
-    CorsOptions,
+    CorsOptions
 } from './types.js';
+
+const logger = createLogger('HTTP');
 
 /**
  * @zh 创建 HTTP 请求对象
@@ -47,7 +50,7 @@ async function createRequest(req: IncomingMessage): Promise<HttpRequest> {
         query,
         headers: req.headers as Record<string, string | string[] | undefined>,
         body,
-        ip,
+        ip
     };
 }
 
@@ -133,7 +136,7 @@ function createResponse(res: ServerResponse): HttpResponse {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.statusCode = code;
             res.end(JSON.stringify({ error: message }));
-        },
+        }
     };
 
     return response;
@@ -253,7 +256,7 @@ export function createHttpRouter(routes: HttpRoutes, cors?: CorsOptions | boolea
             await route.handler(httpReq, httpRes);
             return true;
         } catch (error) {
-            console.error('[HTTP] Route handler error:', error);
+            logger.error('Route handler error:', error);
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ error: 'Internal Server Error' }));

@@ -1730,13 +1730,13 @@ importers:
 
   packages/framework/server:
     dependencies:
+      '@esengine/ecs-framework':
+        specifier: workspace:*
+        version: link:../core/dist
       '@esengine/rpc':
         specifier: workspace:*
         version: link:../rpc
     devDependencies:
-      '@esengine/ecs-framework':
-        specifier: workspace:*
-        version: link:../core/dist
       '@types/jsonwebtoken':
         specifier: ^9.0.0
         version: 9.0.10
