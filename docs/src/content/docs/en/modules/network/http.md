@@ -126,6 +126,9 @@ interface HttpRequest {
     /** Request path */
     path: string
 
+    /** Route parameters (extracted from URL path, e.g., /users/:id) */
+    params: Record<string, string>
+
     /** Query parameters */
     query: Record<string, string>
 
@@ -266,10 +269,24 @@ import { defineHttp } from '@esengine/server'
 export default defineHttp({
     method: 'GET',
     handler(req, res) {
-        // Get parameter from path
-        // Note: current version requires manual path parsing
-        const id = req.path.split('/').pop()
+        // Get route parameter directly from params
+        const { id } = req.params
         res.json({ userId: id })
+    }
+})
+```
+
+Multiple parameters:
+
+```typescript
+// src/http/users/[userId]/posts/[postId].ts
+import { defineHttp } from '@esengine/server'
+
+export default defineHttp({
+    method: 'GET',
+    handler(req, res) {
+        const { userId, postId } = req.params
+        res.json({ userId, postId })
     }
 })
 ```
@@ -480,6 +497,176 @@ export default defineHttp({
 })
 ```
 
+## Middleware
+
+### Middleware Type
+
+Middleware are functions that execute before and after route handlers:
+
+```typescript
+type HttpMiddleware = (
+    req: HttpRequest,
+    res: HttpResponse,
+    next: () => Promise<void>
+) => void | Promise<void>
+```
+
+### Built-in Middleware
+
+```typescript
+import {
+    requestLogger,
+    bodyLimit,
+    responseTime,
+    requestId,
+    securityHeaders
+} from '@esengine/server'
+
+const server = await createServer({
+    port: 3000,
+    http: { /* ... */ },
+    // Global middleware configured via createHttpRouter
+})
+```
+
+#### requestLogger - Request Logging
+
+```typescript
+import { requestLogger } from '@esengine/server'
+
+// Log request and response time
+requestLogger()
+
+// Also log request body
+requestLogger({ logBody: true })
+```
+
+#### bodyLimit - Request Body Size Limit
+
+```typescript
+import { bodyLimit } from '@esengine/server'
+
+// Limit request body to 1MB
+bodyLimit(1024 * 1024)
+```
+
+#### responseTime - Response Time Header
+
+```typescript
+import { responseTime } from '@esengine/server'
+
+// Automatically add X-Response-Time header
+responseTime()
+```
+
+#### requestId - Request ID
+
+```typescript
+import { requestId } from '@esengine/server'
+
+// Auto-generate and add X-Request-ID header
+requestId()
+
+// Custom header name
+requestId('X-Trace-ID')
+```
+
+#### securityHeaders - Security Headers
+
+```typescript
+import { securityHeaders } from '@esengine/server'
+
+// Add common security response headers
+securityHeaders()
+
+// Custom configuration
+securityHeaders({
+    hidePoweredBy: true,
+    frameOptions: 'DENY',
+    noSniff: true
+})
+```
+
+### Custom Middleware
+
+```typescript
+import type { HttpMiddleware } from '@esengine/server'
+
+// Authentication middleware
+const authMiddleware: HttpMiddleware = async (req, res, next) => {
+    const token = req.headers.authorization?.replace('Bearer ', '')
+
+    if (!token) {
+        res.error(401, 'Unauthorized')
+        return  // Don't call next(), terminate request
+    }
+
+    // Validate token...
+    (req as any).userId = 'decoded-user-id'
+
+    await next()  // Continue to next middleware and handler
+}
+```
+
+### Using Middleware
+
+#### With createHttpRouter
+
+```typescript
+import { createHttpRouter, requestLogger, bodyLimit } from '@esengine/server'
+
+const router = createHttpRouter({
+    '/api/users': (req, res) => res.json([]),
+    '/api/admin': {
+        GET: {
+            handler: (req, res) => res.json({ admin: true }),
+            middlewares: [adminAuthMiddleware]  // Route-level middleware
+        }
+    }
+}, {
+    middlewares: [requestLogger(), bodyLimit(1024 * 1024)],  // Global middleware
+    timeout: 30000  // Global timeout 30 seconds
+})
+```
+
+## Request Timeout
+
+### Global Timeout
+
+```typescript
+import { createHttpRouter } from '@esengine/server'
+
+const router = createHttpRouter({
+    '/api/data': async (req, res) => {
+        // If processing exceeds 30 seconds, auto-return 408 Request Timeout
+        await someSlowOperation()
+        res.json({ data: 'result' })
+    }
+}, {
+    timeout: 30000  // 30 seconds
+})
+```
+
+### Route-level Timeout
+
+```typescript
+const router = createHttpRouter({
+    '/api/quick': (req, res) => res.json({ fast: true }),
+
+    '/api/slow': {
+        POST: {
+            handler: async (req, res) => {
+                await verySlowOperation()
+                res.json({ done: true })
+            },
+            timeout: 120000  // This route allows 2 minutes
+        }
+    }
+}, {
+    timeout: 10000  // Global 10 seconds (overridden by route-level)
+})
+```
+
 ## Best Practices
 
 1. **Use defineHttp** - Get better type hints and code organization
@@ -488,3 +675,5 @@ export default defineHttp({
 4. **Directory Organization** - Organize HTTP route files by functional modules
 5. **Validate Input** - Always validate `req.body` and `req.query` content
 6. **Status Code Standards** - Follow HTTP status code conventions (200, 201, 400, 401, 404, 500, etc.)
+7. **Use Middleware** - Implement cross-cutting concerns like auth, logging, rate limiting via middleware
+8. **Set Timeouts** - Prevent slow requests from blocking the server
