@@ -261,69 +261,68 @@ function createResponse(res: ServerResponse): HttpResponse {
 // ============================================================================
 
 /**
- * @zh 应用 CORS 头
- * @en Apply CORS headers
+ * @zh 解析允许的 origin
+ * @en Resolve allowed origin
  *
- * @zh 安全注意：当启用 credentials 时，必须使用白名单，不能使用通配符
- * @en Security note: When credentials enabled, must use whitelist, wildcard not allowed
+ * @zh 安全规则：credentials 只能与固定 origin 或白名单一起使用
+ * @en Security rule: credentials can only be used with fixed origin or whitelist
  */
-function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions): void {
-    const origin = req.headers.origin as string | undefined;
-
-    // 确定允许的 origin | Determine allowed origin
-    let allowedOrigin: string | null = null;
-
-    if (cors.origin === '*') {
-        // 通配符：允许所有，但不能与 credentials 一起使用
-        // Wildcard: allow all, but cannot be used with credentials
-        if (cors.credentials) {
-            // 安全：credentials + 通配符是不安全的，拒绝设置
-            // Security: credentials + wildcard is insecure, refuse to set
-            allowedOrigin = null;
-        } else {
-            allowedOrigin = '*';
-        }
-    } else if (cors.origin === true) {
-        // 反射模式：仅在无 credentials 时允许
-        // Reflect mode: only allow without credentials
-        if (cors.credentials) {
-            // 安全：credentials + 反射是不安全的，拒绝设置
-            // Security: credentials + reflect is insecure, refuse to set
-            allowedOrigin = null;
-        } else {
-            allowedOrigin = origin ?? '*';
-        }
-    } else if (typeof cors.origin === 'string') {
-        // 固定 origin：总是安全的
-        // Fixed origin: always safe
-        allowedOrigin = cors.origin;
-    } else if (Array.isArray(cors.origin) && origin) {
-        // 白名单模式：检查请求 origin 是否在白名单中
-        // Whitelist mode: check if request origin is in whitelist
-        if (cors.origin.includes(origin)) {
-            allowedOrigin = origin;
-        }
+function resolveAllowedOrigin(
+    corsOrigin: CorsOptions['origin'],
+    requestOrigin: string | undefined,
+    credentials: boolean
+): string | null {
+    // 固定字符串 origin：总是安全
+    if (typeof corsOrigin === 'string' && corsOrigin !== '*') {
+        return corsOrigin;
     }
 
-    // 设置 Access-Control-Allow-Origin
+    // 白名单模式：验证请求 origin
+    if (Array.isArray(corsOrigin)) {
+        return requestOrigin && corsOrigin.includes(requestOrigin) ? requestOrigin : null;
+    }
+
+    // 以下模式与 credentials 不兼容
+    if (credentials) {
+        return null;
+    }
+
+    // 通配符模式（无 credentials）
+    if (corsOrigin === '*') {
+        return '*';
+    }
+
+    // 反射模式（无 credentials）
+    if (corsOrigin === true) {
+        return requestOrigin ?? '*';
+    }
+
+    return null;
+}
+
+/**
+ * @zh 应用 CORS 头
+ * @en Apply CORS headers
+ */
+function applyCors(res: ServerResponse, req: IncomingMessage, cors: CorsOptions): void {
+    const requestOrigin = req.headers.origin as string | undefined;
+    const allowedOrigin = resolveAllowedOrigin(cors.origin, requestOrigin, cors.credentials ?? false);
+
     if (allowedOrigin) {
         res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     }
 
-    if (cors.methods) {
-        res.setHeader('Access-Control-Allow-Methods', cors.methods.join(', '));
-    } else {
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    }
+    res.setHeader(
+        'Access-Control-Allow-Methods',
+        cors.methods?.join(', ') ?? 'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+    );
 
-    if (cors.allowedHeaders) {
-        res.setHeader('Access-Control-Allow-Headers', cors.allowedHeaders.join(', '));
-    } else {
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    }
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        cors.allowedHeaders?.join(', ') ?? 'Content-Type, Authorization'
+    );
 
-    // 只有在设置了 allowedOrigin 且非通配符时才设置 credentials
-    // Only set credentials when allowedOrigin is set and not wildcard
+    // credentials 只在有有效 origin 且非通配符时设置
     if (cors.credentials && allowedOrigin && allowedOrigin !== '*') {
         res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
