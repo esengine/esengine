@@ -27,15 +27,15 @@
  */
 
 // Core
-export { createServer } from './core/server.js'
+export { createServer } from './core/server.js';
 
 // Helpers
-export { defineApi, defineMsg, defineHttp } from './helpers/define.js'
+export { defineApi, defineMsg, defineHttp } from './helpers/define.js';
 
 // Room System
-export { Room, type RoomOptions } from './room/Room.js'
-export { Player, type IPlayer } from './room/Player.js'
-export { onMessage } from './room/decorators.js'
+export { Room, type RoomOptions } from './room/Room.js';
+export { Player, type IPlayer } from './room/Player.js';
+export { onMessage } from './room/decorators.js';
 
 // Types
 export type {
@@ -47,18 +47,18 @@ export type {
     ApiDefinition,
     MsgDefinition,
     HttpDefinition,
-    HttpMethod,
-} from './types/index.js'
+    HttpMethod
+} from './types/index.js';
 
 // HTTP
-export { createHttpRouter } from './http/router.js'
+export { createHttpRouter } from './http/router.js';
 export type {
     HttpRequest,
     HttpResponse,
     HttpHandler,
     HttpRoutes,
-    CorsOptions,
-} from './http/types.js'
+    CorsOptions
+} from './http/types.js';
 
 // Re-export useful types from @esengine/rpc
-export { RpcError, ErrorCode } from '@esengine/rpc'
+export { RpcError, ErrorCode } from '@esengine/rpc';

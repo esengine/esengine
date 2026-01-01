@@ -5,8 +5,11 @@
 
 import type { Room, Player } from '../../room/index.js';
 import type { IAuthContext, AuthRoomConfig } from '../types.js';
+import { createLogger } from '../../logger.js';
 import { getAuthContext } from './withAuth.js';
 import { createGuestContext } from '../context.js';
+
+const logger = createLogger('AuthRoom');
 
 /**
  * @zh 带认证的玩家
@@ -181,7 +184,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
                 : createGuestContext<TUser>();
 
             if (requireAuth && !authContext.isAuthenticated) {
-                console.warn(`[AuthRoom] Rejected unauthenticated player: ${player.id}`);
+                logger.warn(`Rejected unauthenticated player: ${player.id}`);
                 this.kick(player as any, 'Authentication required');
                 return;
             }
@@ -192,7 +195,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
                     : authContext.hasAllRoles(allowedRoles);
 
                 if (!hasRole) {
-                    console.warn(`[AuthRoom] Rejected player ${player.id}: insufficient roles`);
+                    logger.warn(`Rejected player ${player.id}: insufficient roles`);
                     this.kick(player as any, 'Insufficient permissions');
                     return;
                 }
@@ -204,12 +207,12 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
                 try {
                     const allowed = await this.onAuth(authPlayer);
                     if (!allowed) {
-                        console.warn(`[AuthRoom] Rejected player ${player.id}: onAuth returned false`);
+                        logger.warn(`Rejected player ${player.id}: onAuth returned false`);
                         this.kick(player as any, 'Authentication rejected');
                         return;
                     }
                 } catch (error) {
-                    console.error(`[AuthRoom] Error in onAuth for player ${player.id}:`, error);
+                    logger.error(`Error in onAuth for player ${player.id}:`, error);
                     this.kick(player as any, 'Authentication error');
                     return;
                 }
@@ -242,7 +245,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
          * @en Get players by role
          */
         getPlayersByRole(role: string): AuthPlayer<TUser>[] {
-            return this.getAuthPlayers().filter(p => p.auth?.hasRole(role));
+            return this.getAuthPlayers().filter((p) => p.auth?.hasRole(role));
         }
 
         /**
@@ -250,7 +253,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
          * @en Get player by user ID
          */
         getPlayerByUserId(userId: string): AuthPlayer<TUser> | undefined {
-            return this.getAuthPlayers().find(p => p.auth?.userId === userId);
+            return this.getAuthPlayers().find((p) => p.auth?.userId === userId);
         }
     }
 
@@ -281,7 +284,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
  * ```
  */
 export abstract class AuthRoomBase<TUser = unknown, TState = any, TPlayerData = Record<string, unknown>>
-    implements IAuthRoom<TUser> {
+implements IAuthRoom<TUser> {
 
     /**
      * @zh 认证配置（子类可覆盖）

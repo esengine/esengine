@@ -41,7 +41,7 @@ export type {
     Component,
     EntitySystem,
     Scene,
-    World,
+    World
 } from '@esengine/ecs-framework';
 
 // Re-export sync types
@@ -55,7 +55,7 @@ export {
     SyncOperation,
     type SyncType,
     type SyncFieldMetadata,
-    type SyncMetadata,
+    type SyncMetadata
 } from '@esengine/ecs-framework';
 
 // Re-export room decorators

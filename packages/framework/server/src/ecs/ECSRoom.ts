@@ -24,7 +24,7 @@ import {
     NETWORK_ENTITY_METADATA,
     type NetworkEntityMetadata,
     // Events
-    ECSEventType,
+    ECSEventType
 } from '@esengine/ecs-framework';
 
 import { Room, type RoomOptions } from '../room/Room.js';
@@ -62,7 +62,7 @@ export interface ECSRoomConfig {
 const DEFAULT_ECS_CONFIG: ECSRoomConfig = {
     syncInterval: 50, // 20 Hz
     enableDeltaSync: true,
-    enableAutoNetworkEntity: true,
+    enableAutoNetworkEntity: true
 };
 
 /**
@@ -305,7 +305,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
      */
     protected broadcastDelta(): void {
         const entities = this._getSyncEntities();
-        const changedEntities = entities.filter(entity => this._hasChanges(entity));
+        const changedEntities = entities.filter((entity) => this._hasChanges(entity));
 
         if (changedEntities.length === 0) return;
 

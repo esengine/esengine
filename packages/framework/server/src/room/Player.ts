@@ -3,7 +3,7 @@
  * @en Player class
  */
 
-import type { Connection } from '@esengine/rpc'
+import type { Connection } from '@esengine/rpc';
 
 /**
  * @zh 玩家接口
@@ -22,13 +22,13 @@ export interface IPlayer<TData = Record<string, unknown>> {
  * @en Player implementation
  */
 export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
-    readonly id: string
-    readonly roomId: string
-    data: TData
+    readonly id: string;
+    readonly roomId: string;
+    data: TData;
 
-    private _conn: Connection<any>
-    private _sendFn: (conn: Connection<any>, type: string, data: unknown) => void
-    private _leaveFn: (player: Player<TData>, reason?: string) => void
+    private _conn: Connection<any>;
+    private _sendFn: (conn: Connection<any>, type: string, data: unknown) => void;
+    private _leaveFn: (player: Player<TData>, reason?: string) => void;
 
     constructor(options: {
         id: string
@@ -38,12 +38,12 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
         leaveFn: (player: Player<TData>, reason?: string) => void
         initialData?: TData
     }) {
-        this.id = options.id
-        this.roomId = options.roomId
-        this._conn = options.conn
-        this._sendFn = options.sendFn
-        this._leaveFn = options.leaveFn
-        this.data = options.initialData ?? ({} as TData)
+        this.id = options.id;
+        this.roomId = options.roomId;
+        this._conn = options.conn;
+        this._sendFn = options.sendFn;
+        this._leaveFn = options.leaveFn;
+        this.data = options.initialData ?? ({} as TData);
     }
 
     /**
@@ -51,7 +51,7 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
      * @en Get underlying connection
      */
     get connection(): Connection<any> {
-        return this._conn
+        return this._conn;
     }
 
     /**
@@ -59,7 +59,7 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
      * @en Send message to player
      */
     send<T>(type: string, data: T): void {
-        this._sendFn(this._conn, type, data)
+        this._sendFn(this._conn, type, data);
     }
 
     /**
@@ -67,6 +67,6 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
      * @en Make player leave the room
      */
     leave(reason?: string): void {
-        this._leaveFn(this, reason)
+        this._leaveFn(this, reason);
     }
 }

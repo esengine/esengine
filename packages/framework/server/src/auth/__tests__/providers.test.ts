@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { JwtAuthProvider, createJwtAuthProvider } from '../providers/JwtAuthProvider';
 import { SessionAuthProvider, createSessionAuthProvider, type ISessionStorage } from '../providers/SessionAuthProvider';
 
@@ -125,7 +125,7 @@ describe('JwtAuthProvider', () => {
             const token = provider.sign({ sub: '123', name: 'Alice' });
 
             // Wait a bit so iat changes
-            await new Promise(resolve => setTimeout(resolve, 1100));
+            await new Promise((resolve) => setTimeout(resolve, 1100));
 
             const result = await provider.refresh(token);
 
@@ -239,7 +239,7 @@ describe('SessionAuthProvider', () => {
         it('should validate user on verify', async () => {
             const validatingProvider = createSessionAuthProvider({
                 storage,
-                validateUser: (user) => user.id !== 'banned'
+                validateUser: (user: { id: string; name?: string }) => user.id !== 'banned'
             });
 
             const sessionId = await validatingProvider.createSession({ id: 'banned', name: 'Bad User' });
@@ -252,7 +252,7 @@ describe('SessionAuthProvider', () => {
         it('should pass validation for valid user', async () => {
             const validatingProvider = createSessionAuthProvider({
                 storage,
-                validateUser: (user) => user.id !== 'banned'
+                validateUser: (user: { id: string; name?: string }) => user.id !== 'banned'
             });
 
             const sessionId = await validatingProvider.createSession({ id: '123', name: 'Good User' });
@@ -269,7 +269,7 @@ describe('SessionAuthProvider', () => {
             const session1 = await provider.getSession(sessionId);
             const lastActive1 = session1?.lastActiveAt;
 
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise((resolve) => setTimeout(resolve, 10));
 
             const result = await provider.refresh(sessionId);
             expect(result.success).toBe(true);

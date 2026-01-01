@@ -3,7 +3,7 @@
  * @en Room base class
  */
 
-import { Player } from './Player.js'
+import { Player } from './Player.js';
 
 /**
  * @zh 房间配置
@@ -26,7 +26,7 @@ interface MessageHandlerMeta {
  * @zh 消息处理器存储 key
  * @en Message handler storage key
  */
-const MESSAGE_HANDLERS = Symbol('messageHandlers')
+const MESSAGE_HANDLERS = Symbol('messageHandlers');
 
 /**
  * @zh 房间基类
@@ -58,19 +58,19 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @zh 最大玩家数
      * @en Maximum players
      */
-    maxPlayers = 16
+    maxPlayers = 16;
 
     /**
      * @zh Tick 速率（每秒），0 = 不自动 tick
      * @en Tick rate (per second), 0 = no auto tick
      */
-    tickRate = 0
+    tickRate = 0;
 
     /**
      * @zh 空房间自动销毁
      * @en Auto dispose when empty
      */
-    autoDispose = true
+    autoDispose = true;
 
     // ========================================================================
     // 状态 | State
@@ -80,21 +80,21 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @zh 房间状态
      * @en Room state
      */
-    state: TState = {} as TState
+    state: TState = {} as TState;
 
     // ========================================================================
     // 内部属性 | Internal properties
     // ========================================================================
 
-    private _id: string = ''
-    private _players: Map<string, Player<TPlayerData>> = new Map()
-    private _locked = false
-    private _disposed = false
-    private _tickInterval: ReturnType<typeof setInterval> | null = null
-    private _lastTickTime = 0
-    private _broadcastFn: ((type: string, data: unknown) => void) | null = null
-    private _sendFn: ((conn: any, type: string, data: unknown) => void) | null = null
-    private _disposeFn: (() => void) | null = null
+    private _id: string = '';
+    private _players: Map<string, Player<TPlayerData>> = new Map();
+    private _locked = false;
+    private _disposed = false;
+    private _tickInterval: ReturnType<typeof setInterval> | null = null;
+    private _lastTickTime = 0;
+    private _broadcastFn: ((type: string, data: unknown) => void) | null = null;
+    private _sendFn: ((conn: any, type: string, data: unknown) => void) | null = null;
+    private _disposeFn: (() => void) | null = null;
 
     // ========================================================================
     // 只读属性 | Readonly properties
@@ -105,7 +105,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Room ID
      */
     get id(): string {
-        return this._id
+        return this._id;
     }
 
     /**
@@ -113,7 +113,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en All players
      */
     get players(): ReadonlyArray<Player<TPlayerData>> {
-        return Array.from(this._players.values())
+        return Array.from(this._players.values());
     }
 
     /**
@@ -121,7 +121,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Player count
      */
     get playerCount(): number {
-        return this._players.size
+        return this._players.size;
     }
 
     /**
@@ -129,7 +129,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Is full
      */
     get isFull(): boolean {
-        return this._players.size >= this.maxPlayers
+        return this._players.size >= this.maxPlayers;
     }
 
     /**
@@ -137,7 +137,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Is locked
      */
     get isLocked(): boolean {
-        return this._locked
+        return this._locked;
     }
 
     /**
@@ -145,7 +145,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Is disposed
      */
     get isDisposed(): boolean {
-        return this._disposed
+        return this._disposed;
     }
 
     // ========================================================================
@@ -192,7 +192,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      */
     broadcast<T>(type: string, data: T): void {
         for (const player of this._players.values()) {
-            player.send(type, data)
+            player.send(type, data);
         }
     }
 
@@ -203,7 +203,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
     broadcastExcept<T>(except: Player<TPlayerData>, type: string, data: T): void {
         for (const player of this._players.values()) {
             if (player.id !== except.id) {
-                player.send(type, data)
+                player.send(type, data);
             }
         }
     }
@@ -213,7 +213,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Get player by id
      */
     getPlayer(id: string): Player<TPlayerData> | undefined {
-        return this._players.get(id)
+        return this._players.get(id);
     }
 
     /**
@@ -221,7 +221,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Kick player
      */
     kick(player: Player<TPlayerData>, reason?: string): void {
-        player.leave(reason ?? 'kicked')
+        player.leave(reason ?? 'kicked');
     }
 
     /**
@@ -229,7 +229,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Lock room
      */
     lock(): void {
-        this._locked = true
+        this._locked = true;
     }
 
     /**
@@ -237,7 +237,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Unlock room
      */
     unlock(): void {
-        this._locked = false
+        this._locked = false;
     }
 
     /**
@@ -245,18 +245,18 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Manually dispose room
      */
     dispose(): void {
-        if (this._disposed) return
-        this._disposed = true
+        if (this._disposed) return;
+        this._disposed = true;
 
-        this._stopTick()
+        this._stopTick();
 
         for (const player of this._players.values()) {
-            player.leave('room_disposed')
+            player.leave('room_disposed');
         }
-        this._players.clear()
+        this._players.clear();
 
-        this.onDispose()
-        this._disposeFn?.()
+        this.onDispose();
+        this._disposeFn?.();
     }
 
     // ========================================================================
@@ -272,18 +272,18 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
         broadcastFn: (type: string, data: unknown) => void
         disposeFn: () => void
     }): void {
-        this._id = options.id
-        this._sendFn = options.sendFn
-        this._broadcastFn = options.broadcastFn
-        this._disposeFn = options.disposeFn
+        this._id = options.id;
+        this._sendFn = options.sendFn;
+        this._broadcastFn = options.broadcastFn;
+        this._disposeFn = options.disposeFn;
     }
 
     /**
      * @internal
      */
     async _create(options?: RoomOptions): Promise<void> {
-        await this.onCreate(options)
-        this._startTick()
+        await this.onCreate(options);
+        this._startTick();
     }
 
     /**
@@ -291,7 +291,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      */
     async _addPlayer(id: string, conn: any): Promise<Player<TPlayerData> | null> {
         if (this._locked || this.isFull || this._disposed) {
-            return null
+            return null;
         }
 
         const player = new Player<TPlayerData>({
@@ -299,27 +299,27 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
             roomId: this._id,
             conn,
             sendFn: this._sendFn!,
-            leaveFn: (p, reason) => this._removePlayer(p.id, reason),
-        })
+            leaveFn: (p, reason) => this._removePlayer(p.id, reason)
+        });
 
-        this._players.set(id, player)
-        await this.onJoin(player)
+        this._players.set(id, player);
+        await this.onJoin(player);
 
-        return player
+        return player;
     }
 
     /**
      * @internal
      */
     async _removePlayer(id: string, reason?: string): Promise<void> {
-        const player = this._players.get(id)
-        if (!player) return
+        const player = this._players.get(id);
+        if (!player) return;
 
-        this._players.delete(id)
-        await this.onLeave(player, reason)
+        this._players.delete(id);
+        await this.onLeave(player, reason);
 
         if (this.autoDispose && this._players.size === 0) {
-            this.dispose()
+            this.dispose();
         }
     }
 
@@ -327,16 +327,16 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @internal
      */
     _handleMessage(type: string, data: unknown, playerId: string): void {
-        const player = this._players.get(playerId)
-        if (!player) return
+        const player = this._players.get(playerId);
+        if (!player) return;
 
-        const handlers = (this.constructor as any)[MESSAGE_HANDLERS] as MessageHandlerMeta[] | undefined
+        const handlers = (this.constructor as any)[MESSAGE_HANDLERS] as MessageHandlerMeta[] | undefined;
         if (handlers) {
             for (const handler of handlers) {
                 if (handler.type === type) {
-                    const method = (this as any)[handler.method]
+                    const method = (this as any)[handler.method];
                     if (typeof method === 'function') {
-                        method.call(this, data, player)
+                        method.call(this, data, player);
                     }
                 }
             }
@@ -344,21 +344,21 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
     }
 
     private _startTick(): void {
-        if (this.tickRate <= 0) return
+        if (this.tickRate <= 0) return;
 
-        this._lastTickTime = performance.now()
+        this._lastTickTime = performance.now();
         this._tickInterval = setInterval(() => {
-            const now = performance.now()
-            const dt = (now - this._lastTickTime) / 1000
-            this._lastTickTime = now
-            this.onTick(dt)
-        }, 1000 / this.tickRate)
+            const now = performance.now();
+            const dt = (now - this._lastTickTime) / 1000;
+            this._lastTickTime = now;
+            this.onTick(dt);
+        }, 1000 / this.tickRate);
     }
 
     private _stopTick(): void {
         if (this._tickInterval) {
-            clearInterval(this._tickInterval)
-            this._tickInterval = null
+            clearInterval(this._tickInterval);
+            this._tickInterval = null;
         }
     }
 }
@@ -368,7 +368,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
  * @en Get message handler metadata
  */
 export function getMessageHandlers(target: any): MessageHandlerMeta[] {
-    return target[MESSAGE_HANDLERS] || []
+    return target[MESSAGE_HANDLERS] || [];
 }
 
 /**
@@ -377,7 +377,7 @@ export function getMessageHandlers(target: any): MessageHandlerMeta[] {
  */
 export function registerMessageHandler(target: any, type: string, method: string): void {
     if (!target[MESSAGE_HANDLERS]) {
-        target[MESSAGE_HANDLERS] = []
+        target[MESSAGE_HANDLERS] = [];
     }
-    target[MESSAGE_HANDLERS].push({ type, method })
+    target[MESSAGE_HANDLERS].push({ type, method });
 }

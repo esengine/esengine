@@ -3,7 +3,7 @@
  * @en API, message, and HTTP definition helpers
  */
 
-import type { ApiDefinition, MsgDefinition, HttpDefinition } from '../types/index.js'
+import type { ApiDefinition, MsgDefinition, HttpDefinition } from '../types/index.js';
 
 /**
  * @zh 定义 API 处理器
@@ -25,7 +25,7 @@ import type { ApiDefinition, MsgDefinition, HttpDefinition } from '../types/inde
 export function defineApi<TReq, TRes, TData = Record<string, unknown>>(
     definition: ApiDefinition<TReq, TRes, TData>
 ): ApiDefinition<TReq, TRes, TData> {
-    return definition
+    return definition;
 }
 
 /**
@@ -47,7 +47,7 @@ export function defineApi<TReq, TRes, TData = Record<string, unknown>>(
 export function defineMsg<TMsg, TData = Record<string, unknown>>(
     definition: MsgDefinition<TMsg, TData>
 ): MsgDefinition<TMsg, TData> {
-    return definition
+    return definition;
 }
 
 /**
@@ -77,5 +77,5 @@ export function defineMsg<TMsg, TData = Record<string, unknown>>(
 export function defineHttp<TBody = unknown>(
     definition: HttpDefinition<TBody>
 ): HttpDefinition<TBody> {
-    return definition
+    return definition;
 }

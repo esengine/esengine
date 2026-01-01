@@ -4,6 +4,7 @@
  */
 
 import type { ServerConnection, GameServer } from '../../types/index.js';
+import { createLogger } from '../../logger.js';
 import type {
     IAuthProvider,
     AuthResult,
@@ -13,6 +14,8 @@ import type {
     ConnectionRequest
 } from '../types.js';
 import { AuthContext } from '../context.js';
+
+const logger = createLogger('Auth');
 
 /**
  * @zh 认证数据键
@@ -155,7 +158,7 @@ export function withAuth<TUser = unknown>(
                     }
                 }
             } catch (error) {
-                console.error('[Auth] Error during auto-authentication:', error);
+                logger.error('Error during auto-authentication:', error);
             }
         }
 

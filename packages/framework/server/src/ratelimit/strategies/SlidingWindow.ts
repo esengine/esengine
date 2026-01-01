@@ -168,7 +168,7 @@ export class SlidingWindowStrategy implements IRateLimitStrategy {
      */
     private _cleanExpiredTimestamps(window: WindowState, now: number): void {
         const cutoff = now - this._windowMs;
-        window.timestamps = window.timestamps.filter(ts => ts > cutoff);
+        window.timestamps = window.timestamps.filter((ts) => ts > cutoff);
     }
 
     /**

@@ -77,7 +77,7 @@ export interface MockAuthConfig {
  * ```
  */
 export class MockAuthProvider<TUser extends MockUser = MockUser>
-    implements IAuthProvider<TUser, string> {
+implements IAuthProvider<TUser, string> {
 
     readonly name = 'mock';
 
@@ -102,7 +102,7 @@ export class MockAuthProvider<TUser extends MockUser = MockUser>
      */
     private async _delay(): Promise<void> {
         if (this._config.delay && this._config.delay > 0) {
-            await new Promise(resolve => setTimeout(resolve, this._config.delay));
+            await new Promise((resolve) => setTimeout(resolve, this._config.delay));
         }
     }
 
