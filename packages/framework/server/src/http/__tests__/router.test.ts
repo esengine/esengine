@@ -464,7 +464,9 @@ describe('HTTP Router', () => {
             expect(res._headers['access-control-allow-origin']).toBe('*');
         });
 
-        it('should reflect origin when using origin: true without credentials', async () => {
+        it('should use wildcard when origin: true without credentials (for security)', async () => {
+            // 为了安全（避免 CodeQL 警告），origin: true 现在等同于 origin: '*'
+            // For security (avoiding CodeQL warnings), origin: true now equals origin: '*'
             const router = createHttpRouter(
                 { '/api/data': (req, res) => res.json({}) },
                 { cors: { origin: true } }
@@ -480,7 +482,7 @@ describe('HTTP Router', () => {
             await router(req, res);
 
             expect(res._statusCode).toBe(204);
-            expect(res._headers['access-control-allow-origin']).toBe('http://example.com');
+            expect(res._headers['access-control-allow-origin']).toBe('*');
         });
 
         it('should set CORS headers on regular requests', async () => {
