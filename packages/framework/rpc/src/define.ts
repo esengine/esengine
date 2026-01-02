@@ -3,7 +3,7 @@
  * @en Protocol Definition Module
  */
 
-import type { ApiDef, MsgDef, ProtocolDef } from './types'
+import type { ApiDef, MsgDef, ProtocolDef } from './types';
 
 /**
  * @zh 创建 API 定义
@@ -15,7 +15,7 @@ import type { ApiDef, MsgDef, ProtocolDef } from './types'
  * ```
  */
 function api<TInput = void, TOutput = void>(): ApiDef<TInput, TOutput> {
-    return { _type: 'api' } as ApiDef<TInput, TOutput>
+    return { _type: 'api' } as ApiDef<TInput, TOutput>;
 }
 
 /**
@@ -28,7 +28,7 @@ function api<TInput = void, TOutput = void>(): ApiDef<TInput, TOutput> {
  * ```
  */
 function msg<TData = void>(): MsgDef<TData> {
-    return { _type: 'msg' } as MsgDef<TData>
+    return { _type: 'msg' } as MsgDef<TData>;
 }
 
 /**
@@ -49,7 +49,7 @@ function msg<TData = void>(): MsgDef<TData> {
  * ```
  */
 function define<T extends ProtocolDef>(protocol: T): T {
-    return protocol
+    return protocol;
 }
 
 /**
@@ -59,5 +59,5 @@ function define<T extends ProtocolDef>(protocol: T): T {
 export const rpc = {
     define,
     api,
-    msg,
-} as const
+    msg
+} as const;

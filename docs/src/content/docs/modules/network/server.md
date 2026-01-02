@@ -280,6 +280,122 @@ class GameRoom extends Room {
 }
 ```
 
+## Schema 验证
+
+使用内置的 Schema 验证系统进行运行时类型验证：
+
+### 基础用法
+
+```typescript
+import { s, defineApiWithSchema } from '@esengine/server'
+
+// 定义 Schema
+const MoveSchema = s.object({
+    x: s.number(),
+    y: s.number(),
+    speed: s.number().optional()
+})
+
+// 类型自动推断
+type Move = s.infer<typeof MoveSchema>  // { x: number; y: number; speed?: number }
+
+// 使用 Schema 定义 API（自动验证）
+export default defineApiWithSchema(MoveSchema, {
+    handler(req, ctx) {
+        // req 已验证，类型安全
+        console.log(req.x, req.y)
+    }
+})
+```
+
+### 验证器类型
+
+| 类型 | 示例 | 描述 |
+|------|------|------|
+| `s.string()` | `s.string().min(1).max(50)` | 字符串，支持长度限制 |
+| `s.number()` | `s.number().min(0).int()` | 数字，支持范围和整数限制 |
+| `s.boolean()` | `s.boolean()` | 布尔值 |
+| `s.literal()` | `s.literal('admin')` | 字面量类型 |
+| `s.object()` | `s.object({ name: s.string() })` | 对象 |
+| `s.array()` | `s.array(s.number())` | 数组 |
+| `s.enum()` | `s.enum(['a', 'b'] as const)` | 枚举 |
+| `s.union()` | `s.union([s.string(), s.number()])` | 联合类型 |
+| `s.record()` | `s.record(s.any())` | 记录类型 |
+
+### 修饰符
+
+```typescript
+// 可选字段
+s.string().optional()
+
+// 默认值
+s.number().default(0)
+
+// 可为 null
+s.string().nullable()
+
+// 字符串验证
+s.string().min(1).max(100).email().url().regex(/^[a-z]+$/)
+
+// 数字验证
+s.number().min(0).max(100).int().positive()
+
+// 数组验证
+s.array(s.string()).min(1).max(10).nonempty()
+
+// 对象验证
+s.object({ ... }).strict()  // 不允许额外字段
+s.object({ ... }).partial() // 所有字段可选
+s.object({ ... }).pick('name', 'age')  // 选择字段
+s.object({ ... }).omit('password')     // 排除字段
+```
+
+### 消息验证
+
+```typescript
+import { s, defineMsgWithSchema } from '@esengine/server'
+
+const InputSchema = s.object({
+    keys: s.array(s.string()),
+    timestamp: s.number()
+})
+
+export default defineMsgWithSchema(InputSchema, {
+    handler(msg, ctx) {
+        // msg 已验证
+        console.log(msg.keys, msg.timestamp)
+    }
+})
+```
+
+### 手动验证
+
+```typescript
+import { s, parse, safeParse, createGuard } from '@esengine/server'
+
+const UserSchema = s.object({
+    name: s.string(),
+    age: s.number().int().min(0)
+})
+
+// 抛出错误
+const user = parse(UserSchema, data)
+
+// 返回结果对象
+const result = safeParse(UserSchema, data)
+if (result.success) {
+    console.log(result.data)
+} else {
+    console.error(result.error)
+}
+
+// 类型守卫
+const isUser = createGuard(UserSchema)
+if (isUser(data)) {
+    // data 是 User 类型
+}
+```
+
 ## 协议定义
 
 在 `src/shared/protocol.ts` 中定义客户端和服务端共享的类型：

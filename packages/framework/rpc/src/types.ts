@@ -29,8 +29,8 @@ export interface MsgDef<TData = unknown> {
  * @en Protocol definition
  */
 export interface ProtocolDef {
-    readonly api: Record<string, ApiDef<any, any>>
-    readonly msg: Record<string, MsgDef<any>>
+    readonly api: Record<string, ApiDef<unknown, unknown>>
+    readonly msg: Record<string, MsgDef<unknown>>
 }
 
 // ============ Type Inference ============
@@ -39,13 +39,13 @@ export interface ProtocolDef {
  * @zh 提取 API 输入类型
  * @en Extract API input type
  */
-export type ApiInput<T> = T extends ApiDef<infer I, any> ? I : never
+export type ApiInput<T> = T extends ApiDef<infer I, unknown> ? I : never
 
 /**
  * @zh 提取 API 输出类型
  * @en Extract API output type
  */
-export type ApiOutput<T> = T extends ApiDef<any, infer O> ? O : never
+export type ApiOutput<T> = T extends ApiDef<unknown, infer O> ? O : never
 
 /**
  * @zh 提取消息数据类型
@@ -120,8 +120,9 @@ export const PacketType = {
     ApiResponse: 1,
     ApiError: 2,
     Message: 3,
-    Heartbeat: 9,
-} as const
+    Binary: 4,
+    Heartbeat: 9
+} as const;
 
 export type PacketType = typeof PacketType[keyof typeof PacketType]
 
@@ -174,6 +175,19 @@ export type MessagePacket = [
 export type HeartbeatPacket = [type: typeof PacketType.Heartbeat]
 
 /**
+ * @zh 二进制数据包
+ * @en Binary data packet
+ *
+ * @zh 用于传输原始二进制数据，如 ECS 状态同步
+ * @en Used for raw binary data transmission, such as ECS state sync
+ */
+export type BinaryPacket = [
+    type: typeof PacketType.Binary,
+    channel: number,
+    data: Uint8Array
+]
+
+/**
  * @zh 所有数据包类型
  * @en All packet types
  */
@@ -182,6 +196,7 @@ export type Packet =
     | ApiResponsePacket
     | ApiErrorPacket
     | MessagePacket
+    | BinaryPacket
     | HeartbeatPacket
 
 // ============ Error Types ============
@@ -196,8 +211,8 @@ export class RpcError extends Error {
         message: string,
         public readonly details?: unknown
     ) {
-        super(message)
-        this.name = 'RpcError'
+        super(message);
+        this.name = 'RpcError';
     }
 }
 
@@ -211,7 +226,7 @@ export const ErrorCode = {
     UNAUTHORIZED: 'UNAUTHORIZED',
     INTERNAL_ERROR: 'INTERNAL_ERROR',
     TIMEOUT: 'TIMEOUT',
-    CONNECTION_CLOSED: 'CONNECTION_CLOSED',
-} as const
+    CONNECTION_CLOSED: 'CONNECTION_CLOSED'
+} as const;
 
 export type ErrorCode = typeof ErrorCode[keyof typeof ErrorCode]

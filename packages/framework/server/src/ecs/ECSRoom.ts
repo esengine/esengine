@@ -143,6 +143,15 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
 
     constructor(ecsConfig?: Partial<ECSRoomConfig>) {
         super();
+
+        // Check Core initialization
+        if (!Core.worldManager) {
+            throw new Error(
+                'ECSRoom requires Core.create() to be called first. ' +
+                'Ensure Core is initialized before creating ECSRoom instances.'
+            );
+        }
+
         this.ecsConfig = { ...DEFAULT_ECS_CONFIG, ...ecsConfig };
 
         this.worldId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -268,9 +277,12 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
     /**
      * @zh 发送二进制数据给指定玩家
      * @en Send binary data to specific player
+     *
+     * @zh 使用原生 WebSocket 二进制帧发送，效率更高
+     * @en Uses native WebSocket binary frames, more efficient
      */
     protected sendBinary(player: Player<TPlayerData>, data: Uint8Array): void {
-        player.send('$sync', { data: Array.from(data) });
+        player.sendBinary(data);
     }
 
     /**

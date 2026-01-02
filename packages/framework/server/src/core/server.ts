@@ -19,15 +19,18 @@ import type {
     LoadedHttpHandler
 } from '../types/index.js';
 import type { HttpRoutes, HttpHandler } from '../http/types.js';
+import type { Validator } from '../schema/index.js';
 import { loadApiHandlers, loadMsgHandlers, loadHttpHandlers } from '../router/loader.js';
 import { RoomManager, type RoomClass, type Room } from '../room/index.js';
 import { createHttpRouter } from '../http/router.js';
+import { DistributedRoomManager } from '../distributed/DistributedRoomManager.js';
+import { MemoryAdapter } from '../distributed/adapters/MemoryAdapter.js';
 
 /**
  * @zh 默认配置
  * @en Default configuration
  */
-const DEFAULT_CONFIG: Required<Omit<ServerConfig, 'onStart' | 'onConnect' | 'onDisconnect' | 'http' | 'cors' | 'httpDir' | 'httpPrefix'>> & { httpDir: string; httpPrefix: string } = {
+const DEFAULT_CONFIG: Required<Omit<ServerConfig, 'onStart' | 'onConnect' | 'onDisconnect' | 'http' | 'cors' | 'httpDir' | 'httpPrefix' | 'distributed'>> & { httpDir: string; httpPrefix: string } = {
     port: 3000,
     apiDir: 'src/api',
     msgDir: 'src/msg',
@@ -112,6 +115,10 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
     const hasHttpRoutes = Object.keys(mergedHttpRoutes).length > 0;
 
+    // 分布式模式配置
+    const distributedConfig = config.distributed;
+    const isDistributed = distributedConfig?.enabled ?? false;
+
     // 动态构建协议
     const apiDefs: Record<string, ReturnType<typeof rpc.api>> = {
         // 内置 API
@@ -120,7 +127,9 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
     };
     const msgDefs: Record<string, ReturnType<typeof rpc.msg>> = {
         // 内置消息（房间消息透传）
-        RoomMessage: rpc.msg()
+        RoomMessage: rpc.msg(),
+        // 分布式重定向消息
+        $redirect: rpc.msg()
     };
 
     for (const handler of apiHandlers) {
@@ -141,10 +150,45 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
     let rpcServer: RpcServer<typeof protocol, Record<string, unknown>> | null = null;
     let httpServer: HttpServer | null = null;
 
-    // 房间管理器（立即初始化，以便 define() 可在 start() 前调用）
-    const roomManager = new RoomManager((conn, type, data) => {
+    // 发送函数（延迟绑定，因为 rpcServer 在 start() 后才创建）
+    const sendFn = (conn: any, type: string, data: unknown) => {
         rpcServer?.send(conn, 'RoomMessage' as any, { type, data } as any);
-    });
+    };
+
+    // 二进制发送函数（使用原生 WebSocket 二进制帧，效率更高）
+    const sendBinaryFn = (conn: any, data: Uint8Array) => {
+        if (conn && typeof conn.sendBinary === 'function') {
+            conn.sendBinary(data);
+        }
+    };
+
+    // 房间管理器（立即初始化，以便 define() 可在 start() 前调用）
+    let roomManager: RoomManager | DistributedRoomManager;
+    let distributedManager: DistributedRoomManager | null = null;
+
+    if (isDistributed && distributedConfig) {
+        // 分布式模式
+        const adapter = distributedConfig.adapter ?? new MemoryAdapter();
+        distributedManager = new DistributedRoomManager(
+            adapter,
+            {
+                serverId: distributedConfig.serverId,
+                serverAddress: distributedConfig.serverAddress,
+                serverPort: distributedConfig.serverPort ?? opts.port,
+                heartbeatInterval: distributedConfig.heartbeatInterval,
+                snapshotInterval: distributedConfig.snapshotInterval,
+                enableFailover: distributedConfig.enableFailover,
+                capacity: distributedConfig.capacity
+            },
+            sendFn,
+            sendBinaryFn
+        );
+        roomManager = distributedManager;
+        logger.info(`Distributed mode enabled (serverId: ${distributedConfig.serverId})`);
+    } else {
+        // 单机模式
+        roomManager = new RoomManager(sendFn, sendBinaryFn);
+    }
 
     // 构建 API 处理器映射
     const apiMap: Record<string, LoadedApiHandler> = {};
@@ -203,6 +247,29 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 }
 
                 if (roomType) {
+                    // 分布式模式：使用 joinOrCreateDistributed
+                    if (distributedManager) {
+                        const result = await distributedManager.joinOrCreateDistributed(
+                            roomType,
+                            conn.id,
+                            conn,
+                            options
+                        );
+                        if (!result) {
+                            throw new Error('Failed to join or create room');
+                        }
+                        if ('redirect' in result) {
+                            // 发送重定向消息给客户端
+                            rpcServer?.send(conn, '$redirect' as any, {
+                                address: result.redirect,
+                                roomType
+                            } as any);
+                            return { redirect: result.redirect };
+                        }
+                        return { roomId: result.room.id, playerId: result.player.id };
+                    }
+
+                    // 单机模式
                     const result = await roomManager.joinOrCreate(roomType, conn.id, conn, options);
                     if (!result) {
                         throw new Error('Failed to join or create room');
@@ -226,6 +293,19 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         conn: conn as ServerConnection,
                         server: gameServer
                     };
+
+                    const definition = handler.definition as { schema?: Validator<unknown> };
+                    if (definition.schema) {
+                        const result = definition.schema.validate(input);
+                        if (!result.success) {
+                            const pathStr = result.error.path.length > 0
+                                ? ` at "${result.error.path.join('.')}"`
+                                : '';
+                            throw new Error(`Validation failed${pathStr}: ${result.error.message}`);
+                        }
+                        return handler.definition.handler(result.data, ctx);
+                    }
+
                     return handler.definition.handler(input, ctx);
                 };
             }
@@ -246,6 +326,21 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         conn: conn as ServerConnection,
                         server: gameServer
                     };
+
+                    const definition = handler.definition as { schema?: Validator<unknown> };
+                    if (definition.schema) {
+                        const result = definition.schema.validate(data);
+                        if (!result.success) {
+                            const pathStr = result.error.path.length > 0
+                                ? ` at "${result.error.path.join('.')}"`
+                                : '';
+                            logger.warn(`Message validation failed for ${name}${pathStr}: ${result.error.message}`);
+                            return;
+                        }
+                        await handler.definition.handler(result.data, ctx);
+                        return;
+                    }
+
                     await handler.definition.handler(data, ctx);
                 };
             }
@@ -315,6 +410,11 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 await rpcServer.start();
             }
 
+            // 启动分布式管理器
+            if (distributedManager) {
+                await distributedManager.start();
+            }
+
             // 启动 tick 循环
             if (opts.tickRate > 0) {
                 tickInterval = setInterval(() => {
@@ -328,6 +428,12 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 clearInterval(tickInterval);
                 tickInterval = null;
             }
+
+            // 停止分布式管理器（优雅关闭）
+            if (distributedManager) {
+                await distributedManager.stop(true);
+            }
+
             if (rpcServer) {
                 await rpcServer.stop();
                 rpcServer = null;

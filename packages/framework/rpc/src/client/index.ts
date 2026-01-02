@@ -11,11 +11,11 @@ import type {
     ApiOutput,
     MsgData,
     Packet,
-    ConnectionStatus,
-} from '../types'
-import { RpcError, ErrorCode } from '../types'
-import { json } from '../codec/json'
-import type { Codec } from '../codec/types'
+    ConnectionStatus
+} from '../types';
+import { RpcError, ErrorCode } from '../types';
+import { json } from '../codec/json';
+import type { Codec } from '../codec/types';
 
 // ============================================================================
 // Re-exports | 类型重导出
@@ -29,9 +29,9 @@ export type {
     ApiOutput,
     MsgData,
     ConnectionStatus,
-    Codec,
-}
-export { RpcError, ErrorCode }
+    Codec
+};
+export { RpcError, ErrorCode };
 
 // ============================================================================
 // Types | 类型定义
@@ -133,11 +133,11 @@ const PacketType = {
     ApiResponse: 1,
     ApiError: 2,
     Message: 3,
-    Heartbeat: 9,
-} as const
+    Heartbeat: 9
+} as const;
 
 const defaultWebSocketFactory: WebSocketFactory = (url) =>
-    new WebSocket(url) as unknown as WebSocketAdapter
+    new WebSocket(url) as unknown as WebSocketAdapter;
 
 // ============================================================================
 // RpcClient Class | RPC 客户端类
@@ -164,34 +164,34 @@ interface PendingCall {
  * ```
  */
 export class RpcClient<P extends ProtocolDef> {
-    private readonly _url: string
-    private readonly _codec: Codec
-    private readonly _timeout: number
-    private readonly _reconnectInterval: number
-    private readonly _wsFactory: WebSocketFactory
-    private readonly _options: RpcClientOptions
+    private readonly _url: string;
+    private readonly _codec: Codec;
+    private readonly _timeout: number;
+    private readonly _reconnectInterval: number;
+    private readonly _wsFactory: WebSocketFactory;
+    private readonly _options: RpcClientOptions;
 
-    private _ws: WebSocketAdapter | null = null
-    private _status: ConnectionStatus = 'closed'
-    private _callIdCounter = 0
-    private _shouldReconnect: boolean
-    private _reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    private _ws: WebSocketAdapter | null = null;
+    private _status: ConnectionStatus = 'closed';
+    private _callIdCounter = 0;
+    private _shouldReconnect: boolean;
+    private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    private readonly _pendingCalls = new Map<number, PendingCall>()
-    private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>()
+    private readonly _pendingCalls = new Map<number, PendingCall>();
+    private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>();
 
     constructor(
         _protocol: P,
         url: string,
         options: RpcClientOptions = {}
     ) {
-        this._url = url
-        this._options = options
-        this._codec = options.codec ?? json()
-        this._timeout = options.timeout ?? 30000
-        this._shouldReconnect = options.autoReconnect ?? true
-        this._reconnectInterval = options.reconnectInterval ?? 3000
-        this._wsFactory = options.webSocketFactory ?? defaultWebSocketFactory
+        this._url = url;
+        this._options = options;
+        this._codec = options.codec ?? json();
+        this._timeout = options.timeout ?? 30000;
+        this._shouldReconnect = options.autoReconnect ?? true;
+        this._reconnectInterval = options.reconnectInterval ?? 3000;
+        this._wsFactory = options.webSocketFactory ?? defaultWebSocketFactory;
     }
 
     /**
@@ -199,7 +199,7 @@ export class RpcClient<P extends ProtocolDef> {
      * @en Connection status
      */
     get status(): ConnectionStatus {
-        return this._status
+        return this._status;
     }
 
     /**
@@ -207,7 +207,7 @@ export class RpcClient<P extends ProtocolDef> {
      * @en Whether connected
      */
     get isConnected(): boolean {
-        return this._status === 'open'
+        return this._status === 'open';
     }
 
     /**
@@ -217,38 +217,38 @@ export class RpcClient<P extends ProtocolDef> {
     connect(): Promise<this> {
         return new Promise((resolve, reject) => {
             if (this._status === 'open' || this._status === 'connecting') {
-                resolve(this)
-                return
+                resolve(this);
+                return;
             }
 
-            this._status = 'connecting'
-            this._ws = this._wsFactory(this._url)
+            this._status = 'connecting';
+            this._ws = this._wsFactory(this._url);
 
             this._ws.onopen = () => {
-                this._status = 'open'
-                this._options.onConnect?.()
-                resolve(this)
-            }
+                this._status = 'open';
+                this._options.onConnect?.();
+                resolve(this);
+            };
 
             this._ws.onclose = (e) => {
-                this._status = 'closed'
-                this._rejectAllPending()
-                this._options.onDisconnect?.(e.reason)
-                this._scheduleReconnect()
-            }
+                this._status = 'closed';
+                this._rejectAllPending();
+                this._options.onDisconnect?.(e.reason);
+                this._scheduleReconnect();
+            };
 
             this._ws.onerror = () => {
-                const err = new Error('WebSocket error')
-                this._options.onError?.(err)
+                const err = new Error('WebSocket error');
+                this._options.onError?.(err);
                 if (this._status === 'connecting') {
-                    reject(err)
+                    reject(err);
                 }
-            }
+            };
 
             this._ws.onmessage = (e) => {
-                this._handleMessage(e.data as string | ArrayBuffer)
-            }
-        })
+                this._handleMessage(e.data as string | ArrayBuffer);
+            };
+        });
     }
 
     /**
@@ -256,12 +256,12 @@ export class RpcClient<P extends ProtocolDef> {
      * @en Disconnect
      */
     disconnect(): void {
-        this._shouldReconnect = false
-        this._clearReconnectTimer()
+        this._shouldReconnect = false;
+        this._clearReconnectTimer();
         if (this._ws) {
-            this._status = 'closing'
-            this._ws.close()
-            this._ws = null
+            this._status = 'closing';
+            this._ws.close();
+            this._ws = null;
         }
     }
 
@@ -275,25 +275,25 @@ export class RpcClient<P extends ProtocolDef> {
     ): Promise<ApiOutput<P['api'][K]>> {
         return new Promise((resolve, reject) => {
             if (this._status !== 'open') {
-                reject(new RpcError(ErrorCode.CONNECTION_CLOSED, 'Not connected'))
-                return
+                reject(new RpcError(ErrorCode.CONNECTION_CLOSED, 'Not connected'));
+                return;
             }
 
-            const id = ++this._callIdCounter
+            const id = ++this._callIdCounter;
             const timer = setTimeout(() => {
-                this._pendingCalls.delete(id)
-                reject(new RpcError(ErrorCode.TIMEOUT, 'Request timeout'))
-            }, this._timeout)
+                this._pendingCalls.delete(id);
+                reject(new RpcError(ErrorCode.TIMEOUT, 'Request timeout'));
+            }, this._timeout);
 
             this._pendingCalls.set(id, {
                 resolve: resolve as (v: unknown) => void,
                 reject,
-                timer,
-            })
+                timer
+            });
 
-            const packet: Packet = [PacketType.ApiRequest, id, name as string, input]
-            this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer)
-        })
+            const packet: Packet = [PacketType.ApiRequest, id, name as string, input];
+            this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
+        });
     }
 
     /**
@@ -301,9 +301,9 @@ export class RpcClient<P extends ProtocolDef> {
      * @en Send message
      */
     send<K extends MsgNames<P>>(name: K, data: MsgData<P['msg'][K]>): void {
-        if (this._status !== 'open') return
-        const packet: Packet = [PacketType.Message, name as string, data]
-        this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer)
+        if (this._status !== 'open') return;
+        const packet: Packet = [PacketType.Message, name as string, data];
+        this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
     }
 
     /**
@@ -314,14 +314,14 @@ export class RpcClient<P extends ProtocolDef> {
         name: K,
         handler: (data: MsgData<P['msg'][K]>) => void
     ): this {
-        const key = name as string
-        let handlers = this._msgHandlers.get(key)
+        const key = name as string;
+        let handlers = this._msgHandlers.get(key);
         if (!handlers) {
-            handlers = new Set()
-            this._msgHandlers.set(key, handlers)
+            handlers = new Set();
+            this._msgHandlers.set(key, handlers);
         }
-        handlers.add(handler as (data: unknown) => void)
-        return this
+        handlers.add(handler as (data: unknown) => void);
+        return this;
     }
 
     /**
@@ -332,13 +332,13 @@ export class RpcClient<P extends ProtocolDef> {
         name: K,
         handler?: (data: MsgData<P['msg'][K]>) => void
     ): this {
-        const key = name as string
+        const key = name as string;
         if (handler) {
-            this._msgHandlers.get(key)?.delete(handler as (data: unknown) => void)
+            this._msgHandlers.get(key)?.delete(handler as (data: unknown) => void);
         } else {
-            this._msgHandlers.delete(key)
+            this._msgHandlers.delete(key);
         }
-        return this
+        return this;
     }
 
     /**
@@ -350,10 +350,10 @@ export class RpcClient<P extends ProtocolDef> {
         handler: (data: MsgData<P['msg'][K]>) => void
     ): this {
         const wrapper = (data: MsgData<P['msg'][K]>) => {
-            this.off(name, wrapper)
-            handler(data)
-        }
-        return this.on(name, wrapper)
+            this.off(name, wrapper);
+            handler(data);
+        };
+        return this.on(name, wrapper);
     }
 
     // ========================================================================
@@ -362,52 +362,52 @@ export class RpcClient<P extends ProtocolDef> {
 
     private _handleMessage(raw: string | ArrayBuffer): void {
         try {
-            const data = typeof raw === 'string' ? raw : new Uint8Array(raw)
-            const packet = this._codec.decode(data)
-            const type = packet[0]
+            const data = typeof raw === 'string' ? raw : new Uint8Array(raw);
+            const packet = this._codec.decode(data);
+            const type = packet[0];
 
             switch (type) {
                 case PacketType.ApiResponse:
-                    this._handleApiResponse(packet as [number, number, unknown])
-                    break
+                    this._handleApiResponse(packet as [number, number, unknown]);
+                    break;
                 case PacketType.ApiError:
-                    this._handleApiError(packet as [number, number, string, string])
-                    break
+                    this._handleApiError(packet as [number, number, string, string]);
+                    break;
                 case PacketType.Message:
-                    this._handleMsg(packet as [number, string, unknown])
-                    break
+                    this._handleMsg(packet as [number, string, unknown]);
+                    break;
             }
         } catch (err) {
-            this._options.onError?.(err as Error)
+            this._options.onError?.(err as Error);
         }
     }
 
     private _handleApiResponse([, id, result]: [number, number, unknown]): void {
-        const pending = this._pendingCalls.get(id)
+        const pending = this._pendingCalls.get(id);
         if (pending) {
-            clearTimeout(pending.timer)
-            this._pendingCalls.delete(id)
-            pending.resolve(result)
+            clearTimeout(pending.timer);
+            this._pendingCalls.delete(id);
+            pending.resolve(result);
         }
     }
 
     private _handleApiError([, id, code, message]: [number, number, string, string]): void {
-        const pending = this._pendingCalls.get(id)
+        const pending = this._pendingCalls.get(id);
         if (pending) {
-            clearTimeout(pending.timer)
-            this._pendingCalls.delete(id)
-            pending.reject(new RpcError(code, message))
+            clearTimeout(pending.timer);
+            this._pendingCalls.delete(id);
+            pending.reject(new RpcError(code, message));
         }
     }
 
     private _handleMsg([, path, data]: [number, string, unknown]): void {
-        const handlers = this._msgHandlers.get(path)
+        const handlers = this._msgHandlers.get(path);
         if (handlers) {
             for (const handler of handlers) {
                 try {
-                    handler(data)
+                    handler(data);
                 } catch (err) {
-                    this._options.onError?.(err as Error)
+                    this._options.onError?.(err as Error);
                 }
             }
         }
@@ -415,25 +415,25 @@ export class RpcClient<P extends ProtocolDef> {
 
     private _rejectAllPending(): void {
         for (const [, pending] of this._pendingCalls) {
-            clearTimeout(pending.timer)
-            pending.reject(new RpcError(ErrorCode.CONNECTION_CLOSED, 'Connection closed'))
+            clearTimeout(pending.timer);
+            pending.reject(new RpcError(ErrorCode.CONNECTION_CLOSED, 'Connection closed'));
         }
-        this._pendingCalls.clear()
+        this._pendingCalls.clear();
     }
 
     private _scheduleReconnect(): void {
         if (this._shouldReconnect && !this._reconnectTimer) {
             this._reconnectTimer = setTimeout(() => {
-                this._reconnectTimer = null
-                this.connect().catch(() => {})
-            }, this._reconnectInterval)
+                this._reconnectTimer = null;
+                this.connect().catch(() => {});
+            }, this._reconnectInterval);
         }
     }
 
     private _clearReconnectTimer(): void {
         if (this._reconnectTimer) {
-            clearTimeout(this._reconnectTimer)
-            this._reconnectTimer = null
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
         }
     }
 }
@@ -457,5 +457,5 @@ export function connect<P extends ProtocolDef>(
     url: string,
     options: RpcClientOptions = {}
 ): Promise<RpcClient<P>> {
-    return new RpcClient(protocol, url, options).connect()
+    return new RpcClient(protocol, url, options).connect();
 }

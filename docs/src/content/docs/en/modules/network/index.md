@@ -147,6 +147,7 @@ service.on('chat', (data) => {
 
 - [Client Usage](/en/modules/network/client/) - NetworkPlugin, components and systems
 - [Server Side](/en/modules/network/server/) - GameServer and Room management
+- [Distributed Rooms](/en/modules/network/distributed/) - Multi-server room management and player routing
 - [State Sync](/en/modules/network/sync/) - Interpolation and snapshot buffering
 - [Client Prediction](/en/modules/network/prediction/) - Input prediction and server reconciliation
 - [Area of Interest (AOI)](/en/modules/network/aoi/) - View filtering and bandwidth optimization

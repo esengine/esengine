@@ -30,12 +30,72 @@
 export { createServer } from './core/server.js';
 
 // Helpers
-export { defineApi, defineMsg, defineHttp } from './helpers/define.js';
+export {
+    defineApi,
+    defineMsg,
+    defineHttp,
+    defineApiWithSchema,
+    defineMsgWithSchema,
+    type ApiDefinitionWithSchema,
+    type MsgDefinitionWithSchema
+} from './helpers/define.js';
+
+// Schema Validation System
+export {
+    // Schema Builder (main API)
+    s,
+
+    // Primitive Validators
+    string,
+    number,
+    boolean,
+    literal,
+    any,
+
+    // Composite Validators
+    object,
+    array,
+    tuple,
+    union,
+    record,
+    nativeEnum,
+
+    // Validator Classes (for extension)
+    StringValidator,
+    NumberValidator,
+    BooleanValidator,
+    LiteralValidator,
+    AnyValidator,
+    ObjectValidator,
+    ArrayValidator,
+    TupleValidator,
+    UnionValidator,
+    RecordValidator,
+    EnumValidator,
+
+    // Helpers
+    parse,
+    safeParse,
+    createGuard,
+
+    // Types
+    type Validator,
+    type ValidationResult,
+    type ValidationSuccess,
+    type ValidationFailure,
+    type ValidationError,
+    type Infer,
+    type ObjectShape,
+    type InferShape
+} from './schema/index.js';
 
 // Room System
 export { Room, type RoomOptions } from './room/Room.js';
 export { Player, type IPlayer } from './room/Player.js';
 export { onMessage } from './room/decorators.js';
+
+// ECS Room (for ECS-integrated games)
+export { ECSRoom, type ECSRoomConfig } from './ecs/ECSRoom.js';
 
 // Types
 export type {
@@ -62,3 +122,36 @@ export type {
 
 // Re-export useful types from @esengine/rpc
 export { RpcError, ErrorCode } from '@esengine/rpc';
+
+// Distributed Room Support
+export {
+    DistributedRoomManager,
+    MemoryAdapter,
+    RedisAdapter,
+    createRedisAdapter,
+    LoadBalancedRouter,
+    createLoadBalancedRouter,
+    type IDistributedAdapter,
+    type MemoryAdapterConfig,
+    type RedisAdapterConfig,
+    type RedisClient,
+    type RedisClientFactory,
+    type ServerStatus,
+    type ServerRegistration,
+    type RoomRegistration,
+    type RoomQuery,
+    type RoomSnapshot,
+    type DistributedEvent,
+    type DistributedEventType,
+    type DistributedEventHandler,
+    type DistributedRoomManagerConfig,
+    type DistributedConfig,
+    type RoutingResult,
+    type RoutingRequest,
+    type LoadBalanceStrategy,
+    type LoadBalancedRouterConfig
+} from './distributed/index.js';
+
+// Room Manager (for extension)
+export { RoomManager, type RoomClass } from './room/RoomManager.js';
+

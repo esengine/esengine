@@ -266,6 +266,122 @@ class GameRoom extends Room {
 }
 ```
 
+## Schema Validation
+
+Use the built-in Schema validation system for runtime type validation:
+
+### Basic Usage
+
+```typescript
+import { s, defineApiWithSchema } from '@esengine/server'
+
+// Define schema
+const MoveSchema = s.object({
+    x: s.number(),
+    y: s.number(),
+    speed: s.number().optional()
+})
+
+// Auto type inference
+type Move = s.infer<typeof MoveSchema>  // { x: number; y: number; speed?: number }
+
+// Use schema to define API (auto validation)
+export default defineApiWithSchema(MoveSchema, {
+    handler(req, ctx) {
+        // req is validated, type-safe
+        console.log(req.x, req.y)
+    }
+})
+```
+
+### Validator Types
+
+| Type | Example | Description |
+|------|---------|-------------|
+| `s.string()` | `s.string().min(1).max(50)` | String with length constraints |
+| `s.number()` | `s.number().min(0).int()` | Number with range and integer constraints |
+| `s.boolean()` | `s.boolean()` | Boolean |
+| `s.literal()` | `s.literal('admin')` | Literal type |
+| `s.object()` | `s.object({ name: s.string() })` | Object |
+| `s.array()` | `s.array(s.number())` | Array |
+| `s.enum()` | `s.enum(['a', 'b'] as const)` | Enum |
+| `s.union()` | `s.union([s.string(), s.number()])` | Union type |
+| `s.record()` | `s.record(s.any())` | Record type |
+
+### Modifiers
+
+```typescript
+// Optional field
+s.string().optional()
+
+// Default value
+s.number().default(0)
+
+// Nullable
+s.string().nullable()
+
+// String validation
+s.string().min(1).max(100).email().url().regex(/^[a-z]+$/)
+
+// Number validation
+s.number().min(0).max(100).int().positive()
+
+// Array validation
+s.array(s.string()).min(1).max(10).nonempty()
+
+// Object validation
+s.object({ ... }).strict()  // No extra fields allowed
+s.object({ ... }).partial() // All fields optional
+s.object({ ... }).pick('name', 'age')  // Pick fields
+s.object({ ... }).omit('password')     // Omit fields
+```
+
+### Message Validation
+
+```typescript
+import { s, defineMsgWithSchema } from '@esengine/server'
+
+const InputSchema = s.object({
+    keys: s.array(s.string()),
+    timestamp: s.number()
+})
+
+export default defineMsgWithSchema(InputSchema, {
+    handler(msg, ctx) {
+        // msg is validated
+        console.log(msg.keys, msg.timestamp)
+    }
+})
+```
+
+### Manual Validation
+
+```typescript
+import { s, parse, safeParse, createGuard } from '@esengine/server'
+
+const UserSchema = s.object({
+    name: s.string(),
+    age: s.number().int().min(0)
+})
+
+// Throws on error
+const user = parse(UserSchema, data)
+
+// Returns result object
+const result = safeParse(UserSchema, data)
+if (result.success) {
+    console.log(result.data)
+} else {
+    console.error(result.error)
+}
+
+// Type guard
+const isUser = createGuard(UserSchema)
+if (isUser(data)) {
+    // data is User type
+}
+```
+
 ## Protocol Definition
 
 Define shared types in `src/shared/protocol.ts`:
