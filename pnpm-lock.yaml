@@ -178,6 +178,37 @@ importers:
         specifier: ^3.5.26
         version: 3.5.26(typescript@5.9.3)
 
+  packages/devtools/node-editor:
+    dependencies:
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.17
+        version: 20.19.27
+      '@types/react':
+        specifier: ^18.3.12
+        version: 18.3.27
+      '@vitejs/plugin-react':
+        specifier: ^4.7.0
+        version: 4.7.0(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.7
+        version: 6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite-plugin-dts:
+        specifier: ^3.7.0
+        version: 3.9.1(@types/node@20.19.27)(rollup@4.54.0)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+
   packages/editor/editor-app:
     dependencies:
       '@esengine/asset-system':
@@ -589,7 +620,7 @@ importers:
         version: link:../../../engine/engine-core
       '@esengine/node-editor':
         specifier: workspace:*
-        version: link:../node-editor
+        version: link:../../../devtools/node-editor
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27
@@ -632,7 +663,7 @@ importers:
         version: link:../../../engine/engine-core
       '@esengine/node-editor':
         specifier: workspace:*
-        version: link:../node-editor
+        version: link:../../../devtools/node-editor
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27
@@ -811,40 +842,6 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
-
-  packages/editor/plugins/node-editor:
-    dependencies:
-      tslib:
-        specifier: ^2.8.1
-        version: 2.8.1
-    devDependencies:
-      '@types/node':
-        specifier: ^20.19.17
-        version: 20.19.27
-      '@types/react':
-        specifier: ^18.3.12
-        version: 18.3.27
-      '@vitejs/plugin-react':
-        specifier: ^4.7.0
-        version: 4.7.0(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      rimraf:
-        specifier: ^5.0.0
-        version: 5.0.10
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      vite:
-        specifier: ^6.0.7
-        version: 6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      vite-plugin-dts:
-        specifier: ^3.7.0
-        version: 3.9.1(@types/node@20.19.27)(rollup@4.54.0)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      zustand:
-        specifier: ^5.0.8
-        version: 5.0.9(@types/react@18.3.27)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
 
   packages/editor/plugins/particle-editor:
     dependencies:

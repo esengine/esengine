@@ -30,17 +30,18 @@
     "blueprint",
     "shader-graph",
     "state-machine",
-    "ecs",
-    "game-engine"
+    "react"
   ],
-  "author": "yhh",
+  "author": "ESEngine Team",
   "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
   "devDependencies": {
-    "react": "^18.3.1",
-    "zustand": "^5.0.8",
     "@types/node": "^20.19.17",
     "@types/react": "^18.3.12",
     "@vitejs/plugin-react": "^4.7.0",
+    "react": "^18.3.1",
     "rimraf": "^5.0.0",
     "typescript": "^5.8.3",
     "vite": "^6.0.7",
@@ -56,7 +57,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/esengine/esengine.git",
-    "directory": "packages/node-editor"
+    "directory": "packages/devtools/node-editor"
   },
   "private": true
 }
