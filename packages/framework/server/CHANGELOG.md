@@ -1,5 +1,23 @@
 # @esengine/server
 
+## 4.4.0
+
+### Minor Changes
+
+- [#419](https://github.com/esengine/esengine/pull/419) [`3b6fc82`](https://github.com/esengine/esengine/commit/3b6fc8266fa8e4d43058a44b48bf9169f78de068) Thanks [@esengine](https://github.com/esengine)! - feat(server): HTTP 路由增强 | HTTP router enhancement
+
+    **新功能 | New Features**
+    - 路由参数支持：`/users/:id` → `req.params.id` | Route parameters: `/users/:id` → `req.params.id`
+    - 中间件支持：全局和路由级中间件 | Middleware support: global and route-level
+    - 请求超时控制：全局和路由级超时 | Request timeout: global and route-level
+
+    **内置中间件 | Built-in Middleware**
+    - `requestLogger()` - 请求日志 | Request logging
+    - `bodyLimit()` - 请求体大小限制 | Body size limit
+    - `responseTime()` - 响应时间头 | Response time header
+    - `requestId()` - 请求 ID | Request ID
+    - `securityHeaders()` - 安全头 | Security headers
+
 ## 4.3.0
 
 ### Minor Changes
