@@ -13,9 +13,9 @@ import type {
     ApiOutput,
     MsgData,
     Packet,
-    PacketType,
     Connection
 } from '../types';
+import type { IncomingMessage } from 'node:http';
 import { RpcError, ErrorCode } from '../types';
 import { json } from '../codec/json';
 import type { Codec } from '../codec/types';
@@ -211,8 +211,14 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
     let wss: WebSocketServer | null = null;
     let connIdCounter = 0;
 
-    const getClientIp = (ws: WebSocket, req: any): string => {
-        return req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim()
+    const getClientIp = (_ws: WebSocket, req: IncomingMessage | undefined): string => {
+        const forwarded = req?.headers?.['x-forwarded-for'];
+        const forwardedIp = typeof forwarded === 'string'
+            ? forwarded.split(',')[0]?.trim()
+            : Array.isArray(forwarded)
+                ? forwarded[0]?.split(',')[0]?.trim()
+                : undefined;
+        return forwardedIp
             || req?.socket?.remoteAddress
             || 'unknown';
     };
@@ -248,7 +254,8 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
         path: string,
         input: unknown
     ): Promise<void> => {
-        const handler = (options.api as any)[path];
+        const apiHandlers = options.api as Record<string, ApiHandler<unknown, unknown, TConnData> | undefined>;
+        const handler = apiHandlers[path];
 
         if (!handler) {
             const errPacket: Packet = [PT.ApiError, id, ErrorCode.NOT_FOUND, `API not found: ${path}`];
@@ -277,9 +284,10 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
         path: string,
         data: unknown
     ): Promise<void> => {
-        const handler = options.msg?.[path as MsgNames<P>];
+        const msgHandlers = options.msg as Record<string, MsgHandler<unknown, TConnData> | undefined> | undefined;
+        const handler = msgHandlers?.[path];
         if (handler) {
-            await (handler as any)(data, conn);
+            await handler(data, conn);
         }
     };
 

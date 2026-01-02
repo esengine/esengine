@@ -29,8 +29,8 @@ export interface MsgDef<TData = unknown> {
  * @en Protocol definition
  */
 export interface ProtocolDef {
-    readonly api: Record<string, ApiDef<any, any>>
-    readonly msg: Record<string, MsgDef<any>>
+    readonly api: Record<string, ApiDef<unknown, unknown>>
+    readonly msg: Record<string, MsgDef<unknown>>
 }
 
 // ============ Type Inference ============
@@ -39,13 +39,13 @@ export interface ProtocolDef {
  * @zh 提取 API 输入类型
  * @en Extract API input type
  */
-export type ApiInput<T> = T extends ApiDef<infer I, any> ? I : never
+export type ApiInput<T> = T extends ApiDef<infer I, unknown> ? I : never
 
 /**
  * @zh 提取 API 输出类型
  * @en Extract API output type
  */
-export type ApiOutput<T> = T extends ApiDef<any, infer O> ? O : never
+export type ApiOutput<T> = T extends ApiDef<unknown, infer O> ? O : never
 
 /**
  * @zh 提取消息数据类型

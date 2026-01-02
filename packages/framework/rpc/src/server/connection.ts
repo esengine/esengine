@@ -3,6 +3,7 @@
  * @en Server Connection Module
  */
 
+import type { WebSocket } from 'ws';
 import type { Connection, ConnectionStatus } from '../types';
 
 /**
@@ -15,13 +16,13 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
     data: TData;
 
     private _status: ConnectionStatus = 'open';
-    private _socket: any;
+    private _socket: WebSocket;
     private _onClose?: () => void;
 
     constructor(options: {
         id: string
         ip: string
-        socket: any
+        socket: WebSocket
         initialData: TData
         onClose?: () => void
     }) {
