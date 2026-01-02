@@ -13,6 +13,7 @@
     "packages/network-ext/*",
     "packages/editor/*",
     "packages/editor/plugins/*",
+    "packages/devtools/*",
     "packages/rust/*",
     "packages/tools/*"
   ],
