@@ -62,6 +62,7 @@ jobs:
           pnpm --filter "@esengine/transaction" build
           pnpm --filter "@esengine/cli" build
           pnpm --filter "create-esengine-server" build
+          pnpm --filter "@esengine/node-editor" build
 
       - name: Create Release Pull Request or Publish
         id: changesets
