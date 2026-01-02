@@ -49,7 +49,6 @@
     "@esengine/material-editor",
     "@esengine/shader-editor",
     "@esengine/world-streaming-editor",
-    "@esengine/node-editor",
     "@esengine/sdk",
     "@esengine/worker-generator",
     "@esengine/engine"
