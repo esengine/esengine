@@ -5,6 +5,7 @@
 
 import type { Connection, ProtocolDef } from '@esengine/rpc';
 import type { HttpRoutes, CorsOptions, HttpRequest, HttpResponse } from '../http/types.js';
+import type { DistributedConfig } from '../distributed/types.js';
 
 // ============================================================================
 // Server Config
@@ -96,6 +97,26 @@ export interface ServerConfig {
      * @en Connection closed callback
      */
     onDisconnect?: (conn: ServerConnection) => void | Promise<void>
+
+    /**
+     * @zh 分布式模式配置
+     * @en Distributed mode configuration
+     *
+     * @example
+     * ```typescript
+     * const server = await createServer({
+     *     port: 3000,
+     *     distributed: {
+     *         enabled: true,
+     *         adapter: new RedisAdapter({ factory: () => new Redis() }),
+     *         serverId: 'server-1',
+     *         serverAddress: 'ws://192.168.1.100',
+     *         serverPort: 3000
+     *     }
+     * });
+     * ```
+     */
+    distributed?: DistributedConfig
 }
 
 // ============================================================================

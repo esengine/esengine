@@ -62,3 +62,35 @@ export type {
 
 // Re-export useful types from @esengine/rpc
 export { RpcError, ErrorCode } from '@esengine/rpc';
+
+// Distributed Room Support
+export {
+    DistributedRoomManager,
+    MemoryAdapter,
+    RedisAdapter,
+    createRedisAdapter,
+    LoadBalancedRouter,
+    createLoadBalancedRouter,
+    type IDistributedAdapter,
+    type MemoryAdapterConfig,
+    type RedisAdapterConfig,
+    type RedisClient,
+    type RedisClientFactory,
+    type ServerStatus,
+    type ServerRegistration,
+    type RoomRegistration,
+    type RoomQuery,
+    type RoomSnapshot,
+    type DistributedEvent,
+    type DistributedEventType,
+    type DistributedEventHandler,
+    type DistributedRoomManagerConfig,
+    type DistributedConfig,
+    type RoutingResult,
+    type RoutingRequest,
+    type LoadBalanceStrategy,
+    type LoadBalancedRouterConfig
+} from './distributed/index.js';
+
+// Room Manager (for extension)
+export { RoomManager, type RoomClass } from './room/RoomManager.js';

@@ -147,6 +147,7 @@ service.on('chat', (data) => {
 
 - [客户端使用](/modules/network/client/) - NetworkPlugin、组件和系统
 - [服务器端](/modules/network/server/) - GameServer 和 Room 管理
+- [分布式房间](/modules/network/distributed/) - 多服务器房间管理和玩家路由
 - [状态同步](/modules/network/sync/) - 插值和快照缓冲
 - [客户端预测](/modules/network/prediction/) - 输入预测和服务器校正
 - [兴趣区域 (AOI)](/modules/network/aoi/) - 视野过滤和带宽优化
