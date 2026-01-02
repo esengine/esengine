@@ -3,7 +3,7 @@
  * @en Codec Type Definitions
  */
 
-import type { Packet } from '../types'
+import type { Packet } from '../types';
 
 /**
  * @zh 编解码器接口

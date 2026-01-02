@@ -32,6 +32,8 @@
     "build": "tsup && tsc --emitDeclarationOnly",
     "build:watch": "tsup --watch",
     "type-check": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "lint:fix": "eslint src --fix",
     "clean": "rimraf dist"
   },
   "dependencies": {},

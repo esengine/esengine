@@ -3,9 +3,9 @@
  * @en JSON Codec
  */
 
-import type { Packet } from '../types'
-import type { Codec } from './types'
-import { textDecode } from './polyfill'
+import type { Packet } from '../types';
+import type { Codec } from './types';
+import { textDecode } from './polyfill';
 
 /**
  * @zh 创建 JSON 编解码器
@@ -17,14 +17,14 @@ import { textDecode } from './polyfill'
 export function json(): Codec {
     return {
         encode(packet: Packet): string {
-            return JSON.stringify(packet)
+            return JSON.stringify(packet);
         },
 
         decode(data: string | Uint8Array): Packet {
             const str = typeof data === 'string'
                 ? data
-                : textDecode(data)
-            return JSON.parse(str) as Packet
-        },
-    }
+                : textDecode(data);
+            return JSON.parse(str) as Packet;
+        }
+    };
 }

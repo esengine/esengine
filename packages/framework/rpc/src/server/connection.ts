@@ -3,20 +3,20 @@
  * @en Server Connection Module
  */
 
-import type { Connection, ConnectionStatus } from '../types'
+import type { Connection, ConnectionStatus } from '../types';
 
 /**
  * @zh 服务端连接实现
  * @en Server connection implementation
  */
 export class ServerConnection<TData = unknown> implements Connection<TData> {
-    readonly id: string
-    readonly ip: string
-    data: TData
+    readonly id: string;
+    readonly ip: string;
+    data: TData;
 
-    private _status: ConnectionStatus = 'open'
-    private _socket: any
-    private _onClose?: () => void
+    private _status: ConnectionStatus = 'open';
+    private _socket: any;
+    private _onClose?: () => void;
 
     constructor(options: {
         id: string
@@ -25,15 +25,15 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
         initialData: TData
         onClose?: () => void
     }) {
-        this.id = options.id
-        this.ip = options.ip
-        this.data = options.initialData
-        this._socket = options.socket
-        this._onClose = options.onClose
+        this.id = options.id;
+        this.ip = options.ip;
+        this.data = options.initialData;
+        this._socket = options.socket;
+        this._onClose = options.onClose;
     }
 
     get status(): ConnectionStatus {
-        return this._status
+        return this._status;
     }
 
     /**
@@ -41,8 +41,20 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
      * @en Send raw data
      */
     send(data: string | Uint8Array): void {
-        if (this._status !== 'open') return
-        this._socket.send(data)
+        if (this._status !== 'open') return;
+        this._socket.send(data);
+    }
+
+    /**
+     * @zh 发送二进制数据（原生 WebSocket 二进制帧）
+     * @en Send binary data (native WebSocket binary frame)
+     *
+     * @zh 直接发送 Uint8Array，不经过 JSON 编码，效率更高
+     * @en Directly sends Uint8Array without JSON encoding, more efficient
+     */
+    sendBinary(data: Uint8Array): void {
+        if (this._status !== 'open') return;
+        this._socket.send(data, { binary: true });
     }
 
     /**
@@ -50,12 +62,12 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
      * @en Close connection
      */
     close(reason?: string): void {
-        if (this._status !== 'open') return
+        if (this._status !== 'open') return;
 
-        this._status = 'closing'
-        this._socket.close(1000, reason)
-        this._status = 'closed'
-        this._onClose?.()
+        this._status = 'closing';
+        this._socket.close(1000, reason);
+        this._status = 'closed';
+        this._onClose?.();
     }
 
     /**
@@ -63,6 +75,6 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
      * @en Mark connection as closed (internal use)
      */
     _markClosed(): void {
-        this._status = 'closed'
+        this._status = 'closed';
     }
 }

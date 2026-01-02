@@ -173,12 +173,6 @@ export interface ApiDefinition<TReq = unknown, TRes = unknown, TData = Record<st
      * @en API handler function
      */
     handler: (req: TReq, ctx: ApiContext<TData>) => TRes | Promise<TRes>
-
-    /**
-     * @zh 请求验证函数（可选）
-     * @en Request validation function (optional)
-     */
-    validate?: (req: unknown) => req is TReq
 }
 
 // ============================================================================

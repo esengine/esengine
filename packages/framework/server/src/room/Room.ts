@@ -94,6 +94,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
     private _lastTickTime = 0;
     private _broadcastFn: ((type: string, data: unknown) => void) | null = null;
     private _sendFn: ((conn: any, type: string, data: unknown) => void) | null = null;
+    private _sendBinaryFn: ((conn: any, data: Uint8Array) => void) | null = null;
     private _disposeFn: (() => void) | null = null;
 
     // ========================================================================
@@ -269,11 +270,13 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
     _init(options: {
         id: string
         sendFn: (conn: any, type: string, data: unknown) => void
+        sendBinaryFn?: (conn: any, data: Uint8Array) => void
         broadcastFn: (type: string, data: unknown) => void
         disposeFn: () => void
     }): void {
         this._id = options.id;
         this._sendFn = options.sendFn;
+        this._sendBinaryFn = options.sendBinaryFn ?? null;
         this._broadcastFn = options.broadcastFn;
         this._disposeFn = options.disposeFn;
     }
@@ -299,6 +302,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
             roomId: this._id,
             conn,
             sendFn: this._sendFn!,
+            sendBinaryFn: this._sendBinaryFn ?? undefined,
             leaveFn: (p, reason) => this._removePlayer(p.id, reason)
         });
 

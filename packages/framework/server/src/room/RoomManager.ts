@@ -61,8 +61,18 @@ export class RoomManager {
      */
     protected _sendFn: (conn: any, type: string, data: unknown) => void;
 
-    constructor(sendFn: (conn: any, type: string, data: unknown) => void) {
+    /**
+     * @zh 二进制发送函数
+     * @en Binary send function
+     */
+    protected _sendBinaryFn?: (conn: any, data: Uint8Array) => void;
+
+    constructor(
+        sendFn: (conn: any, type: string, data: unknown) => void,
+        sendBinaryFn?: (conn: any, data: Uint8Array) => void
+    ) {
         this._sendFn = sendFn;
+        this._sendBinaryFn = sendBinaryFn;
     }
 
     /**
@@ -306,6 +316,7 @@ export class RoomManager {
         room._init({
             id: finalRoomId,
             sendFn: this._sendFn,
+            sendBinaryFn: this._sendBinaryFn,
             broadcastFn: (type, data) => {
                 for (const player of room.players) {
                     player.send(type, data);

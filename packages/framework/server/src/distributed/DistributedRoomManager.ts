@@ -67,13 +67,15 @@ export class DistributedRoomManager extends RoomManager {
      * @param adapter - 分布式适配器 | Distributed adapter
      * @param config - 配置 | Configuration
      * @param sendFn - 消息发送函数 | Message send function
+     * @param sendBinaryFn - 二进制发送函数 | Binary send function
      */
     constructor(
         adapter: IDistributedAdapter,
         config: DistributedRoomManagerConfig,
-        sendFn: (conn: any, type: string, data: unknown) => void
+        sendFn: (conn: any, type: string, data: unknown) => void,
+        sendBinaryFn?: (conn: any, data: Uint8Array) => void
     ) {
-        super(sendFn);
+        super(sendFn, sendBinaryFn);
 
         this._adapter = adapter;
         this._serverId = config.serverId;

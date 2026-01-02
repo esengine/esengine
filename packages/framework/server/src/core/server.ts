@@ -19,6 +19,7 @@ import type {
     LoadedHttpHandler
 } from '../types/index.js';
 import type { HttpRoutes, HttpHandler } from '../http/types.js';
+import type { Validator } from '../schema/index.js';
 import { loadApiHandlers, loadMsgHandlers, loadHttpHandlers } from '../router/loader.js';
 import { RoomManager, type RoomClass, type Room } from '../room/index.js';
 import { createHttpRouter } from '../http/router.js';
@@ -154,6 +155,13 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
         rpcServer?.send(conn, 'RoomMessage' as any, { type, data } as any);
     };
 
+    // 二进制发送函数（使用原生 WebSocket 二进制帧，效率更高）
+    const sendBinaryFn = (conn: any, data: Uint8Array) => {
+        if (conn && typeof conn.sendBinary === 'function') {
+            conn.sendBinary(data);
+        }
+    };
+
     // 房间管理器（立即初始化，以便 define() 可在 start() 前调用）
     let roomManager: RoomManager | DistributedRoomManager;
     let distributedManager: DistributedRoomManager | null = null;
@@ -172,13 +180,14 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 enableFailover: distributedConfig.enableFailover,
                 capacity: distributedConfig.capacity
             },
-            sendFn
+            sendFn,
+            sendBinaryFn
         );
         roomManager = distributedManager;
         logger.info(`Distributed mode enabled (serverId: ${distributedConfig.serverId})`);
     } else {
         // 单机模式
-        roomManager = new RoomManager(sendFn);
+        roomManager = new RoomManager(sendFn, sendBinaryFn);
     }
 
     // 构建 API 处理器映射
@@ -284,6 +293,19 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         conn: conn as ServerConnection,
                         server: gameServer
                     };
+
+                    const definition = handler.definition as { schema?: Validator<unknown> };
+                    if (definition.schema) {
+                        const result = definition.schema.validate(input);
+                        if (!result.success) {
+                            const pathStr = result.error.path.length > 0
+                                ? ` at "${result.error.path.join('.')}"`
+                                : '';
+                            throw new Error(`Validation failed${pathStr}: ${result.error.message}`);
+                        }
+                        return handler.definition.handler(result.data, ctx);
+                    }
+
                     return handler.definition.handler(input, ctx);
                 };
             }
@@ -304,6 +326,21 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         conn: conn as ServerConnection,
                         server: gameServer
                     };
+
+                    const definition = handler.definition as { schema?: Validator<unknown> };
+                    if (definition.schema) {
+                        const result = definition.schema.validate(data);
+                        if (!result.success) {
+                            const pathStr = result.error.path.length > 0
+                                ? ` at "${result.error.path.join('.')}"`
+                                : '';
+                            logger.warn(`Message validation failed for ${name}${pathStr}: ${result.error.message}`);
+                            return;
+                        }
+                        await handler.definition.handler(result.data, ctx);
+                        return;
+                    }
+
                     await handler.definition.handler(data, ctx);
                 };
             }
