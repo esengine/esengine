@@ -10,6 +10,9 @@
 // Import styles (导入样式)
 import './styles/index.css';
 
+// CSS utilities for Shadow DOM (Shadow DOM 的 CSS 工具)
+export { nodeEditorCssText, injectNodeEditorStyles } from './styles/cssText';
+
 // Domain models (领域模型)
 export {
     // Models

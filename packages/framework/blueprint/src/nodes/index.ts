@@ -1,11 +1,33 @@
 /**
- * Blueprint Nodes - All node definitions and executors
- * 蓝图节点 - 所有节点定义和执行器
+ * @zh 蓝图节点 - 所有节点定义和执行器
+ * @en Blueprint Nodes - All node definitions and executors
+ *
+ * @zh 节点分类：
+ * - events: 生命周期事件（BeginPlay, Tick, EndPlay）
+ * - ecs: ECS 操作（Entity, Component, Flow）
+ * - math: 数学运算
+ * - time: 时间工具
+ * - debug: 调试工具
+ *
+ * @en Node categories:
+ * - events: Lifecycle events (BeginPlay, Tick, EndPlay)
+ * - ecs: ECS operations (Entity, Component, Flow)
+ * - math: Math operations
+ * - time: Time utilities
+ * - debug: Debug utilities
  */
 
-// Import all nodes to trigger registration
-// 导入所有节点以触发注册
+// Lifecycle events | 生命周期事件
 export * from './events';
-export * from './debug';
-export * from './time';
+
+// ECS operations | ECS 操作
+export * from './ecs';
+
+// Math operations | 数学运算
 export * from './math';
+
+// Time utilities | 时间工具
+export * from './time';
+
+// Debug utilities | 调试工具
+export * from './debug';

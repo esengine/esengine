@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState, useMemo } from 'react';
+import React, { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import { Graph } from '../../domain/models/Graph';
 import { GraphNode, NodeTemplate } from '../../domain/models/GraphNode';
 import { Connection } from '../../domain/models/Connection';
@@ -126,6 +126,18 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
     const [dragState, setDragState] = useState<DragState | null>(null);
     const [connectionDrag, setConnectionDrag] = useState<ConnectionDragState | null>(null);
     const [hoveredPin, setHoveredPin] = useState<Pin | null>(null);
+
+    // Force re-render after mount to ensure connections are drawn correctly
+    // 挂载后强制重渲染以确保连接线正确绘制
+    const [, forceUpdate] = useState(0);
+    useEffect(() => {
+        // Use requestAnimationFrame to wait for DOM to be fully rendered
+        // 使用 requestAnimationFrame 等待 DOM 完全渲染
+        const rafId = requestAnimationFrame(() => {
+            forceUpdate(n => n + 1);
+        });
+        return () => cancelAnimationFrame(rafId);
+    }, [graph.id]);
 
     /**
      * Converts screen coordinates to canvas coordinates
