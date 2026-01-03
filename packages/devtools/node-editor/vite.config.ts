@@ -4,12 +4,14 @@ import dts from 'vite-plugin-dts';
 import react from '@vitejs/plugin-react';
 
 /**
- * Custom plugin: Convert CSS to self-executing style injection code
- * 自定义插件：将 CSS 转换为自执行的样式注入代码
+ * Custom plugin: Handle CSS for node editor
+ * 自定义插件：处理节点编辑器的 CSS
+ *
+ * This plugin does two things:
+ * 1. Auto-injects CSS into document.head for normal usage
+ * 2. Replaces placeholder in cssText.ts with actual CSS for Shadow DOM usage
  */
 function injectCSSPlugin(): any {
-    let cssCounter = 0;
-
     return {
         name: 'inject-css-plugin',
         enforce: 'post' as const,
@@ -23,19 +25,28 @@ function injectCSSPlugin(): any {
                 const cssChunk = bundle[cssFile];
                 if (!cssChunk || !cssChunk.source) continue;
 
-                const cssContent = cssChunk.source;
-                const styleId = `esengine-node-editor-style-${cssCounter++}`;
+                const cssContent = cssChunk.source as string;
+                const styleId = 'esengine-node-editor-styles';
 
                 // Generate style injection code (生成样式注入代码)
                 const injectCode = `(function(){if(typeof document!=='undefined'){var s=document.createElement('style');s.id='${styleId}';if(!document.getElementById(s.id)){s.textContent=${JSON.stringify(cssContent)};document.head.appendChild(s);}}})();`;
 
-                // Inject into index.js (注入到 index.js)
+                // Process all JS bundles (处理所有 JS 包)
                 for (const jsKey of bundleKeys) {
-                    if (!jsKey.endsWith('.js')) continue;
+                    if (!jsKey.endsWith('.js') && !jsKey.endsWith('.cjs')) continue;
                     const jsChunk = bundle[jsKey];
                     if (!jsChunk || jsChunk.type !== 'chunk' || !jsChunk.code) continue;
 
-                    if (jsKey === 'index.js') {
+                    // Replace CSS placeholder with actual CSS content
+                    // 将 CSS 占位符替换为实际的 CSS 内容
+                    // Match both single and double quotes (ESM uses single, CJS uses double)
+                    jsChunk.code = jsChunk.code.replace(
+                        /['"]__NODE_EDITOR_CSS_PLACEHOLDER__['"]/g,
+                        JSON.stringify(cssContent)
+                    );
+
+                    // Auto-inject CSS for index bundles (为 index 包自动注入 CSS)
+                    if (jsKey === 'index.js' || jsKey === 'index.cjs') {
                         jsChunk.code = injectCode + '\n' + jsChunk.code;
                     }
                 }
@@ -65,8 +76,11 @@ export default defineConfig({
             entry: {
                 index: resolve(__dirname, 'src/index.ts')
             },
-            formats: ['es'],
-            fileName: (format, entryName) => `${entryName}.js`
+            formats: ['es', 'cjs'],
+            fileName: (format, entryName) => {
+                if (format === 'cjs') return `${entryName}.cjs`;
+                return `${entryName}.js`;
+            }
         },
         rollupOptions: {
             external: [

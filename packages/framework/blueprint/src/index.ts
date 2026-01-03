@@ -1,32 +1,47 @@
 /**
  * @esengine/blueprint - Visual scripting system for ECS Framework
  *
- * @zh 蓝图可视化脚本系统 - 可与任何 ECS 框架配合使用
- * @en Visual scripting system - works with any ECS framework
+ * @zh 蓝图可视化脚本系统 - 与 ECS 框架深度集成
+ * @en Visual scripting system - Deep integration with ECS framework
  *
- * @zh 此包是通用的可视化脚本实现，可以与任何 ECS 框架配合使用。
- * 对于 ESEngine 集成，请从 '@esengine/blueprint/esengine' 导入插件。
+ * @zh 此包提供完整的可视化脚本功能：
+ * - 内置 ECS 操作节点（Entity、Component、Flow）
+ * - 组件自动节点生成（使用装饰器标记）
+ * - 运行时蓝图执行
  *
- * @en This package is a generic visual scripting implementation that works with any ECS framework.
- * For ESEngine integration, import the plugin from '@esengine/blueprint/esengine'.
+ * @en This package provides complete visual scripting features:
+ * - Built-in ECS operation nodes (Entity, Component, Flow)
+ * - Auto component node generation (using decorators)
+ * - Runtime blueprint execution
  *
- * @example Cocos/Laya/通用 ECS 使用方式:
+ * @example 基础使用 | Basic usage:
  * ```typescript
  * import {
  *     createBlueprintSystem,
- *     createBlueprintComponentData
+ *     registerAllComponentNodes
  * } from '@esengine/blueprint';
  *
- * // Create blueprint system for your scene
+ * // 注册所有标记的组件节点 | Register all marked component nodes
+ * registerAllComponentNodes();
+ *
+ * // 创建蓝图系统 | Create blueprint system
  * const blueprintSystem = createBlueprintSystem(scene);
+ * ```
  *
- * // Create component data
- * const componentData = createBlueprintComponentData();
- * componentData.blueprintAsset = loadedAsset;
+ * @example 标记组件 | Mark components:
+ * ```typescript
+ * import { BlueprintExpose, BlueprintProperty, BlueprintMethod } from '@esengine/blueprint';
  *
- * // Add to your game loop
- * function update(dt) {
- *     blueprintSystem.process(blueprintEntities, dt);
+ * @ECSComponent('Health')
+ * @BlueprintExpose({ displayName: '生命值' })
+ * export class HealthComponent extends Component {
+ *     @BlueprintProperty({ displayName: '当前生命值' })
+ *     current: number = 100;
+ *
+ *     @BlueprintMethod({ displayName: '治疗' })
+ *     heal(amount: number): void {
+ *         this.current += amount;
+ *     }
  * }
  * ```
  *
@@ -45,7 +60,10 @@ export * from './triggers';
 // Composition
 export * from './composition';
 
-// Nodes (import to register)
+// Registry (decorators & auto-generation)
+export * from './registry';
+
+// Nodes (import to register built-in nodes)
 import './nodes';
 
 // Re-export commonly used items
@@ -65,3 +83,12 @@ export {
     triggerCustomBlueprintEvent
 } from './runtime/BlueprintSystem';
 export { createEmptyBlueprint, validateBlueprintAsset } from './types/blueprint';
+
+// Re-export registry for convenience
+export {
+    BlueprintExpose,
+    BlueprintProperty,
+    BlueprintMethod,
+    registerAllComponentNodes,
+    registerComponentNodes
+} from './registry';
