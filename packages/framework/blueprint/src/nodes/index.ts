@@ -5,6 +5,7 @@
  * @zh 节点分类：
  * - events: 生命周期事件（BeginPlay, Tick, EndPlay）
  * - ecs: ECS 操作（Entity, Component, Flow）
+ * - variables: 变量读写
  * - math: 数学运算
  * - time: 时间工具
  * - debug: 调试工具
@@ -12,6 +13,7 @@
  * @en Node categories:
  * - events: Lifecycle events (BeginPlay, Tick, EndPlay)
  * - ecs: ECS operations (Entity, Component, Flow)
+ * - variables: Variable get/set
  * - math: Math operations
  * - time: Time utilities
  * - debug: Debug utilities
@@ -22,6 +24,9 @@ export * from './events';
 
 // ECS operations | ECS 操作
 export * from './ecs';
+
+// Variables | 变量
+export * from './variables';
 
 // Math operations | 数学运算
 export * from './math';
