@@ -1,6 +1,6 @@
 {
   "name": "@esengine/node-editor",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Universal node-based visual editor for blueprint, shader graph, and state machine",
   "main": "dist/index.js",
   "module": "dist/index.js",
