@@ -12,6 +12,68 @@ import { ExecutionContext, ExecutionResult } from '../../runtime/ExecutionContex
 import { INodeExecutor, RegisterNode } from '../../runtime/NodeRegistry';
 
 // ============================================================================
+// Add Component (Generic) | 添加组件（通用）
+// ============================================================================
+
+export const AddComponentTemplate: BlueprintNodeTemplate = {
+    type: 'ECS_AddComponent',
+    title: 'Add Component',
+    category: 'component',
+    color: '#1e8b8b',
+    description: 'Adds a component to an entity by type name (按类型名称为实体添加组件)',
+    keywords: ['component', 'add', 'create', 'attach'],
+    menuPath: ['ECS', 'Component', 'Add Component'],
+    inputs: [
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'entity', type: 'entity', displayName: 'Entity' },
+        { name: 'componentType', type: 'string', displayName: 'Component Type', defaultValue: '' }
+    ],
+    outputs: [
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'component', type: 'component', displayName: 'Component' },
+        { name: 'success', type: 'bool', displayName: 'Success' }
+    ]
+};
+
+@RegisterNode(AddComponentTemplate)
+export class AddComponentExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const entity = context.evaluateInput(node.id, 'entity', context.entity) as Entity;
+        const componentType = context.evaluateInput(node.id, 'componentType', '') as string;
+
+        if (!entity || entity.isDestroyed || !componentType) {
+            return { outputs: { component: null, success: false }, nextExec: 'exec' };
+        }
+
+        // Check if component already exists
+        const existing = entity.components.find(c =>
+            c.constructor.name === componentType ||
+            (c.constructor as any).__componentName__ === componentType
+        );
+
+        if (existing) {
+            return { outputs: { component: existing, success: false }, nextExec: 'exec' };
+        }
+
+        // Try to create component from registry
+        const ComponentClass = context.getComponentClass?.(componentType);
+        if (!ComponentClass) {
+            console.warn(`[Blueprint] Component type not found: ${componentType}`);
+            return { outputs: { component: null, success: false }, nextExec: 'exec' };
+        }
+
+        try {
+            const component = new ComponentClass();
+            entity.addComponent(component);
+            return { outputs: { component, success: true }, nextExec: 'exec' };
+        } catch (error) {
+            console.error(`[Blueprint] Failed to add component ${componentType}:`, error);
+            return { outputs: { component: null, success: false }, nextExec: 'exec' };
+        }
+    }
+}
+
+// ============================================================================
 // Has Component | 是否有组件
 // ============================================================================
 

@@ -130,6 +130,13 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
     // Force re-render after mount to ensure connections are drawn correctly
     // 挂载后强制重渲染以确保连接线正确绘制
     const [, forceUpdate] = useState(0);
+
+    // Track collapsed state to force connection re-render
+    // 跟踪折叠状态以强制连接线重渲染
+    const collapsedNodesKey = useMemo(() => {
+        return graph.nodes.map(n => `${n.id}:${n.isCollapsed}`).join(',');
+    }, [graph.nodes]);
+
     useEffect(() => {
         // Use requestAnimationFrame to wait for DOM to be fully rendered
         // 使用 requestAnimationFrame 等待 DOM 完全渲染
@@ -137,7 +144,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
             forceUpdate(n => n + 1);
         });
         return () => cancelAnimationFrame(rafId);
-    }, [graph.id]);
+    }, [graph.id, collapsedNodesKey]);
 
     /**
      * Converts screen coordinates to canvas coordinates
@@ -158,20 +165,50 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
      * 获取引脚在画布坐标系中的位置
      *
      * 直接从节点位置和引脚在节点内的相对位置计算，不依赖 DOM 测量
+     * 当节点收缩时，返回节点头部的位置
      */
     const getPinPosition = useCallback((pinId: string): Position | undefined => {
+        // First, find which node this pin belongs to
+        // 首先查找该引脚属于哪个节点
+        let ownerNode: GraphNode | undefined;
+        for (const node of graph.nodes) {
+            if (node.allPins.some(p => p.id === pinId)) {
+                ownerNode = node;
+                break;
+            }
+        }
+        if (!ownerNode) return undefined;
+
         // Find the pin element and its parent node
         const pinElement = containerRef.current?.querySelector(`[data-pin-id="${pinId}"]`) as HTMLElement;
-        if (!pinElement) return undefined;
+
+        // If pin element not found (e.g., node is collapsed), use node header position
+        // 如果找不到引脚元素（例如节点已收缩），使用节点头部位置
+        if (!pinElement) {
+            const nodeElement = containerRef.current?.querySelector(`[data-node-id="${ownerNode.id}"]`) as HTMLElement;
+            if (!nodeElement) return undefined;
+
+            const nodeRect = nodeElement.getBoundingClientRect();
+            const { zoom } = transformRef.current;
+
+            // Find the pin to determine if it's input or output
+            const pin = ownerNode.allPins.find(p => p.id === pinId);
+            const isOutput = pin?.isOutput ?? false;
+
+            // For collapsed nodes, position at the right side for outputs, left side for inputs
+            // 对于收缩的节点，输出引脚在右侧，输入引脚在左侧
+            const headerHeight = 28; // Approximate header height
+            const relativeX = isOutput ? nodeRect.width / zoom : 0;
+            const relativeY = headerHeight / 2;
+
+            return new Position(
+                ownerNode.position.x + relativeX,
+                ownerNode.position.y + relativeY
+            );
+        }
 
         const nodeElement = pinElement.closest('[data-node-id]') as HTMLElement;
         if (!nodeElement) return undefined;
-
-        const nodeId = nodeElement.getAttribute('data-node-id');
-        if (!nodeId) return undefined;
-
-        const node = graph.getNode(nodeId);
-        if (!node) return undefined;
 
         // Get pin position relative to node element (in unscaled pixels)
         const nodeRect = nodeElement.getBoundingClientRect();
@@ -184,8 +221,8 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
 
         // Final position = node position + relative position
         return new Position(
-            node.position.x + relativeX,
-            node.position.y + relativeY
+            ownerNode.position.x + relativeX,
+            ownerNode.position.y + relativeY
         );
     }, [graph]);
 

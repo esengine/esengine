@@ -87,10 +87,21 @@ export interface BlueprintAsset {
 }
 
 /**
- * Creates an empty blueprint asset
- * 创建空的蓝图资产
+ * Creates an empty blueprint asset with default Event Begin Play node
+ * 创建带有默认 Event Begin Play 节点的空蓝图资产
  */
-export function createEmptyBlueprint(name: string): BlueprintAsset {
+export function createEmptyBlueprint(name: string, includeBeginPlay: boolean = true): BlueprintAsset {
+    const nodes: BlueprintNode[] = [];
+
+    if (includeBeginPlay) {
+        nodes.push({
+            id: 'node_beginplay_1',
+            type: 'EventBeginPlay',
+            position: { x: 100, y: 200 },
+            data: {}
+        });
+    }
+
     return {
         version: 1,
         type: 'blueprint',
@@ -100,7 +111,7 @@ export function createEmptyBlueprint(name: string): BlueprintAsset {
             modifiedAt: Date.now()
         },
         variables: [],
-        nodes: [],
+        nodes,
         connections: []
     };
 }

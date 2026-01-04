@@ -75,7 +75,28 @@ export { NodeRegistry, RegisterNode } from './runtime/NodeRegistry';
 export { BlueprintVM } from './runtime/BlueprintVM';
 export { BlueprintComponent } from './runtime/BlueprintComponent';
 export { BlueprintSystem } from './runtime/BlueprintSystem';
+export { ExecutionContext } from './runtime/ExecutionContext';
 export { createEmptyBlueprint, validateBlueprintAsset } from './types/blueprint';
+
+// Component registration helper
+import { ExecutionContext } from './runtime/ExecutionContext';
+import type { Component } from '@esengine/ecs-framework';
+
+/**
+ * @zh 注册组件类以支持在蓝图中动态创建
+ * @en Register a component class for dynamic creation in blueprints
+ *
+ * @example
+ * ```typescript
+ * import { registerComponentClass } from '@esengine/blueprint';
+ * import { MyComponent } from './MyComponent';
+ *
+ * registerComponentClass('MyComponent', MyComponent);
+ * ```
+ */
+export function registerComponentClass(typeName: string, componentClass: new () => Component): void {
+    ExecutionContext.registerComponentClass(typeName, componentClass);
+}
 
 // Re-export registry for convenience
 export {

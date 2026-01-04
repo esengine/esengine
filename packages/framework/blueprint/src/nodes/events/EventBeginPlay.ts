@@ -17,13 +17,19 @@ export const EventBeginPlayTemplate: BlueprintNodeTemplate = {
     category: 'event',
     color: '#CC0000',
     description: 'Triggered once when the blueprint starts executing (蓝图开始执行时触发一次)',
-    keywords: ['start', 'begin', 'init', 'event'],
+    keywords: ['start', 'begin', 'init', 'event', 'self'],
+    menuPath: ['Events', 'Begin Play'],
     inputs: [],
     outputs: [
         {
             name: 'exec',
             type: 'exec',
             displayName: ''
+        },
+        {
+            name: 'self',
+            type: 'entity',
+            displayName: 'Self'
         }
     ]
 };
@@ -34,11 +40,12 @@ export const EventBeginPlayTemplate: BlueprintNodeTemplate = {
  */
 @RegisterNode(EventBeginPlayTemplate)
 export class EventBeginPlayExecutor implements INodeExecutor {
-    execute(_node: BlueprintNode, _context: ExecutionContext): ExecutionResult {
-        // Event nodes just trigger execution flow
-        // 事件节点只触发执行流
+    execute(_node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         return {
-            nextExec: 'exec'
+            nextExec: 'exec',
+            outputs: {
+                self: context.entity
+            }
         };
     }
 }

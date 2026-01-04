@@ -17,13 +17,19 @@ export const EventTickTemplate: BlueprintNodeTemplate = {
     category: 'event',
     color: '#CC0000',
     description: 'Triggered every frame during execution (执行期间每帧触发)',
-    keywords: ['update', 'frame', 'tick', 'event'],
+    keywords: ['update', 'frame', 'tick', 'event', 'self'],
+    menuPath: ['Events', 'Tick'],
     inputs: [],
     outputs: [
         {
             name: 'exec',
             type: 'exec',
             displayName: ''
+        },
+        {
+            name: 'self',
+            type: 'entity',
+            displayName: 'Self'
         },
         {
             name: 'deltaTime',
@@ -43,6 +49,7 @@ export class EventTickExecutor implements INodeExecutor {
         return {
             nextExec: 'exec',
             outputs: {
+                self: context.entity,
                 deltaTime: context.deltaTime
             }
         };
