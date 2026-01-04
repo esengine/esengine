@@ -3,9 +3,10 @@
  * 执行上下文 - 蓝图执行的运行时上下文
  */
 
-import type { Entity, IScene } from '@esengine/ecs-framework';
+import type { Entity, IScene, Component } from '@esengine/ecs-framework';
 import { BlueprintNode, BlueprintConnection } from '../types/nodes';
 import { BlueprintAsset } from '../types/blueprint';
+import { getRegisteredBlueprintComponents } from '../registry/BlueprintDecorators';
 
 /**
  * Result of node execution
@@ -71,6 +72,9 @@ export class ExecutionContext {
 
     /** Global variables (shared) (全局变量，共享) */
     private static _globalVariables: Map<string, unknown> = new Map();
+
+    /** Component class registry (组件类注册表) */
+    private static _componentRegistry: Map<string, new () => Component> = new Map();
 
     /** Node output cache for current execution (当前执行的节点输出缓存) */
     private _outputCache: Map<string, Record<string, unknown>> = new Map();
@@ -266,5 +270,50 @@ export class ExecutionContext {
      */
     static clearGlobalVariables(): void {
         ExecutionContext._globalVariables.clear();
+    }
+
+    /**
+     * Get a component class by name
+     * 通过名称获取组件类
+     *
+     * @zh 首先检查 @BlueprintExpose 装饰的组件，然后检查手动注册的组件
+     * @en First checks @BlueprintExpose decorated components, then manually registered ones
+     */
+    getComponentClass(typeName: string): (new () => Component) | undefined {
+        // First check registered blueprint components
+        const blueprintComponents = getRegisteredBlueprintComponents();
+        for (const [componentClass, metadata] of blueprintComponents) {
+            if (metadata.componentName === typeName ||
+                componentClass.name === typeName) {
+                return componentClass as new () => Component;
+            }
+        }
+
+        // Then check manual registry
+        return ExecutionContext._componentRegistry.get(typeName);
+    }
+
+    /**
+     * Register a component class for dynamic creation
+     * 注册组件类以支持动态创建
+     */
+    static registerComponentClass(typeName: string, componentClass: new () => Component): void {
+        ExecutionContext._componentRegistry.set(typeName, componentClass);
+    }
+
+    /**
+     * Unregister a component class
+     * 取消注册组件类
+     */
+    static unregisterComponentClass(typeName: string): void {
+        ExecutionContext._componentRegistry.delete(typeName);
+    }
+
+    /**
+     * Get all registered component classes
+     * 获取所有已注册的组件类
+     */
+    static getRegisteredComponentClasses(): Map<string, new () => Component> {
+        return new Map(ExecutionContext._componentRegistry);
     }
 }

@@ -17,13 +17,19 @@ export const EventEndPlayTemplate: BlueprintNodeTemplate = {
     category: 'event',
     color: '#CC0000',
     description: 'Triggered once when the blueprint stops executing (蓝图停止执行时触发一次)',
-    keywords: ['stop', 'end', 'destroy', 'event'],
+    keywords: ['stop', 'end', 'destroy', 'event', 'self'],
+    menuPath: ['Events', 'End Play'],
     inputs: [],
     outputs: [
         {
             name: 'exec',
             type: 'exec',
             displayName: ''
+        },
+        {
+            name: 'self',
+            type: 'entity',
+            displayName: 'Self'
         }
     ]
 };
@@ -34,9 +40,12 @@ export const EventEndPlayTemplate: BlueprintNodeTemplate = {
  */
 @RegisterNode(EventEndPlayTemplate)
 export class EventEndPlayExecutor implements INodeExecutor {
-    execute(_node: BlueprintNode, _context: ExecutionContext): ExecutionResult {
+    execute(_node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         return {
-            nextExec: 'exec'
+            nextExec: 'exec',
+            outputs: {
+                self: context.entity
+            }
         };
     }
 }
