@@ -1,121 +1,86 @@
 /**
- * Blueprint Execution System - Manages blueprint lifecycle and execution
- * 蓝图执行系统 - 管理蓝图生命周期和执行
+ * @zh 蓝图系统 - 处理所有带有 BlueprintComponent 的实体
+ * @en Blueprint System - Processes all entities with BlueprintComponent
  */
 
-import type { Entity, IScene } from '@esengine/ecs-framework';
-import {
-    IBlueprintComponent,
-    initializeBlueprintVM,
-    startBlueprint,
-    tickBlueprint,
-    cleanupBlueprint
-} from './BlueprintComponent';
+import { EntitySystem, Matcher, ECSSystem, type Entity, Time } from '@esengine/ecs-framework';
+import { BlueprintComponent } from './BlueprintComponent';
+import { registerAllComponentNodes } from '../registry';
 
 /**
- * Blueprint system interface for engine integration
- * 用于引擎集成的蓝图系统接口
+ * @zh 蓝图执行系统
+ * @en Blueprint execution system
+ *
+ * @zh 自动处理所有带有 BlueprintComponent 的实体，管理蓝图的初始化、执行和清理
+ * @en Automatically processes all entities with BlueprintComponent, manages blueprint initialization, execution and cleanup
+ *
+ * @example
+ * ```typescript
+ * import { BlueprintSystem } from '@esengine/blueprint';
+ *
+ * // 添加到场景
+ * scene.addSystem(new BlueprintSystem());
+ *
+ * // 为实体添加蓝图
+ * const entity = scene.createEntity('Player');
+ * const blueprint = new BlueprintComponent();
+ * blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+ * entity.addComponent(blueprint);
+ * ```
  */
-export interface IBlueprintSystem {
-    /** Process entities with blueprint components (处理带有蓝图组件的实体) */
-    process(entities: IBlueprintEntity[], deltaTime: number): void;
+@ECSSystem('BlueprintSystem')
+export class BlueprintSystem extends EntitySystem {
+    private _componentsRegistered = false;
 
-    /** Called when entity is added to system (实体添加到系统时调用) */
-    onEntityAdded(entity: IBlueprintEntity): void;
-
-    /** Called when entity is removed from system (实体从系统移除时调用) */
-    onEntityRemoved(entity: IBlueprintEntity): void;
-}
-
-/**
- * Entity with blueprint component
- * 带有蓝图组件的实体
- */
-export interface IBlueprintEntity extends Entity {
-    /** Blueprint component data (蓝图组件数据) */
-    blueprintComponent: IBlueprintComponent;
-}
-
-/**
- * Creates a blueprint execution system
- * 创建蓝图执行系统
- */
-export function createBlueprintSystem(scene: IScene): IBlueprintSystem {
-    return {
-        process(entities: IBlueprintEntity[], deltaTime: number): void {
-            for (const entity of entities) {
-                const component = entity.blueprintComponent;
-
-                // Skip if no blueprint asset loaded
-                // 如果没有加载蓝图资产则跳过
-                if (!component.blueprintAsset) {
-                    continue;
-                }
-
-                // Initialize VM if needed
-                // 如果需要则初始化 VM
-                if (!component.vm) {
-                    initializeBlueprintVM(component, entity, scene);
-                }
-
-                // Auto-start if enabled
-                // 如果启用则自动启动
-                if (component.autoStart && !component.isStarted) {
-                    startBlueprint(component);
-                }
-
-                // Tick the blueprint
-                // 更新蓝图
-                tickBlueprint(component, deltaTime);
-            }
-        },
-
-        onEntityAdded(entity: IBlueprintEntity): void {
-            const component = entity.blueprintComponent;
-
-            if (component.blueprintAsset) {
-                initializeBlueprintVM(component, entity, scene);
-
-                if (component.autoStart) {
-                    startBlueprint(component);
-                }
-            }
-        },
-
-        onEntityRemoved(entity: IBlueprintEntity): void {
-            cleanupBlueprint(entity.blueprintComponent);
-        }
-    };
-}
-
-/**
- * Utility to manually trigger blueprint events
- * 手动触发蓝图事件的工具
- */
-export function triggerBlueprintEvent(
-    entity: IBlueprintEntity,
-    eventType: string,
-    data?: Record<string, unknown>
-): void {
-    const vm = entity.blueprintComponent.vm;
-
-    if (vm && entity.blueprintComponent.isStarted) {
-        vm.triggerEvent(eventType, data);
+    constructor() {
+        super(Matcher.all(BlueprintComponent));
     }
-}
 
-/**
- * Utility to trigger custom events by name
- * 按名称触发自定义事件的工具
- */
-export function triggerCustomBlueprintEvent(
-    entity: IBlueprintEntity,
-    eventName: string,
-    data?: Record<string, unknown>
-): void {
-    const vm = entity.blueprintComponent.vm;
+    /**
+     * @zh 系统初始化时注册所有组件节点
+     * @en Register all component nodes when system initializes
+     */
+    protected override onInitialize(): void {
+        if (!this._componentsRegistered) {
+            registerAllComponentNodes();
+            this._componentsRegistered = true;
+        }
+    }
 
-    if (vm && entity.blueprintComponent.isStarted) {
-        vm.triggerCustomEvent(eventName, data);
+    /**
+     * @zh 处理所有带有蓝图组件的实体
+     * @en Process all entities with blueprint components
+     */
+    protected override process(entities: readonly Entity[]): void {
+        const dt = Time.deltaTime;
+
+        for (const entity of entities) {
+            const blueprint = entity.getComponent(BlueprintComponent);
+            if (!blueprint?.blueprintAsset) continue;
+
+            // 初始化 VM
+            if (!blueprint.vm) {
+                blueprint.initialize(entity, this.scene!);
+            }
+
+            // 自动启动
+            if (blueprint.autoStart && !blueprint.isStarted) {
+                blueprint.start();
+            }
+
+            // 每帧更新
+            blueprint.tick(dt);
+        }
+    }
+
+    /**
+     * @zh 实体移除时清理蓝图资源
+     * @en Cleanup blueprint resources when entity is removed
+     */
+    protected override onRemoved(entity: Entity): void {
+        const blueprint = entity.getComponent(BlueprintComponent);
+        if (blueprint) {
+            blueprint.cleanup();
+        }
     }
 }

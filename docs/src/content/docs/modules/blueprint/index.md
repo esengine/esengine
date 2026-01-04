@@ -1,9 +1,9 @@
 ---
 title: "蓝图可视化脚本 (Blueprint)"
-description: "完整的可视化脚本系统"
+description: "与 ECS 框架深度集成的可视化脚本系统"
 ---
 
-`@esengine/blueprint` 提供了一个功能完整的可视化脚本系统，支持节点式编程、事件驱动和蓝图组合。
+`@esengine/blueprint` 提供与 ECS 框架深度集成的可视化脚本系统，支持通过节点式编程控制实体行为。
 
 ## 安装
 
@@ -11,104 +11,141 @@ description: "完整的可视化脚本系统"
 npm install @esengine/blueprint
 ```
 
+## 核心特性
+
+- **ECS 深度集成** - 内置 Entity、Component 操作节点
+- **组件自动节点生成** - 使用装饰器标记组件，自动生成 Get/Set/Call 节点
+- **运行时蓝图执行** - 高效的虚拟机执行蓝图逻辑
+
 ## 快速开始
+
+### 1. 添加蓝图系统
+
+```typescript
+import { Scene, Core } from '@esengine/ecs-framework';
+import { BlueprintSystem } from '@esengine/blueprint';
+
+// 创建场景并添加蓝图系统
+const scene = new Scene();
+scene.addSystem(new BlueprintSystem());
+
+// 设置场景
+Core.setScene(scene);
+```
+
+### 2. 为实体添加蓝图
+
+```typescript
+import { BlueprintComponent } from '@esengine/blueprint';
+
+// 创建实体
+const player = scene.createEntity('Player');
+
+// 添加蓝图组件
+const blueprint = new BlueprintComponent();
+blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+blueprint.autoStart = true;
+player.addComponent(blueprint);
+```
+
+### 3. 标记组件（自动生成蓝图节点）
 
 ```typescript
 import {
-    createBlueprintSystem,
-    createBlueprintComponentData,
-    NodeRegistry,
-    RegisterNode
+    BlueprintExpose,
+    BlueprintProperty,
+    BlueprintMethod
 } from '@esengine/blueprint';
+import { Component, ECSComponent } from '@esengine/ecs-framework';
 
-// 创建蓝图系统
-const blueprintSystem = createBlueprintSystem(scene);
+@ECSComponent('Health')
+@BlueprintExpose({ displayName: '生命值', category: 'gameplay' })
+export class HealthComponent extends Component {
+    @BlueprintProperty({ displayName: '当前生命值', type: 'float' })
+    current: number = 100;
 
-// 加载蓝图资产
-const blueprint = await loadBlueprintAsset('player.bp');
+    @BlueprintProperty({ displayName: '最大生命值', type: 'float' })
+    max: number = 100;
 
-// 创建蓝图组件数据
-const componentData = createBlueprintComponentData();
-componentData.blueprintAsset = blueprint;
+    @BlueprintMethod({
+        displayName: '治疗',
+        params: [{ name: 'amount', type: 'float' }]
+    })
+    heal(amount: number): void {
+        this.current = Math.min(this.current + amount, this.max);
+    }
 
-// 在游戏循环中更新
-function gameLoop(dt: number) {
-    blueprintSystem.process(entities, dt);
+    @BlueprintMethod({ displayName: '受伤' })
+    takeDamage(amount: number): boolean {
+        this.current -= amount;
+        return this.current <= 0;
+    }
 }
 ```
 
-## 核心概念
+标记后，蓝图编辑器中会自动出现以下节点：
+- **Get Health** - 获取 Health 组件
+- **Get 当前生命值** - 获取 current 属性
+- **Set 当前生命值** - 设置 current 属性
+- **治疗** - 调用 heal 方法
+- **受伤** - 调用 takeDamage 方法
 
-### 蓝图资产结构
+## ECS 集成架构
 
-蓝图保存为 `.bp` 文件，包含以下结构：
-
-```typescript
-interface BlueprintAsset {
-    version: number;           // 格式版本
-    type: 'blueprint';         // 资产类型
-    metadata: BlueprintMetadata; // 元数据
-    variables: BlueprintVariable[]; // 变量定义
-    nodes: BlueprintNode[];    // 节点实例
-    connections: BlueprintConnection[]; // 连接
-}
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Core.update()                        │
+│                              ↓                               │
+│                    Scene.updateSystems()                     │
+│                              ↓                               │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │                  BlueprintSystem                       │  │
+│  │                                                        │  │
+│  │  Matcher.all(BlueprintComponent)                       │  │
+│  │                       ↓                                │  │
+│  │  process(entities) → blueprint.tick() for each entity  │  │
+│  │                       ↓                                │  │
+│  │              BlueprintVM.tick(dt)                      │  │
+│  │                       ↓                                │  │
+│  │         Execute Event/ECS/Flow Nodes                   │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 节点类型
-
-节点按功能分为以下类别：
+## 节点类型
 
 | 类别 | 说明 | 颜色 |
 |------|------|------|
-| `event` | 事件节点（入口点） | 红色 |
-| `flow` | 流程控制 | 灰色 |
-| `entity` | 实体操作 | 蓝色 |
-| `component` | 组件访问 | 青色 |
+| `event` | 事件节点（BeginPlay, Tick, EndPlay） | 红色 |
+| `entity` | ECS 实体操作 | 蓝色 |
+| `component` | ECS 组件访问 | 青色 |
+| `flow` | 流程控制（Branch, Sequence, Loop） | 灰色 |
 | `math` | 数学运算 | 绿色 |
-| `logic` | 逻辑运算 | 红色 |
-| `variable` | 变量访问 | 紫色 |
-| `time` | 时间工具 | 青色 |
-| `debug` | 调试工具 | 灰色 |
+| `time` | 时间工具（Delay, GetDeltaTime） | 青色 |
+| `debug` | 调试工具（Print） | 灰色 |
 
-### 引脚类型
+## 蓝图资产结构
 
-节点通过引脚连接：
+蓝图保存为 `.bp` 文件：
 
 ```typescript
-interface BlueprintPinDefinition {
-    name: string;        // 引脚名称
-    type: PinDataType;   // 数据类型
-    direction: 'input' | 'output';
-    isExec?: boolean;    // 是否是执行引脚
-    defaultValue?: unknown;
+interface BlueprintAsset {
+    version: number;
+    type: 'blueprint';
+    metadata: {
+        name: string;
+        description?: string;
+    };
+    variables: BlueprintVariable[];
+    nodes: BlueprintNode[];
+    connections: BlueprintConnection[];
 }
-
-// 支持的数据类型
-type PinDataType =
-    | 'exec'      // 执行流
-    | 'boolean'   // 布尔值
-    | 'number'    // 数字
-    | 'string'    // 字符串
-    | 'vector2'   // 2D 向量
-    | 'vector3'   // 3D 向量
-    | 'entity'    // 实体引用
-    | 'component' // 组件引用
-    | 'any';      // 任意类型
-```
-
-### 变量作用域
-
-```typescript
-type VariableScope =
-    | 'local'     // 每次执行独立
-    | 'instance'  // 每个实体独立
-    | 'global';   // 全局共享
 ```
 
 ## 文档导航
 
-- [虚拟机 API](./vm) - BlueprintVM 执行和上下文
-- [自定义节点](./custom-nodes) - 创建自定义节点
-- [内置节点](./nodes) - 内置节点参考
-- [蓝图组合](./composition) - 片段和组合器
-- [实际示例](./examples) - ECS 集成和最佳实践
+- [虚拟机 API](./vm) - BlueprintVM 与 ECS 集成
+- [ECS 节点参考](./nodes) - 内置 ECS 操作节点
+- [自定义节点](./custom-nodes) - 创建自定义 ECS 节点
+- [蓝图组合](./composition) - 片段复用
+- [实际示例](./examples) - ECS 游戏逻辑示例

@@ -14,23 +14,27 @@
  * - Auto component node generation (using decorators)
  * - Runtime blueprint execution
  *
- * @example 基础使用 | Basic usage:
+ * @example 基础使用 | Basic Usage:
  * ```typescript
- * import {
- *     createBlueprintSystem,
- *     registerAllComponentNodes
- * } from '@esengine/blueprint';
+ * import { BlueprintSystem, BlueprintComponent } from '@esengine/blueprint';
+ * import { Scene, Core } from '@esengine/ecs-framework';
  *
- * // 注册所有标记的组件节点 | Register all marked component nodes
- * registerAllComponentNodes();
+ * // 创建场景并添加蓝图系统
+ * const scene = new Scene();
+ * scene.addSystem(new BlueprintSystem());
+ * Core.setScene(scene);
  *
- * // 创建蓝图系统 | Create blueprint system
- * const blueprintSystem = createBlueprintSystem(scene);
+ * // 为实体添加蓝图
+ * const entity = scene.createEntity('Player');
+ * const blueprint = new BlueprintComponent();
+ * blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+ * entity.addComponent(blueprint);
  * ```
  *
- * @example 标记组件 | Mark components:
+ * @example 标记组件 | Mark Components:
  * ```typescript
  * import { BlueprintExpose, BlueprintProperty, BlueprintMethod } from '@esengine/blueprint';
+ * import { Component, ECSComponent } from '@esengine/ecs-framework';
  *
  * @ECSComponent('Health')
  * @BlueprintExpose({ displayName: '生命值' })
@@ -69,19 +73,8 @@ import './nodes';
 // Re-export commonly used items
 export { NodeRegistry, RegisterNode } from './runtime/NodeRegistry';
 export { BlueprintVM } from './runtime/BlueprintVM';
-export {
-    createBlueprintComponentData,
-    initializeBlueprintVM,
-    startBlueprint,
-    stopBlueprint,
-    tickBlueprint,
-    cleanupBlueprint
-} from './runtime/BlueprintComponent';
-export {
-    createBlueprintSystem,
-    triggerBlueprintEvent,
-    triggerCustomBlueprintEvent
-} from './runtime/BlueprintSystem';
+export { BlueprintComponent } from './runtime/BlueprintComponent';
+export { BlueprintSystem } from './runtime/BlueprintSystem';
 export { createEmptyBlueprint, validateBlueprintAsset } from './types/blueprint';
 
 // Re-export registry for convenience

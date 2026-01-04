@@ -1,107 +1,118 @@
 ---
-title: "内置节点"
-description: "蓝图内置节点参考"
+title: "ECS 节点参考"
+description: "蓝图内置 ECS 操作节点"
 ---
 
 ## 事件节点
 
+生命周期事件，作为蓝图执行的入口点：
+
 | 节点 | 说明 |
 |------|------|
 | `EventBeginPlay` | 蓝图启动时触发 |
-| `EventTick` | 每帧触发 |
+| `EventTick` | 每帧触发，接收 deltaTime |
 | `EventEndPlay` | 蓝图停止时触发 |
-| `EventCollision` | 碰撞时触发 |
-| `EventInput` | 输入事件触发 |
-| `EventTimer` | 定时器触发 |
-| `EventMessage` | 自定义消息触发 |
 
-## 流程控制节点
+## 实体节点 (Entity)
+
+操作 ECS 实体：
+
+| 节点 | 说明 | 类型 |
+|------|------|------|
+| `Get Self` | 获取拥有此蓝图的实体 | 纯节点 |
+| `Create Entity` | 在场景中创建新实体 | 执行节点 |
+| `Destroy Entity` | 销毁指定实体 | 执行节点 |
+| `Destroy Self` | 销毁自身实体 | 执行节点 |
+| `Is Valid` | 检查实体是否有效 | 纯节点 |
+| `Get Entity Name` | 获取实体名称 | 纯节点 |
+| `Set Entity Name` | 设置实体名称 | 执行节点 |
+| `Get Entity Tag` | 获取实体标签 | 纯节点 |
+| `Set Entity Tag` | 设置实体标签 | 执行节点 |
+| `Set Active` | 设置实体激活状态 | 执行节点 |
+| `Is Active` | 检查实体是否激活 | 纯节点 |
+| `Find Entity By Name` | 按名称查找实体 | 纯节点 |
+| `Find Entities By Tag` | 按标签查找所有实体 | 纯节点 |
+| `Get Entity ID` | 获取实体唯一 ID | 纯节点 |
+| `Find Entity By ID` | 按 ID 查找实体 | 纯节点 |
+
+## 组件节点 (Component)
+
+操作 ECS 组件：
+
+| 节点 | 说明 | 类型 |
+|------|------|------|
+| `Has Component` | 检查实体是否有指定组件 | 纯节点 |
+| `Get Component` | 获取实体的组件 | 纯节点 |
+| `Get All Components` | 获取实体所有组件 | 纯节点 |
+| `Remove Component` | 移除组件 | 执行节点 |
+| `Get Component Property` | 获取组件属性值 | 纯节点 |
+| `Set Component Property` | 设置组件属性值 | 执行节点 |
+| `Get Component Type` | 获取组件类型名称 | 纯节点 |
+| `Get Owner Entity` | 从组件获取所属实体 | 纯节点 |
+
+## 流程控制节点 (Flow)
+
+控制执行流程：
 
 | 节点 | 说明 |
 |------|------|
 | `Branch` | 条件分支 (if/else) |
 | `Sequence` | 顺序执行多个输出 |
-| `ForLoop` | 循环执行 |
-| `WhileLoop` | 条件循环 |
-| `DoOnce` | 只执行一次 |
-| `FlipFlop` | 交替执行两个分支 |
+| `For Loop` | 循环执行 |
+| `For Each` | 遍历数组 |
+| `While Loop` | 条件循环 |
+| `Do Once` | 只执行一次 |
+| `Flip Flop` | 交替执行两个分支 |
 | `Gate` | 可开关的执行门 |
 
-## 时间节点
+## 时间节点 (Time)
+
+| 节点 | 说明 | 类型 |
+|------|------|------|
+| `Delay` | 延迟执行 | 执行节点 |
+| `Get Delta Time` | 获取帧间隔时间 | 纯节点 |
+| `Get Time` | 获取运行总时间 | 纯节点 |
+
+## 数学节点 (Math)
 
 | 节点 | 说明 |
 |------|------|
-| `Delay` | 延迟执行 |
-| `GetDeltaTime` | 获取帧间隔 |
-| `GetTime` | 获取运行时间 |
-| `SetTimer` | 设置定时器 |
-| `ClearTimer` | 清除定时器 |
-
-## 数学节点
-
-| 节点 | 说明 |
-|------|------|
-| `Add` | 加法 |
-| `Subtract` | 减法 |
-| `Multiply` | 乘法 |
-| `Divide` | 除法 |
+| `Add` / `Subtract` / `Multiply` / `Divide` | 四则运算 |
 | `Abs` | 绝对值 |
 | `Clamp` | 限制范围 |
 | `Lerp` | 线性插值 |
 | `Min` / `Max` | 最小/最大值 |
-| `Sin` / `Cos` | 三角函数 |
-| `Sqrt` | 平方根 |
-| `Power` | 幂运算 |
 
-## 逻辑节点
+## 调试节点 (Debug)
 
 | 节点 | 说明 |
 |------|------|
-| `And` | 逻辑与 |
-| `Or` | 逻辑或 |
-| `Not` | 逻辑非 |
-| `Equal` | 相等比较 |
-| `NotEqual` | 不等比较 |
-| `Greater` | 大于比较 |
-| `Less` | 小于比较 |
+| `Print` | 输出到控制台 |
 
-## 向量节点
+## 自动生成的组件节点
 
-| 节点 | 说明 |
-|------|------|
-| `MakeVector2` | 创建 2D 向量 |
-| `BreakVector2` | 分解 2D 向量 |
-| `VectorAdd` | 向量加法 |
-| `VectorSubtract` | 向量减法 |
-| `VectorMultiply` | 向量乘法 |
-| `VectorLength` | 向量长度 |
-| `VectorNormalize` | 向量归一化 |
-| `VectorDistance` | 向量距离 |
+使用 `@BlueprintExpose` 装饰器标记的组件会自动生成节点：
 
-## 实体节点
+```typescript
+@ECSComponent('Transform')
+@BlueprintExpose({ displayName: '变换', category: 'core' })
+export class TransformComponent extends Component {
+    @BlueprintProperty({ displayName: 'X 坐标' })
+    x: number = 0;
 
-| 节点 | 说明 |
-|------|------|
-| `GetSelf` | 获取当前实体 |
-| `GetComponent` | 获取组件 |
-| `HasComponent` | 检查组件 |
-| `AddComponent` | 添加组件 |
-| `RemoveComponent` | 移除组件 |
-| `SpawnEntity` | 创建实体 |
-| `DestroyEntity` | 销毁实体 |
+    @BlueprintProperty({ displayName: 'Y 坐标' })
+    y: number = 0;
 
-## 变量节点
+    @BlueprintMethod({ displayName: '移动' })
+    translate(dx: number, dy: number): void {
+        this.x += dx;
+        this.y += dy;
+    }
+}
+```
 
-| 节点 | 说明 |
-|------|------|
-| `GetVariable` | 获取变量值 |
-| `SetVariable` | 设置变量值 |
-
-## 调试节点
-
-| 节点 | 说明 |
-|------|------|
-| `Print` | 打印到控制台 |
-| `DrawDebugLine` | 绘制调试线 |
-| `DrawDebugPoint` | 绘制调试点 |
-| `Breakpoint` | 调试断点 |
+生成的节点：
+- **Get Transform** - 获取 Transform 组件
+- **Get X 坐标** / **Set X 坐标** - 访问 x 属性
+- **Get Y 坐标** / **Set Y 坐标** - 访问 y 属性
+- **移动** - 调用 translate 方法
