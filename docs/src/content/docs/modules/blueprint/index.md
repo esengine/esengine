@@ -5,7 +5,15 @@ description: "与 ECS 框架深度集成的可视化脚本系统"
 
 `@esengine/blueprint` 提供与 ECS 框架深度集成的可视化脚本系统，支持通过节点式编程控制实体行为。
 
-## 安装
+## 编辑器下载
+
+Cocos Creator 蓝图编辑器插件：
+
+**[下载 Cocos Node Editor v1.0.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.0.0)**
+
+详细使用教程请参考 [编辑器使用指南](./editor-guide)。
+
+## 安装运行时
 
 ```bash
 npm install @esengine/blueprint
@@ -144,6 +152,7 @@ interface BlueprintAsset {
 
 ## 文档导航
 
+- [编辑器使用指南](./editor-guide) - Cocos Creator 蓝图编辑器教程
 - [虚拟机 API](./vm) - BlueprintVM 与 ECS 集成
 - [ECS 节点参考](./nodes) - 内置 ECS 操作节点
 - [自定义节点](./custom-nodes) - 创建自定义 ECS 节点

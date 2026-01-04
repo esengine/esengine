@@ -5,7 +5,15 @@ description: "Visual scripting system deeply integrated with ECS framework"
 
 `@esengine/blueprint` provides a visual scripting system deeply integrated with the ECS framework, supporting node-based programming to control entity behavior.
 
-## Installation
+## Editor Download
+
+Blueprint Editor Plugin for Cocos Creator:
+
+**[Download Cocos Node Editor v1.0.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.0.0)**
+
+For detailed usage instructions, see [Editor User Guide](./editor-guide).
+
+## Runtime Installation
 
 ```bash
 npm install @esengine/blueprint
@@ -144,6 +152,7 @@ interface BlueprintAsset {
 
 ## Documentation Navigation
 
+- [Editor User Guide](./editor-guide) - Cocos Creator Blueprint Editor tutorial
 - [Virtual Machine API](./vm) - BlueprintVM and ECS integration
 - [ECS Node Reference](./nodes) - Built-in ECS operation nodes
 - [Custom Nodes](./custom-nodes) - Create custom ECS nodes

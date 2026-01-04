@@ -232,6 +232,7 @@ export default defineConfig({
               translations: { en: 'Blueprint' },
               items: [
                 { label: '概述', slug: 'modules/blueprint', translations: { en: 'Overview' } },
+                { label: '编辑器使用指南', slug: 'modules/blueprint/editor-guide', translations: { en: 'Editor Guide' } },
                 { label: '虚拟机 API', slug: 'modules/blueprint/vm', translations: { en: 'VM API' } },
                 { label: '自定义节点', slug: 'modules/blueprint/custom-nodes', translations: { en: 'Custom Nodes' } },
                 { label: '内置节点', slug: 'modules/blueprint/nodes', translations: { en: 'Built-in Nodes' } },
