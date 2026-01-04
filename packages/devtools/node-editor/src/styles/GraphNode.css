@@ -38,6 +38,24 @@
     z-index: var(--ne-z-dragging);
 }
 
+/* Error state for invalid variable references */
+.ne-node.has-error {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 1px #e74c3c,
+                0 0 12px rgba(231, 76, 60, 0.4),
+                0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.ne-node.has-error .ne-node-header {
+    background: linear-gradient(180deg, #c0392b 0%, #962d22 100%) !important;
+}
+
+.ne-node-warning-icon {
+    color: #f1c40f;
+    font-size: 14px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
 /* ==================== Node Header 节点头部 ==================== */
 .ne-node-header {
     display: flex;

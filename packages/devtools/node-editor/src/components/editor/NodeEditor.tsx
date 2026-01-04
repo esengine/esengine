@@ -81,6 +81,16 @@ interface ConnectionDragState {
 }
 
 /**
+ * Box selection state
+ * 框选状态
+ */
+interface BoxSelectState {
+    startPos: Position;
+    currentPos: Position;
+    additive: boolean;
+}
+
+/**
  * NodeEditor - Complete node graph editor component
  * NodeEditor - 完整的节点图编辑器组件
  */
@@ -126,6 +136,11 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
     const [dragState, setDragState] = useState<DragState | null>(null);
     const [connectionDrag, setConnectionDrag] = useState<ConnectionDragState | null>(null);
     const [hoveredPin, setHoveredPin] = useState<Pin | null>(null);
+    const [boxSelectState, setBoxSelectState] = useState<BoxSelectState | null>(null);
+
+    // Track if box selection just ended to prevent click from clearing selection
+    // 跟踪框选是否刚刚结束，以防止 click 清除选择
+    const boxSelectJustEndedRef = useRef(false);
 
     // Force re-render after mount to ensure connections are drawn correctly
     // 挂载后强制重渲染以确保连接线正确绘制
@@ -477,6 +492,12 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
      * 处理画布点击取消选择
      */
     const handleCanvasClick = useCallback((_position: Position, _e: React.MouseEvent) => {
+        // Skip if box selection just ended (click fires after mouseup)
+        // 如果框选刚刚结束则跳过（click 在 mouseup 之后触发）
+        if (boxSelectJustEndedRef.current) {
+            boxSelectJustEndedRef.current = false;
+            return;
+        }
         if (!readOnly) {
             onSelectionChange?.(new Set(), new Set());
         }
@@ -489,6 +510,79 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
     const handleCanvasContextMenu = useCallback((position: Position, e: React.MouseEvent) => {
         onCanvasContextMenu?.(position, e);
     }, [onCanvasContextMenu]);
+
+    /**
+     * Handles box selection start
+     * 处理框选开始
+     */
+    const handleBoxSelectStart = useCallback((position: Position, e: React.MouseEvent) => {
+        if (readOnly) return;
+        setBoxSelectState({
+            startPos: position,
+            currentPos: position,
+            additive: e.ctrlKey || e.metaKey
+        });
+    }, [readOnly]);
+
+    /**
+     * Handles box selection move
+     * 处理框选移动
+     */
+    const handleBoxSelectMove = useCallback((position: Position) => {
+        if (boxSelectState) {
+            setBoxSelectState(prev => prev ? { ...prev, currentPos: position } : null);
+        }
+    }, [boxSelectState]);
+
+    /**
+     * Handles box selection end
+     * 处理框选结束
+     */
+    const handleBoxSelectEnd = useCallback(() => {
+        if (!boxSelectState) return;
+
+        const { startPos, currentPos, additive } = boxSelectState;
+
+        // Calculate selection box bounds
+        const minX = Math.min(startPos.x, currentPos.x);
+        const maxX = Math.max(startPos.x, currentPos.x);
+        const minY = Math.min(startPos.y, currentPos.y);
+        const maxY = Math.max(startPos.y, currentPos.y);
+
+        // Find nodes within the selection box
+        const nodesInBox: string[] = [];
+        const nodeWidth = 200;  // Approximate node width
+        const nodeHeight = 100; // Approximate node height
+
+        for (const node of graph.nodes) {
+            const nodeLeft = node.position.x;
+            const nodeTop = node.position.y;
+            const nodeRight = nodeLeft + nodeWidth;
+            const nodeBottom = nodeTop + nodeHeight;
+
+            // Check if node intersects with selection box
+            const intersects = !(nodeRight < minX || nodeLeft > maxX || nodeBottom < minY || nodeTop > maxY);
+            if (intersects) {
+                nodesInBox.push(node.id);
+            }
+        }
+
+        // Update selection
+        if (additive) {
+            // Add to existing selection
+            const newSelection = new Set(selectedNodeIds);
+            nodesInBox.forEach(id => newSelection.add(id));
+            onSelectionChange?.(newSelection, new Set());
+        } else {
+            // Replace selection
+            onSelectionChange?.(new Set(nodesInBox), new Set());
+        }
+
+        // Mark that box selection just ended to prevent click from clearing selection
+        // 标记框选刚刚结束，以防止 click 清除选择
+        boxSelectJustEndedRef.current = true;
+        setBoxSelectState(null);
+    }, [boxSelectState, graph.nodes, selectedNodeIds, onSelectionChange]);
 
     /**
      * Handles pin value change
@@ -546,6 +640,9 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
                 onContextMenu={handleCanvasContextMenu}
                 onPanChange={handlePanChange}
                 onZoomChange={handleZoomChange}
+                onMouseDown={handleBoxSelectStart}
+                onCanvasMouseMove={handleBoxSelectMove}
+                onCanvasMouseUp={handleBoxSelectEnd}
             >
                 {/* Connection layer (连接层) */}
                 <ConnectionLayer
@@ -580,6 +677,19 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
                         onToggleCollapse={handleToggleCollapse}
                     />
                 ))}
+
+                {/* Box selection overlay (框选覆盖层) */}
+                {boxSelectState && (
+                    <div
+                        className="ne-selection-box"
+                        style={{
+                            left: Math.min(boxSelectState.startPos.x, boxSelectState.currentPos.x),
+                            top: Math.min(boxSelectState.startPos.y, boxSelectState.currentPos.y),
+                            width: Math.abs(boxSelectState.currentPos.x - boxSelectState.startPos.x),
+                            height: Math.abs(boxSelectState.currentPos.y - boxSelectState.startPos.y)
+                        }}
+                    />
+                )}
             </GraphCanvas>
         </div>
     );

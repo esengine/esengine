@@ -50,6 +50,15 @@ export interface GraphCanvasProps {
     /** Canvas context menu callback (画布右键菜单回调) */
     onContextMenu?: (position: Position, e: React.MouseEvent) => void;
 
+    /** Canvas mouse down callback for box selection (画布鼠标按下回调，用于框选) */
+    onMouseDown?: (position: Position, e: React.MouseEvent) => void;
+
+    /** Canvas mouse move callback (画布鼠标移动回调) */
+    onCanvasMouseMove?: (position: Position, e: React.MouseEvent) => void;
+
+    /** Canvas mouse up callback (画布鼠标释放回调) */
+    onCanvasMouseUp?: (position: Position, e: React.MouseEvent) => void;
+
     /** Children to render (要渲染的子元素) */
     children?: React.ReactNode;
 }
@@ -75,6 +84,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     onZoomChange,
     onClick,
     onContextMenu,
+    onMouseDown: onMouseDownProp,
+    onCanvasMouseMove,
+    onCanvasMouseUp,
     children
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -132,22 +144,30 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }, [zoom, pan, minZoom, maxZoom, updateZoom, updatePan]);
 
     /**
-     * Handles mouse down for panning
-     * 处理鼠标按下开始平移
+     * Handles mouse down for panning or box selection
+     * 处理鼠标按下开始平移或框选
      */
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        // Middle mouse button or space + left click for panning
-        // 中键或空格+左键平移
+        // Middle mouse button or Alt + left click for panning
+        // 中键或 Alt+左键平移
         if (e.button === 1 || (e.button === 0 && e.altKey)) {
             e.preventDefault();
             setIsPanning(true);
             lastMousePos.current = new Position(e.clientX, e.clientY);
+        } else if (e.button === 0) {
+            // Left click on canvas background - start box selection
+            // 左键点击画布背景 - 开始框选
+            const target = e.target as HTMLElement;
+            if (target === containerRef.current || target.classList.contains('ne-canvas-content')) {
+                const canvasPos = screenToCanvas(e.clientX, e.clientY);
+                onMouseDownProp?.(canvasPos, e);
+            }
         }
-    }, []);
+    }, [screenToCanvas, onMouseDownProp]);
 
     /**
-     * Handles mouse move for panning
-     * 处理鼠标移动进行平移
+     * Handles mouse move for panning or box selection
+     * 处理鼠标移动进行平移或框选
      */
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         if (isPanning) {
@@ -157,13 +177,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             const newPan = new Position(pan.x + dx, pan.y + dy);
             updatePan(newPan);
         }
-    }, [isPanning, pan, updatePan]);
+        // Always call canvas mouse move for box selection
+        // 始终调用画布鼠标移动回调用于框选
+        const canvasPos = screenToCanvas(e.clientX, e.clientY);
+        onCanvasMouseMove?.(canvasPos, e);
+    }, [isPanning, pan, updatePan, screenToCanvas, onCanvasMouseMove]);
 
     /**
-     * Handles mouse up to stop panning
-     * 处理鼠标释放停止平移
+     * Handles mouse up to stop panning or box selection
+     * 处理鼠标释放停止平移或框选
      */
-    const handleMouseUp = useCallback(() => {
+    const handleMouseUp = useCallback((e: React.MouseEvent) => {
+        setIsPanning(false);
+        const canvasPos = screenToCanvas(e.clientX, e.clientY);
+        onCanvasMouseUp?.(canvasPos, e);
+    }, [screenToCanvas, onCanvasMouseUp]);
+
+    /**
+     * Handles mouse leave to stop panning
+     * 处理鼠标离开停止平移
+     */
+    const handleMouseLeave = useCallback(() => {
         setIsPanning(false);
     }, []);
 
@@ -276,7 +310,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
             onClick={handleClick}
             onContextMenu={handleContextMenu}
         >

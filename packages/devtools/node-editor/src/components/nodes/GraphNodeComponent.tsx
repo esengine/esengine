@@ -64,6 +64,8 @@ export const GraphNodeComponent: React.FC<GraphNodeComponentProps> = ({
         return draggingFromPin.canConnectTo(pin);
     }, [draggingFromPin]);
 
+    const hasError = Boolean(node.data.invalidVariable);
+
     const classNames = useMemo(() => {
         const classes = ['ne-node'];
         if (isSelected) classes.push('selected');
@@ -71,8 +73,9 @@ export const GraphNodeComponent: React.FC<GraphNodeComponentProps> = ({
         if (node.isCollapsed) classes.push('collapsed');
         if (node.category === 'comment') classes.push('comment');
         if (executionState !== 'idle') classes.push(executionState);
+        if (hasError) classes.push('has-error');
         return classes.join(' ');
-    }, [isSelected, isDragging, node.isCollapsed, node.category, executionState]);
+    }, [isSelected, isDragging, node.isCollapsed, node.category, executionState, hasError]);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (e.button !== 0) return;
@@ -102,8 +105,10 @@ export const GraphNodeComponent: React.FC<GraphNodeComponentProps> = ({
         : undefined;
 
     // Separate exec pins from data pins
+    // Also filter out pins listed in data.hiddenInputs
+    const hiddenInputs = (node.data.hiddenInputs as string[]) || [];
     const inputExecPins = node.inputPins.filter(p => p.isExec && !p.hidden);
-    const inputDataPins = node.inputPins.filter(p => !p.isExec && !p.hidden);
+    const inputDataPins = node.inputPins.filter(p => !p.isExec && !p.hidden && !hiddenInputs.includes(p.name));
     const outputExecPins = node.outputPins.filter(p => p.isExec && !p.hidden);
     const outputDataPins = node.outputPins.filter(p => !p.isExec && !p.hidden);
 
@@ -129,13 +134,17 @@ export const GraphNodeComponent: React.FC<GraphNodeComponentProps> = ({
                 className={`ne-node-header ${node.category}`}
                 style={headerStyle}
             >
-                {/* Diamond icon for event nodes, or custom icon */}
+                {/* Warning icon for invalid nodes, or diamond/custom icon */}
                 <span className="ne-node-header-icon">
-                    {node.icon && renderIcon ? renderIcon(node.icon) : null}
+                    {hasError ? (
+                        <span className="ne-node-warning-icon" title={`Variable '${node.data.variableName}' not found`}>⚠</span>
+                    ) : (
+                        node.icon && renderIcon ? renderIcon(node.icon) : null
+                    )}
                 </span>
 
                 <span className="ne-node-header-title">
-                    {node.title}
+                    {(node.data.displayTitle as string) || node.title}
                     {node.subtitle && (
                         <span className="ne-node-header-subtitle">
                             {node.subtitle}
