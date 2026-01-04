@@ -34,9 +34,9 @@ your-project/
 ## Interface Overview
 
 - **Toolbar** - Located at the top, contains New, Open, Save, Undo, Redo operations
-- **Node Panel** - Located on the left, lists all available nodes by category (Event, Entity, Component, Flow Control, etc.)
-- **Canvas Area** - Main central area for placing and connecting nodes
-- **Variables Panel** - Located at the bottom, for defining and managing blueprint variables
+- **Variables Panel** - Located at the top-left, for defining and managing blueprint variables
+- **Canvas Area** - Main area for placing and connecting nodes
+- **Node Menu** - Right-click on empty canvas to open, lists all available nodes by category
 
 ## Canvas Operations
 
