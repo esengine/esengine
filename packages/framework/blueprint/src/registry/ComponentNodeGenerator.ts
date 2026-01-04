@@ -38,6 +38,8 @@ export function generateComponentNodes(
     const category = metadata.category ?? 'component';
     const color = metadata.color ?? '#1e8b8b';
 
+    // Generate Add/Get component nodes
+    generateAddComponentNode(componentClass, componentName, metadata, color);
     generateGetComponentNode(componentClass, componentName, metadata, color);
 
     for (const prop of properties) {
@@ -50,6 +52,105 @@ export function generateComponentNodes(
     for (const method of methods) {
         generateMethodCallNode(componentName, method, category, color);
     }
+}
+
+/**
+ * @zh 生成 Add Component 节点
+ * @en Generate Add Component node
+ */
+function generateAddComponentNode(
+    componentClass: Function,
+    componentName: string,
+    metadata: ComponentBlueprintMetadata,
+    color: string
+): void {
+    const nodeType = `Add_${componentName}`;
+    const displayName = metadata.displayName ?? componentName;
+
+    // Build input pins for initial property values
+    const propertyInputs: BlueprintNodeTemplate['inputs'] = [];
+    const propertyDefaults: Record<string, unknown> = {};
+
+    for (const prop of metadata.properties) {
+        if (!prop.readonly) {
+            propertyInputs.push({
+                name: prop.propertyKey,
+                type: prop.pinType,
+                displayName: prop.displayName,
+                defaultValue: prop.defaultValue
+            });
+            propertyDefaults[prop.propertyKey] = prop.defaultValue;
+        }
+    }
+
+    const template: BlueprintNodeTemplate = {
+        type: nodeType,
+        title: `Add ${displayName}`,
+        category: 'component',
+        color,
+        description: `Adds ${displayName} component to entity (为实体添加 ${displayName} 组件)`,
+        keywords: ['add', 'component', 'create', componentName.toLowerCase()],
+        menuPath: ['Components', displayName, `Add ${displayName}`],
+        inputs: [
+            { name: 'exec', type: 'exec', displayName: '' },
+            { name: 'entity', type: 'entity', displayName: 'Entity' },
+            ...propertyInputs
+        ],
+        outputs: [
+            { name: 'exec', type: 'exec', displayName: '' },
+            { name: 'component', type: 'component', displayName: displayName },
+            { name: 'success', type: 'bool', displayName: 'Success' }
+        ]
+    };
+
+    const propertyKeys = metadata.properties
+        .filter(p => !p.readonly)
+        .map(p => p.propertyKey);
+
+    const executor: INodeExecutor = {
+        execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+            const entity = context.evaluateInput(node.id, 'entity', context.entity) as Entity;
+
+            if (!entity || entity.isDestroyed) {
+                return { outputs: { component: null, success: false }, nextExec: 'exec' };
+            }
+
+            // Check if component already exists
+            const existing = entity.components.find(c =>
+                c.constructor === componentClass ||
+                c.constructor.name === componentName ||
+                (c.constructor as any).__componentName__ === componentName
+            );
+
+            if (existing) {
+                // Component already exists, return it
+                return { outputs: { component: existing, success: false }, nextExec: 'exec' };
+            }
+
+            try {
+                // Create new component instance
+                const component = new (componentClass as new () => Component)();
+
+                // Set initial property values from inputs
+                for (const key of propertyKeys) {
+                    const value = context.evaluateInput(node.id, key, propertyDefaults[key]);
+                    if (value !== undefined) {
+                        (component as any)[key] = value;
+                    }
+                }
+
+                // Add to entity
+                entity.addComponent(component);
+
+                return { outputs: { component, success: true }, nextExec: 'exec' };
+            } catch (error) {
+                console.error(`[Blueprint] Failed to add ${componentName}:`, error);
+                return { outputs: { component: null, success: false }, nextExec: 'exec' };
+            }
+        }
+    };
+
+    NodeRegistry.instance.register(template, executor);
 }
 
 /**
