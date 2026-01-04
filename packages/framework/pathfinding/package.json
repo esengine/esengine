@@ -1,6 +1,6 @@
 {
     "name": "@esengine/pathfinding",
-    "version": "5.0.0",
+    "version": "6.0.0",
     "description": "寻路系统 | Pathfinding System - A*, Grid, NavMesh",
     "type": "module",
     "main": "./dist/index.js",

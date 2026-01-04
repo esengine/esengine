@@ -1,5 +1,12 @@
 # @esengine/pathfinding
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`2e84942`](https://github.com/esengine/esengine/commit/2e84942ea14c5326620398add05840fa8bea16f8)]:
+    - @esengine/blueprint@4.2.0
+
 ## 5.0.0
 
 ### Patch Changes
