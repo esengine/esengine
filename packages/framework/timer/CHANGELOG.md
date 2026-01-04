@@ -1,5 +1,12 @@
 # @esengine/timer
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`c2acd14`](https://github.com/esengine/esengine/commit/c2acd14fce83af6cd116b3f2e40607229ccc3d6e)]:
+    - @esengine/blueprint@4.3.0
+
 ## 6.0.0
 
 ### Patch Changes
