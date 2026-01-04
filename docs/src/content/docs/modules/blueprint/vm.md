@@ -45,7 +45,7 @@ interface ExecutionContext {
     time: number;               // 总运行时间
 
     // 获取输入值
-    getInput<T>(nodeId: string, pinName: string): T;
+    evaluateInput(nodeId: string, pinName: string, defaultValue: unknown): unknown;
 
     // 设置输出值
     setOutput(nodeId: string, pinName: string, value: unknown): void;
@@ -70,35 +70,33 @@ interface ExecutionResult {
 
 ## 与 ECS 集成
 
-### 使用蓝图系统
+### 使用内置蓝图系统
 
 ```typescript
-import { createBlueprintSystem } from '@esengine/blueprint';
+import { Scene, Core } from '@esengine/ecs-framework';
+import { BlueprintSystem, BlueprintComponent } from '@esengine/blueprint';
 
-class GameScene {
-    private blueprintSystem: BlueprintSystem;
+// 添加蓝图系统到场景
+const scene = new Scene();
+scene.addSystem(new BlueprintSystem());
+Core.setScene(scene);
 
-    initialize() {
-        this.blueprintSystem = createBlueprintSystem(this.scene);
-    }
-
-    update(dt: number) {
-        // 处理所有带蓝图组件的实体
-        this.blueprintSystem.process(this.entities, dt);
-    }
-}
+// 为实体添加蓝图
+const entity = scene.createEntity('Player');
+const blueprint = new BlueprintComponent();
+blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+entity.addComponent(blueprint);
 ```
 
 ### 触发蓝图事件
 
 ```typescript
-import { triggerBlueprintEvent, triggerCustomBlueprintEvent } from '@esengine/blueprint';
-
-// 触发内置事件
-triggerBlueprintEvent(entity, 'Collision', { other: otherEntity });
-
-// 触发自定义事件
-triggerCustomBlueprintEvent(entity, 'OnPickup', { item: itemEntity });
+// 从实体获取蓝图组件并触发事件
+const blueprint = entity.getComponent(BlueprintComponent);
+if (blueprint?.vm) {
+    blueprint.vm.triggerEvent('EventCollision', { other: otherEntity });
+    blueprint.vm.triggerCustomEvent('OnPickup', { item: itemEntity });
+}
 ```
 
 ## 序列化

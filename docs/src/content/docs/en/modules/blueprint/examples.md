@@ -3,85 +3,127 @@ title: "Examples"
 description: "ECS integration and best practices"
 ---
 
-## Player Control Blueprint
+## Complete Game Integration Example
 
 ```typescript
-// Define input handling node
-const InputMoveTemplate: BlueprintNodeTemplate = {
-    type: 'InputMove',
-    title: 'Get Movement Input',
-    category: 'input',
-    inputs: [],
-    outputs: [
-        { name: 'direction', type: 'vector2', direction: 'output' }
-    ],
-    isPure: true
-};
+import { Scene, Core, Component, ECSComponent } from '@esengine/ecs-framework';
+import {
+    BlueprintSystem,
+    BlueprintComponent,
+    BlueprintExpose,
+    BlueprintProperty,
+    BlueprintMethod
+} from '@esengine/blueprint';
 
-@RegisterNode(InputMoveTemplate)
-class InputMoveExecutor implements INodeExecutor {
-    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        const input = context.scene.services.get(InputServiceToken);
-        const direction = {
-            x: input.getAxis('horizontal'),
-            y: input.getAxis('vertical')
-        };
-        return { outputs: { direction } };
+// 1. Define game components
+@ECSComponent('Player')
+@BlueprintExpose({ displayName: 'Player', category: 'gameplay' })
+export class PlayerComponent extends Component {
+    @BlueprintProperty({ displayName: 'Move Speed', type: 'float' })
+    moveSpeed: number = 5;
+
+    @BlueprintProperty({ displayName: 'Score', type: 'int' })
+    score: number = 0;
+
+    @BlueprintMethod({ displayName: 'Add Score' })
+    addScore(points: number): void {
+        this.score += points;
     }
+}
+
+@ECSComponent('Health')
+@BlueprintExpose({ displayName: 'Health', category: 'gameplay' })
+export class HealthComponent extends Component {
+    @BlueprintProperty({ displayName: 'Current Health' })
+    current: number = 100;
+
+    @BlueprintProperty({ displayName: 'Max Health' })
+    max: number = 100;
+
+    @BlueprintMethod({ displayName: 'Heal' })
+    heal(amount: number): void {
+        this.current = Math.min(this.current + amount, this.max);
+    }
+
+    @BlueprintMethod({ displayName: 'Take Damage' })
+    takeDamage(amount: number): boolean {
+        this.current -= amount;
+        return this.current <= 0;
+    }
+}
+
+// 2. Initialize game
+async function initGame() {
+    const scene = new Scene();
+
+    // Add blueprint system
+    scene.addSystem(new BlueprintSystem());
+
+    Core.setScene(scene);
+
+    // 3. Create player
+    const player = scene.createEntity('Player');
+    player.addComponent(new PlayerComponent());
+    player.addComponent(new HealthComponent());
+
+    // Add blueprint control
+    const blueprint = new BlueprintComponent();
+    blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+    player.addComponent(blueprint);
 }
 ```
 
-## State Switching Logic
+## Custom Node Example
 
 ```typescript
-// Implement state machine logic in blueprint
-const stateBlueprint = createEmptyBlueprint('PlayerState');
+import type { Entity } from '@esengine/ecs-framework';
+import {
+    BlueprintNodeTemplate,
+    BlueprintNode,
+    ExecutionContext,
+    ExecutionResult,
+    INodeExecutor,
+    RegisterNode
+} from '@esengine/blueprint';
 
-// Add state variable
-stateBlueprint.variables.push({
-    name: 'currentState',
-    type: 'string',
-    defaultValue: 'idle',
-    scope: 'instance'
-});
-
-// Check state transitions in Tick event
-// ... implemented via node connections
-```
-
-## Damage Handling System
-
-```typescript
 // Custom damage node
 const ApplyDamageTemplate: BlueprintNodeTemplate = {
     type: 'ApplyDamage',
     title: 'Apply Damage',
     category: 'combat',
+    color: '#aa2222',
+    description: 'Apply damage to entity with Health component',
+    keywords: ['damage', 'hurt', 'attack'],
+    menuPath: ['Combat', 'Apply Damage'],
     inputs: [
-        { name: 'exec', type: 'exec', direction: 'input', isExec: true },
-        { name: 'target', type: 'entity', direction: 'input' },
-        { name: 'amount', type: 'number', direction: 'input', defaultValue: 10 }
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'target', type: 'entity', displayName: 'Target' },
+        { name: 'amount', type: 'float', displayName: 'Damage', defaultValue: 10 }
     ],
     outputs: [
-        { name: 'exec', type: 'exec', direction: 'output', isExec: true },
-        { name: 'killed', type: 'boolean', direction: 'output' }
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'killed', type: 'bool', displayName: 'Killed' }
     ]
 };
 
 @RegisterNode(ApplyDamageTemplate)
 class ApplyDamageExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        const target = context.getInput<Entity>(node.id, 'target');
-        const amount = context.getInput<number>(node.id, 'amount');
+        const target = context.evaluateInput(node.id, 'target', context.entity) as Entity;
+        const amount = context.evaluateInput(node.id, 'amount', 10) as number;
 
-        const health = target.getComponent(HealthComponent);
+        if (!target || target.isDestroyed) {
+            return { outputs: { killed: false }, nextExec: 'exec' };
+        }
+
+        const health = target.components.find(c =>
+            (c.constructor as any).__componentName__ === 'Health'
+        ) as any;
+
         if (health) {
             health.current -= amount;
             const killed = health.current <= 0;
-            return {
-                outputs: { killed },
-                nextExec: 'exec'
-            };
+            return { outputs: { killed }, nextExec: 'exec' };
         }
 
         return { outputs: { killed: false }, nextExec: 'exec' };
@@ -132,7 +174,8 @@ vm.maxStepsPerFrame = 1000;
 
 ```typescript
 // Enable debug mode for execution logs
-vm.debug = true;
+const blueprint = entity.getComponent(BlueprintComponent);
+blueprint.debug = true;
 
 // Use Print nodes for intermediate values
 // Set breakpoints in editor

@@ -3,109 +3,132 @@ title: "实际示例"
 description: "ECS 集成和最佳实践"
 ---
 
-## 玩家控制蓝图
+## 完整游戏集成示例
 
 ```typescript
-// 定义输入处理节点
-const InputMoveTemplate: BlueprintNodeTemplate = {
-    type: 'InputMove',
-    title: 'Get Movement Input',
-    category: 'input',
-    inputs: [],
-    outputs: [
-        { name: 'direction', type: 'vector2', direction: 'output' }
-    ],
-    isPure: true
-};
+import { Scene, Core, Component, ECSComponent } from '@esengine/ecs-framework';
+import {
+    BlueprintSystem,
+    BlueprintComponent,
+    BlueprintExpose,
+    BlueprintProperty,
+    BlueprintMethod
+} from '@esengine/blueprint';
 
-@RegisterNode(InputMoveTemplate)
-class InputMoveExecutor implements INodeExecutor {
-    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        const input = context.scene.services.get(InputServiceToken);
-        const direction = {
-            x: input.getAxis('horizontal'),
-            y: input.getAxis('vertical')
-        };
-        return { outputs: { direction } };
+// 1. 定义游戏组件
+@ECSComponent('Player')
+@BlueprintExpose({ displayName: '玩家', category: 'gameplay' })
+export class PlayerComponent extends Component {
+    @BlueprintProperty({ displayName: '移动速度', type: 'float' })
+    moveSpeed: number = 5;
+
+    @BlueprintProperty({ displayName: '分数', type: 'int' })
+    score: number = 0;
+
+    @BlueprintMethod({ displayName: '增加分数' })
+    addScore(points: number): void {
+        this.score += points;
     }
+}
+
+@ECSComponent('Health')
+@BlueprintExpose({ displayName: '生命值', category: 'gameplay' })
+export class HealthComponent extends Component {
+    @BlueprintProperty({ displayName: '当前生命值' })
+    current: number = 100;
+
+    @BlueprintProperty({ displayName: '最大生命值' })
+    max: number = 100;
+
+    @BlueprintMethod({ displayName: '治疗' })
+    heal(amount: number): void {
+        this.current = Math.min(this.current + amount, this.max);
+    }
+
+    @BlueprintMethod({ displayName: '受伤' })
+    takeDamage(amount: number): boolean {
+        this.current -= amount;
+        return this.current <= 0;
+    }
+}
+
+// 2. 初始化游戏
+async function initGame() {
+    const scene = new Scene();
+
+    // 添加蓝图系统
+    scene.addSystem(new BlueprintSystem());
+
+    Core.setScene(scene);
+
+    // 3. 创建玩家
+    const player = scene.createEntity('Player');
+    player.addComponent(new PlayerComponent());
+    player.addComponent(new HealthComponent());
+
+    // 添加蓝图控制
+    const blueprint = new BlueprintComponent();
+    blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+    player.addComponent(blueprint);
 }
 ```
 
-## 状态切换逻辑
+## 自定义节点示例
 
 ```typescript
-// 在蓝图中实现状态机逻辑
-const stateBlueprint = createEmptyBlueprint('PlayerState');
+import type { Entity } from '@esengine/ecs-framework';
+import {
+    BlueprintNodeTemplate,
+    BlueprintNode,
+    ExecutionContext,
+    ExecutionResult,
+    INodeExecutor,
+    RegisterNode
+} from '@esengine/blueprint';
 
-// 添加状态变量
-stateBlueprint.variables.push({
-    name: 'currentState',
-    type: 'string',
-    defaultValue: 'idle',
-    scope: 'instance'
-});
-
-// 在 Tick 事件中检查状态转换
-// ... 通过节点连接实现
-```
-
-## 伤害处理系统
-
-```typescript
 // 自定义伤害节点
 const ApplyDamageTemplate: BlueprintNodeTemplate = {
     type: 'ApplyDamage',
     title: 'Apply Damage',
     category: 'combat',
+    color: '#aa2222',
+    description: '对带有 Health 组件的实体造成伤害',
+    keywords: ['damage', 'hurt', 'attack'],
+    menuPath: ['Combat', 'Apply Damage'],
     inputs: [
-        { name: 'exec', type: 'exec', direction: 'input', isExec: true },
-        { name: 'target', type: 'entity', direction: 'input' },
-        { name: 'amount', type: 'number', direction: 'input', defaultValue: 10 }
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'target', type: 'entity', displayName: '目标' },
+        { name: 'amount', type: 'float', displayName: '伤害量', defaultValue: 10 }
     ],
     outputs: [
-        { name: 'exec', type: 'exec', direction: 'output', isExec: true },
-        { name: 'killed', type: 'boolean', direction: 'output' }
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'killed', type: 'bool', displayName: '已击杀' }
     ]
 };
 
 @RegisterNode(ApplyDamageTemplate)
 class ApplyDamageExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        const target = context.getInput<Entity>(node.id, 'target');
-        const amount = context.getInput<number>(node.id, 'amount');
+        const target = context.evaluateInput(node.id, 'target', context.entity) as Entity;
+        const amount = context.evaluateInput(node.id, 'amount', 10) as number;
 
-        const health = target.getComponent(HealthComponent);
+        if (!target || target.isDestroyed) {
+            return { outputs: { killed: false }, nextExec: 'exec' };
+        }
+
+        const health = target.components.find(c =>
+            (c.constructor as any).__componentName__ === 'Health'
+        ) as any;
+
         if (health) {
             health.current -= amount;
             const killed = health.current <= 0;
-            return {
-                outputs: { killed },
-                nextExec: 'exec'
-            };
+            return { outputs: { killed }, nextExec: 'exec' };
         }
 
         return { outputs: { killed: false }, nextExec: 'exec' };
     }
 }
-```
-
-## 技能冷却系统
-
-```typescript
-// 冷却检查节点
-const CheckCooldownTemplate: BlueprintNodeTemplate = {
-    type: 'CheckCooldown',
-    title: 'Check Cooldown',
-    category: 'ability',
-    inputs: [
-        { name: 'skillId', type: 'string', direction: 'input' }
-    ],
-    outputs: [
-        { name: 'ready', type: 'boolean', direction: 'output' },
-        { name: 'remaining', type: 'number', direction: 'output' }
-    ],
-    isPure: true
-};
 ```
 
 ## 最佳实践
@@ -151,7 +174,8 @@ vm.maxStepsPerFrame = 1000;
 
 ```typescript
 // 启用调试模式查看执行日志
-vm.debug = true;
+const blueprint = entity.getComponent(BlueprintComponent);
+blueprint.debug = true;
 
 // 使用 Print 节点输出中间值
 // 在编辑器中设置断点

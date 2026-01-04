@@ -28,13 +28,13 @@ const MyNodeTemplate: BlueprintNodeTemplate = {
 ## Implementing Node Executor
 
 ```typescript
-import { INodeExecutor, RegisterNode } from '@esengine/blueprint';
+import { INodeExecutor, RegisterNode, BlueprintNode, ExecutionContext, ExecutionResult } from '@esengine/blueprint';
 
 @RegisterNode(MyNodeTemplate)
 class MyNodeExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        // Get input
-        const value = context.getInput<number>(node.id, 'value');
+        // Get input (using evaluateInput)
+        const value = context.evaluateInput(node.id, 'value', 0) as number;
 
         // Execute logic
         const result = value * 2;
@@ -100,29 +100,58 @@ const PureNodeTemplate: BlueprintNodeTemplate = {
 };
 ```
 
-## Example: Input Handler Node
+## Example: ECS Component Operation Node
 
 ```typescript
-const InputMoveTemplate: BlueprintNodeTemplate = {
-    type: 'InputMove',
-    title: 'Get Movement Input',
-    category: 'input',
-    inputs: [],
-    outputs: [
-        { name: 'direction', type: 'vector2', direction: 'output' }
+import type { Entity } from '@esengine/ecs-framework';
+import { BlueprintNodeTemplate, BlueprintNode } from '@esengine/blueprint';
+import { ExecutionContext, ExecutionResult } from '@esengine/blueprint';
+import { INodeExecutor, RegisterNode } from '@esengine/blueprint';
+
+// Custom heal node
+const HealEntityTemplate: BlueprintNodeTemplate = {
+    type: 'HealEntity',
+    title: 'Heal Entity',
+    category: 'gameplay',
+    color: '#22aa22',
+    description: 'Heal an entity with HealthComponent',
+    keywords: ['heal', 'health', 'restore'],
+    menuPath: ['Gameplay', 'Combat', 'Heal Entity'],
+    inputs: [
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'entity', type: 'entity', displayName: 'Target' },
+        { name: 'amount', type: 'float', displayName: 'Amount', defaultValue: 10 }
     ],
-    isPure: true
+    outputs: [
+        { name: 'exec', type: 'exec', displayName: '' },
+        { name: 'newHealth', type: 'float', displayName: 'New Health' }
+    ]
 };
 
-@RegisterNode(InputMoveTemplate)
-class InputMoveExecutor implements INodeExecutor {
+@RegisterNode(HealEntityTemplate)
+class HealEntityExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        const input = context.scene.services.get(InputServiceToken);
-        const direction = {
-            x: input.getAxis('horizontal'),
-            y: input.getAxis('vertical')
-        };
-        return { outputs: { direction } };
+        const entity = context.evaluateInput(node.id, 'entity', context.entity) as Entity;
+        const amount = context.evaluateInput(node.id, 'amount', 10) as number;
+
+        if (!entity || entity.isDestroyed) {
+            return { outputs: { newHealth: 0 }, nextExec: 'exec' };
+        }
+
+        // Get HealthComponent
+        const health = entity.components.find(c =>
+            (c.constructor as any).__componentName__ === 'Health'
+        ) as any;
+
+        if (health) {
+            health.current = Math.min(health.current + amount, health.max);
+            return {
+                outputs: { newHealth: health.current },
+                nextExec: 'exec'
+            };
+        }
+
+        return { outputs: { newHealth: 0 }, nextExec: 'exec' };
     }
 }
 ```

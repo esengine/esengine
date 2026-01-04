@@ -45,7 +45,7 @@ interface ExecutionContext {
     time: number;               // Total runtime
 
     // Get input value
-    getInput<T>(nodeId: string, pinName: string): T;
+    evaluateInput(nodeId: string, pinName: string, defaultValue: unknown): unknown;
 
     // Set output value
     setOutput(nodeId: string, pinName: string, value: unknown): void;
@@ -70,35 +70,33 @@ interface ExecutionResult {
 
 ## ECS Integration
 
-### Using Blueprint System
+### Using Built-in Blueprint System
 
 ```typescript
-import { createBlueprintSystem } from '@esengine/blueprint';
+import { Scene, Core } from '@esengine/ecs-framework';
+import { BlueprintSystem, BlueprintComponent } from '@esengine/blueprint';
 
-class GameScene {
-    private blueprintSystem: BlueprintSystem;
+// Add blueprint system to scene
+const scene = new Scene();
+scene.addSystem(new BlueprintSystem());
+Core.setScene(scene);
 
-    initialize() {
-        this.blueprintSystem = createBlueprintSystem(this.scene);
-    }
-
-    update(dt: number) {
-        // Process all entities with blueprint components
-        this.blueprintSystem.process(this.entities, dt);
-    }
-}
+// Add blueprint to entity
+const entity = scene.createEntity('Player');
+const blueprint = new BlueprintComponent();
+blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+entity.addComponent(blueprint);
 ```
 
 ### Triggering Blueprint Events
 
 ```typescript
-import { triggerBlueprintEvent, triggerCustomBlueprintEvent } from '@esengine/blueprint';
-
-// Trigger built-in event
-triggerBlueprintEvent(entity, 'Collision', { other: otherEntity });
-
-// Trigger custom event
-triggerCustomBlueprintEvent(entity, 'OnPickup', { item: itemEntity });
+// Get blueprint component from entity and trigger events
+const blueprint = entity.getComponent(BlueprintComponent);
+if (blueprint?.vm) {
+    blueprint.vm.triggerEvent('EventCollision', { other: otherEntity });
+    blueprint.vm.triggerCustomEvent('OnPickup', { item: itemEntity });
+}
 ```
 
 ## Serialization
