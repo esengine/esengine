@@ -9,6 +9,9 @@ description: "Cocos Creator 蓝图可视化脚本编辑器完整使用教程"
 
 ### 下载
 
+> **内测中**：蓝图编辑器目前处于内测阶段，需要激活码才能使用。
+> 请加入 QQ 群 **481923584** 后私聊群主获取激活码。
+
 从 GitHub Release 下载最新版本：
 
 **[下载 Cocos Node Editor v1.0.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.0.0)**

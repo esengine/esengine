@@ -9,6 +9,9 @@ This guide covers how to use the Blueprint Visual Scripting Editor in Cocos Crea
 
 ### Download
 
+> **Beta Testing**: The blueprint editor is currently in beta. An activation code is required.
+> Please join QQ Group **481923584** and message the group owner to get your activation code.
+
 Download the latest version from GitHub Release:
 
 **[Download Cocos Node Editor v1.0.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.0.0)**
