@@ -1,5 +1,16 @@
 # @esengine/node-editor
 
+## 1.3.0
+
+### Minor Changes
+
+- [`3bfb8a1`](https://github.com/esengine/esengine/commit/3bfb8a1c9baba18373717910d29f266a71c1f63e) Thanks [@esengine](https://github.com/esengine)! - feat(node-editor): add box selection and variable node error states
+    - Add box selection: drag on empty canvas to select multiple nodes
+    - Support Ctrl+drag for additive selection (add to existing selection)
+    - Add error state styling for invalid variable references (red border, warning icon)
+    - Support dynamic node title via `data.displayTitle`
+    - Support hiding inputs via `data.hiddenInputs` array
+
 ## 1.2.2
 
 ### Patch Changes
