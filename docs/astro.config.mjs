@@ -3,8 +3,12 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import vue from '@astrojs/vue';
 import tailwindcss from '@tailwindcss/vite';
+import rehypeRaw from 'rehype-raw';
 
 export default defineConfig({
+  markdown: {
+    rehypePlugins: [rehypeRaw],
+  },
   integrations: [
     starlight({
       title: 'ESEngine',
