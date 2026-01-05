@@ -236,3 +236,257 @@ nav.sidebar-content ul li a[aria-current="page"] {
     font-size: 2rem;
   }
 }
+
+/* ==================== Blueprint Node Visualization ==================== */
+/* Matches the actual node-editor component styles */
+
+/* Graph Container - 使用固定像素坐标 */
+.bp-graph {
+  position: relative;
+  background: #141419;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  border: 1px solid #2a2a35;
+  overflow: auto;
+  cursor: grab;
+}
+
+.bp-graph:active {
+  cursor: grabbing;
+}
+
+/* Inner container for panning */
+.bp-graph-content {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+/* SVG Connections Layer */
+.bp-connections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Node absolute positioning in graph */
+.bp-graph > .bp-node {
+  position: absolute;
+}
+
+/* Connection paths */
+.bp-conn {
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+
+.bp-conn.exec { stroke: #ffffff; stroke-width: 3px; }
+.bp-conn.float { stroke: #7ecd32; }
+.bp-conn.int { stroke: #1cc4c4; }
+.bp-conn.bool { stroke: #8c0000; }
+.bp-conn.string { stroke: #e060e0; }
+.bp-conn.object { stroke: #00a0e0; }
+.bp-conn.entity { stroke: #00a0e0; }
+.bp-conn.component { stroke: #7030c0; }
+.bp-conn.array { stroke: #7030c0; }
+.bp-conn.any { stroke: #707070; }
+
+/* ==================== Node Container ==================== */
+.bp-node {
+  position: relative;
+  min-width: 140px;
+  background: rgba(12, 12, 16, 0.95);
+  border: 1px solid rgba(40, 40, 50, 0.8);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* ==================== Node Header ==================== */
+/* 与 node-editor 完全一致 */
+.bp-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 28px;
+  border-radius: 5px 5px 0 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  position: relative;
+}
+
+/* Header icon - diamond for events */
+.bp-node-header-icon {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.bp-node-header.event .bp-node-header-icon {
+  background: #fff;
+  transform: rotate(45deg);
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+}
+
+/* Header title */
+.bp-node-header-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header exec pin (for event nodes) - at right edge */
+/* 与 node-editor 完全一致 */
+.bp-header-exec {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bp-header-exec svg {
+  display: block;
+}
+
+/* Category Colors */
+.bp-node-header.event {
+  background: linear-gradient(180deg, #b81c1c 0%, #6b1010 100%);
+}
+
+.bp-node-header.function {
+  background: linear-gradient(180deg, #1b6eb5 0%, #0d3d66 100%);
+}
+
+.bp-node-header.pure {
+  background: linear-gradient(180deg, #3d8b3d 0%, #1f5a1f 100%);
+}
+
+.bp-node-header.flow {
+  background: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%);
+}
+
+.bp-node-header.variable {
+  background: linear-gradient(180deg, #7b3d9b 0%, #4a1f66 100%);
+}
+
+.bp-node-header.debug {
+  background: linear-gradient(180deg, #6a6a6a 0%, #3a3a3a 100%);
+}
+
+.bp-node-header.time {
+  background: linear-gradient(180deg, #1cc4c4 0%, #0d7070 100%);
+}
+
+.bp-node-header.math {
+  background: linear-gradient(180deg, #7ecd32 0%, #4a7a1e 100%);
+}
+
+/* ==================== Node Body ==================== */
+/* 与 node-editor 完全一致 */
+.bp-node-body {
+  padding: 6px 0;
+  background: rgba(8, 8, 12, 0.95);
+  border-radius: 0 0 5px 5px;
+}
+
+/* ==================== Pin Row ==================== */
+/* 与 node-editor 完全一致 */
+.bp-pin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  padding: 1px 0;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.bp-pin-row.input {
+  flex-direction: row;
+  justify-content: flex-start;
+  padding-left: 10px;
+  padding-right: 16px;
+}
+
+.bp-pin-row.output {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  padding-right: 10px;
+  padding-left: 16px;
+}
+
+/* ==================== Pin (SVG-based) ==================== */
+.bp-pin {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bp-pin svg {
+  display: block;
+}
+
+/* Pin Label */
+.bp-pin-label {
+  color: #b0b0b0;
+  font-size: 11px;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.bp-pin-row.output .bp-pin-label {
+  text-align: right;
+}
+
+/* Pin Value */
+.bp-pin-value {
+  color: #7ecd32;
+  font-size: 10px;
+  margin-left: auto;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.bp-pin-row.output .bp-pin-value {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* ==================== Legend ==================== */
+.bp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(20, 20, 25, 0.8);
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+.bp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #a0a0a0;
+}

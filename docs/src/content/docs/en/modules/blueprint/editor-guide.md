@@ -3,6 +3,8 @@ title: "Blueprint Editor User Guide"
 description: "Complete guide for using the Cocos Creator Blueprint Visual Scripting Editor"
 ---
 
+<script src="/js/blueprint-graph.js"></script>
+
 This guide covers how to use the Blueprint Visual Scripting Editor in Cocos Creator.
 
 ## Download & Installation
@@ -345,50 +347,244 @@ Blueprints are saved as JSON, compatible with `@esengine/blueprint` runtime:
 
 Move entity every frame:
 
-```
-[Event Tick] ─Exec─→ [Get Self] ─Entity─→ [Get Component: Transform]
-                                               │
-                     [Get Delta Time]          ▼
-                          │              [Set Property: x]
-                          │                    │
-                     [Multiply] ◄──────────────┘
-                          │
-                          └─ Speed: 100
-```
+<div class="bp-graph" style="" data-connections='[{"from":"ex1-exec","to":"ex1-setprop","type":"exec"},{"from":"ex1-delta","to":"ex1-mul-a","type":"float"},{"from":"ex1-mul-result","to":"ex1-x","type":"float"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 140px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event Tick</span>
+      <span class="bp-header-exec" data-pin="ex1-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex1-delta"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Delta Time</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 200px; top: 110px; width: 120px;">
+    <div class="bp-node-header math">Multiply</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex1-mul-a"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">A</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7ecd32" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">B (Speed)</span>
+        <span class="bp-pin-value">100</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex1-mul-result"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Result</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 380px; top: 20px; width: 150px;">
+    <div class="bp-node-header function">Set Property</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex1-setprop"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7030c0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Target</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex1-x"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">x</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### Example 2: Health System
 
-Check death after taking damage:
+Check death after taking damage. `Event OnDamage` is a custom event node that can be triggered from code via `vm.triggerCustomEvent('OnDamage', { damage: 50 })`:
 
-```
-[On Damage Event] ─→ [Get Component: Health] ─→ [Get Property: current]
-                                                        │
-                                                        ▼
-                                                  [Subtract]
-                                                        │
-                                                        ▼
-                                                  [Set Property: current]
-                                                        │
-                                                        ▼
-                              ┌─ True ─→ [Destroy Self]
-                     [Branch]─┤
-                              └─ False ─→ (continue)
-                                   ▲
-                                   │
-                           [Less Or Equal]
-                                   │
-                              current <= 0
-```
+<div class="bp-graph" data-graph='{
+  "nodes": [
+    {
+      "id": "event", "title": "Event OnDamage", "category": "event",
+      "outputs": [
+        {"id": "event-exec", "type": "exec", "inHeader": true},
+        {"id": "event-self", "type": "entity", "label": "Self"},
+        {"id": "event-damage", "type": "float", "label": "Damage"}
+      ]
+    },
+    {
+      "id": "getcomp", "title": "Get Component", "category": "function",
+      "inputs": [
+        {"id": "getcomp-exec", "type": "exec", "label": "Exec"},
+        {"id": "getcomp-entity", "type": "entity", "label": "Entity"},
+        {"id": "getcomp-type", "type": "string", "label": "Type", "value": "Health", "connected": false}
+      ],
+      "outputs": [
+        {"id": "getcomp-out", "type": "exec"},
+        {"id": "getcomp-comp", "type": "component", "label": "Component"}
+      ]
+    },
+    {
+      "id": "getprop", "title": "Get Property", "category": "pure",
+      "inputs": [
+        {"id": "getprop-target", "type": "component", "label": "Target"},
+        {"id": "getprop-prop", "type": "string", "label": "Property", "value": "current", "connected": false}
+      ],
+      "outputs": [
+        {"id": "getprop-val", "type": "float", "label": "Value"}
+      ]
+    },
+    {
+      "id": "sub", "title": "Subtract", "category": "math",
+      "inputs": [
+        {"id": "sub-exec", "type": "exec", "label": "Exec"},
+        {"id": "sub-a", "type": "float", "label": "A"},
+        {"id": "sub-b", "type": "float", "label": "B"}
+      ],
+      "outputs": [
+        {"id": "sub-out", "type": "exec"},
+        {"id": "sub-result", "type": "float", "label": "Result"}
+      ]
+    },
+    {
+      "id": "setprop", "title": "Set Property", "category": "function",
+      "inputs": [
+        {"id": "setprop-exec", "type": "exec", "label": "Exec"},
+        {"id": "setprop-target", "type": "component", "label": "Target"},
+        {"id": "setprop-prop", "type": "string", "label": "Property", "value": "current", "connected": false},
+        {"id": "setprop-val", "type": "float", "label": "Value"}
+      ],
+      "outputs": [
+        {"id": "setprop-out", "type": "exec"}
+      ]
+    },
+    {
+      "id": "lte", "title": "Less Or Equal", "category": "pure",
+      "inputs": [
+        {"id": "lte-a", "type": "float", "label": "A"},
+        {"id": "lte-b", "type": "float", "label": "B", "value": "0", "connected": false}
+      ],
+      "outputs": [
+        {"id": "lte-result", "type": "bool", "label": "Result"}
+      ]
+    },
+    {
+      "id": "branch", "title": "Branch", "category": "flow",
+      "inputs": [
+        {"id": "branch-exec", "type": "exec", "label": "Exec"},
+        {"id": "branch-cond", "type": "bool", "label": "Condition"}
+      ],
+      "outputs": [
+        {"id": "branch-true", "type": "exec", "label": "True"},
+        {"id": "branch-false", "type": "exec", "label": "False"}
+      ]
+    },
+    {
+      "id": "destroy", "title": "Destroy Entity", "category": "function",
+      "inputs": [
+        {"id": "destroy-exec", "type": "exec", "label": "Exec"},
+        {"id": "destroy-entity", "type": "entity", "label": "Entity"}
+      ]
+    }
+  ],
+  "connections": [
+    {"from": "event-exec", "to": "getcomp-exec", "type": "exec"},
+    {"from": "getcomp-out", "to": "sub-exec", "type": "exec"},
+    {"from": "sub-out", "to": "setprop-exec", "type": "exec"},
+    {"from": "setprop-out", "to": "branch-exec", "type": "exec"},
+    {"from": "branch-true", "to": "destroy-exec", "type": "exec"},
+    {"from": "event-self", "to": "getcomp-entity", "type": "entity"},
+    {"from": "event-self", "to": "destroy-entity", "type": "entity"},
+    {"from": "getcomp-comp", "to": "getprop-target", "type": "component"},
+    {"from": "getcomp-comp", "to": "setprop-target", "type": "component"},
+    {"from": "getprop-val", "to": "sub-a", "type": "float"},
+    {"from": "event-damage", "to": "sub-b", "type": "float"},
+    {"from": "sub-result", "to": "setprop-val", "type": "float"},
+    {"from": "sub-result", "to": "lte-a", "type": "float"},
+    {"from": "lte-result", "to": "branch-cond", "type": "bool"}
+  ]
+}'></div>
 
 ### Example 3: Delayed Spawning
 
 Spawn an enemy every 2 seconds:
 
-```
-[Event BeginPlay] ─→ [Do N Times] ─Loop─→ [Delay: 2.0] ─→ [Create Entity: Enemy]
-                          │
-                          └─ N: 10
-```
+<div class="bp-graph" style="" data-connections='[{"from":"ex3-begin-exec","to":"ex3-loop","type":"exec"},{"from":"ex3-loop-body","to":"ex3-delay","type":"exec"},{"from":"ex3-delay-done","to":"ex3-create","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 170px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event BeginPlay</span>
+      <span class="bp-header-exec" data-pin="ex3-begin-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 240px; top: 20px; width: 130px;">
+    <div class="bp-node-header flow">Do N Times</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex3-loop"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#1cc4c4" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">N</span>
+        <span class="bp-pin-value">10</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex3-loop-body"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Loop Body</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#1cc4c4"/></svg></span>
+        <span class="bp-pin-label">Index</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Completed</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 430px; top: 20px; width: 120px;">
+    <div class="bp-node-header time">Delay</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex3-delay"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7ecd32" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Duration</span>
+        <span class="bp-pin-value">2.0</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex3-delay-done"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Done</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 610px; top: 20px; width: 140px;">
+    <div class="bp-node-header function">Create Entity</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex3-create"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#e060e0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Name</span>
+        <span class="bp-pin-value">"Enemy"</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Entity</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ## Troubleshooting
 

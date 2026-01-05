@@ -3,6 +3,8 @@ title: "蓝图编辑器使用指南"
 description: "Cocos Creator 蓝图可视化脚本编辑器完整使用教程"
 ---
 
+<script src="/js/blueprint-graph.js"></script>
+
 本指南介绍如何在 Cocos Creator 中使用蓝图可视化脚本编辑器。
 
 ## 下载与安装
@@ -93,10 +95,37 @@ your-project/
 | **Event EndPlay** | 蓝图停止时 | Exec |
 
 **示例：游戏开始时打印消息**
-```
-[Event BeginPlay] ──Exec──→ [Print]
-                              └─ Message: "游戏开始!"
-```
+
+<div class="bp-graph" style="" data-connections='[{"from":"eg1-exec","to":"eg1-print","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 170px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event BeginPlay</span>
+      <span class="bp-header-exec" data-pin="eg1-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Self</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 280px; top: 20px; width: 150px;">
+    <div class="bp-node-header debug">Print</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg1-print"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#e060e0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Message</span>
+        <span class="bp-pin-value">"游戏开始!"</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### 实体节点 (Entity)
 
@@ -114,10 +143,52 @@ your-project/
 | **Set Active** | 设置激活状态 | Exec, Entity, Active | Exec |
 
 **示例：创建新实体**
-```
-[Event BeginPlay] ──→ [Create Entity] ──→ [Add Component]
-                        └─ Name: "Bullet"     └─ Type: Transform
-```
+
+<div class="bp-graph" style="" data-connections='[{"from":"eg2-exec","to":"eg2-create","type":"exec"},{"from":"eg2-create-out","to":"eg2-add","type":"exec"},{"from":"eg2-entity","to":"eg2-add-entity","type":"entity"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 170px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event BeginPlay</span>
+      <span class="bp-header-exec" data-pin="eg2-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 280px; top: 20px; width: 150px;">
+    <div class="bp-node-header function">Create Entity</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg2-create"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#e060e0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Name</span>
+        <span class="bp-pin-value">"Bullet"</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg2-create-out"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg2-entity"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Entity</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 520px; top: 20px; width: 150px;">
+    <div class="bp-node-header function">Add Transform</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg2-add"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg2-add-entity"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Entity</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### 组件节点 (Component)
 
@@ -132,11 +203,50 @@ your-project/
 | **Get/Set Property** | 获取/设置组件属性 |
 
 **示例：修改 Transform 组件**
-```
-[Get Self] ─Entity─→ [Get Component: Transform] ─Component─→ [Set Property]
-                                                               ├─ Property: x
-                                                               └─ Value: 100
-```
+
+<div class="bp-graph" style="" data-connections='[{"from":"eg3-self","to":"eg3-getcomp","type":"entity"},{"from":"eg3-comp","to":"eg3-setprop","type":"component"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 100px;">
+    <div class="bp-node-header pure">Get Self</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg3-self"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Entity</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 200px; top: 20px; width: 150px;">
+    <div class="bp-node-header pure">Get Component</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg3-getcomp"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Entity</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg3-comp"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7030c0"/></svg></span>
+        <span class="bp-pin-label">Transform</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 430px; top: 20px; width: 130px;">
+    <div class="bp-node-header function">Set Property</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg3-setprop"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7030c0"/></svg></span>
+        <span class="bp-pin-label">Target</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7ecd32" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">x</span>
+        <span class="bp-pin-value">100</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### 流程控制节点 (Flow)
 
@@ -146,42 +256,161 @@ your-project/
 
 条件判断，类似 if/else。
 
-```
-         ┌─ True ──→ [DoSomething]
-[Branch]─┤
-         └─ False ─→ [DoOtherThing]
-```
+<div class="bp-graph" style="" data-connections='[{"from":"eg4-true","to":"eg4-do1","type":"exec"},{"from":"eg4-false","to":"eg4-do2","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 50px; width: 110px;">
+    <div class="bp-node-header flow">Branch</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#8c0000" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Condition</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg4-true"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">True</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg4-false"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">False</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 220px; top: 20px; width: 130px;">
+    <div class="bp-node-header function">DoSomething</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg4-do1"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 220px; top: 110px; width: 130px;">
+    <div class="bp-node-header function">DoOtherThing</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg4-do2"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 #### Sequence (序列)
 
 按顺序执行多个分支。
 
-```
-           ┌─ Then 0 ──→ [Step1]
-[Sequence]─┼─ Then 1 ──→ [Step2]
-           └─ Then 2 ──→ [Step3]
-```
+<div class="bp-graph" style="" data-connections='[{"from":"eg5-then0","to":"eg5-step1","type":"exec"},{"from":"eg5-then1","to":"eg5-step2","type":"exec"},{"from":"eg5-then2","to":"eg5-step3","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 110px;">
+    <div class="bp-node-header flow">Sequence</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg5-then0"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Then 0</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg5-then1"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Then 1</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg5-then2"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Then 2</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 220px; top: 20px; width: 100px;">
+    <div class="bp-node-header function">Step 1</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg5-step1"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 220px; top: 100px; width: 100px;">
+    <div class="bp-node-header function">Step 2</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg5-step2"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 220px; top: 180px; width: 100px;">
+    <div class="bp-node-header function">Step 3</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg5-step3"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 #### For Loop (循环)
 
 循环执行指定次数。
 
-```
-[For Loop] ─Loop Body─→ [每次迭代执行]
-    │
-    └─ Completed ────→ [循环结束后执行]
-```
-
-| 输入 | 说明 |
-|------|------|
-| First Index | 起始索引 |
-| Last Index | 结束索引 |
-
-| 输出 | 说明 |
-|------|------|
-| Loop Body | 每次迭代执行 |
-| Index | 当前索引 |
-| Completed | 循环结束后执行 |
+<div class="bp-graph" style="" data-connections='[{"from":"eg6-body","to":"eg6-iter","type":"exec"},{"from":"eg6-done","to":"eg6-finish","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 140px;">
+    <div class="bp-node-header flow">For Loop</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#1cc4c4" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">First Index</span>
+        <span class="bp-pin-value">0</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#1cc4c4" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Last Index</span>
+        <span class="bp-pin-value">10</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg6-body"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Loop Body</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#1cc4c4"/></svg></span>
+        <span class="bp-pin-label">Index</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg6-done"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Completed</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 250px; top: 80px; width: 130px;">
+    <div class="bp-node-header function">每次迭代执行</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg6-iter"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 250px; top: 160px; width: 140px;">
+    <div class="bp-node-header function">循环结束后执行</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg6-finish"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 #### For Each (遍历)
 
@@ -212,10 +441,49 @@ your-project/
 | **Get Time** | 获取运行总时间 | Number |
 
 **示例：延迟 2 秒后执行**
-```
-[Event BeginPlay] ──→ [Delay] ──→ [Print]
-                       └─ Duration: 2.0   └─ "2秒后执行"
-```
+
+<div class="bp-graph" style="" data-connections='[{"from":"eg7-exec","to":"eg7-delay","type":"exec"},{"from":"eg7-done","to":"eg7-print","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 170px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event BeginPlay</span>
+      <span class="bp-header-exec" data-pin="eg7-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 280px; top: 20px; width: 120px;">
+    <div class="bp-node-header time">Delay</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg7-delay"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7ecd32" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Duration</span>
+        <span class="bp-pin-value">2.0</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="eg7-done"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Done</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 490px; top: 20px; width: 130px;">
+    <div class="bp-node-header debug">Print</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="eg7-print"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#e060e0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Msg</span>
+        <span class="bp-pin-value">"2秒后执行"</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### 数学节点 (Math)
 
@@ -345,50 +613,244 @@ your-project/
 
 实现每帧移动实体：
 
-```
-[Event Tick] ─Exec─→ [Get Self] ─Entity─→ [Get Component: Transform]
-                                               │
-                     [Get Delta Time]          ▼
-                          │              [Set Property: x]
-                          │                    │
-                     [Multiply] ◄──────────────┘
-                          │
-                          └─ Speed: 100
-```
+<div class="bp-graph" style="" data-connections='[{"from":"ex1-exec","to":"ex1-setprop","type":"exec"},{"from":"ex1-delta","to":"ex1-mul-a","type":"float"},{"from":"ex1-mul-result","to":"ex1-x","type":"float"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 140px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event Tick</span>
+      <span class="bp-header-exec" data-pin="ex1-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex1-delta"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Delta Time</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 200px; top: 110px; width: 120px;">
+    <div class="bp-node-header math">Multiply</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex1-mul-a"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">A</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7ecd32" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">B (Speed)</span>
+        <span class="bp-pin-value">100</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex1-mul-result"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Result</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 380px; top: 20px; width: 150px;">
+    <div class="bp-node-header function">Set Property</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex1-setprop"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7030c0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Target</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex1-x"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">x</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### 示例 2：生命值系统
 
-受伤后检查死亡：
+受伤后检查死亡逻辑。`Event OnDamage` 是一个自定义事件节点，可以通过代码 `vm.triggerCustomEvent('OnDamage', { damage: 50 })` 触发：
 
-```
-[On Damage Event] ─→ [Get Component: Health] ─→ [Get Property: current]
-                                                        │
-                                                        ▼
-                                                  [Subtract]
-                                                        │
-                                                        ▼
-                                                  [Set Property: current]
-                                                        │
-                                                        ▼
-                              ┌─ True ─→ [Destroy Self]
-                     [Branch]─┤
-                              └─ False ─→ (继续)
-                                   ▲
-                                   │
-                           [Less Or Equal]
-                                   │
-                              current <= 0
-```
+<div class="bp-graph" data-graph='{
+  "nodes": [
+    {
+      "id": "event", "title": "Event OnDamage", "category": "event",
+      "outputs": [
+        {"id": "event-exec", "type": "exec", "inHeader": true},
+        {"id": "event-self", "type": "entity", "label": "Self"},
+        {"id": "event-damage", "type": "float", "label": "Damage"}
+      ]
+    },
+    {
+      "id": "getcomp", "title": "Get Component", "category": "function",
+      "inputs": [
+        {"id": "getcomp-exec", "type": "exec", "label": "Exec"},
+        {"id": "getcomp-entity", "type": "entity", "label": "Entity"},
+        {"id": "getcomp-type", "type": "string", "label": "Type", "value": "Health", "connected": false}
+      ],
+      "outputs": [
+        {"id": "getcomp-out", "type": "exec"},
+        {"id": "getcomp-comp", "type": "component", "label": "Component"}
+      ]
+    },
+    {
+      "id": "getprop", "title": "Get Property", "category": "pure",
+      "inputs": [
+        {"id": "getprop-target", "type": "component", "label": "Target"},
+        {"id": "getprop-prop", "type": "string", "label": "Property", "value": "current", "connected": false}
+      ],
+      "outputs": [
+        {"id": "getprop-val", "type": "float", "label": "Value"}
+      ]
+    },
+    {
+      "id": "sub", "title": "Subtract", "category": "math",
+      "inputs": [
+        {"id": "sub-exec", "type": "exec", "label": "Exec"},
+        {"id": "sub-a", "type": "float", "label": "A"},
+        {"id": "sub-b", "type": "float", "label": "B"}
+      ],
+      "outputs": [
+        {"id": "sub-out", "type": "exec"},
+        {"id": "sub-result", "type": "float", "label": "Result"}
+      ]
+    },
+    {
+      "id": "setprop", "title": "Set Property", "category": "function",
+      "inputs": [
+        {"id": "setprop-exec", "type": "exec", "label": "Exec"},
+        {"id": "setprop-target", "type": "component", "label": "Target"},
+        {"id": "setprop-prop", "type": "string", "label": "Property", "value": "current", "connected": false},
+        {"id": "setprop-val", "type": "float", "label": "Value"}
+      ],
+      "outputs": [
+        {"id": "setprop-out", "type": "exec"}
+      ]
+    },
+    {
+      "id": "lte", "title": "Less Or Equal", "category": "pure",
+      "inputs": [
+        {"id": "lte-a", "type": "float", "label": "A"},
+        {"id": "lte-b", "type": "float", "label": "B", "value": "0", "connected": false}
+      ],
+      "outputs": [
+        {"id": "lte-result", "type": "bool", "label": "Result"}
+      ]
+    },
+    {
+      "id": "branch", "title": "Branch", "category": "flow",
+      "inputs": [
+        {"id": "branch-exec", "type": "exec", "label": "Exec"},
+        {"id": "branch-cond", "type": "bool", "label": "Condition"}
+      ],
+      "outputs": [
+        {"id": "branch-true", "type": "exec", "label": "True"},
+        {"id": "branch-false", "type": "exec", "label": "False"}
+      ]
+    },
+    {
+      "id": "destroy", "title": "Destroy Entity", "category": "function",
+      "inputs": [
+        {"id": "destroy-exec", "type": "exec", "label": "Exec"},
+        {"id": "destroy-entity", "type": "entity", "label": "Entity"}
+      ]
+    }
+  ],
+  "connections": [
+    {"from": "event-exec", "to": "getcomp-exec", "type": "exec"},
+    {"from": "getcomp-out", "to": "sub-exec", "type": "exec"},
+    {"from": "sub-out", "to": "setprop-exec", "type": "exec"},
+    {"from": "setprop-out", "to": "branch-exec", "type": "exec"},
+    {"from": "branch-true", "to": "destroy-exec", "type": "exec"},
+    {"from": "event-self", "to": "getcomp-entity", "type": "entity"},
+    {"from": "event-self", "to": "destroy-entity", "type": "entity"},
+    {"from": "getcomp-comp", "to": "getprop-target", "type": "component"},
+    {"from": "getcomp-comp", "to": "setprop-target", "type": "component"},
+    {"from": "getprop-val", "to": "sub-a", "type": "float"},
+    {"from": "event-damage", "to": "sub-b", "type": "float"},
+    {"from": "sub-result", "to": "setprop-val", "type": "float"},
+    {"from": "sub-result", "to": "lte-a", "type": "float"},
+    {"from": "lte-result", "to": "branch-cond", "type": "bool"}
+  ]
+}'></div>
 
 ### 示例 3：延迟生成
 
 每 2 秒生成一个敌人：
 
-```
-[Event BeginPlay] ─→ [Do N Times] ─Loop─→ [Delay: 2.0] ─→ [Create Entity: Enemy]
-                          │
-                          └─ N: 10
-```
+<div class="bp-graph" style="" data-connections='[{"from":"ex3-begin-exec","to":"ex3-loop","type":"exec"},{"from":"ex3-loop-body","to":"ex3-delay","type":"exec"},{"from":"ex3-delay-done","to":"ex3-create","type":"exec"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 170px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event BeginPlay</span>
+      <span class="bp-header-exec" data-pin="ex3-begin-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 240px; top: 20px; width: 130px;">
+    <div class="bp-node-header flow">Do N Times</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex3-loop"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#1cc4c4" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">N</span>
+        <span class="bp-pin-value">10</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex3-loop-body"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Loop Body</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#1cc4c4"/></svg></span>
+        <span class="bp-pin-label">Index</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Completed</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 430px; top: 20px; width: 120px;">
+    <div class="bp-node-header time">Delay</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex3-delay"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#7ecd32" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Duration</span>
+        <span class="bp-pin-value">2.0</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="ex3-delay-done"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Done</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 610px; top: 20px; width: 140px;">
+    <div class="bp-node-header function">Create Entity</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="ex3-create"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="#e060e0" stroke-width="2"/></svg></span>
+        <span class="bp-pin-label">Name</span>
+        <span class="bp-pin-value">"Enemy"</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Entity</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ## 常见问题
 
