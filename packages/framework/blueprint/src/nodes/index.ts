@@ -7,6 +7,7 @@
  * - ecs: ECS 操作（Entity, Component, Flow）
  * - variables: 变量读写
  * - math: 数学运算
+ * - logic: 比较和逻辑运算
  * - time: 时间工具
  * - debug: 调试工具
  *
@@ -15,6 +16,7 @@
  * - ecs: ECS operations (Entity, Component, Flow)
  * - variables: Variable get/set
  * - math: Math operations
+ * - logic: Comparison and logical operations
  * - time: Time utilities
  * - debug: Debug utilities
  */
@@ -30,6 +32,9 @@ export * from './variables';
 
 // Math operations | 数学运算
 export * from './math';
+
+// Logic operations | 逻辑运算
+export * from './logic';
 
 // Time utilities | 时间工具
 export * from './time';
