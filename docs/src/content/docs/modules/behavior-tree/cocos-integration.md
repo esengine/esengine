@@ -8,7 +8,7 @@ title: "Cocos Creator 集成"
 
 - Cocos Creator 3.x 或更高版本
 - 基本的 TypeScript 知识
-- 已完成[快速开始](./getting-started/)教程
+- 已完成[快速开始](/modules/behavior-tree/getting-started/)教程
 
 ## 安装
 
@@ -679,7 +679,7 @@ const updateInterval = sys.isNative ? 0.016 : 0.05;
 
 ## 下一步
 
-- 查看[资产管理](./asset-management/)了解如何加载和管理行为树资产、使用子树
-- 学习[高级用法](./advanced-usage/)了解性能优化和调试技巧
-- 阅读[最佳实践](./best-practices/)优化你的 AI
-- 学习[自定义节点执行器](./custom-actions/)创建自定义行为
+- 查看[资产管理](/modules/behavior-tree/asset-management/)了解如何加载和管理行为树资产、使用子树
+- 学习[高级用法](/modules/behavior-tree/advanced-usage/)了解性能优化和调试技巧
+- 阅读[最佳实践](/modules/behavior-tree/best-practices/)优化你的 AI
+- 学习[自定义节点执行器](/modules/behavior-tree/custom-actions/)创建自定义行为

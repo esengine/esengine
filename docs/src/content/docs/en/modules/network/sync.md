@@ -235,3 +235,139 @@ const corrected = prediction.reconcile(serverState, serverSeq, applyInput);
 1. **Interpolation delay**: 100-150ms for typical networks
 2. **Prediction**: Use only for local player, interpolate remote players
 3. **Snapshot count**: Keep enough snapshots to handle network jitter
+
+---
+
+## Fixed-Point Sync (Lockstep)
+
+For **Lockstep** architecture, use fixed-point numbers to ensure cross-platform determinism.
+
+> See [Fixed-Point Numbers](/en/modules/network/fixed-point) for math basics
+
+### FixedTransformState
+
+Fixed-point transform state for network transmission:
+
+```typescript
+import {
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    type IFixedTransformStateRaw
+} from '@esengine/network';
+
+// Create state
+const state = FixedTransformState.from(100, 200, Math.PI / 4);
+
+// Serialize (sender)
+const raw: IFixedTransformStateRaw = state.toRaw();
+socket.send(JSON.stringify({ type: 'sync', state: raw }));
+
+// Deserialize (receiver)
+const received = FixedTransformState.fromRaw(message.state);
+
+// Use for rendering
+const { x, y, rotation } = received.toFloat();
+sprite.position.set(x, y);
+```
+
+State with velocity (for extrapolation):
+
+```typescript
+const state = FixedTransformStateWithVelocity.from(
+    100, 200,    // position
+    0,           // rotation
+    5, 3,        // velocity
+    0.1          // angular velocity
+);
+```
+
+### Fixed-Point Interpolators
+
+```typescript
+import {
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator
+} from '@esengine/network';
+import { Fixed32 } from '@esengine/ecs-framework-math';
+
+// Linear interpolator
+const interpolator = createFixedTransformInterpolator();
+
+const from = FixedTransformState.from(0, 0, 0);
+const to = FixedTransformState.from(100, 50, Math.PI);
+const t = Fixed32.from(0.5);
+
+const result = interpolator.interpolate(from, to, t);
+
+// Hermite interpolator (smoother)
+const hermite = createFixedHermiteTransformInterpolator(100);
+```
+
+### Fixed-Point Snapshot Buffer
+
+Manages fixed-point state history for lockstep replay:
+
+```typescript
+import {
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer
+} from '@esengine/network';
+
+// Create buffer (max 30 snapshots, 2 frame delay)
+const buffer = createFixedSnapshotBuffer<FixedTransformState>(30, 2);
+
+// Add snapshots
+buffer.push({
+    frame: 100,
+    state: FixedTransformState.from(100, 200, 0)
+});
+
+// Get interpolation snapshots
+const result = buffer.getInterpolationSnapshots(103);
+if (result) {
+    const { from, to, t } = result;
+    const interpolated = interpolator.interpolate(from.state, to.state, t);
+}
+
+// Get latest/specific frame
+const latest = buffer.getLatest();
+const atFrame = buffer.getAtFrame(100);
+
+// Rollback replay
+const snapshotsToReplay = buffer.getSnapshotsAfter(98);
+
+// Clean up old snapshots
+buffer.removeSnapshotsBefore(95);
+```
+
+Sub-frame interpolation:
+
+```typescript
+// Use Fixed32 frame time (supports fractional frames)
+const frameTime = Fixed32.from(102.5);
+const result = buffer.getInterpolationSnapshotsFixed(frameTime);
+```
+
+### API Exports
+
+```typescript
+import {
+    // State classes
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    type IFixedTransformStateRaw,
+    type IFixedTransformStateWithVelocityRaw,
+
+    // Interpolators
+    FixedTransformInterpolator,
+    FixedHermiteTransformInterpolator,
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator,
+
+    // Snapshot buffer
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer,
+    type IFixedStateSnapshot,
+    type IFixedInterpolationResult
+} from '@esengine/network';
+```

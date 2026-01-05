@@ -252,3 +252,145 @@ if (predictionSystem) {
     console.log('Current sequence:', predictionSystem.inputSequence);
 }
 ```
+
+---
+
+## 定点数客户端预测（帧同步）
+
+用于**帧同步 (Lockstep)** 的确定性客户端预测。
+
+> 定点数基础知识请参考 [定点数文档](/modules/network/fixed-point)
+
+### 基本用法
+
+```typescript
+import {
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    type IFixedPredictor,
+    type IFixedStatePositionExtractor
+} from '@esengine/network';
+import { Fixed32, FixedVector2 } from '@esengine/ecs-framework-math';
+
+// 定义游戏状态
+interface GameState {
+    position: FixedVector2;
+    velocity: FixedVector2;
+}
+
+// 实现预测器（必须使用定点数运算）
+const predictor: IFixedPredictor<GameState, PlayerInput> = {
+    predict(state: GameState, input: PlayerInput, deltaTime: Fixed32): GameState {
+        const speed = Fixed32.from(100);
+        const inputVec = FixedVector2.from(input.dx, input.dy);
+        const velocity = inputVec.normalize().mul(speed);
+        const displacement = velocity.mul(deltaTime);
+
+        return {
+            position: state.position.add(displacement),
+            velocity
+        };
+    }
+};
+
+// 创建预测器
+const prediction = createFixedClientPrediction(predictor, {
+    maxUnacknowledgedInputs: 60,
+    fixedDeltaTime: Fixed32.from(1 / 60),
+    reconciliationThreshold: Fixed32.from(0.001),
+    enableSmoothReconciliation: false  // 帧同步通常关闭
+});
+```
+
+### 记录输入
+
+```typescript
+function onUpdate(input: PlayerInput, currentState: GameState) {
+    // 记录输入并获得预测状态
+    const predicted = prediction.recordInput(input, currentState);
+
+    // 渲染预测状态
+    const pos = predicted.position.toObject();
+    sprite.position.set(pos.x, pos.y);
+
+    // 发送输入
+    socket.send(JSON.stringify({
+        frame: prediction.currentFrame,
+        input
+    }));
+}
+```
+
+### 服务器校正
+
+```typescript
+// 位置提取器
+const posExtractor: IFixedStatePositionExtractor<GameState> = {
+    getPosition(state: GameState): FixedVector2 {
+        return state.position;
+    }
+};
+
+// 收到服务器状态
+function onServerState(serverState: GameState, serverFrame: number) {
+    const reconciled = prediction.reconcile(
+        serverState,
+        serverFrame,
+        posExtractor
+    );
+}
+```
+
+### 回滚重播
+
+```typescript
+// 发现不同步时回滚
+const correctedState = prediction.rollbackAndResimulate(
+    serverFrame,
+    authoritativeState
+);
+
+// 查看历史状态
+const historicalState = prediction.getStateAtFrame(100);
+```
+
+### 预设移动预测器
+
+```typescript
+import {
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
+    type IFixedMovementInput,
+    type IFixedMovementState
+} from '@esengine/network';
+
+// 创建移动预测器（速度 100 单位/秒）
+const movePredictor = createFixedMovementPredictor(Fixed32.from(100));
+const posExtractor = createFixedMovementPositionExtractor();
+
+const prediction = createFixedClientPrediction<IFixedMovementState, IFixedMovementInput>(
+    movePredictor,
+    { fixedDeltaTime: Fixed32.from(1 / 60) }
+);
+
+// 输入格式
+const input: IFixedMovementInput = { dx: 1, dy: 0 };
+```
+
+### API 导出
+
+```typescript
+import {
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
+    type IFixedInputSnapshot,
+    type IFixedPredictedState,
+    type IFixedPredictor,
+    type IFixedStatePositionExtractor,
+    type FixedClientPredictionConfig,
+    type IFixedMovementInput,
+    type IFixedMovementState
+} from '@esengine/network';
+```

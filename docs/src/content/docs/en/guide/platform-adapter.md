@@ -16,7 +16,7 @@ The ECS framework provides a platform adapter interface that allows users to imp
 
 ## Supported Platforms
 
-### [Browser Adapter](./platform-adapter/browser/)
+### [Browser Adapter](/en/guide/platform-adapter/browser/)
 
 Supports all modern browser environments, including Chrome, Firefox, Safari, Edge, etc.
 
@@ -30,7 +30,7 @@ Supports all modern browser environments, including Chrome, Firefox, Safari, Edg
 
 ---
 
-### [WeChat Mini Game Adapter](./platform-adapter/wechat-minigame/)
+### [WeChat Mini Game Adapter](/en/guide/platform-adapter/wechat-minigame/)
 
 Designed specifically for the WeChat Mini Game environment, handling special restrictions and APIs.
 
@@ -44,7 +44,7 @@ Designed specifically for the WeChat Mini Game environment, handling special res
 
 ---
 
-### [Node.js Adapter](./platform-adapter/nodejs/)
+### [Node.js Adapter](/en/guide/platform-adapter/nodejs/)
 
 Provides support for Node.js server environments, suitable for game servers and compute servers.
 

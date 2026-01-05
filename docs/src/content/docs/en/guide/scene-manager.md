@@ -23,7 +23,7 @@ SceneManager is suitable for:
 - Automatic ECS fluent API management
 - Automatic scene lifecycle handling
 - Integrated with Core, auto-updated
-- Supports [Persistent Entity](./persistent-entity) migration across scenes (v2.3.0+)
+- Supports [Persistent Entity](/en/guide/persistent-entity/) migration across scenes (v2.3.0+)
 
 ## Basic Usage
 
@@ -434,7 +434,6 @@ Core (Global Services)
 
 ## Related Documentation
 
-- [Persistent Entity](./persistent-entity) - Learn how to keep entities across scene transitions
-- [WorldManager](./world-manager) - Learn about advanced multi-world isolation features
+- [Persistent Entity](/en/guide/persistent-entity/) - Learn how to keep entities across scene transitions
 
 SceneManager provides simple yet powerful scene management capabilities for most games. Through Core's static methods, you can easily manage scene transitions.

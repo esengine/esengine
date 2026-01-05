@@ -16,7 +16,7 @@ ECS框架提供了平台适配器接口，允许用户为不同的运行环境�
 
 ## 支持的平台
 
-### 🌐 [浏览器适配器](./platform-adapter/browser/)
+### 🌐 [浏览器适配器](/guide/platform-adapter/browser/)
 
 支持所有现代浏览器环境，包括 Chrome、Firefox、Safari、Edge 等。
 
@@ -30,7 +30,7 @@ ECS框架提供了平台适配器接口，允许用户为不同的运行环境�
 
 ---
 
-### 📱 [微信小游戏适配器](./platform-adapter/wechat-minigame/)
+### 📱 [微信小游戏适配器](/guide/platform-adapter/wechat-minigame/)
 
 专为微信小游戏环境设计，处理微信小游戏的特殊限制和API。
 
@@ -44,7 +44,7 @@ ECS框架提供了平台适配器接口，允许用户为不同的运行环境�
 
 ---
 
-### 🖥️ [Node.js适配器](./platform-adapter/nodejs/)
+### 🖥️ [Node.js适配器](/guide/platform-adapter/nodejs/)
 
 为 Node.js 服务器环境提供支持，适用于游戏服务器和计算服务器。
 

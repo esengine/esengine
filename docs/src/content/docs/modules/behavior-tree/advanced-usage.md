@@ -305,11 +305,11 @@ const tree = BehaviorTreeBuilder.create('Timeout')
 
 ### Cocos Creator集成
 
-参见[Cocos Creator集成指南](./cocos-integration/)
+参见[Cocos Creator集成指南](/modules/behavior-tree/cocos-integration/)
 
 ### LayaAir集成
 
-参见[LayaAir集成指南](./laya-integration/)
+参见[LayaAir集成指南](/modules/behavior-tree/laya-integration/)
 
 ## 最佳实践
 
@@ -389,6 +389,6 @@ const tree = BehaviorTreeBuilder.create('AI')
 
 ## 下一步
 
-- 查看[自定义节点执行器](./custom-actions/)学习如何创建自定义节点
-- 阅读[最佳实践](./best-practices/)了解行为树设计技巧
-- 参考[编辑器使用指南](./editor-guide/)学习可视化编辑
+- 查看[自定义节点执行器](/modules/behavior-tree/custom-actions/)学习如何创建自定义节点
+- 阅读[最佳实践](/modules/behavior-tree/best-practices/)了解行为树设计技巧
+- 参考[编辑器使用指南](/modules/behavior-tree/editor-guide/)学习可视化编辑

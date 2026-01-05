@@ -252,3 +252,145 @@ if (predictionSystem) {
     console.log('Current sequence:', predictionSystem.inputSequence);
 }
 ```
+
+---
+
+## Fixed-Point Client Prediction (Lockstep)
+
+Deterministic client prediction for **Lockstep** architecture.
+
+> See [Fixed-Point Numbers](/en/modules/network/fixed-point) for math basics
+
+### Basic Usage
+
+```typescript
+import {
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    type IFixedPredictor,
+    type IFixedStatePositionExtractor
+} from '@esengine/network';
+import { Fixed32, FixedVector2 } from '@esengine/ecs-framework-math';
+
+// Define game state
+interface GameState {
+    position: FixedVector2;
+    velocity: FixedVector2;
+}
+
+// Implement predictor (must use fixed-point arithmetic)
+const predictor: IFixedPredictor<GameState, PlayerInput> = {
+    predict(state: GameState, input: PlayerInput, deltaTime: Fixed32): GameState {
+        const speed = Fixed32.from(100);
+        const inputVec = FixedVector2.from(input.dx, input.dy);
+        const velocity = inputVec.normalize().mul(speed);
+        const displacement = velocity.mul(deltaTime);
+
+        return {
+            position: state.position.add(displacement),
+            velocity
+        };
+    }
+};
+
+// Create prediction
+const prediction = createFixedClientPrediction(predictor, {
+    maxUnacknowledgedInputs: 60,
+    fixedDeltaTime: Fixed32.from(1 / 60),
+    reconciliationThreshold: Fixed32.from(0.001),
+    enableSmoothReconciliation: false  // Usually disabled for lockstep
+});
+```
+
+### Record Input
+
+```typescript
+function onUpdate(input: PlayerInput, currentState: GameState) {
+    // Record input and get predicted state
+    const predicted = prediction.recordInput(input, currentState);
+
+    // Render predicted state
+    const pos = predicted.position.toObject();
+    sprite.position.set(pos.x, pos.y);
+
+    // Send input
+    socket.send(JSON.stringify({
+        frame: prediction.currentFrame,
+        input
+    }));
+}
+```
+
+### Server Reconciliation
+
+```typescript
+// Position extractor
+const posExtractor: IFixedStatePositionExtractor<GameState> = {
+    getPosition(state: GameState): FixedVector2 {
+        return state.position;
+    }
+};
+
+// When receiving server state
+function onServerState(serverState: GameState, serverFrame: number) {
+    const reconciled = prediction.reconcile(
+        serverState,
+        serverFrame,
+        posExtractor
+    );
+}
+```
+
+### Rollback and Replay
+
+```typescript
+// Rollback when desync detected
+const correctedState = prediction.rollbackAndResimulate(
+    serverFrame,
+    authoritativeState
+);
+
+// View historical state
+const historicalState = prediction.getStateAtFrame(100);
+```
+
+### Preset Movement Predictor
+
+```typescript
+import {
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
+    type IFixedMovementInput,
+    type IFixedMovementState
+} from '@esengine/network';
+
+// Create movement predictor (speed 100 units/sec)
+const movePredictor = createFixedMovementPredictor(Fixed32.from(100));
+const posExtractor = createFixedMovementPositionExtractor();
+
+const prediction = createFixedClientPrediction<IFixedMovementState, IFixedMovementInput>(
+    movePredictor,
+    { fixedDeltaTime: Fixed32.from(1 / 60) }
+);
+
+// Input format
+const input: IFixedMovementInput = { dx: 1, dy: 0 };
+```
+
+### API Exports
+
+```typescript
+import {
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
+    type IFixedInputSnapshot,
+    type IFixedPredictedState,
+    type IFixedPredictor,
+    type IFixedStatePositionExtractor,
+    type FixedClientPredictionConfig,
+    type IFixedMovementInput,
+    type IFixedMovementState
+} from '@esengine/network';
+```

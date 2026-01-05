@@ -340,3 +340,139 @@ if (!identity.bIsLocalPlayer) {
 3. **校正阈值**：根据游戏精度需求设置合适的阈值
 
 4. **快照数量**：保持足够的快照以应对网络抖动
+
+---
+
+## 定点数同步（帧同步）
+
+以下内容用于**帧同步 (Lockstep)** 架构，使用定点数确保跨平台确定性。
+
+> 定点数基础知识请参考 [定点数文档](/modules/network/fixed-point)
+
+### FixedTransformState
+
+定点数变换状态，用于网络传输：
+
+```typescript
+import {
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    type IFixedTransformStateRaw
+} from '@esengine/network';
+
+// 创建状态
+const state = FixedTransformState.from(100, 200, Math.PI / 4);
+
+// 序列化（发送方）
+const raw: IFixedTransformStateRaw = state.toRaw();
+socket.send(JSON.stringify({ type: 'sync', state: raw }));
+
+// 反序列化（接收方）
+const received = FixedTransformState.fromRaw(message.state);
+
+// 用于渲染
+const { x, y, rotation } = received.toFloat();
+sprite.position.set(x, y);
+```
+
+带速度的状态（用于外推）：
+
+```typescript
+const state = FixedTransformStateWithVelocity.from(
+    100, 200,    // 位置
+    0,           // 旋转
+    5, 3,        // 速度
+    0.1          // 角速度
+);
+```
+
+### 定点数插值器
+
+```typescript
+import {
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator
+} from '@esengine/network';
+import { Fixed32 } from '@esengine/ecs-framework-math';
+
+// 线性插值器
+const interpolator = createFixedTransformInterpolator();
+
+const from = FixedTransformState.from(0, 0, 0);
+const to = FixedTransformState.from(100, 50, Math.PI);
+const t = Fixed32.from(0.5);
+
+const result = interpolator.interpolate(from, to, t);
+
+// Hermite 插值器（更平滑）
+const hermite = createFixedHermiteTransformInterpolator(100);
+```
+
+### 定点数快照缓冲区
+
+管理定点数状态历史，用于帧同步回放：
+
+```typescript
+import {
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer
+} from '@esengine/network';
+
+// 创建缓冲区（最多 30 快照，2 帧延迟）
+const buffer = createFixedSnapshotBuffer<FixedTransformState>(30, 2);
+
+// 添加快照
+buffer.push({
+    frame: 100,
+    state: FixedTransformState.from(100, 200, 0)
+});
+
+// 获取插值快照
+const result = buffer.getInterpolationSnapshots(103);
+if (result) {
+    const { from, to, t } = result;
+    const interpolated = interpolator.interpolate(from.state, to.state, t);
+}
+
+// 获取最新/指定帧快照
+const latest = buffer.getLatest();
+const atFrame = buffer.getAtFrame(100);
+
+// 回滚重播
+const snapshotsToReplay = buffer.getSnapshotsAfter(98);
+
+// 清理旧快照
+buffer.removeSnapshotsBefore(95);
+```
+
+子帧插值：
+
+```typescript
+// 使用 Fixed32 帧时间（支持小数帧）
+const frameTime = Fixed32.from(102.5);
+const result = buffer.getInterpolationSnapshotsFixed(frameTime);
+```
+
+### API 导出
+
+```typescript
+import {
+    // 状态类
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    type IFixedTransformStateRaw,
+    type IFixedTransformStateWithVelocityRaw,
+
+    // 插值器
+    FixedTransformInterpolator,
+    FixedHermiteTransformInterpolator,
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator,
+
+    // 快照缓冲区
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer,
+    type IFixedStateSnapshot,
+    type IFixedInterpolationResult
+} from '@esengine/network';
+```

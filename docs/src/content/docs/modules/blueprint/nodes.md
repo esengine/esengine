@@ -535,6 +535,6 @@ description: "蓝图内置 ECS 操作节点完整参考"
 
 ## 相关文档
 
-- [蓝图编辑器指南](./editor-guide) - 学习如何使用编辑器
-- [自定义节点](./custom-nodes) - 创建自定义节点
-- [蓝图虚拟机](./vm) - 运行时 API
+- [蓝图编辑器指南](/modules/blueprint/editor-guide) - 学习如何使用编辑器
+- [自定义节点](/modules/blueprint/custom-nodes) - 创建自定义节点
+- [蓝图虚拟机](/modules/blueprint/vm) - 运行时 API

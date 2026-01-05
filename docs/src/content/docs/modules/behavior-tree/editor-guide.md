@@ -117,5 +117,5 @@ BehaviorTreeStarter.start(entity, tree);
 
 ## 下一步
 
-- 查看[编辑器工作流](./editor-workflow/)了解完整的开发流程
-- 查看[自定义节点执行器](./custom-actions/)学习如何扩展节点
+- 查看[编辑器工作流](/modules/behavior-tree/editor-workflow/)了解完整的开发流程
+- 查看[自定义节点执行器](/modules/behavior-tree/custom-actions/)学习如何扩展节点

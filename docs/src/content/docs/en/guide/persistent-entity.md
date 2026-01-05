@@ -359,6 +359,5 @@ class GoodScene extends Scene {
 
 ## Related Documentation
 
-- [Scene](./scene) - Learn the basics of scenes
-- [SceneManager](./scene-manager) - Learn about scene transitions
-- [WorldManager](./world-manager) - Learn about multi-world management
+- [Scene](/en/guide/scene/) - Learn the basics of scenes
+- [SceneManager](/en/guide/scene-manager/) - Learn about scene transitions
