@@ -75,13 +75,87 @@ Control execution flow:
 
 ## Math Nodes
 
+Basic Operations:
+
 | Node | Description |
 |------|-------------|
-| `Add` / `Subtract` / `Multiply` / `Divide` | Basic operations |
+| `Add` / `Subtract` / `Multiply` / `Divide` | Basic arithmetic |
+| `Modulo` | Modulo operation (%) |
+| `Negate` | Negate value |
 | `Abs` | Absolute value |
-| `Clamp` | Clamp to range |
-| `Lerp` | Linear interpolation |
+| `Sign` | Sign (+1, 0, -1) |
 | `Min` / `Max` | Minimum/Maximum |
+| `Clamp` | Clamp to range |
+| `Wrap` | Wrap value to range |
+
+Power & Roots:
+
+| Node | Description |
+|------|-------------|
+| `Power` | Power (A^B) |
+| `Sqrt` | Square root |
+
+Rounding:
+
+| Node | Description |
+|------|-------------|
+| `Floor` | Round down |
+| `Ceil` | Round up |
+| `Round` | Round to nearest |
+
+Trigonometry:
+
+| Node | Description |
+|------|-------------|
+| `Sin` / `Cos` / `Tan` | Sine/Cosine/Tangent |
+| `Asin` / `Acos` / `Atan` | Inverse trig functions |
+| `Atan2` | Two-argument arctangent |
+| `DegToRad` / `RadToDeg` | Degree/Radian conversion |
+
+Interpolation:
+
+| Node | Description |
+|------|-------------|
+| `Lerp` | Linear interpolation |
+| `InverseLerp` | Inverse linear interpolation |
+
+Random:
+
+| Node | Description |
+|------|-------------|
+| `Random Range` | Random float in range |
+| `Random Int` | Random integer in range |
+
+## Logic Nodes
+
+Comparison:
+
+| Node | Description |
+|------|-------------|
+| `Equal` | Equal (==) |
+| `Not Equal` | Not equal (!=) |
+| `Greater Than` | Greater than (>) |
+| `Greater Or Equal` | Greater than or equal (>=) |
+| `Less Than` | Less than (<) |
+| `Less Or Equal` | Less than or equal (<=) |
+| `In Range` | Check if value is in range |
+
+Logical Operations:
+
+| Node | Description |
+|------|-------------|
+| `AND` | Logical AND |
+| `OR` | Logical OR |
+| `NOT` | Logical NOT |
+| `XOR` | Exclusive OR |
+| `NAND` | NOT AND |
+
+Utility:
+
+| Node | Description |
+|------|-------------|
+| `Is Null` | Check if value is null |
+| `Select` | Choose A or B based on condition (ternary) |
 
 ## Debug Nodes
 

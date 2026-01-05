@@ -2,6 +2,7 @@ import { GraphNode } from './GraphNode';
 import { Connection } from './Connection';
 import { Pin } from './Pin';
 import { Position } from '../value-objects/Position';
+import { NodeGroup, serializeNodeGroup } from './NodeGroup';
 
 /**
  * Graph - Aggregate root for the node graph
@@ -15,6 +16,7 @@ export class Graph {
     private readonly _name: string;
     private readonly _nodes: Map<string, GraphNode>;
     private readonly _connections: Connection[];
+    private readonly _groups: NodeGroup[];
     private readonly _metadata: Record<string, unknown>;
 
     constructor(
@@ -22,12 +24,14 @@ export class Graph {
         name: string,
         nodes: GraphNode[] = [],
         connections: Connection[] = [],
-        metadata: Record<string, unknown> = {}
+        metadata: Record<string, unknown> = {},
+        groups: NodeGroup[] = []
     ) {
         this._id = id;
         this._name = name;
         this._nodes = new Map(nodes.map(n => [n.id, n]));
         this._connections = [...connections];
+        this._groups = [...groups];
         this._metadata = { ...metadata };
     }
 
@@ -57,6 +61,29 @@ export class Graph {
 
     get connectionCount(): number {
         return this._connections.length;
+    }
+
+    /**
+     * Gets all groups (节点组)
+     */
+    get groups(): NodeGroup[] {
+        return [...this._groups];
+    }
+
+    /**
+     * Gets a group by ID
+     * 通过ID获取组
+     */
+    getGroup(groupId: string): NodeGroup | undefined {
+        return this._groups.find(g => g.id === groupId);
+    }
+
+    /**
+     * Gets the group containing a specific node
+     * 获取包含特定节点的组
+     */
+    getNodeGroup(nodeId: string): NodeGroup | undefined {
+        return this._groups.find(g => g.nodeIds.includes(nodeId));
     }
 
     /**
@@ -112,7 +139,7 @@ export class Graph {
             throw new Error(`Node with ID "${node.id}" already exists`);
         }
         const newNodes = [...this.nodes, node];
-        return new Graph(this._id, this._name, newNodes, this._connections, this._metadata);
+        return new Graph(this._id, this._name, newNodes, this._connections, this._metadata, this._groups);
     }
 
     /**
@@ -125,7 +152,14 @@ export class Graph {
         }
         const newNodes = this.nodes.filter(n => n.id !== nodeId);
         const newConnections = this._connections.filter(c => !c.involvesNode(nodeId));
-        return new Graph(this._id, this._name, newNodes, newConnections, this._metadata);
+        // Also remove the node from any groups it belongs to
+        const newGroups = this._groups.map(g => {
+            if (g.nodeIds.includes(nodeId)) {
+                return { ...g, nodeIds: g.nodeIds.filter(id => id !== nodeId) };
+            }
+            return g;
+        }).filter(g => g.nodeIds.length > 0); // Remove empty groups
+        return new Graph(this._id, this._name, newNodes, newConnections, this._metadata, newGroups);
     }
 
     /**
@@ -138,7 +172,7 @@ export class Graph {
 
         const updatedNode = updater(node);
         const newNodes = this.nodes.map(n => n.id === nodeId ? updatedNode : n);
-        return new Graph(this._id, this._name, newNodes, this._connections, this._metadata);
+        return new Graph(this._id, this._name, newNodes, this._connections, this._metadata, this._groups);
     }
 
     /**
@@ -184,7 +218,7 @@ export class Graph {
         }
 
         newConnections.push(connection);
-        return new Graph(this._id, this._name, this.nodes, newConnections, this._metadata);
+        return new Graph(this._id, this._name, this.nodes, newConnections, this._metadata, this._groups);
     }
 
     /**
@@ -196,7 +230,7 @@ export class Graph {
         if (newConnections.length === this._connections.length) {
             return this;
         }
-        return new Graph(this._id, this._name, this.nodes, newConnections, this._metadata);
+        return new Graph(this._id, this._name, this.nodes, newConnections, this._metadata, this._groups);
     }
 
     /**
@@ -208,7 +242,47 @@ export class Graph {
         if (newConnections.length === this._connections.length) {
             return this;
         }
-        return new Graph(this._id, this._name, this.nodes, newConnections, this._metadata);
+        return new Graph(this._id, this._name, this.nodes, newConnections, this._metadata, this._groups);
+    }
+
+    // ========== Group Operations (组操作) ==========
+
+    /**
+     * Adds a new group (immutable)
+     * 添加新组（不可变）
+     */
+    addGroup(group: NodeGroup): Graph {
+        if (this._groups.some(g => g.id === group.id)) {
+            throw new Error(`Group with ID "${group.id}" already exists`);
+        }
+        const newGroups = [...this._groups, group];
+        return new Graph(this._id, this._name, this.nodes, this._connections, this._metadata, newGroups);
+    }
+
+    /**
+     * Removes a group (immutable)
+     * 移除组（不可变）
+     */
+    removeGroup(groupId: string): Graph {
+        const newGroups = this._groups.filter(g => g.id !== groupId);
+        if (newGroups.length === this._groups.length) {
+            return this;
+        }
+        return new Graph(this._id, this._name, this.nodes, this._connections, this._metadata, newGroups);
+    }
+
+    /**
+     * Updates a group (immutable)
+     * 更新组（不可变）
+     */
+    updateGroup(groupId: string, updater: (group: NodeGroup) => NodeGroup): Graph {
+        const groupIndex = this._groups.findIndex(g => g.id === groupId);
+        if (groupIndex === -1) return this;
+
+        const updatedGroup = updater(this._groups[groupIndex]);
+        const newGroups = [...this._groups];
+        newGroups[groupIndex] = updatedGroup;
+        return new Graph(this._id, this._name, this.nodes, this._connections, this._metadata, newGroups);
     }
 
     /**
@@ -219,7 +293,7 @@ export class Graph {
         return new Graph(this._id, this._name, this.nodes, this._connections, {
             ...this._metadata,
             ...metadata
-        });
+        }, this._groups);
     }
 
     /**
@@ -227,7 +301,7 @@ export class Graph {
      * 创建具有更新名称的新图（不可变）
      */
     rename(newName: string): Graph {
-        return new Graph(this._id, newName, this.nodes, this._connections, this._metadata);
+        return new Graph(this._id, newName, this.nodes, this._connections, this._metadata, this._groups);
     }
 
     /**
@@ -257,6 +331,7 @@ export class Graph {
             name: this._name,
             nodes: this.nodes.map(n => n.toJSON()),
             connections: this._connections.map(c => c.toJSON()),
+            groups: this._groups.map(g => serializeNodeGroup(g)),
             metadata: this._metadata
         };
     }

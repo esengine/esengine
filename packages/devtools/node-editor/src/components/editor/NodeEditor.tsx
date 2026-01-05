@@ -4,8 +4,10 @@ import { GraphNode, NodeTemplate } from '../../domain/models/GraphNode';
 import { Connection } from '../../domain/models/Connection';
 import { Pin } from '../../domain/models/Pin';
 import { Position } from '../../domain/value-objects/Position';
+import { NodeGroup, computeGroupBounds, estimateNodeHeight } from '../../domain/models/NodeGroup';
 import { GraphCanvas } from '../canvas/GraphCanvas';
 import { MemoizedGraphNodeComponent, NodeExecutionState } from '../nodes/GraphNodeComponent';
+import { MemoizedGroupNodeComponent } from '../nodes/GroupNodeComponent';
 import { ConnectionLayer } from '../connections/ConnectionLine';
 
 /**
@@ -56,6 +58,12 @@ export interface NodeEditorProps {
 
     /** Connection context menu callback (连接右键菜单回调) */
     onConnectionContextMenu?: (connection: Connection, e: React.MouseEvent) => void;
+
+    /** Group context menu callback (组右键菜单回调) */
+    onGroupContextMenu?: (group: NodeGroup, e: React.MouseEvent) => void;
+
+    /** Group double click callback - typically used to expand group (组双击回调 - 通常用于展开组) */
+    onGroupDoubleClick?: (group: NodeGroup) => void;
 }
 
 /**
@@ -112,7 +120,9 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
     onNodeDoubleClick: _onNodeDoubleClick,
     onCanvasContextMenu,
     onNodeContextMenu,
-    onConnectionContextMenu
+    onConnectionContextMenu,
+    onGroupContextMenu,
+    onGroupDoubleClick
 }) => {
     // Silence unused variable warnings (消除未使用变量警告)
     void _templates;
@@ -152,6 +162,64 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
         return graph.nodes.map(n => `${n.id}:${n.isCollapsed}`).join(',');
     }, [graph.nodes]);
 
+    // Groups are now simple visual boxes - no node hiding
+    // 组现在是简单的可视化框 - 不隐藏节点
+
+    // Track selected group IDs (local state, managed similarly to nodes)
+    // 跟踪选中的组ID（本地状态，类似节点管理方式）
+    const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+
+    // Group drag state - includes initial positions of nodes in the group
+    // 组拖拽状态 - 包含组内节点的初始位置
+    const [groupDragState, setGroupDragState] = useState<{
+        groupId: string;
+        startGroupPosition: Position;
+        startMouse: { x: number; y: number };
+        nodeStartPositions: Map<string, Position>;
+    } | null>(null);
+
+    // Key for tracking group changes
+    const groupsKey = useMemo(() => {
+        return graph.groups.map(g => `${g.id}:${g.position.x}:${g.position.y}`).join(',');
+    }, [graph.groups]);
+
+    // Compute dynamic group bounds based on current node positions and sizes
+    // 根据当前节点位置和尺寸动态计算组边界
+    const groupsWithDynamicBounds = useMemo(() => {
+        const defaultNodeWidth = 200;
+
+        return graph.groups.map(group => {
+            // Get current bounds of all nodes in this group
+            const nodeBounds = group.nodeIds
+                .map(nodeId => graph.getNode(nodeId))
+                .filter((node): node is GraphNode => node !== undefined)
+                .map(node => ({
+                    x: node.position.x,
+                    y: node.position.y,
+                    width: defaultNodeWidth,
+                    height: estimateNodeHeight(
+                        node.inputPins.length,
+                        node.outputPins.length,
+                        node.isCollapsed
+                    )
+                }));
+
+            if (nodeBounds.length === 0) {
+                // No nodes found, use stored position/size as fallback
+                return group;
+            }
+
+            // Calculate dynamic bounds based on actual node sizes
+            const { position, size } = computeGroupBounds(nodeBounds);
+
+            return {
+                ...group,
+                position,
+                size
+            };
+        });
+    }, [graph.groups, graph.nodes]);
+
     useEffect(() => {
         // Use requestAnimationFrame to wait for DOM to be fully rendered
         // 使用 requestAnimationFrame 等待 DOM 完全渲染
@@ -159,7 +227,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
             forceUpdate(n => n + 1);
         });
         return () => cancelAnimationFrame(rafId);
-    }, [graph.id, collapsedNodesKey]);
+    }, [graph.id, collapsedNodesKey, groupsKey]);
 
     /**
      * Converts screen coordinates to canvas coordinates
@@ -181,6 +249,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
      *
      * 直接从节点位置和引脚在节点内的相对位置计算，不依赖 DOM 测量
      * 当节点收缩时，返回节点头部的位置
+     * 当节点在折叠组中时，返回组节点的位置
      */
     const getPinPosition = useCallback((pinId: string): Position | undefined => {
         // First, find which node this pin belongs to
@@ -319,6 +388,22 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
             onGraphChange?.(newGraph);
         }
 
+        // Group dragging - moves all nodes inside (group bounds are dynamic)
+        // 组拖拽 - 移动组内所有节点（组边界是动态计算的）
+        if (groupDragState) {
+            const dx = mousePos.x - groupDragState.startMouse.x;
+            const dy = mousePos.y - groupDragState.startMouse.y;
+
+            // Only move nodes - group bounds will auto-recalculate
+            let newGraph = graph;
+            for (const [nodeId, startPos] of groupDragState.nodeStartPositions) {
+                const newNodePos = new Position(startPos.x + dx, startPos.y + dy);
+                newGraph = newGraph.moveNode(nodeId, newNodePos);
+            }
+
+            onGraphChange?.(newGraph);
+        }
+
         // Connection dragging (连接拖拽)
         if (connectionDrag) {
             const isValid = hoveredPin ? connectionDrag.fromPin.canConnectTo(hoveredPin) : undefined;
@@ -330,7 +415,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
                 isValid
             } : null);
         }
-    }, [graph, dragState, connectionDrag, hoveredPin, screenToCanvas, onGraphChange]);
+    }, [graph, dragState, groupDragState, connectionDrag, hoveredPin, screenToCanvas, onGraphChange]);
 
     /**
      * Handles mouse up to end dragging
@@ -340,6 +425,11 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
         // End node dragging (结束节点拖拽)
         if (dragState) {
             setDragState(null);
+        }
+
+        // End group dragging (结束组拖拽)
+        if (groupDragState) {
+            setGroupDragState(null);
         }
 
         // End connection dragging (结束连接拖拽)
@@ -376,7 +466,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
 
             setConnectionDrag(null);
         }
-    }, [graph, dragState, connectionDrag, hoveredPin, onGraphChange]);
+    }, [graph, dragState, groupDragState, connectionDrag, hoveredPin, onGraphChange]);
 
     /**
      * Handles pin mouse down
@@ -488,6 +578,81 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
     }, [graph, onConnectionContextMenu]);
 
     /**
+     * Handles group selection
+     * 处理组选择
+     */
+    const handleGroupSelect = useCallback((groupId: string, additive: boolean) => {
+        if (readOnly) return;
+
+        const newSelection = new Set(selectedGroupIds);
+
+        if (additive) {
+            if (newSelection.has(groupId)) {
+                newSelection.delete(groupId);
+            } else {
+                newSelection.add(groupId);
+            }
+        } else {
+            newSelection.clear();
+            newSelection.add(groupId);
+        }
+
+        setSelectedGroupIds(newSelection);
+        // Clear node and connection selection when selecting groups
+        onSelectionChange?.(new Set(), new Set());
+    }, [selectedGroupIds, readOnly, onSelectionChange]);
+
+    /**
+     * Handles group drag start
+     * 处理组拖拽开始
+     *
+     * Captures initial positions of both the group and all nodes inside it
+     * 捕获组和组内所有节点的初始位置
+     */
+    const handleGroupDragStart = useCallback((groupId: string, startMouse: { x: number; y: number }) => {
+        if (readOnly) return;
+
+        const group = graph.getGroup(groupId);
+        if (!group) return;
+
+        // Convert screen coordinates to canvas coordinates (same as node dragging)
+        // 将屏幕坐标转换为画布坐标（与节点拖拽相同）
+        const canvasPos = screenToCanvas(startMouse.x, startMouse.y);
+
+        // Capture initial positions of all nodes in the group
+        const nodeStartPositions = new Map<string, Position>();
+        for (const nodeId of group.nodeIds) {
+            const node = graph.getNode(nodeId);
+            if (node) {
+                nodeStartPositions.set(nodeId, node.position);
+            }
+        }
+
+        setGroupDragState({
+            groupId,
+            startGroupPosition: group.position,
+            startMouse: { x: canvasPos.x, y: canvasPos.y },
+            nodeStartPositions
+        });
+    }, [graph, readOnly, screenToCanvas]);
+
+    /**
+     * Handles group context menu
+     * 处理组右键菜单
+     */
+    const handleGroupContextMenu = useCallback((group: NodeGroup, e: React.MouseEvent) => {
+        onGroupContextMenu?.(group, e);
+    }, [onGroupContextMenu]);
+
+    /**
+     * Handles group double click
+     * 处理组双击
+     */
+    const handleGroupDoubleClick = useCallback((group: NodeGroup) => {
+        onGroupDoubleClick?.(group);
+    }, [onGroupDoubleClick]);
+
+    /**
      * Handles canvas click to deselect
      * 处理画布点击取消选择
      */
@@ -500,6 +665,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
         }
         if (!readOnly) {
             onSelectionChange?.(new Set(), new Set());
+            setSelectedGroupIds(new Set());
         }
     }, [readOnly, onSelectionChange]);
 
@@ -644,6 +810,21 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
                 onCanvasMouseMove={handleBoxSelectMove}
                 onCanvasMouseUp={handleBoxSelectEnd}
             >
+                {/* Group boxes - rendered first so they appear behind nodes (组框 - 先渲染，这样显示在节点后面) */}
+                {/* Use dynamically calculated bounds so groups auto-resize to fit nodes */}
+                {groupsWithDynamicBounds.map(group => (
+                    <MemoizedGroupNodeComponent
+                        key={group.id}
+                        group={group}
+                        isSelected={selectedGroupIds.has(group.id)}
+                        isDragging={groupDragState?.groupId === group.id}
+                        onSelect={handleGroupSelect}
+                        onDragStart={handleGroupDragStart}
+                        onContextMenu={handleGroupContextMenu}
+                        onDoubleClick={handleGroupDoubleClick}
+                    />
+                ))}
+
                 {/* Connection layer (连接层) */}
                 <ConnectionLayer
                     connections={graph.connections}
@@ -655,7 +836,7 @@ export const NodeEditor: React.FC<NodeEditorProps> = ({
                     onConnectionContextMenu={handleConnectionContextMenu}
                 />
 
-                {/* Nodes (节点) */}
+                {/* All Nodes (所有节点) */}
                 {graph.nodes.map(node => (
                     <MemoizedGraphNodeComponent
                         key={node.id}

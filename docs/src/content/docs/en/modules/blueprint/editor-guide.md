@@ -270,6 +270,30 @@ If you delete a variable but nodes still reference it:
 - Nodes display a **red border** and **warning icon**
 - You need to recreate the variable or delete these nodes
 
+## Node Grouping
+
+You can organize multiple nodes into a visual group box to help manage complex blueprints.
+
+### Creating a Group
+
+1. Box-select or Ctrl+click to select multiple nodes (at least 2)
+2. Right-click on the selected nodes
+3. Choose **Create Group**
+4. A group box will automatically wrap all selected nodes
+
+### Group Operations
+
+| Action | Method |
+|--------|--------|
+| Move group | Drag the group header, all nodes move together |
+| Ungroup | Right-click on group box → **Ungroup** |
+
+### Features
+
+- **Dynamic sizing**: Group box automatically resizes to wrap all nodes
+- **Independent movement**: You can move nodes within the group individually, and the box adjusts
+- **Editor only**: Groups are purely visual organization, no runtime impact
+
 ## Keyboard Shortcuts
 
 | Shortcut | Function |

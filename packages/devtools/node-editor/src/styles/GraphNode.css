@@ -281,3 +281,32 @@
                     0 0 20px rgba(255, 167, 38, 0.7);
     }
 }
+
+/* ==================== Group Node 组节点 ==================== */
+.ne-node.ne-group-node {
+    border: 2px dashed rgba(100, 149, 237, 0.6);
+    background: rgba(40, 60, 90, 0.85);
+}
+
+.ne-node.ne-group-node:hover {
+    border-color: rgba(100, 149, 237, 0.8);
+}
+
+.ne-node.ne-group-node.selected {
+    border-color: #6495ed;
+    box-shadow: 0 0 0 1px #6495ed,
+                0 0 16px rgba(100, 149, 237, 0.5),
+                0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.ne-group-header {
+    background: linear-gradient(90deg, #3a5f8a 0%, #2a4a6a 100%) !important;
+}
+
+.ne-group-hint {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #8899aa;
+    font-style: italic;
+    text-align: center;
+}

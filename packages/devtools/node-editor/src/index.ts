@@ -23,7 +23,15 @@ export {
     // Types
     type NodeTemplate,
     type NodeCategory,
-    type PinDefinition
+    type PinDefinition,
+    // NodeGroup
+    type NodeGroup,
+    type NodeBounds,
+    createNodeGroup,
+    computeGroupBounds,
+    estimateNodeHeight,
+    serializeNodeGroup,
+    deserializeNodeGroup
 } from './domain/models';
 
 // Value objects (值对象)
