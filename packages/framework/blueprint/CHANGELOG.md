@@ -1,5 +1,32 @@
 # @esengine/blueprint
 
+## 4.4.0
+
+### Minor Changes
+
+- [#438](https://github.com/esengine/esengine/pull/438) [`0d33cf0`](https://github.com/esengine/esengine/commit/0d33cf00977d16e6282931aba2cf771ec2c84c6b) Thanks [@esengine](https://github.com/esengine)! - feat(node-editor): add visual group box for organizing nodes
+    - Add NodeGroup model with dynamic bounds calculation based on node pin counts
+    - Add GroupNodeComponent for rendering group boxes behind nodes
+    - Groups automatically resize to wrap contained nodes
+    - Dragging group header moves all nodes inside together
+    - Support group serialization/deserialization
+    - Export `estimateNodeHeight` and `NodeBounds` for accurate size calculation
+
+    feat(blueprint): add comprehensive math and logic nodes
+
+    Math nodes:
+    - Modulo, Abs, Min, Max, Power, Sqrt
+    - Floor, Ceil, Round, Sign, Negate
+    - Sin, Cos, Tan, Asin, Acos, Atan, Atan2
+    - DegToRad, RadToDeg, Lerp, InverseLerp
+    - Clamp, Wrap, RandomRange, RandomInt
+
+    Logic nodes:
+    - Equal, NotEqual, GreaterThan, GreaterThanOrEqual
+    - LessThan, LessThanOrEqual, InRange
+    - AND, OR, NOT, XOR, NAND
+    - IsNull, Select (ternary)
+
 ## 4.3.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
     "name": "@esengine/procgen",
-    "version": "7.0.0",
+    "version": "8.0.0",
     "description": "Procedural generation tools for ECS Framework / ECS 框架的程序化生成工具",
     "type": "module",
     "main": "./dist/index.js",
