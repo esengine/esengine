@@ -1,5 +1,12 @@
 # @esengine/pathfinding
 
+## 9.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`30173f0`](https://github.com/esengine/esengine/commit/30173f076415c9770a429b236b8bab95a2fdc498)]:
+    - @esengine/ecs-framework-math@2.8.0
+
 ## 8.0.0
 
 ### Patch Changes
