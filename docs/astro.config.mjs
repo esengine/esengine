@@ -100,6 +100,8 @@ export default defineConfig({
                 { label: '最佳实践', slug: 'guide/scene/best-practices', translations: { en: 'Best Practices' } },
               ],
             },
+            { label: '场景管理器', slug: 'guide/scene-manager', translations: { en: 'SceneManager' } },
+            { label: '持久实体', slug: 'guide/persistent-entity', translations: { en: 'Persistent Entity' } },
             {
               label: '序列化',
               translations: { en: 'Serialization' },
@@ -237,6 +239,7 @@ export default defineConfig({
               items: [
                 { label: '概述', slug: 'modules/blueprint', translations: { en: 'Overview' } },
                 { label: '编辑器使用指南', slug: 'modules/blueprint/editor-guide', translations: { en: 'Editor Guide' } },
+                { label: 'Cocos Creator 编辑器', slug: 'modules/blueprint/cocos-editor', translations: { en: 'Cocos Creator Editor' } },
                 { label: '虚拟机 API', slug: 'modules/blueprint/vm', translations: { en: 'VM API' } },
                 { label: '自定义节点', slug: 'modules/blueprint/custom-nodes', translations: { en: 'Custom Nodes' } },
                 { label: '内置节点', slug: 'modules/blueprint/nodes', translations: { en: 'Built-in Nodes' } },
@@ -275,7 +278,9 @@ export default defineConfig({
                 { label: 'HTTP 路由', slug: 'modules/network/http', translations: { en: 'HTTP Routing' } },
                 { label: '认证系统', slug: 'modules/network/auth', translations: { en: 'Authentication' } },
                 { label: '速率限制', slug: 'modules/network/rate-limit', translations: { en: 'Rate Limiting' } },
+                { label: '分布式房间', slug: 'modules/network/distributed', translations: { en: 'Distributed Rooms' } },
                 { label: '状态同步', slug: 'modules/network/sync', translations: { en: 'State Sync' } },
+                { label: '定点数同步', slug: 'modules/network/fixed-point', translations: { en: 'Fixed-Point Sync' } },
                 { label: '客户端预测', slug: 'modules/network/prediction', translations: { en: 'Prediction' } },
                 { label: 'AOI 兴趣区域', slug: 'modules/network/aoi', translations: { en: 'AOI' } },
                 { label: '增量压缩', slug: 'modules/network/delta', translations: { en: 'Delta Compression' } },

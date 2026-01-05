@@ -1123,6 +1123,6 @@ execute(context: NodeExecutionContext): TaskStatus {
 
 ## 下一步
 
-- 学习[编辑器工作流](./editor-workflow/)了解如何在编辑器中使用自定义节点
-- 阅读[最佳实践](./best-practices/)学习行为树设计模式
-- 查看[高级用法](./advanced-usage/)了解更多功能
+- 学习[编辑器工作流](/modules/behavior-tree/editor-workflow/)了解如何在编辑器中使用自定义节点
+- 阅读[最佳实践](/modules/behavior-tree/best-practices/)学习行为树设计模式
+- 查看[高级用法](/modules/behavior-tree/advanced-usage/)了解更多功能

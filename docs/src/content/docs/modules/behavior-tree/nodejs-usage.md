@@ -577,6 +577,6 @@ function loadAIState(entity: Entity, savedState: any) {
 
 ## 下一步
 
-- 查看[资产管理](./asset-management/)了解资源加载和子树
-- 学习[自定义节点执行器](./custom-actions/)创建自定义行为
-- 阅读[最佳实践](./best-practices/)优化你的服务端AI
+- 查看[资产管理](/modules/behavior-tree/asset-management/)了解资源加载和子树
+- 学习[自定义节点执行器](/modules/behavior-tree/custom-actions/)创建自定义行为
+- 阅读[最佳实践](/modules/behavior-tree/best-practices/)优化你的服务端AI

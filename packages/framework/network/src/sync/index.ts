@@ -78,3 +78,49 @@ export {
     ComponentSyncSystem,
     createComponentSyncSystem
 } from './ComponentSync';
+
+// =============================================================================
+// 定点数同步 | Fixed-point Sync (Deterministic Lockstep)
+// =============================================================================
+
+export {
+    // Transform State
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    createZeroFixedTransformState,
+    createZeroFixedTransformStateWithVelocity,
+    // Interpolators
+    FixedTransformInterpolator,
+    FixedHermiteTransformInterpolator,
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator,
+    // Snapshot Buffer
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer,
+    // Client Prediction
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
+} from './fixed';
+
+export type {
+    // Transform State Types
+    IFixedTransformStateRaw,
+    IFixedTransformStateWithVelocityRaw,
+    // Interpolator Types
+    IFixedInterpolator,
+    IFixedExtrapolator,
+    // Snapshot Buffer Types
+    IFixedStateSnapshot,
+    IFixedSnapshotBufferConfig,
+    IFixedInterpolationResult,
+    // Client Prediction Types
+    IFixedInputSnapshot,
+    IFixedPredictedState,
+    IFixedPredictor,
+    IFixedStatePositionExtractor,
+    FixedClientPredictionConfig,
+    IFixedMovementInput,
+    IFixedMovementState,
+} from './fixed';

@@ -138,6 +138,11 @@ export type {
     ComponentSyncEvent,
     ComponentSyncEventListener,
     ComponentSyncConfig,
+    // Fixed-point sync types
+    IFixedTransformStateRaw,
+    IFixedTransformStateWithVelocityRaw,
+    IFixedInterpolator,
+    IFixedExtrapolator,
 } from './sync'
 
 export {
@@ -158,6 +163,15 @@ export {
     // Component sync
     ComponentSyncSystem,
     createComponentSyncSystem,
+    // Fixed-point sync (Deterministic Lockstep)
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    createZeroFixedTransformState,
+    createZeroFixedTransformStateWithVelocity,
+    FixedTransformInterpolator,
+    FixedHermiteTransformInterpolator,
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator,
 } from './sync'
 
 // ============================================================================

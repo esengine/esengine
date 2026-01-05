@@ -26,7 +26,7 @@ Root Selector
 
 ### 2. 单一职责原则
 
-每个节点应该只做一件事。要实现复杂动作,创建自定义执行器,参见[自定义节点执行器](./custom-actions/)。
+每个节点应该只做一件事。要实现复杂动作,创建自定义执行器,参见[自定义节点执行器](/modules/behavior-tree/custom-actions/)。
 
 ```typescript
 // 好的设计 - 使用内置节点
@@ -465,6 +465,6 @@ export class SmartUpdate implements INodeExecutor {
 
 ## 下一步
 
-- 学习[自定义节点执行器](./custom-actions/)扩展行为树功能
-- 探索[高级用法](./advanced-usage/)了解更多技巧
-- 参考[核心概念](./core-concepts/)深入理解原理
+- 学习[自定义节点执行器](/modules/behavior-tree/custom-actions/)扩展行为树功能
+- 探索[高级用法](/modules/behavior-tree/advanced-usage/)了解更多技巧
+- 参考[核心概念](/modules/behavior-tree/core-concepts/)深入理解原理

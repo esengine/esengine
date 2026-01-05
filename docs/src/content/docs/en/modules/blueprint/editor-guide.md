@@ -604,7 +604,7 @@ Use **Print** nodes to output variable values to the console.
 
 ## Next Steps
 
-- [ECS Node Reference](./nodes) - Complete node list
-- [Custom Nodes](./custom-nodes) - Create custom nodes
-- [Runtime Integration](./vm) - Blueprint VM API
-- [Examples](./examples) - More game logic examples
+- [ECS Node Reference](/en/modules/blueprint/nodes) - Complete node list
+- [Custom Nodes](/en/modules/blueprint/custom-nodes) - Create custom nodes
+- [Runtime Integration](/en/modules/blueprint/vm) - Blueprint VM API
+- [Examples](/en/modules/blueprint/examples) - More game logic examples

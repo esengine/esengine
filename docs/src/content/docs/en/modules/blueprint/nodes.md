@@ -604,6 +604,6 @@ Blueprint-defined variables automatically generate Get and Set nodes:
 
 ## Related Documentation
 
-- [Blueprint Editor Guide](./editor-guide) - Learn how to use the editor
-- [Custom Nodes](./custom-nodes) - Create custom nodes
-- [Blueprint VM](./vm) - Runtime API
+- [Blueprint Editor Guide](/en/modules/blueprint/editor-guide) - Learn how to use the editor
+- [Custom Nodes](/en/modules/blueprint/custom-nodes) - Create custom nodes
+- [Blueprint VM](/en/modules/blueprint/vm) - Runtime API

@@ -870,7 +870,7 @@ your-project/
 
 ## 下一步
 
-- [ECS 节点参考](./nodes) - 完整节点列表
-- [自定义节点](./custom-nodes) - 创建自定义节点
-- [运行时集成](./vm) - 蓝图虚拟机 API
-- [实际示例](./examples) - 更多游戏逻辑示例
+- [ECS 节点参考](/modules/blueprint/nodes) - 完整节点列表
+- [自定义节点](/modules/blueprint/custom-nodes) - 创建自定义节点
+- [运行时集成](/modules/blueprint/vm) - 蓝图虚拟机 API
+- [实际示例](/modules/blueprint/examples) - 更多游戏逻辑示例
