@@ -1,5 +1,16 @@
 # @esengine/demos
 
+## 1.0.14
+
+### Patch Changes
+
+- Updated dependencies []:
+    - @esengine/fsm@8.0.0
+    - @esengine/pathfinding@8.0.0
+    - @esengine/procgen@8.0.0
+    - @esengine/spatial@8.0.0
+    - @esengine/timer@8.0.0
+
 ## 1.0.13
 
 ### Patch Changes
