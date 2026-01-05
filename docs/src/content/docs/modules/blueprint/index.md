@@ -7,12 +7,11 @@ description: "与 ECS 框架深度集成的可视化脚本系统"
 
 ## 编辑器下载
 
-> **内测中**：蓝图编辑器目前处于内测阶段，需要激活码才能使用。
-> 请加入 QQ 群 **481923584** 后私聊群主获取激活码。
+Cocos Creator 蓝图编辑器插件（免费）：
 
-Cocos Creator 蓝图编辑器插件：
+**[下载 Cocos Node Editor v1.1.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.1.0)**
 
-**[下载 Cocos Node Editor v1.0.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.0.0)**
+> 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.cn/)
 
 详细使用教程请参考 [编辑器使用指南](./editor-guide)。
 
