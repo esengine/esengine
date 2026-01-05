@@ -1,5 +1,13 @@
 # @esengine/demos
 
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies []:
+    - @esengine/pathfinding@9.0.0
+    - @esengine/spatial@9.0.0
+
 ## 1.0.14
 
 ### Patch Changes
