@@ -472,6 +472,12 @@ Control blueprint execution flow:
 | `Less` | A < B | Boolean |
 | `Less Or Equal` | A <= B | Boolean |
 
+### Extended Math Nodes
+
+> **Vector2, Fixed32, FixedVector2, Color** and other advanced math nodes are provided by the `@esengine/ecs-framework-math` module.
+>
+> See: [Math Blueprint Nodes](/en/modules/math/blueprint-nodes)
+
 ### Example: Clamp Value
 
 <div class="bp-graph" style="" data-connections='[{"from":"en-rand-result","to":"en-clamp-value","type":"float"}]'>
@@ -604,6 +610,7 @@ Blueprint-defined variables automatically generate Get and Set nodes:
 
 ## Related Documentation
 
+- [Math Blueprint Nodes](/en/modules/math/blueprint-nodes) - Vector2, Fixed32, Color and other math nodes
 - [Blueprint Editor Guide](/en/modules/blueprint/editor-guide) - Learn how to use the editor
 - [Custom Nodes](/en/modules/blueprint/custom-nodes) - Create custom nodes
 - [Blueprint VM](/en/modules/blueprint/vm) - Runtime API
