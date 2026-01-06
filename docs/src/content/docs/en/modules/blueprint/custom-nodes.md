@@ -3,6 +3,164 @@ title: "Custom Nodes"
 description: "Creating custom blueprint nodes"
 ---
 
+## Blueprint Decorators
+
+Use decorators to quickly expose ECS components as blueprint nodes.
+
+### @BlueprintComponent
+
+Mark a component class as blueprint-enabled:
+
+```typescript
+import { BlueprintComponent, BlueprintProperty } from '@esengine/blueprint';
+
+@BlueprintComponent({
+    title: 'Player Controller',
+    category: 'gameplay',
+    color: '#4a90d9',
+    description: 'Controls player movement and interaction'
+})
+class PlayerController extends Component {
+    @BlueprintProperty({ displayName: 'Move Speed' })
+    speed: number = 100;
+
+    @BlueprintProperty({ displayName: 'Jump Height' })
+    jumpHeight: number = 200;
+}
+```
+
+### @BlueprintProperty
+
+Expose component properties as node inputs:
+
+```typescript
+@BlueprintProperty({
+    displayName: 'Health',
+    description: 'Current health value',
+    isInput: true,
+    isOutput: true
+})
+health: number = 100;
+```
+
+### @BlueprintArray
+
+For array type properties, supports editing complex object arrays:
+
+```typescript
+import { BlueprintArray, Schema } from '@esengine/blueprint';
+
+interface Waypoint {
+    position: { x: number; y: number };
+    waitTime: number;
+    speed: number;
+}
+
+@BlueprintComponent({
+    title: 'Patrol Path',
+    category: 'ai'
+})
+class PatrolPath extends Component {
+    @BlueprintArray({
+        displayName: 'Waypoints',
+        description: 'Points along the patrol path',
+        itemSchema: Schema.object({
+            position: Schema.vector2({ defaultValue: { x: 0, y: 0 } }),
+            waitTime: Schema.float({ min: 0, max: 10, defaultValue: 1.0 }),
+            speed: Schema.float({ min: 0, max: 500, defaultValue: 100 })
+        }),
+        reorderable: true,
+        exposeElementPorts: true,
+        portNameTemplate: 'Waypoint {index1}'
+    })
+    waypoints: Waypoint[] = [];
+}
+```
+
+## Schema Type System
+
+Schema defines type information for complex data structures, enabling the editor to automatically generate corresponding UI.
+
+### Primitive Types
+
+```typescript
+import { Schema } from '@esengine/blueprint';
+
+// Number types
+Schema.float({ min: 0, max: 100, defaultValue: 50, step: 0.1 })
+Schema.int({ min: 0, max: 10, defaultValue: 5 })
+
+// String
+Schema.string({ defaultValue: 'Hello', multiline: false, placeholder: 'Enter text...' })
+
+// Boolean
+Schema.boolean({ defaultValue: true })
+
+// Vectors
+Schema.vector2({ defaultValue: { x: 0, y: 0 } })
+Schema.vector3({ defaultValue: { x: 0, y: 0, z: 0 } })
+```
+
+### Composite Types
+
+```typescript
+// Object
+Schema.object({
+    name: Schema.string({ defaultValue: '' }),
+    health: Schema.float({ min: 0, max: 100 }),
+    position: Schema.vector2()
+})
+
+// Array
+Schema.array({
+    items: Schema.float(),
+    minItems: 0,
+    maxItems: 10
+})
+
+// Enum
+Schema.enum({
+    options: ['idle', 'walk', 'run', 'jump'],
+    defaultValue: 'idle'
+})
+
+// Reference
+Schema.ref({ refType: 'entity' })
+Schema.ref({ refType: 'asset', assetType: 'texture' })
+```
+
+### Complete Example
+
+```typescript
+@BlueprintComponent({ title: 'Enemy Config', category: 'ai' })
+class EnemyConfig extends Component {
+    @BlueprintArray({
+        displayName: 'Attack Patterns',
+        itemSchema: Schema.object({
+            name: Schema.string({ defaultValue: 'Basic Attack' }),
+            damage: Schema.float({ min: 0, max: 100, defaultValue: 10 }),
+            cooldown: Schema.float({ min: 0, max: 10, defaultValue: 1 }),
+            range: Schema.float({ min: 0, max: 500, defaultValue: 50 }),
+            animation: Schema.string({ defaultValue: 'attack_01' })
+        }),
+        reorderable: true
+    })
+    attackPatterns: AttackPattern[] = [];
+
+    @BlueprintProperty({
+        displayName: 'Patrol Area',
+        schema: Schema.object({
+            center: Schema.vector2(),
+            radius: Schema.float({ min: 0, defaultValue: 100 })
+        })
+    })
+    patrolArea: { center: { x: number; y: number }; radius: number } = {
+        center: { x: 0, y: 0 },
+        radius: 100
+    };
+}
+```
+
 ## Defining Node Template
 
 ```typescript
@@ -33,16 +191,11 @@ import { INodeExecutor, RegisterNode, BlueprintNode, ExecutionContext, Execution
 @RegisterNode(MyNodeTemplate)
 class MyNodeExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        // Get input (using evaluateInput)
         const value = context.evaluateInput(node.id, 'value', 0) as number;
-
-        // Execute logic
         const result = value * 2;
-
-        // Return result
         return {
             outputs: { result },
-            nextExec: 'exec'  // Continue execution
+            nextExec: 'exec'
         };
     }
 }
@@ -64,19 +217,10 @@ NodeRegistry.instance.register(MyNodeTemplate, new MyNodeExecutor());
 ```typescript
 import { NodeRegistry } from '@esengine/blueprint';
 
-// Get singleton
 const registry = NodeRegistry.instance;
-
-// Get all templates
 const allTemplates = registry.getAllTemplates();
-
-// Get by category
 const mathNodes = registry.getTemplatesByCategory('math');
-
-// Search nodes
 const results = registry.searchTemplates('add');
-
-// Check existence
 if (registry.has('MyCustomNode')) { ... }
 ```
 
@@ -89,7 +233,7 @@ const PureNodeTemplate: BlueprintNodeTemplate = {
     type: 'GetDistance',
     title: 'Get Distance',
     category: 'math',
-    isPure: true,  // Mark as pure node
+    isPure: true,
     inputs: [
         { name: 'a', type: 'vector2', direction: 'input' },
         { name: 'b', type: 'vector2', direction: 'input' }
@@ -98,60 +242,4 @@ const PureNodeTemplate: BlueprintNodeTemplate = {
         { name: 'distance', type: 'number', direction: 'output' }
     ]
 };
-```
-
-## Example: ECS Component Operation Node
-
-```typescript
-import type { Entity } from '@esengine/ecs-framework';
-import { BlueprintNodeTemplate, BlueprintNode } from '@esengine/blueprint';
-import { ExecutionContext, ExecutionResult } from '@esengine/blueprint';
-import { INodeExecutor, RegisterNode } from '@esengine/blueprint';
-
-// Custom heal node
-const HealEntityTemplate: BlueprintNodeTemplate = {
-    type: 'HealEntity',
-    title: 'Heal Entity',
-    category: 'gameplay',
-    color: '#22aa22',
-    description: 'Heal an entity with HealthComponent',
-    keywords: ['heal', 'health', 'restore'],
-    menuPath: ['Gameplay', 'Combat', 'Heal Entity'],
-    inputs: [
-        { name: 'exec', type: 'exec', displayName: '' },
-        { name: 'entity', type: 'entity', displayName: 'Target' },
-        { name: 'amount', type: 'float', displayName: 'Amount', defaultValue: 10 }
-    ],
-    outputs: [
-        { name: 'exec', type: 'exec', displayName: '' },
-        { name: 'newHealth', type: 'float', displayName: 'New Health' }
-    ]
-};
-
-@RegisterNode(HealEntityTemplate)
-class HealEntityExecutor implements INodeExecutor {
-    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        const entity = context.evaluateInput(node.id, 'entity', context.entity) as Entity;
-        const amount = context.evaluateInput(node.id, 'amount', 10) as number;
-
-        if (!entity || entity.isDestroyed) {
-            return { outputs: { newHealth: 0 }, nextExec: 'exec' };
-        }
-
-        // Get HealthComponent
-        const health = entity.components.find(c =>
-            (c.constructor as any).__componentName__ === 'Health'
-        ) as any;
-
-        if (health) {
-            health.current = Math.min(health.current + amount, health.max);
-            return {
-                outputs: { newHealth: health.current },
-                nextExec: 'exec'
-            };
-        }
-
-        return { outputs: { newHealth: 0 }, nextExec: 'exec' };
-    }
-}
 ```
