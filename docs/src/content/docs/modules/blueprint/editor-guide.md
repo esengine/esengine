@@ -13,7 +13,7 @@ description: "Cocos Creator 蓝图可视化脚本编辑器完整使用教程"
 
 从 GitHub Release 下载最新版本（免费）：
 
-**[下载 Cocos Node Editor v1.1.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.1.0)**
+**[下载 Cocos Node Editor v1.2.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.0)**
 
 > 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.cn/)
 
