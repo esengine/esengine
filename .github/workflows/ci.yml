@@ -63,9 +63,9 @@ jobs:
     - name: Build framework packages
       run: |
         pnpm --filter @esengine/ecs-framework build
+        pnpm --filter @esengine/blueprint build
         pnpm --filter @esengine/ecs-framework-math build
         pnpm --filter @esengine/behavior-tree build
-        pnpm --filter @esengine/blueprint build
         pnpm --filter @esengine/fsm build
         pnpm --filter @esengine/timer build
         pnpm --filter @esengine/spatial build
