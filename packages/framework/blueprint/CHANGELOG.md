@@ -1,5 +1,21 @@
 # @esengine/blueprint
 
+## 4.5.0
+
+### Minor Changes
+
+- [#447](https://github.com/esengine/esengine/pull/447) [`4e66bd8`](https://github.com/esengine/esengine/commit/4e66bd8e2be80b366a7723dcc48b99df0457aed4) Thanks [@esengine](https://github.com/esengine)! - feat(blueprint): add Schema type system and @BlueprintArray decorator
+    - Add `Schema` fluent API for defining complex data types:
+        - Primitive types: `Schema.float()`, `Schema.int()`, `Schema.string()`, `Schema.boolean()`, `Schema.vector2()`, `Schema.vector3()`
+        - Composite types: `Schema.object()`, `Schema.array()`, `Schema.enum()`, `Schema.ref()`
+        - Support for constraints: `min`, `max`, `step`, `defaultValue`, `placeholder`, etc.
+    - Add `@BlueprintArray` decorator for array properties:
+        - `itemSchema`: Define schema for array items using Schema API
+        - `reorderable`: Allow drag-and-drop reordering
+        - `exposeElementPorts`: Create individual ports for each array element
+        - `portNameTemplate`: Custom naming for element ports (e.g., "Waypoint {index1}")
+    - Update documentation with examples and usage guide
+
 ## 4.4.0
 
 ### Minor Changes
