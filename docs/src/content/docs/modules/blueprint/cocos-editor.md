@@ -7,36 +7,25 @@ description: "在 Cocos Creator 中使用蓝图可视化脚本系统"
 
 ## 安装扩展
 
-### 1. 复制扩展到项目
+### 1. 下载扩展
 
-将 `cocos-node-editor` 扩展复制到你的 Cocos Creator 项目的 `extensions` 目录：
+从发布页面下载 `cocos-node-editor.zip` 扩展包。
 
-```
-your-project/
-├── assets/
-├── extensions/
-│   └── cocos-node-editor/    # 蓝图编辑器扩展
-└── ...
-```
-
-### 2. 安装依赖
-
-在扩展目录中安装依赖：
-
-```bash
-cd extensions/cocos-node-editor
-npm install
-```
-
-### 3. 启用扩展
+### 2. 导入扩展
 
 1. 打开 Cocos Creator
 2. 进入 **扩展 → 扩展管理器**
-3. 找到 `cocos-node-editor` 并启用
+3. 点击 **导入扩展包** 按钮
+4. 选择下载的 `cocos-node-editor.zip` 文件
+5. 导入后启用扩展
 
 ## 打开蓝图编辑器
 
 通过菜单 **面板 → Node Editor** 打开蓝图编辑器面板。
+
+### 首次打开 - 安装依赖
+
+首次打开面板时，插件会检测项目中是否安装了 `@esengine/blueprint` 依赖包。如果未安装，会显示 **"缺少必要的依赖包"** 提示，点击 **"安装依赖"** 按钮即可自动安装。
 
 ## 编辑器界面
 
