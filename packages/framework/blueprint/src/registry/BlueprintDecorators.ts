@@ -1,118 +1,75 @@
 /**
  * @zh 蓝图装饰器 - 用于标记可在蓝图中使用的组件、属性和方法
  * @en Blueprint Decorators - Mark components, properties and methods for blueprint use
- *
- * @example
- * ```typescript
- * import { BlueprintExpose, BlueprintProperty, BlueprintMethod } from '@esengine/blueprint';
- *
- * @ECSComponent('Health')
- * @BlueprintExpose({ displayName: '生命值组件', category: 'gameplay' })
- * export class HealthComponent extends Component {
- *
- *     @BlueprintProperty({ displayName: '当前生命值', type: 'float' })
- *     current: number = 100;
- *
- *     @BlueprintProperty({ displayName: '最大生命值', type: 'float', readonly: true })
- *     max: number = 100;
- *
- *     @BlueprintMethod({
- *         displayName: '治疗',
- *         params: [{ name: 'amount', type: 'float' }]
- *     })
- *     heal(amount: number): void {
- *         this.current = Math.min(this.current + amount, this.max);
- *     }
- *
- *     @BlueprintMethod({
- *         displayName: '受伤',
- *         params: [{ name: 'amount', type: 'float' }],
- *         returnType: 'bool'
- *     })
- *     takeDamage(amount: number): boolean {
- *         this.current -= amount;
- *         return this.current <= 0;
- *     }
- * }
- * ```
  */
 
 import type { BlueprintPinType } from '../types/pins';
+import type { PropertySchema, ArraySchema, ObjectSchema } from '../types/schema';
 
 // ============================================================================
-// Types | 类型定义
+// Types
 // ============================================================================
 
-/**
- * @zh 参数定义
- * @en Parameter definition
- */
 export interface BlueprintParamDef {
-    /** @zh 参数名称 @en Parameter name */
     name: string;
-    /** @zh 显示名称 @en Display name */
     displayName?: string;
-    /** @zh 引脚类型 @en Pin type */
     type?: BlueprintPinType;
-    /** @zh 默认值 @en Default value */
     defaultValue?: unknown;
 }
 
-/**
- * @zh 蓝图暴露选项
- * @en Blueprint expose options
- */
 export interface BlueprintExposeOptions {
-    /** @zh 组件显示名称 @en Component display name */
     displayName?: string;
-    /** @zh 组件描述 @en Component description */
     description?: string;
-    /** @zh 组件分类 @en Component category */
     category?: string;
-    /** @zh 组件颜色 @en Component color */
     color?: string;
-    /** @zh 组件图标 @en Component icon */
     icon?: string;
 }
 
-/**
- * @zh 蓝图属性选项
- * @en Blueprint property options
- */
 export interface BlueprintPropertyOptions {
-    /** @zh 属性显示名称 @en Property display name */
     displayName?: string;
-    /** @zh 属性描述 @en Property description */
     description?: string;
-    /** @zh 引脚类型 @en Pin type */
     type?: BlueprintPinType;
-    /** @zh 是否只读（不生成 Set 节点）@en Readonly (no Set node generated) */
     readonly?: boolean;
-    /** @zh 默认值 @en Default value */
     defaultValue?: unknown;
 }
 
-/**
- * @zh 蓝图方法选项
- * @en Blueprint method options
- */
 export interface BlueprintMethodOptions {
-    /** @zh 方法显示名称 @en Method display name */
     displayName?: string;
-    /** @zh 方法描述 @en Method description */
     description?: string;
-    /** @zh 是否是纯函数（无副作用）@en Is pure function (no side effects) */
     isPure?: boolean;
-    /** @zh 参数列表 @en Parameter list */
     params?: BlueprintParamDef[];
-    /** @zh 返回值类型 @en Return type */
     returnType?: BlueprintPinType;
 }
 
 /**
- * @zh 属性元数据
- * @en Property metadata
+ * @zh 蓝图数组属性选项
+ * @en Blueprint array property options
  */
+export interface BlueprintArrayOptions {
+    displayName?: string;
+    description?: string;
+    itemSchema: PropertySchema;
+    reorderable?: boolean;
+    collapsible?: boolean;
+    minItems?: number;
+    maxItems?: number;
+    defaultValue?: unknown[];
+    itemLabel?: string;
+    exposeElementPorts?: boolean;
+    portNameTemplate?: string;
+}
+
+/**
+ * @zh 蓝图对象属性选项
+ * @en Blueprint object property options
+ */
+export interface BlueprintObjectOptions {
+    displayName?: string;
+    description?: string;
+    properties: Record<string, PropertySchema>;
+    collapsible?: boolean;
+}
+
 export interface PropertyMetadata {
     propertyKey: string;
     displayName: string;
@@ -120,12 +77,12 @@ export interface PropertyMetadata {
     pinType: BlueprintPinType;
     readonly: boolean;
     defaultValue?: unknown;
+    schema?: PropertySchema;
+    isDynamicArray?: boolean;
+    exposeElementPorts?: boolean;
+    portNameTemplate?: string;
 }
 
-/**
- * @zh 方法元数据
- * @en Method metadata
- */
 export interface MethodMetadata {
     methodKey: string;
     displayName: string;
@@ -135,10 +92,6 @@ export interface MethodMetadata {
     returnType: BlueprintPinType;
 }
 
-/**
- * @zh 组件蓝图元数据
- * @en Component blueprint metadata
- */
 export interface ComponentBlueprintMetadata extends BlueprintExposeOptions {
     componentName: string;
     properties: PropertyMetadata[];
@@ -146,41 +99,25 @@ export interface ComponentBlueprintMetadata extends BlueprintExposeOptions {
 }
 
 // ============================================================================
-// Registry | 注册表
+// Registry
 // ============================================================================
 
-/**
- * @zh 已注册的蓝图组件
- * @en Registered blueprint components
- */
 const registeredComponents = new Map<Function, ComponentBlueprintMetadata>();
 
-/**
- * @zh 获取所有已注册的蓝图组件
- * @en Get all registered blueprint components
- */
 export function getRegisteredBlueprintComponents(): Map<Function, ComponentBlueprintMetadata> {
     return registeredComponents;
 }
 
-/**
- * @zh 获取组件的蓝图元数据
- * @en Get blueprint metadata for a component
- */
 export function getBlueprintMetadata(componentClass: Function): ComponentBlueprintMetadata | undefined {
     return registeredComponents.get(componentClass);
 }
 
-/**
- * @zh 清除所有注册的蓝图组件（用于测试）
- * @en Clear all registered blueprint components (for testing)
- */
 export function clearRegisteredComponents(): void {
     registeredComponents.clear();
 }
 
 // ============================================================================
-// Internal Helpers | 内部辅助函数
+// Internal Helpers
 // ============================================================================
 
 function getOrCreateMetadata(constructor: Function): ComponentBlueprintMetadata {
@@ -197,20 +134,9 @@ function getOrCreateMetadata(constructor: Function): ComponentBlueprintMetadata 
 }
 
 // ============================================================================
-// Decorators | 装饰器
+// Decorators
 // ============================================================================
 
-/**
- * @zh 标记组件可在蓝图中使用
- * @en Mark component as usable in blueprint
- *
- * @example
- * ```typescript
- * @ECSComponent('Player')
- * @BlueprintExpose({ displayName: '玩家', category: 'gameplay' })
- * export class PlayerComponent extends Component { }
- * ```
- */
 export function BlueprintExpose(options: BlueprintExposeOptions = {}): ClassDecorator {
     return function (target: Function) {
         const metadata = getOrCreateMetadata(target);
@@ -220,19 +146,6 @@ export function BlueprintExpose(options: BlueprintExposeOptions = {}): ClassDeco
     };
 }
 
-/**
- * @zh 标记属性可在蓝图中访问
- * @en Mark property as accessible in blueprint
- *
- * @example
- * ```typescript
- * @BlueprintProperty({ displayName: '生命值', type: 'float' })
- * health: number = 100;
- *
- * @BlueprintProperty({ displayName: '名称', type: 'string', readonly: true })
- * name: string = 'Player';
- * ```
- */
 export function BlueprintProperty(options: BlueprintPropertyOptions = {}): PropertyDecorator {
     return function (target: Object, propertyKey: string | symbol) {
         const key = String(propertyKey);
@@ -257,25 +170,108 @@ export function BlueprintProperty(options: BlueprintPropertyOptions = {}): Prope
 }
 
 /**
- * @zh 标记方法可在蓝图中调用
- * @en Mark method as callable in blueprint
+ * @zh 标记属性为蓝图数组（支持动态增删、排序）
+ * @en Mark property as blueprint array (supports dynamic add/remove, reorder)
  *
  * @example
  * ```typescript
- * @BlueprintMethod({
- *     displayName: '攻击',
- *     params: [
- *         { name: 'target', type: 'entity' },
- *         { name: 'damage', type: 'float' }
- *     ],
- *     returnType: 'bool'
+ * @BlueprintArray({
+ *     displayName: '路径点',
+ *     itemSchema: Schema.object({
+ *         position: Schema.vector2(),
+ *         waitTime: Schema.float({ min: 0, defaultValue: 1.0 })
+ *     }),
+ *     reorderable: true,
+ *     exposeElementPorts: true,
+ *     portNameTemplate: 'Point {index1}'
  * })
- * attack(target: Entity, damage: number): boolean { }
- *
- * @BlueprintMethod({ displayName: '获取速度', isPure: true, returnType: 'float' })
- * getSpeed(): number { return this.speed; }
+ * waypoints: Waypoint[] = [];
  * ```
  */
+export function BlueprintArray(options: BlueprintArrayOptions): PropertyDecorator {
+    return function (target: Object, propertyKey: string | symbol) {
+        const key = String(propertyKey);
+        const metadata = getOrCreateMetadata(target.constructor);
+
+        const arraySchema: ArraySchema = {
+            type: 'array',
+            items: options.itemSchema,
+            defaultValue: options.defaultValue,
+            minItems: options.minItems,
+            maxItems: options.maxItems,
+            reorderable: options.reorderable,
+            collapsible: options.collapsible,
+            itemLabel: options.itemLabel
+        };
+
+        const propMeta: PropertyMetadata = {
+            propertyKey: key,
+            displayName: options.displayName ?? key,
+            description: options.description,
+            pinType: 'array',
+            readonly: false,
+            defaultValue: options.defaultValue,
+            schema: arraySchema,
+            isDynamicArray: true,
+            exposeElementPorts: options.exposeElementPorts,
+            portNameTemplate: options.portNameTemplate
+        };
+
+        const existingIndex = metadata.properties.findIndex(p => p.propertyKey === key);
+        if (existingIndex >= 0) {
+            metadata.properties[existingIndex] = propMeta;
+        } else {
+            metadata.properties.push(propMeta);
+        }
+    };
+}
+
+/**
+ * @zh 标记属性为蓝图对象（支持嵌套结构）
+ * @en Mark property as blueprint object (supports nested structure)
+ *
+ * @example
+ * ```typescript
+ * @BlueprintObject({
+ *     displayName: '变换',
+ *     properties: {
+ *         position: Schema.vector2(),
+ *         rotation: Schema.float(),
+ *         scale: Schema.vector2({ defaultValue: { x: 1, y: 1 } })
+ *     }
+ * })
+ * transform: Transform;
+ * ```
+ */
+export function BlueprintObject(options: BlueprintObjectOptions): PropertyDecorator {
+    return function (target: Object, propertyKey: string | symbol) {
+        const key = String(propertyKey);
+        const metadata = getOrCreateMetadata(target.constructor);
+
+        const objectSchema: ObjectSchema = {
+            type: 'object',
+            properties: options.properties,
+            collapsible: options.collapsible
+        };
+
+        const propMeta: PropertyMetadata = {
+            propertyKey: key,
+            displayName: options.displayName ?? key,
+            description: options.description,
+            pinType: 'object',
+            readonly: false,
+            schema: objectSchema
+        };
+
+        const existingIndex = metadata.properties.findIndex(p => p.propertyKey === key);
+        if (existingIndex >= 0) {
+            metadata.properties[existingIndex] = propMeta;
+        } else {
+            metadata.properties.push(propMeta);
+        }
+    };
+}
+
 export function BlueprintMethod(options: BlueprintMethodOptions = {}): MethodDecorator {
     return function (target: Object, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
         const key = String(propertyKey);
@@ -302,13 +298,9 @@ export function BlueprintMethod(options: BlueprintMethodOptions = {}): MethodDec
 }
 
 // ============================================================================
-// Utility Functions | 工具函数
+// Utility Functions
 // ============================================================================
 
-/**
- * @zh 从 TypeScript 类型名推断蓝图引脚类型
- * @en Infer blueprint pin type from TypeScript type name
- */
 export function inferPinType(typeName: string): BlueprintPinType {
     const typeMap: Record<string, BlueprintPinType> = {
         'number': 'float',

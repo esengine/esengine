@@ -4,6 +4,7 @@
  */
 
 import { BlueprintPinDefinition } from './pins';
+import { ObjectSchema } from './schema';
 
 /**
  * Node category for visual styling and organization
@@ -70,6 +71,23 @@ export interface BlueprintNodeTemplate {
 
     /** Node color for visual distinction (节点颜色用于视觉区分) */
     color?: string;
+
+    // ========== Schema Support (Schema 支持) ==========
+
+    /**
+     * @zh 节点数据 Schema - 定义节点存储的数据结构
+     * @en Node data schema - defines the data structure stored in the node
+     *
+     * @zh 当定义了 schema 时，节点数据将按照 schema 结构存储和验证
+     * @en When schema is defined, node data will be stored and validated according to the schema structure
+     */
+    schema?: ObjectSchema;
+
+    /**
+     * @zh 动态数组路径列表 - 指定哪些数组支持动态增删元素
+     * @en Dynamic array paths - specifies which arrays support dynamic add/remove elements
+     */
+    dynamicArrayPaths?: string[];
 }
 
 /**
@@ -96,6 +114,9 @@ export interface BlueprintNode {
 /**
  * Connection between two pins
  * 两个引脚之间的连接
+ *
+ * @zh 引脚路径支持数组索引，如 "waypoints[0].position"
+ * @en Pin paths support array indices, e.g., "waypoints[0].position"
  */
 export interface BlueprintConnection {
     /** Unique connection ID (唯一连接ID) */
@@ -104,13 +125,19 @@ export interface BlueprintConnection {
     /** Source node ID (源节点ID) */
     fromNodeId: string;
 
-    /** Source pin name (源引脚名称) */
+    /**
+     * @zh 源引脚路径（支持数组索引如 "items[0].value"）
+     * @en Source pin path (supports array indices like "items[0].value")
+     */
     fromPin: string;
 
     /** Target node ID (目标节点ID) */
     toNodeId: string;
 
-    /** Target pin name (目标引脚名称) */
+    /**
+     * @zh 目标引脚路径（支持数组索引如 "items[0].value"）
+     * @en Target pin path (supports array indices like "items[0].value")
+     */
     toPin: string;
 }
 
