@@ -7,36 +7,25 @@ This document explains how to install and use the blueprint visual scripting edi
 
 ## Installation
 
-### 1. Copy Extension to Project
+### 1. Download Extension
 
-Copy the `cocos-node-editor` extension to your Cocos Creator project's `extensions` directory:
+Download the `cocos-node-editor.zip` extension package from the release page.
 
-```
-your-project/
-├── assets/
-├── extensions/
-│   └── cocos-node-editor/    # Blueprint editor extension
-└── ...
-```
-
-### 2. Install Dependencies
-
-Install dependencies in the extension directory:
-
-```bash
-cd extensions/cocos-node-editor
-npm install
-```
-
-### 3. Enable Extension
+### 2. Import Extension
 
 1. Open Cocos Creator
 2. Go to **Extensions → Extension Manager**
-3. Find `cocos-node-editor` and enable it
+3. Click the **Import Extension** button
+4. Select the downloaded `cocos-node-editor.zip` file
+5. Enable the extension after importing
 
 ## Opening the Blueprint Editor
 
 Open the blueprint editor panel via menu **Panel → Node Editor**.
+
+### First Launch - Install Dependencies
+
+When opening the panel for the first time, the plugin will check if `@esengine/blueprint` is installed in your project. If not installed, it will display **"Missing required dependencies"** prompt. Click the **"Install Dependencies"** button to install automatically.
 
 ## Editor Interface
 
