@@ -40,6 +40,9 @@
   },
   "author": "yhh",
   "license": "MIT",
+  "dependencies": {
+    "@esengine/blueprint": "workspace:*"
+  },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-node-resolve": "^16.0.1",

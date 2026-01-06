@@ -296,6 +296,10 @@ nav.sidebar-content ul li a[aria-current="page"] {
 .bp-conn.component { stroke: #7030c0; }
 .bp-conn.array { stroke: #7030c0; }
 .bp-conn.any { stroke: #707070; }
+.bp-conn.vector2 { stroke: #2196F3; }
+.bp-conn.fixed32 { stroke: #9C27B0; }
+.bp-conn.fixedvector2 { stroke: #673AB7; }
+.bp-conn.color { stroke: #FF9800; }
 
 /* ==================== Node Container ==================== */
 .bp-node {

@@ -561,3 +561,325 @@ export class SignExecutor implements INodeExecutor {
         return { outputs: { result: Math.sign(value) } };
     }
 }
+
+// ============================================================================
+// Wrap Node (循环限制节点)
+// ============================================================================
+
+export const WrapTemplate: BlueprintNodeTemplate = {
+    type: 'Wrap',
+    title: 'Wrap',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Wraps value to stay within min and max range (将值循环限制在范围内)',
+    keywords: ['wrap', 'loop', 'cycle', 'range', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'value', type: 'float', displayName: 'Value', defaultValue: 0 },
+        { name: 'min', type: 'float', displayName: 'Min', defaultValue: 0 },
+        { name: 'max', type: 'float', displayName: 'Max', defaultValue: 1 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Result' }
+    ]
+};
+
+@RegisterNode(WrapTemplate)
+export class WrapExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const value = Number(context.evaluateInput(node.id, 'value', 0));
+        const min = Number(context.evaluateInput(node.id, 'min', 0));
+        const max = Number(context.evaluateInput(node.id, 'max', 1));
+        const range = max - min;
+        if (range <= 0) return { outputs: { result: min } };
+        const wrapped = ((value - min) % range + range) % range + min;
+        return { outputs: { result: wrapped } };
+    }
+}
+
+// ============================================================================
+// Sin Node (正弦节点)
+// ============================================================================
+
+export const SinTemplate: BlueprintNodeTemplate = {
+    type: 'Sin',
+    title: 'Sin',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the sine of angle in radians (返回弧度角的正弦值)',
+    keywords: ['sin', 'sine', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'radians', type: 'float', displayName: 'Radians', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Result' }
+    ]
+};
+
+@RegisterNode(SinTemplate)
+export class SinExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const radians = Number(context.evaluateInput(node.id, 'radians', 0));
+        return { outputs: { result: Math.sin(radians) } };
+    }
+}
+
+// ============================================================================
+// Cos Node (余弦节点)
+// ============================================================================
+
+export const CosTemplate: BlueprintNodeTemplate = {
+    type: 'Cos',
+    title: 'Cos',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the cosine of angle in radians (返回弧度角的余弦值)',
+    keywords: ['cos', 'cosine', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'radians', type: 'float', displayName: 'Radians', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Result' }
+    ]
+};
+
+@RegisterNode(CosTemplate)
+export class CosExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const radians = Number(context.evaluateInput(node.id, 'radians', 0));
+        return { outputs: { result: Math.cos(radians) } };
+    }
+}
+
+// ============================================================================
+// Tan Node (正切节点)
+// ============================================================================
+
+export const TanTemplate: BlueprintNodeTemplate = {
+    type: 'Tan',
+    title: 'Tan',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the tangent of angle in radians (返回弧度角的正切值)',
+    keywords: ['tan', 'tangent', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'radians', type: 'float', displayName: 'Radians', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Result' }
+    ]
+};
+
+@RegisterNode(TanTemplate)
+export class TanExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const radians = Number(context.evaluateInput(node.id, 'radians', 0));
+        return { outputs: { result: Math.tan(radians) } };
+    }
+}
+
+// ============================================================================
+// Asin Node (反正弦节点)
+// ============================================================================
+
+export const AsinTemplate: BlueprintNodeTemplate = {
+    type: 'Asin',
+    title: 'Asin',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the arc sine in radians (返回反正弦值，单位为弧度)',
+    keywords: ['asin', 'arc', 'sine', 'inverse', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'value', type: 'float', displayName: 'Value', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Radians' }
+    ]
+};
+
+@RegisterNode(AsinTemplate)
+export class AsinExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const value = Number(context.evaluateInput(node.id, 'value', 0));
+        return { outputs: { result: Math.asin(Math.max(-1, Math.min(1, value))) } };
+    }
+}
+
+// ============================================================================
+// Acos Node (反余弦节点)
+// ============================================================================
+
+export const AcosTemplate: BlueprintNodeTemplate = {
+    type: 'Acos',
+    title: 'Acos',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the arc cosine in radians (返回反余弦值，单位为弧度)',
+    keywords: ['acos', 'arc', 'cosine', 'inverse', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'value', type: 'float', displayName: 'Value', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Radians' }
+    ]
+};
+
+@RegisterNode(AcosTemplate)
+export class AcosExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const value = Number(context.evaluateInput(node.id, 'value', 0));
+        return { outputs: { result: Math.acos(Math.max(-1, Math.min(1, value))) } };
+    }
+}
+
+// ============================================================================
+// Atan Node (反正切节点)
+// ============================================================================
+
+export const AtanTemplate: BlueprintNodeTemplate = {
+    type: 'Atan',
+    title: 'Atan',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the arc tangent in radians (返回反正切值，单位为弧度)',
+    keywords: ['atan', 'arc', 'tangent', 'inverse', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'value', type: 'float', displayName: 'Value', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Radians' }
+    ]
+};
+
+@RegisterNode(AtanTemplate)
+export class AtanExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const value = Number(context.evaluateInput(node.id, 'value', 0));
+        return { outputs: { result: Math.atan(value) } };
+    }
+}
+
+// ============================================================================
+// Atan2 Node (两参数反正切节点)
+// ============================================================================
+
+export const Atan2Template: BlueprintNodeTemplate = {
+    type: 'Atan2',
+    title: 'Atan2',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the angle in radians between the positive X axis and the point (x, y) (返回点(x,y)与正X轴之间的弧度角)',
+    keywords: ['atan2', 'angle', 'direction', 'trig', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'y', type: 'float', displayName: 'Y', defaultValue: 0 },
+        { name: 'x', type: 'float', displayName: 'X', defaultValue: 1 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Radians' }
+    ]
+};
+
+@RegisterNode(Atan2Template)
+export class Atan2Executor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const y = Number(context.evaluateInput(node.id, 'y', 0));
+        const x = Number(context.evaluateInput(node.id, 'x', 1));
+        return { outputs: { result: Math.atan2(y, x) } };
+    }
+}
+
+// ============================================================================
+// Degrees to Radians Node (角度转弧度节点)
+// ============================================================================
+
+export const DegToRadTemplate: BlueprintNodeTemplate = {
+    type: 'DegToRad',
+    title: 'Degrees to Radians',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Converts degrees to radians (将角度转换为弧度)',
+    keywords: ['degrees', 'radians', 'convert', 'angle', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'degrees', type: 'float', displayName: 'Degrees', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Radians' }
+    ]
+};
+
+@RegisterNode(DegToRadTemplate)
+export class DegToRadExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const degrees = Number(context.evaluateInput(node.id, 'degrees', 0));
+        return { outputs: { result: degrees * (Math.PI / 180) } };
+    }
+}
+
+// ============================================================================
+// Radians to Degrees Node (弧度转角度节点)
+// ============================================================================
+
+export const RadToDegTemplate: BlueprintNodeTemplate = {
+    type: 'RadToDeg',
+    title: 'Radians to Degrees',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Converts radians to degrees (将弧度转换为角度)',
+    keywords: ['radians', 'degrees', 'convert', 'angle', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'radians', type: 'float', displayName: 'Radians', defaultValue: 0 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Degrees' }
+    ]
+};
+
+@RegisterNode(RadToDegTemplate)
+export class RadToDegExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const radians = Number(context.evaluateInput(node.id, 'radians', 0));
+        return { outputs: { result: radians * (180 / Math.PI) } };
+    }
+}
+
+// ============================================================================
+// Inverse Lerp Node (反向线性插值节点)
+// ============================================================================
+
+export const InverseLerpTemplate: BlueprintNodeTemplate = {
+    type: 'InverseLerp',
+    title: 'Inverse Lerp',
+    category: 'math',
+    color: '#4CAF50',
+    description: 'Returns the percentage of Value between A and B (返回值在 A 和 B 之间的百分比位置)',
+    keywords: ['inverse', 'lerp', 'percentage', 'ratio', 'math'],
+    isPure: true,
+    inputs: [
+        { name: 'a', type: 'float', displayName: 'A', defaultValue: 0 },
+        { name: 'b', type: 'float', displayName: 'B', defaultValue: 1 },
+        { name: 'value', type: 'float', displayName: 'Value', defaultValue: 0.5 }
+    ],
+    outputs: [
+        { name: 'result', type: 'float', displayName: 'Alpha (0-1)' }
+    ]
+};
+
+@RegisterNode(InverseLerpTemplate)
+export class InverseLerpExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const a = Number(context.evaluateInput(node.id, 'a', 0));
+        const b = Number(context.evaluateInput(node.id, 'b', 1));
+        const value = Number(context.evaluateInput(node.id, 'value', 0.5));
+        if (b === a) return { outputs: { result: 0 } };
+        return { outputs: { result: (value - a) / (b - a) } };
+    }
+}

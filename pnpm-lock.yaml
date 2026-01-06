@@ -1575,6 +1575,10 @@ importers:
         version: 5.9.3
 
   packages/framework/math:
+    dependencies:
+      '@esengine/blueprint':
+        specifier: workspace:*
+        version: link:../blueprint
     devDependencies:
       '@rollup/plugin-commonjs':
         specifier: ^28.0.3

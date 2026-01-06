@@ -248,6 +248,14 @@ export default defineConfig({
               ],
             },
             {
+              label: '数学库',
+              translations: { en: 'Math' },
+              items: [
+                { label: '概述', slug: 'modules/math', translations: { en: 'Overview' } },
+                { label: '蓝图节点', slug: 'modules/math/blueprint-nodes', translations: { en: 'Blueprint Nodes' } },
+              ],
+            },
+            {
               label: '程序生成',
               translations: { en: 'Procgen' },
               items: [

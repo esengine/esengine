@@ -470,6 +470,12 @@ description: "蓝图内置 ECS 操作节点完整参考"
 | `Less` | A < B | Boolean |
 | `Less Or Equal` | A <= B | Boolean |
 
+### 扩展数学节点
+
+> **Vector2、Fixed32、FixedVector2、Color** 等高级数学节点由 `@esengine/ecs-framework-math` 模块提供。
+>
+> 详见：[数学库蓝图节点](/modules/math/blueprint-nodes)
+
 ### 示例：钳制数值
 
 <div class="bp-graph" style="" data-connections='[{"from":"rand-result","to":"clamp-value","type":"float"}]'>
@@ -535,6 +541,7 @@ description: "蓝图内置 ECS 操作节点完整参考"
 
 ## 相关文档
 
+- [数学库蓝图节点](/modules/math/blueprint-nodes) - Vector2、Fixed32、Color 等数学节点
 - [蓝图编辑器指南](/modules/blueprint/editor-guide) - 学习如何使用编辑器
 - [自定义节点](/modules/blueprint/custom-nodes) - 创建自定义节点
 - [蓝图虚拟机](/modules/blueprint/vm) - 运行时 API
