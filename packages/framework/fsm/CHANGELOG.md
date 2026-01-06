@@ -1,5 +1,12 @@
 # @esengine/fsm
 
+## 9.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`4e66bd8`](https://github.com/esengine/esengine/commit/4e66bd8e2be80b366a7723dcc48b99df0457aed4)]:
+    - @esengine/blueprint@4.5.0
+
 ## 8.0.0
 
 ### Patch Changes
