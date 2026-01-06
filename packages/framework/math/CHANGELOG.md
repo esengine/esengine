@@ -1,5 +1,16 @@
 # @esengine/ecs-framework-math
 
+## 2.9.0
+
+### Minor Changes
+
+- [#442](https://github.com/esengine/esengine/pull/442) [`bffe90b`](https://github.com/esengine/esengine/commit/bffe90b6a17563cc90709faf339b229dc3abd22d) Thanks [@esengine](https://github.com/esengine)! - feat(math): add blueprint nodes for math library
+    - Add Vector2 blueprint nodes (Make, Break, Add, Sub, Mul, Length, Normalize, Dot, Cross, Distance, Lerp, Rotate, FromAngle)
+    - Add Fixed32 blueprint nodes (FromFloat, FromInt, ToFloat, ToInt, arithmetic operations, Abs, Sqrt, Floor, Ceil, Round, Sign, Min, Max, Clamp, Lerp)
+    - Add FixedVector2 blueprint nodes (Make, Break, Add, Sub, Mul, Negate, Length, Normalize, Dot, Cross, Distance, Lerp)
+    - Add Color blueprint nodes (Make, Break, FromHex, ToHex, FromHSL, ToHSL, Lerp, Lighten, Darken, Saturate, Desaturate, Invert, Grayscale, Luminance, constants)
+    - Add documentation for math blueprint nodes (Chinese and English)
+
 ## 2.8.0
 
 ### Minor Changes
