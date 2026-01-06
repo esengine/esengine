@@ -110,89 +110,22 @@ Blueprints are saved as `.blueprint.json` files, fully compatible with runtime:
 
 ## Running Blueprints in Game
 
-Use ECS system to manage and execute blueprints.
+The `@esengine/blueprint` package provides complete ECS integration, including `BlueprintComponent` and `BlueprintSystem` ready to use.
 
-### 1. Define Blueprint Component
-
-```typescript
-import { Component, ECSComponent, Property, Serialize } from '@esengine/ecs-framework';
-import type { BlueprintAsset } from '@esengine/blueprint';
-
-@ECSComponent('Blueprint')
-export class BlueprintComponent extends Component {
-    @Serialize()
-    @Property({ type: 'asset', label: 'Blueprint Asset' })
-    blueprintPath: string = '';
-
-    @Serialize()
-    @Property({ type: 'boolean', label: 'Auto Start' })
-    autoStart: boolean = true;
-
-    // Runtime data (not serialized)
-    blueprintAsset: BlueprintAsset | null = null;
-    vm: BlueprintVM | null = null;
-    isStarted: boolean = false;
-}
-```
-
-### 2. Create Blueprint Execution System
+### 1. Add Blueprint System to Scene
 
 ```typescript
-import { EntitySystem, Matcher, Entity } from '@esengine/ecs-framework';
-import {
-    BlueprintVM,
-    validateBlueprintAsset
-} from '@esengine/blueprint';
-import { BlueprintComponent } from './BlueprintComponent';
+import { BlueprintSystem } from '@esengine/blueprint';
 
-export class BlueprintExecutionSystem extends EntitySystem {
-    constructor() {
-        super(Matcher.empty().all(BlueprintComponent));
-    }
-
-    protected override process(entities: readonly Entity[]): void {
-        const dt = Time.deltaTime;
-
-        for (const entity of entities) {
-            const bp = entity.getComponent(BlueprintComponent)!;
-
-            // Skip entities without blueprint asset
-            if (!bp.blueprintAsset) continue;
-
-            // Initialize VM
-            if (!bp.vm) {
-                bp.vm = new BlueprintVM(bp.blueprintAsset, entity, this.scene!);
-            }
-
-            // Auto start
-            if (bp.autoStart && !bp.isStarted) {
-                bp.vm.start();
-                bp.isStarted = true;
-            }
-
-            // Update blueprint
-            if (bp.isStarted) {
-                bp.vm.tick(dt);
-            }
-        }
-    }
-
-    protected override onRemoved(entity: Entity): void {
-        const bp = entity.getComponent(BlueprintComponent);
-        if (bp?.vm && bp.isStarted) {
-            bp.vm.stop();
-            bp.vm = null;
-            bp.isStarted = false;
-        }
-    }
-}
+// Add blueprint system during scene initialization
+scene.addSystem(new BlueprintSystem());
 ```
 
-### 3. Load Blueprint and Add to Entity
+### 2. Load Blueprint and Add to Entity
 
 ```typescript
 import { resources, JsonAsset } from 'cc';
-import { validateBlueprintAsset } from '@esengine/blueprint';
+import { BlueprintComponent, validateBlueprintAsset, BlueprintAsset } from '@esengine/blueprint';
 
 // Load blueprint asset
 async function loadBlueprint(path: string): Promise<BlueprintAsset | null> {
@@ -227,12 +160,22 @@ async function createBlueprintEntity(scene: IScene, blueprintPath: string): Prom
 }
 ```
 
-### 4. Register System to Scene
+### BlueprintComponent Properties
 
-```typescript
-// During scene initialization
-scene.addSystem(new BlueprintExecutionSystem());
-```
+| Property | Type | Description |
+|----------|------|-------------|
+| `blueprintAsset` | `BlueprintAsset \| null` | Blueprint asset data |
+| `blueprintPath` | `string` | Blueprint asset path (for serialization) |
+| `autoStart` | `boolean` | Auto-start execution (default `true`) |
+| `debug` | `boolean` | Enable debug mode |
+
+### BlueprintComponent Methods
+
+| Method | Description |
+|--------|-------------|
+| `start()` | Manually start blueprint execution |
+| `stop()` | Stop blueprint execution |
+| `cleanup()` | Cleanup blueprint resources |
 
 ## Creating Custom Nodes
 

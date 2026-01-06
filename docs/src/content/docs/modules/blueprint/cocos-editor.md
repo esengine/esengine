@@ -110,89 +110,22 @@ npm install
 
 ## 在游戏中运行蓝图
 
-使用 ECS 系统方式管理和执行蓝图。
+`@esengine/blueprint` 包已提供完整的 ECS 集成，包括 `BlueprintComponent` 和 `BlueprintSystem`，可以直接使用。
 
-### 1. 定义蓝图组件
-
-```typescript
-import { Component, ECSComponent, Property, Serialize } from '@esengine/ecs-framework';
-import type { BlueprintAsset } from '@esengine/blueprint';
-
-@ECSComponent('Blueprint')
-export class BlueprintComponent extends Component {
-    @Serialize()
-    @Property({ type: 'asset', label: 'Blueprint Asset' })
-    blueprintPath: string = '';
-
-    @Serialize()
-    @Property({ type: 'boolean', label: 'Auto Start' })
-    autoStart: boolean = true;
-
-    // 运行时数据（不序列化）
-    blueprintAsset: BlueprintAsset | null = null;
-    vm: BlueprintVM | null = null;
-    isStarted: boolean = false;
-}
-```
-
-### 2. 创建蓝图执行系统
+### 1. 添加蓝图系统到场景
 
 ```typescript
-import { EntitySystem, Matcher, Entity } from '@esengine/ecs-framework';
-import {
-    BlueprintVM,
-    validateBlueprintAsset
-} from '@esengine/blueprint';
-import { BlueprintComponent } from './BlueprintComponent';
+import { BlueprintSystem } from '@esengine/blueprint';
 
-export class BlueprintExecutionSystem extends EntitySystem {
-    constructor() {
-        super(Matcher.empty().all(BlueprintComponent));
-    }
-
-    protected override process(entities: readonly Entity[]): void {
-        const dt = Time.deltaTime;
-
-        for (const entity of entities) {
-            const bp = entity.getComponent(BlueprintComponent)!;
-
-            // 跳过没有蓝图资产的实体
-            if (!bp.blueprintAsset) continue;
-
-            // 初始化 VM
-            if (!bp.vm) {
-                bp.vm = new BlueprintVM(bp.blueprintAsset, entity, this.scene!);
-            }
-
-            // 自动启动
-            if (bp.autoStart && !bp.isStarted) {
-                bp.vm.start();
-                bp.isStarted = true;
-            }
-
-            // 更新蓝图
-            if (bp.isStarted) {
-                bp.vm.tick(dt);
-            }
-        }
-    }
-
-    protected override onRemoved(entity: Entity): void {
-        const bp = entity.getComponent(BlueprintComponent);
-        if (bp?.vm && bp.isStarted) {
-            bp.vm.stop();
-            bp.vm = null;
-            bp.isStarted = false;
-        }
-    }
-}
+// 在场景初始化时添加蓝图系统
+scene.addSystem(new BlueprintSystem());
 ```
 
-### 3. 加载蓝图并添加到实体
+### 2. 加载蓝图并添加到实体
 
 ```typescript
 import { resources, JsonAsset } from 'cc';
-import { validateBlueprintAsset } from '@esengine/blueprint';
+import { BlueprintComponent, validateBlueprintAsset, BlueprintAsset } from '@esengine/blueprint';
 
 // 加载蓝图资产
 async function loadBlueprint(path: string): Promise<BlueprintAsset | null> {
@@ -227,12 +160,22 @@ async function createBlueprintEntity(scene: IScene, blueprintPath: string): Prom
 }
 ```
 
-### 4. 注册系统到场景
+### BlueprintComponent 属性
 
-```typescript
-// 在场景初始化时
-scene.addSystem(new BlueprintExecutionSystem());
-```
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `blueprintAsset` | `BlueprintAsset \| null` | 蓝图资产数据 |
+| `blueprintPath` | `string` | 蓝图资产路径（用于序列化） |
+| `autoStart` | `boolean` | 是否自动开始执行（默认 `true`） |
+| `debug` | `boolean` | 是否启用调试模式 |
+
+### BlueprintComponent 方法
+
+| 方法 | 说明 |
+|------|------|
+| `start()` | 手动开始执行蓝图 |
+| `stop()` | 停止蓝图执行 |
+| `cleanup()` | 清理蓝图资源 |
 
 ## 创建自定义节点
 
