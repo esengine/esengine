@@ -301,12 +301,47 @@
   color: #ffffff;
 }
 
+.toolbar-btn.active {
+  background-color: #4a9eff;
+  color: #ffffff;
+}
+
+.toolbar-btn.active:hover {
+  background-color: #5aabff;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar-btn:disabled:hover {
+  background: transparent;
+  color: #a0a0a0;
+}
+
+.toolbar-btn-text {
+  width: auto;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .toolbar-btn.play-btn {
   color: #4EC9B0;
 }
 
 .toolbar-btn.play-btn:hover {
   background-color: #4EC9B0;
+  color: #1e1e1e;
+}
+
+.toolbar-btn.stop-btn {
+  color: #f14c4c;
+}
+
+.toolbar-btn.stop-btn:hover {
+  background-color: #f14c4c;
   color: #1e1e1e;
 }
 
