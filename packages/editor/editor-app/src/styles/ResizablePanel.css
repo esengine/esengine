@@ -16,22 +16,21 @@
 .panel-section {
   overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .resizer {
-  background: var(--color-bg-elevated);
+  background: #1a1a1a;
   position: relative;
-  z-index: var(--z-index-base);
-  transition: background-color var(--transition-fast);
+  z-index: 10;
+  transition: background-color 0.15s ease;
   flex-shrink: 0;
 }
 
-.resizer:hover {
-  background: var(--color-primary-subtle);
-}
-
-.resizer:active {
-  background: var(--color-primary);
+.resizer:hover,
+.resizer.active {
+  background: #3b82f6;
 }
 
 .resizer-horizontal {
@@ -71,7 +70,15 @@ body.resizing {
   user-select: none !important;
 }
 
+body.resizing * {
+  cursor: col-resize !important;
+}
+
 body.resizing-vertical {
   cursor: row-resize !important;
   user-select: none !important;
+}
+
+body.resizing-vertical * {
+  cursor: row-resize !important;
 }

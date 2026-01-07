@@ -4,10 +4,13 @@
     align-items: center;
     justify-content: space-between;
     height: 32px;
+    min-height: 32px;
     background: linear-gradient(180deg, #3a3a3f 0%, #2d2d32 100%);
     border-bottom: 1px solid #1a1a1d;
     user-select: none;
     flex-shrink: 0;
+    position: relative;
+    z-index: 100;
 }
 
 /* ==================== Left Section: Logo + Menus ==================== */
@@ -154,7 +157,17 @@
 .titlebar-center {
     flex: 1;
     height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     -webkit-app-region: drag;
+}
+
+.titlebar-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: #b0b0b0;
+    letter-spacing: 0.5px;
 }
 
 /* ==================== Right Section: Project Name + Window Controls ==================== */

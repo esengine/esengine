@@ -15,14 +15,12 @@ interface StartupLogoProps {
     onAnimationComplete: () => void;
 }
 
-// 在组件外部创建粒子数据，确保只初始化一次
 let particlesCache: Particle[] | null = null;
 let cacheKey: string | null = null;
 
 function createParticles(width: number, height: number, text: string, fontSize: number): Particle[] {
     const key = `${width}-${height}-${fontSize}`;
     if (particlesCache && cacheKey === key) {
-        // 重置粒子位置
         for (const p of particlesCache) {
             const angle = Math.random() * Math.PI * 2;
             const distance = Math.random() * Math.max(width, height);
@@ -115,7 +113,7 @@ export function StartupLogo({ onAnimationComplete }: StartupLogoProps) {
 
         const startTime = performance.now();
         const duration = 2000;
-        const glowDuration = 500; // 发光过渡时长
+        const glowDuration = 500;
         const holdDuration = 800;
         let animationId: number | null = null;
         let glowStartTime: number | null = null;
@@ -136,7 +134,6 @@ export function StartupLogo({ onAnimationComplete }: StartupLogoProps) {
             ctx.fillStyle = '#1e1e1e';
             ctx.fillRect(0, 0, width, height);
 
-            // 计算发光进度
             let glowProgress = 0;
             if (progress >= 1) {
                 if (glowStartTime === null) {
@@ -147,7 +144,6 @@ export function StartupLogo({ onAnimationComplete }: StartupLogoProps) {
             }
 
             for (const particle of particles) {
-                // 使用线性插值移动
                 const moveProgress = Math.min(easedProgress * 1.2, 1);
                 const currentX = particle.x + (particle.targetX - particle.x) * moveProgress;
                 const currentY = particle.y + (particle.targetY - particle.y) * moveProgress;
@@ -155,13 +151,12 @@ export function StartupLogo({ onAnimationComplete }: StartupLogoProps) {
                 ctx.beginPath();
                 ctx.arc(currentX, currentY, particle.size, 0, Math.PI * 2);
                 ctx.fillStyle = particle.color;
-                ctx.globalAlpha = particle.alpha * (1 - glowProgress * 0.3); // 粒子逐渐变淡
+                ctx.globalAlpha = particle.alpha * (1 - glowProgress * 0.3);
                 ctx.fill();
             }
 
             ctx.globalAlpha = 1;
 
-            // 发光文字渐变显示
             if (glowProgress > 0) {
                 ctx.save();
                 ctx.shadowColor = '#4EC9B0';
@@ -174,7 +169,6 @@ export function StartupLogo({ onAnimationComplete }: StartupLogoProps) {
                 ctx.restore();
             }
 
-            // 发光完成后开始淡出
             if (glowProgress >= 1) {
                 if (!timeoutId1) {
                     timeoutId1 = setTimeout(() => {
@@ -195,7 +189,6 @@ export function StartupLogo({ onAnimationComplete }: StartupLogoProps) {
 
         animationId = requestAnimationFrame(animate);
 
-        // 返回 cleanup 函数
         return () => {
             isCancelled = true;
             if (animationId !== null) {

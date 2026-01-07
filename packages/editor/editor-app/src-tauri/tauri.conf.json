@@ -11,11 +11,7 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "resources": [
-      "runtime/**/*",
-      "engine/**/*",
-      "bin/*"
-    ],
+    "resources": [],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

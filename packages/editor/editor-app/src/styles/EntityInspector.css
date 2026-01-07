@@ -1441,3 +1441,439 @@
   margin-left: 6px;
   vertical-align: middle;
 }
+
+/* ==================== Property Input ==================== */
+.property-input {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  padding: 0 8px;
+  color: #ddd;
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  min-width: 0;
+  height: 22px;
+  transition: border-color 0.15s ease;
+}
+
+.property-input:hover {
+  border-color: #4a4a4a;
+  background: #1e1e1e;
+}
+
+.property-input:focus {
+  outline: none;
+  border-color: #d4a029;
+  background: #1e1e1e;
+  box-shadow: none;
+}
+
+.property-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #1a1a1a;
+}
+
+.property-input-number,
+.property-input-text {
+  text-align: left;
+}
+
+/* Hide number spinners */
+.property-input-number::-webkit-inner-spin-button,
+.property-input-number::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"].property-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ==================== Boolean Toggle ==================== */
+.property-field-boolean {
+  justify-content: space-between;
+}
+
+.property-toggle {
+  position: relative;
+  width: 36px;
+  height: 18px;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.property-toggle-off {
+  background: #2a2a2a;
+  border: 1px solid #444;
+}
+
+.property-toggle-off:hover:not(:disabled) {
+  background: #333;
+  border-color: #555;
+}
+
+.property-toggle-on {
+  background: #3b82f6;
+  border: 1px solid #3b82f6;
+}
+
+.property-toggle-on:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.property-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.property-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.property-toggle-off .property-toggle-thumb {
+  left: 2px;
+  transform: translateX(0);
+}
+
+.property-toggle-on .property-toggle-thumb {
+  left: 2px;
+  transform: translateX(18px);
+}
+
+/* ==================== Color Field ==================== */
+.property-color-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  position: relative;
+}
+
+.property-color-preview {
+  flex: 1;
+  height: 22px;
+  border-radius: 2px;
+  border: 1px solid #3a3a3a;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  min-width: 40px;
+}
+
+.property-color-preview:hover {
+  border-color: #4a4a4a;
+}
+
+.property-input-color {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  position: absolute;
+  pointer-events: none;
+}
+
+.property-input-color-text {
+  width: 70px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'Consolas', 'Monaco', monospace;
+  text-align: center;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  padding: 0 4px;
+  color: #ddd;
+  font-size: 10px;
+  height: 22px;
+}
+
+.property-input-color-text:hover {
+  border-color: #4a4a4a;
+}
+
+.property-input-color-text:focus {
+  outline: none;
+  border-color: #d4a029;
+}
+
+/* Color Picker Popup */
+.color-picker-popup {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  width: 200px;
+  padding: 8px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.color-picker-saturation {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  border-radius: 4px;
+  cursor: crosshair;
+  overflow: hidden;
+}
+
+.color-picker-saturation-white {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, #fff, transparent);
+}
+
+.color-picker-saturation-black {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, #000, transparent);
+}
+
+.color-picker-cursor {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.color-picker-hue {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: linear-gradient(to right,
+      #ff0000 0%,
+      #ffff00 17%,
+      #00ff00 33%,
+      #00ffff 50%,
+      #0000ff 67%,
+      #ff00ff 83%,
+      #ff0000 100%
+  );
+  cursor: pointer;
+}
+
+.color-picker-hue-cursor {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.color-picker-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.color-picker-preview-box {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  flex-shrink: 0;
+}
+
+.color-picker-hex {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  color: #999;
+  letter-spacing: 0.05em;
+}
+
+/* ==================== Vector Fields ==================== */
+.property-vector-compact {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.property-vector-axis-compact {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  position: relative;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  height: 22px;
+  overflow: hidden;
+}
+
+.property-vector-axis-compact:hover {
+  border-color: #4a4a4a;
+  background: #1e1e1e;
+}
+
+.property-vector-axis-compact:focus-within {
+  border-color: #d4a029;
+}
+
+/* Color bar axis indicator */
+.property-vector-axis-label {
+  width: 4px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  flex-shrink: 0;
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.property-vector-axis-x {
+  background: #c04040;
+}
+
+.property-vector-axis-y {
+  background: #40a040;
+}
+
+.property-vector-axis-z {
+  background: #4060c0;
+}
+
+.property-vector-axis-w {
+  background: #a040a0;
+}
+
+.property-input-number-compact {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
+  padding: 0 6px;
+  font-size: 11px;
+  height: 100%;
+  line-height: 22px;
+  background: transparent;
+  border: none;
+  color: #ddd;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.property-input-number-compact:focus {
+  outline: none;
+}
+
+.property-input-number-compact::-webkit-inner-spin-button,
+.property-input-number-compact::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ==================== Dropdown ==================== */
+.property-dropdown {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.property-dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  padding: 0 8px;
+  color: #ddd;
+  font-size: 11px;
+  cursor: pointer;
+  height: 22px;
+  transition: border-color 0.15s ease;
+}
+
+.property-dropdown-trigger:hover {
+  border-color: #4a4a4a;
+}
+
+.property-dropdown-trigger.open {
+  border-color: #d4a029;
+}
+
+.property-dropdown-value {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.property-dropdown-arrow {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #666;
+}
+
+.property-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.property-dropdown-item {
+  width: 100%;
+  display: block;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  color: #ddd;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.property-dropdown-item:hover {
+  background: #3a3a3a;
+}
+
+.property-dropdown-item.selected {
+  background: #4a4a4a;
+  color: #fff;
+}

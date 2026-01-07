@@ -2,14 +2,14 @@ import { useState, useRef, useEffect, ReactNode } from 'react';
 import '../styles/ResizablePanel.css';
 
 interface ResizablePanelProps {
-  direction: 'horizontal' | 'vertical';
-  leftOrTop: ReactNode;
-  rightOrBottom: ReactNode;
-  defaultSize?: number;
-  minSize?: number;
-  maxSize?: number;
-  side?: 'left' | 'right' | 'top' | 'bottom';
-  storageKey?: string;
+    direction: 'horizontal' | 'vertical';
+    leftOrTop: ReactNode;
+    rightOrBottom: ReactNode;
+    defaultSize?: number;
+    minSize?: number;
+    maxSize?: number;
+    side?: 'left' | 'right' | 'top' | 'bottom';
+    storageKey?: string;
 }
 
 export function ResizablePanel({
@@ -74,14 +74,17 @@ export function ResizablePanel({
 
         const handleMouseUp = () => {
             setIsDragging(false);
+            document.body.classList.remove('resizing', 'resizing-vertical');
         };
 
+        document.body.classList.add(direction === 'horizontal' ? 'resizing' : 'resizing-vertical');
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
 
         return () => {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
+            document.body.classList.remove('resizing', 'resizing-vertical');
         };
     }, [isDragging, direction, minSize, maxSize, side]);
 
@@ -90,7 +93,7 @@ export function ResizablePanel({
     };
 
     const className = `resizable-panel resizable-panel-${direction}`;
-    const resizerClassName = `resizer resizer-${direction}`;
+    const resizerClassName = `resizer resizer-${direction}${isDragging ? ' active' : ''}`;
 
     if (direction === 'horizontal') {
         if (side === 'right') {
@@ -102,7 +105,6 @@ export function ResizablePanel({
                     <div
                         className={resizerClassName}
                         onMouseDown={handleMouseDown}
-                        style={{ cursor: isDragging ? 'ew-resize' : 'col-resize' }}
                     >
                         <div className="resizer-handle" />
                     </div>
@@ -120,7 +122,6 @@ export function ResizablePanel({
                     <div
                         className={resizerClassName}
                         onMouseDown={handleMouseDown}
-                        style={{ cursor: isDragging ? 'ew-resize' : 'col-resize' }}
                     >
                         <div className="resizer-handle" />
                     </div>
@@ -140,7 +141,6 @@ export function ResizablePanel({
                     <div
                         className={resizerClassName}
                         onMouseDown={handleMouseDown}
-                        style={{ cursor: isDragging ? 'ns-resize' : 'row-resize' }}
                     >
                         <div className="resizer-handle" />
                     </div>
@@ -158,7 +158,6 @@ export function ResizablePanel({
                     <div
                         className={resizerClassName}
                         onMouseDown={handleMouseDown}
-                        style={{ cursor: isDragging ? 'ns-resize' : 'row-resize' }}
                     >
                         <div className="resizer-handle" />
                     </div>
