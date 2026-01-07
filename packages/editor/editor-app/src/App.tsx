@@ -1,28 +1,36 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { SceneHierarchy } from './components/SceneHierarchy';
 import { Inspector } from './components/Inspector';
 import { StatusBar } from './components/StatusBar';
 import { DockContainer } from './components/DockContainer';
+import { GameViewport } from './components/GameViewport';
 import './styles/App.css';
 
 function App() {
     const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
     const [selectedEntityName, setSelectedEntityName] = useState<string>('');
+    const [isPlaying, setIsPlaying] = useState(false);
 
-    const handleSelectEntity = (id: number) => {
+    const handleSelectEntity = useCallback((id: number) => {
         setSelectedEntityId(id);
-        // Mock entity name lookup
-        const names: Record<number, string> = {
-            1: 'Scene',
-            2: 'Main Camera',
-            3: 'Directional Light',
-            4: 'Game Objects',
-            5: 'Player',
-            6: 'Enemy'
-        };
-        setSelectedEntityName(names[id] || 'Entity');
-    };
+        setSelectedEntityName('Entity');
+    }, []);
+
+    const handlePlay = useCallback(() => {
+        setIsPlaying(true);
+        // TODO: Start game in ccesengine
+    }, []);
+
+    const handlePause = useCallback(() => {
+        setIsPlaying(false);
+        // TODO: Pause game in ccesengine
+    }, []);
+
+    const handleStop = useCallback(() => {
+        setIsPlaying(false);
+        // TODO: Stop game in ccesengine
+    }, []);
 
     return (
         <div className="editor-container">
@@ -78,20 +86,16 @@ function App() {
                         />
                     }
                     scenePanel={
-                        <div className="viewport-canvas">
-                            <canvas id="viewport-canvas" />
-                            <div className="viewport-overlay">
-                                <span>Viewport - ccesengine integration pending</span>
-                            </div>
-                        </div>
+                        <GameViewport mode="scene" />
                     }
                     gamePanel={
-                        <div className="viewport-canvas">
-                            <canvas id="game-canvas" />
-                            <div className="viewport-overlay">
-                                <span>Game View - Press Play to start</span>
-                            </div>
-                        </div>
+                        <GameViewport
+                            mode="game"
+                            isPlaying={isPlaying}
+                            onPlay={handlePlay}
+                            onPause={handlePause}
+                            onStop={handleStop}
+                        />
                     }
                     inspectorPanel={
                         <Inspector
