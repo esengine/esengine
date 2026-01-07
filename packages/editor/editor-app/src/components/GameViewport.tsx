@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Pause, Square, Maximize2, Grid } from 'lucide-react';
-import { getEngineService, IEngineService, SceneObject } from '../services/EngineService';
+import { getEngineService, IEngineService, SceneObject, GizmoHandle } from '../services/EngineService';
 import '../styles/GameViewport.css';
 
 type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
@@ -35,8 +35,9 @@ export function GameViewport({
     // Drag state
     const isDraggingRef = useRef(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
-    const dragObjectStartRef = useRef({ x: 0, y: 0 });
+    const dragObjectStartRef = useRef({ x: 0, y: 0, width: 0, height: 0, rotation: 0 });
     const selectedObjectRef = useRef<SceneObject | null>(null);
+    const activeGizmoHandleRef = useRef<GizmoHandle>('none');
 
     // Handle canvas resize
     useEffect(() => {
@@ -168,6 +169,13 @@ export function GameViewport({
         return () => clearInterval(interval);
     }, [isPlaying]);
 
+    // Sync active tool to engine
+    useEffect(() => {
+        if (engineRef.current && isEngineReady) {
+            engineRef.current.setActiveTool(activeTool);
+        }
+    }, [activeTool, isEngineReady]);
+
     // Get canvas-relative coordinates
     const getCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
@@ -185,6 +193,33 @@ export function GameViewport({
         if (mode !== 'scene' || !engineRef.current || !isEngineReady) return;
 
         const coords = getCanvasCoords(e);
+
+        // First check if we hit a gizmo handle
+        const gizmoHandle = engineRef.current.hitTestGizmo(coords.x, coords.y);
+        if (gizmoHandle !== 'none') {
+            activeGizmoHandleRef.current = gizmoHandle;
+            isDraggingRef.current = true;
+            dragStartRef.current = coords;
+
+            const selectedId = engineRef.current.getSelectedObjectId();
+            if (selectedId !== null) {
+                const objects = engineRef.current.getObjects();
+                const obj = objects.find(o => o.id === selectedId);
+                if (obj) {
+                    selectedObjectRef.current = obj;
+                    dragObjectStartRef.current = {
+                        x: obj.x,
+                        y: obj.y,
+                        width: obj.width,
+                        height: obj.height,
+                        rotation: obj.rotation
+                    };
+                }
+            }
+            return;
+        }
+
+        // Hit test objects
         const hitObject = engineRef.current.hitTest(coords.x, coords.y);
 
         // Select object
@@ -195,8 +230,15 @@ export function GameViewport({
         // Start drag if using move tool and hit an object
         if (hitObject && (activeTool === 'move' || activeTool === 'select')) {
             isDraggingRef.current = true;
+            activeGizmoHandleRef.current = 'xy';
             dragStartRef.current = coords;
-            dragObjectStartRef.current = { x: hitObject.x, y: hitObject.y };
+            dragObjectStartRef.current = {
+                x: hitObject.x,
+                y: hitObject.y,
+                width: hitObject.width,
+                height: hitObject.height,
+                rotation: hitObject.rotation
+            };
         }
     }, [mode, isEngineReady, activeTool, getCanvasCoords, onSelectObject]);
 
@@ -207,17 +249,77 @@ export function GameViewport({
         const coords = getCanvasCoords(e);
         const dx = coords.x - dragStartRef.current.x;
         const dy = coords.y - dragStartRef.current.y;
+        const handle = activeGizmoHandleRef.current;
+        const objId = selectedObjectRef.current.id;
 
-        // Update object position (note: Y is inverted in world space)
-        engineRef.current.updateObject(selectedObjectRef.current.id, {
-            x: dragObjectStartRef.current.x + dx,
-            y: dragObjectStartRef.current.y - dy
-        });
+        switch (handle) {
+            case 'x':
+                // Move only along X axis
+                engineRef.current.updateObject(objId, {
+                    x: dragObjectStartRef.current.x + dx
+                });
+                break;
+            case 'y':
+                // Move only along Y axis (screen Y is inverted)
+                engineRef.current.updateObject(objId, {
+                    y: dragObjectStartRef.current.y - dy
+                });
+                break;
+            case 'xy':
+                // Move along both axes
+                engineRef.current.updateObject(objId, {
+                    x: dragObjectStartRef.current.x + dx,
+                    y: dragObjectStartRef.current.y - dy
+                });
+                break;
+            case 'rotate': {
+                // Calculate rotation based on angle from center
+                const objScreen = engineRef.current.worldToScreen(
+                    dragObjectStartRef.current.x,
+                    dragObjectStartRef.current.y
+                );
+                const startAngle = Math.atan2(
+                    dragStartRef.current.y - objScreen.y,
+                    dragStartRef.current.x - objScreen.x
+                );
+                const currentAngle = Math.atan2(
+                    coords.y - objScreen.y,
+                    coords.x - objScreen.x
+                );
+                const deltaAngle = (currentAngle - startAngle) * 180 / Math.PI;
+                engineRef.current.updateObject(objId, {
+                    rotation: dragObjectStartRef.current.rotation - deltaAngle
+                });
+                break;
+            }
+            case 'scale-x':
+                // Scale width only
+                engineRef.current.updateObject(objId, {
+                    width: Math.max(10, dragObjectStartRef.current.width + dx * 2)
+                });
+                break;
+            case 'scale-y':
+                // Scale height only (screen Y inverted)
+                engineRef.current.updateObject(objId, {
+                    height: Math.max(10, dragObjectStartRef.current.height - dy * 2)
+                });
+                break;
+            case 'scale-xy': {
+                // Uniform scale
+                const scale = 1 + (dx - dy) / 100;
+                engineRef.current.updateObject(objId, {
+                    width: Math.max(10, dragObjectStartRef.current.width * scale),
+                    height: Math.max(10, dragObjectStartRef.current.height * scale)
+                });
+                break;
+            }
+        }
     }, [getCanvasCoords]);
 
     // Mouse up handler
     const handleMouseUp = useCallback(() => {
         isDraggingRef.current = false;
+        activeGizmoHandleRef.current = 'none';
     }, []);
 
     // Get cursor style based on active tool

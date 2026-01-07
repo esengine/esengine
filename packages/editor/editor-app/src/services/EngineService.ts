@@ -6,6 +6,9 @@
  * Currently supports a placeholder renderer, but designed for ccesengine integration.
  */
 
+export type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
+export type GizmoHandle = 'none' | 'x' | 'y' | 'xy' | 'rotate' | 'scale-x' | 'scale-y' | 'scale-xy';
+
 export interface EngineConfig {
     canvas: HTMLCanvasElement;
     width: number;
@@ -58,6 +61,10 @@ export interface IEngineService {
     hitTest(screenX: number, screenY: number): SceneObject | null;
     screenToWorld(screenX: number, screenY: number): { x: number; y: number };
     worldToScreen(worldX: number, worldY: number): { x: number; y: number };
+
+    // Gizmo
+    setActiveTool(tool: TransformTool): void;
+    hitTestGizmo(screenX: number, screenY: number): GizmoHandle;
 }
 
 /**
@@ -76,6 +83,13 @@ export class PlaceholderEngineService implements IEngineService {
     private fpsFrameCount: number = 0;
     private objects: SceneObject[] = [];
     private selectedObjectId: number | null = null;
+    private activeTool: TransformTool = 'select';
+
+    // Gizmo constants
+    private readonly GIZMO_AXIS_LENGTH = 80;
+    private readonly GIZMO_ARROW_SIZE = 12;
+    private readonly GIZMO_HANDLE_SIZE = 10;
+    private readonly GIZMO_ROTATE_RADIUS = 60;
 
     private state: EngineState = {
         isInitialized: false,
@@ -287,6 +301,78 @@ export class PlaceholderEngineService implements IEngineService {
         };
     }
 
+    /**
+     * @zh 设置当前激活的变换工具
+     * @en Set the active transform tool
+     */
+    setActiveTool(tool: TransformTool): void {
+        this.activeTool = tool;
+        if (!this.state.isRunning) {
+            this.render();
+        }
+    }
+
+    /**
+     * @zh Gizmo 命中测试
+     * @en Gizmo hit testing
+     */
+    hitTestGizmo(screenX: number, screenY: number): GizmoHandle {
+        if (this.selectedObjectId === null || !this.config) return 'none';
+
+        const selectedObj = this.objects.find(o => o.id === this.selectedObjectId);
+        if (!selectedObj) return 'none';
+
+        const objScreen = this.worldToScreen(selectedObj.x, selectedObj.y);
+        const dx = screenX - objScreen.x;
+        const dy = screenY - objScreen.y;
+
+        if (this.activeTool === 'move') {
+            // Check XY handle (center square)
+            if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+                return 'xy';
+            }
+            // Check X axis
+            if (dx > 0 && dx < this.GIZMO_AXIS_LENGTH + this.GIZMO_ARROW_SIZE && Math.abs(dy) < 10) {
+                return 'x';
+            }
+            // Check Y axis (screen Y is inverted)
+            if (dy < 0 && dy > -(this.GIZMO_AXIS_LENGTH + this.GIZMO_ARROW_SIZE) && Math.abs(dx) < 10) {
+                return 'y';
+            }
+        } else if (this.activeTool === 'rotate') {
+            // Check rotate circle
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (Math.abs(dist - this.GIZMO_ROTATE_RADIUS) < 8) {
+                return 'rotate';
+            }
+        } else if (this.activeTool === 'scale') {
+            const halfW = selectedObj.width / 2;
+            const halfH = selectedObj.height / 2;
+            const handleSize = this.GIZMO_HANDLE_SIZE;
+
+            // Check corner handles (scale XY)
+            const corners = [
+                { x: halfW, y: -halfH },   // top-right
+                { x: -halfW, y: -halfH },  // top-left
+                { x: -halfW, y: halfH },   // bottom-left
+                { x: halfW, y: halfH }     // bottom-right
+            ];
+            for (const corner of corners) {
+                if (Math.abs(dx - corner.x) < handleSize && Math.abs(dy - corner.y) < handleSize) {
+                    return 'scale-xy';
+                }
+            }
+            // Check X scale handles
+            if (Math.abs(dx - halfW) < handleSize && Math.abs(dy) < handleSize) return 'scale-x';
+            if (Math.abs(dx + halfW) < handleSize && Math.abs(dy) < handleSize) return 'scale-x';
+            // Check Y scale handles
+            if (Math.abs(dy + halfH) < handleSize && Math.abs(dx) < handleSize) return 'scale-y';
+            if (Math.abs(dy - halfH) < handleSize && Math.abs(dx) < handleSize) return 'scale-y';
+        }
+
+        return 'none';
+    }
+
     private gameLoop = (): void => {
         if (!this.state.isRunning) return;
 
@@ -337,10 +423,186 @@ export class PlaceholderEngineService implements IEngineService {
         // Draw origin marker
         this.drawOriginMarker(width, height);
 
+        // Draw gizmo for selected object
+        if (this.selectedObjectId !== null && this.activeTool !== 'select') {
+            this.drawGizmo();
+        }
+
         // Draw running indicator if game is running
         if (this.state.isRunning && !this.state.isPaused) {
             this.drawRunningIndicator(width, height);
         }
+    }
+
+    /**
+     * @zh 绘制变换 Gizmo
+     * @en Draw transform gizmo
+     */
+    private drawGizmo(): void {
+        if (!this.ctx) return;
+
+        const selectedObj = this.objects.find(o => o.id === this.selectedObjectId);
+        if (!selectedObj) return;
+
+        const screen = this.worldToScreen(selectedObj.x, selectedObj.y);
+
+        this.ctx.save();
+        this.ctx.translate(screen.x, screen.y);
+
+        switch (this.activeTool) {
+            case 'move':
+                this.drawMoveGizmo();
+                break;
+            case 'rotate':
+                this.drawRotateGizmo();
+                break;
+            case 'scale':
+                this.drawScaleGizmo(selectedObj);
+                break;
+        }
+
+        this.ctx.restore();
+    }
+
+    /**
+     * @zh 绘制移动 Gizmo
+     * @en Draw move gizmo with X/Y axis arrows
+     */
+    private drawMoveGizmo(): void {
+        if (!this.ctx) return;
+
+        const axisLength = this.GIZMO_AXIS_LENGTH;
+        const arrowSize = this.GIZMO_ARROW_SIZE;
+
+        // X axis (red) - pointing right
+        this.ctx.strokeStyle = '#ff4444';
+        this.ctx.fillStyle = '#ff4444';
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, 0);
+        this.ctx.lineTo(axisLength, 0);
+        this.ctx.stroke();
+
+        // X arrow head
+        this.ctx.beginPath();
+        this.ctx.moveTo(axisLength + arrowSize, 0);
+        this.ctx.lineTo(axisLength - 4, -6);
+        this.ctx.lineTo(axisLength - 4, 6);
+        this.ctx.closePath();
+        this.ctx.fill();
+
+        // X label
+        this.ctx.font = 'bold 12px sans-serif';
+        this.ctx.fillText('X', axisLength + arrowSize + 4, 4);
+
+        // Y axis (green) - pointing up (negative screen Y)
+        this.ctx.strokeStyle = '#44ff44';
+        this.ctx.fillStyle = '#44ff44';
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, 0);
+        this.ctx.lineTo(0, -axisLength);
+        this.ctx.stroke();
+
+        // Y arrow head
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -(axisLength + arrowSize));
+        this.ctx.lineTo(-6, -(axisLength - 4));
+        this.ctx.lineTo(6, -(axisLength - 4));
+        this.ctx.closePath();
+        this.ctx.fill();
+
+        // Y label
+        this.ctx.fillText('Y', 4, -(axisLength + arrowSize + 4));
+
+        // Center XY handle (yellow square)
+        this.ctx.fillStyle = '#ffff44';
+        this.ctx.strokeStyle = '#cccc00';
+        this.ctx.lineWidth = 2;
+        this.ctx.fillRect(-8, -8, 16, 16);
+        this.ctx.strokeRect(-8, -8, 16, 16);
+    }
+
+    /**
+     * @zh 绘制旋转 Gizmo
+     * @en Draw rotate gizmo with rotation circle
+     */
+    private drawRotateGizmo(): void {
+        if (!this.ctx) return;
+
+        const radius = this.GIZMO_ROTATE_RADIUS;
+
+        // Draw rotation circle
+        this.ctx.strokeStyle = '#4a9eff';
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        // Draw rotation handle at 0 degrees (right side)
+        this.ctx.fillStyle = '#4a9eff';
+        this.ctx.beginPath();
+        this.ctx.arc(radius, 0, 8, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw angle indicator lines
+        this.ctx.strokeStyle = 'rgba(74, 158, 255, 0.3)';
+        this.ctx.lineWidth = 1;
+        for (let i = 0; i < 8; i++) {
+            const angle = (i * Math.PI) / 4;
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, 0);
+            this.ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+            this.ctx.stroke();
+        }
+
+        // Center dot
+        this.ctx.fillStyle = '#4a9eff';
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
+    /**
+     * @zh 绘制缩放 Gizmo
+     * @en Draw scale gizmo with scale handles
+     */
+    private drawScaleGizmo(obj: SceneObject): void {
+        if (!this.ctx) return;
+
+        const halfW = obj.width / 2;
+        const halfH = obj.height / 2;
+        const handleSize = this.GIZMO_HANDLE_SIZE;
+
+        // Draw bounding box
+        this.ctx.strokeStyle = '#ffaa00';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 3]);
+        this.ctx.strokeRect(-halfW, -halfH, obj.width, obj.height);
+        this.ctx.setLineDash([]);
+
+        // Corner handles (scale XY) - yellow
+        this.ctx.fillStyle = '#ffaa00';
+        this.ctx.fillRect(-halfW - handleSize / 2, -halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(halfW - handleSize / 2, -halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(-halfW - handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(halfW - handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+
+        // Edge handles
+        // X handles (left/right) - red
+        this.ctx.fillStyle = '#ff4444';
+        this.ctx.fillRect(-halfW - handleSize / 2, -handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(halfW - handleSize / 2, -handleSize / 2, handleSize, handleSize);
+
+        // Y handles (top/bottom) - green
+        this.ctx.fillStyle = '#44ff44';
+        this.ctx.fillRect(-handleSize / 2, -halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(-handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+
+        // Center handle
+        this.ctx.fillStyle = '#ffaa00';
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        this.ctx.fill();
     }
 
     private drawObjects(width: number, height: number): void {
