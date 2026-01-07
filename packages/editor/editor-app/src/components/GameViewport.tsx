@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Pause, Square, Maximize2, Grid } from 'lucide-react';
+import { getEngineService, IEngineService } from '../services/EngineService';
 import '../styles/GameViewport.css';
 
 interface GameViewportProps {
@@ -13,9 +14,11 @@ interface GameViewportProps {
 export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop }: GameViewportProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const engineRef = useRef<IEngineService | null>(null);
     const [isEngineReady, setIsEngineReady] = useState(false);
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
     const [showGrid, setShowGrid] = useState(mode === 'scene');
+    const [engineState, setEngineState] = useState({ fps: 0, frameCount: 0 });
 
     // Handle canvas resize
     useEffect(() => {
@@ -35,17 +38,8 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
 
     // Update canvas size
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        canvas.width = canvasSize.width;
-        canvas.height = canvasSize.height;
-
-        // Trigger engine resize if initialized
-        if (isEngineReady) {
-            // TODO: Call ccesengine resize
-            // game.canvas = canvas;
-            // screen.windowSize = { width: canvasSize.width, height: canvasSize.height };
+        if (engineRef.current && isEngineReady) {
+            engineRef.current.resize(canvasSize.width, canvasSize.height);
         }
     }, [canvasSize, isEngineReady]);
 
@@ -54,87 +48,59 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        // TODO: Initialize ccesengine here
-        // import { game, Game, director } from 'ccesengine';
-        //
-        // game.init({
-        //     overrideSettings: {
-        //         rendering: {
-        //             renderMode: 2, // WebGL
-        //         }
-        //     }
-        // }).then(() => {
-        //     game.run();
-        //     setIsEngineReady(true);
-        // });
+        const engine = getEngineService();
+        engineRef.current = engine;
 
-        // For now, draw a placeholder grid
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            drawGrid(ctx, canvasSize.width, canvasSize.height);
-        }
+        engine.init({
+            canvas,
+            width: canvasSize.width,
+            height: canvasSize.height,
+            backgroundColor: '#1a1a1a',
+            showGrid: mode === 'scene',
+        }).then(() => {
+            setIsEngineReady(true);
+        });
 
         return () => {
-            // TODO: Cleanup ccesengine
-            // game.end();
+            engine.destroy();
+            engineRef.current = null;
         };
     }, []);
 
-    // Redraw grid when size changes
+    // Update grid visibility
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas || isEngineReady) return;
-
-        const ctx = canvas.getContext('2d');
-        if (ctx && showGrid) {
-            drawGrid(ctx, canvasSize.width, canvasSize.height);
+        if (engineRef.current && isEngineReady) {
+            engineRef.current.resize(canvasSize.width, canvasSize.height);
         }
-    }, [canvasSize, isEngineReady, showGrid]);
+    }, [showGrid, isEngineReady]);
 
-    const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(0, 0, width, height);
+    // Handle play/pause/stop from parent
+    useEffect(() => {
+        if (!engineRef.current || !isEngineReady) return;
 
-        if (!showGrid) return;
+        const engine = engineRef.current;
+        const state = engine.getState();
 
-        const gridSize = 50;
-        ctx.strokeStyle = '#2a2a2a';
-        ctx.lineWidth = 1;
-
-        // Draw grid lines
-        for (let x = 0; x <= width; x += gridSize) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-            ctx.stroke();
+        if (isPlaying && !state.isRunning) {
+            engine.start();
+        } else if (!isPlaying && state.isRunning) {
+            engine.stop();
         }
-        for (let y = 0; y <= height; y += gridSize) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-            ctx.stroke();
-        }
+    }, [isPlaying, isEngineReady]);
 
-        // Draw center lines
-        ctx.strokeStyle = '#3a3a3a';
-        ctx.lineWidth = 2;
-        const centerX = Math.floor(width / 2);
-        const centerY = Math.floor(height / 2);
-        ctx.beginPath();
-        ctx.moveTo(centerX, 0);
-        ctx.lineTo(centerX, height);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, centerY);
-        ctx.lineTo(width, centerY);
-        ctx.stroke();
+    // Update engine state display
+    useEffect(() => {
+        if (!isPlaying || !engineRef.current) return;
 
-        // Draw center marker
-        ctx.fillStyle = '#4a9eff';
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
-        ctx.fill();
-    };
+        const interval = setInterval(() => {
+            if (engineRef.current) {
+                const state = engineRef.current.getState();
+                setEngineState({ fps: state.fps, frameCount: state.frameCount });
+            }
+        }, 100);
+
+        return () => clearInterval(interval);
+    }, [isPlaying]);
 
     const handleMaximize = useCallback(() => {
         const container = containerRef.current;
@@ -183,6 +149,9 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
                         >
                             <Grid size={14} />
                         </button>
+                    )}
+                    {mode === 'game' && isPlaying && (
+                        <span className="viewport-fps">FPS: {engineState.fps}</span>
                     )}
                     <button
                         className="viewport-btn"
