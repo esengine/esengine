@@ -14,6 +14,19 @@ export interface EngineConfig {
     showGrid?: boolean;
 }
 
+export interface SceneObject {
+    id: number;
+    name: string;
+    type: 'box' | 'circle' | 'sprite';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    color: string;
+    selected?: boolean;
+}
+
 export interface EngineState {
     isInitialized: boolean;
     isRunning: boolean;
@@ -32,6 +45,13 @@ export interface IEngineService {
     resize(width: number, height: number): void;
     getState(): EngineState;
     render(): void;
+
+    // Scene object management
+    addObject(object: SceneObject): void;
+    removeObject(id: number): void;
+    updateObject(id: number, updates: Partial<SceneObject>): void;
+    selectObject(id: number | null): void;
+    getObjects(): SceneObject[];
 }
 
 /**
@@ -48,6 +68,8 @@ export class PlaceholderEngineService implements IEngineService {
     private fps: number = 0;
     private fpsUpdateTime: number = 0;
     private fpsFrameCount: number = 0;
+    private objects: SceneObject[] = [];
+    private selectedObjectId: number | null = null;
 
     private state: EngineState = {
         isInitialized: false,
@@ -127,6 +149,54 @@ export class PlaceholderEngineService implements IEngineService {
         return { ...this.state };
     }
 
+    // Scene object management
+    addObject(object: SceneObject): void {
+        this.objects.push(object);
+        if (!this.state.isRunning) {
+            this.render();
+        }
+    }
+
+    removeObject(id: number): void {
+        this.objects = this.objects.filter(obj => obj.id !== id);
+        if (this.selectedObjectId === id) {
+            this.selectedObjectId = null;
+        }
+        if (!this.state.isRunning) {
+            this.render();
+        }
+    }
+
+    updateObject(id: number, updates: Partial<SceneObject>): void {
+        const obj = this.objects.find(o => o.id === id);
+        if (obj) {
+            Object.assign(obj, updates);
+            if (!this.state.isRunning) {
+                this.render();
+            }
+        }
+    }
+
+    selectObject(id: number | null): void {
+        // Clear previous selection
+        this.objects.forEach(obj => obj.selected = false);
+
+        this.selectedObjectId = id;
+        if (id !== null) {
+            const obj = this.objects.find(o => o.id === id);
+            if (obj) {
+                obj.selected = true;
+            }
+        }
+        if (!this.state.isRunning) {
+            this.render();
+        }
+    }
+
+    getObjects(): SceneObject[] {
+        return [...this.objects];
+    }
+
     private gameLoop = (): void => {
         if (!this.state.isRunning) return;
 
@@ -171,6 +241,9 @@ export class PlaceholderEngineService implements IEngineService {
             this.drawGrid(width, height);
         }
 
+        // Draw scene objects
+        this.drawObjects(width, height);
+
         // Draw origin marker
         this.drawOriginMarker(width, height);
 
@@ -178,6 +251,137 @@ export class PlaceholderEngineService implements IEngineService {
         if (this.state.isRunning && !this.state.isPaused) {
             this.drawRunningIndicator(width, height);
         }
+    }
+
+    private drawObjects(width: number, height: number): void {
+        if (!this.ctx) return;
+
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        for (const obj of this.objects) {
+            this.ctx.save();
+
+            // Transform to world coordinates (centered)
+            const screenX = centerX + obj.x;
+            const screenY = centerY - obj.y; // Y is inverted for screen coordinates
+
+            this.ctx.translate(screenX, screenY);
+            this.ctx.rotate(-obj.rotation * Math.PI / 180);
+
+            // Draw the object
+            switch (obj.type) {
+                case 'box':
+                    this.drawBox(obj);
+                    break;
+                case 'circle':
+                    this.drawCircle(obj);
+                    break;
+                case 'sprite':
+                    this.drawSprite(obj);
+                    break;
+            }
+
+            // Draw selection outline
+            if (obj.selected) {
+                this.drawSelectionOutline(obj);
+            }
+
+            this.ctx.restore();
+        }
+    }
+
+    private drawBox(obj: SceneObject): void {
+        if (!this.ctx) return;
+
+        const halfW = obj.width / 2;
+        const halfH = obj.height / 2;
+
+        this.ctx.fillStyle = obj.color;
+        this.ctx.fillRect(-halfW, -halfH, obj.width, obj.height);
+
+        // Draw border
+        this.ctx.strokeStyle = this.adjustBrightness(obj.color, -30);
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(-halfW, -halfH, obj.width, obj.height);
+    }
+
+    private drawCircle(obj: SceneObject): void {
+        if (!this.ctx) return;
+
+        const radius = Math.min(obj.width, obj.height) / 2;
+
+        this.ctx.fillStyle = obj.color;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw border
+        this.ctx.strokeStyle = this.adjustBrightness(obj.color, -30);
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+    }
+
+    private drawSprite(obj: SceneObject): void {
+        if (!this.ctx) return;
+
+        const halfW = obj.width / 2;
+        const halfH = obj.height / 2;
+
+        // Draw sprite placeholder (checkerboard pattern)
+        const checkSize = 10;
+        for (let y = -halfH; y < halfH; y += checkSize) {
+            for (let x = -halfW; x < halfW; x += checkSize) {
+                const isWhite = ((Math.floor((x + halfW) / checkSize) + Math.floor((y + halfH) / checkSize)) % 2 === 0);
+                this.ctx.fillStyle = isWhite ? '#555' : '#333';
+                this.ctx.fillRect(x, y, checkSize, checkSize);
+            }
+        }
+
+        // Draw border
+        this.ctx.strokeStyle = obj.color;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(-halfW, -halfH, obj.width, obj.height);
+
+        // Draw sprite icon
+        this.ctx.fillStyle = obj.color;
+        this.ctx.font = '12px sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Sprite', 0, 0);
+    }
+
+    private drawSelectionOutline(obj: SceneObject): void {
+        if (!this.ctx) return;
+
+        const halfW = obj.width / 2 + 4;
+        const halfH = obj.height / 2 + 4;
+
+        // Draw selection box
+        this.ctx.strokeStyle = '#4a9eff';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 3]);
+        this.ctx.strokeRect(-halfW, -halfH, halfW * 2, halfH * 2);
+        this.ctx.setLineDash([]);
+
+        // Draw corner handles
+        const handleSize = 6;
+        this.ctx.fillStyle = '#4a9eff';
+
+        // Draw corner handles
+        this.ctx.fillRect(-halfW - handleSize / 2, -halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(halfW - handleSize / 2, -halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(-halfW - handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+        this.ctx.fillRect(halfW - handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+    }
+
+    private adjustBrightness(color: string, amount: number): string {
+        // Simple brightness adjustment for hex colors
+        const hex = color.replace('#', '');
+        const r = Math.max(0, Math.min(255, parseInt(hex.substr(0, 2), 16) + amount));
+        const g = Math.max(0, Math.min(255, parseInt(hex.substr(2, 2), 16) + amount));
+        const b = Math.max(0, Math.min(255, parseInt(hex.substr(4, 2), 16) + amount));
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     }
 
     private drawGrid(width: number, height: number): void {
