@@ -6,6 +6,7 @@ import { Inspector } from './components/Inspector';
 import { StatusBar } from './components/StatusBar';
 import { DockContainer } from './components/DockContainer';
 import { GameViewport } from './components/GameViewport';
+import { SceneObject } from './services/EngineService';
 import './styles/App.css';
 
 type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
@@ -23,6 +24,16 @@ function App() {
     const handleSelectEntity = useCallback((id: number) => {
         setSelectedEntityId(id);
         setSelectedEntityName('Entity');
+    }, []);
+
+    const handleSelectSceneObject = useCallback((object: SceneObject | null) => {
+        if (object) {
+            setSelectedEntityId(object.id);
+            setSelectedEntityName(object.name);
+        } else {
+            setSelectedEntityId(null);
+            setSelectedEntityName('');
+        }
     }, []);
 
     const handlePlay = useCallback(() => {
@@ -219,7 +230,11 @@ function App() {
                         />
                     }
                     scenePanel={
-                        <GameViewport mode="scene" />
+                        <GameViewport
+                            mode="scene"
+                            activeTool={activeTool}
+                            onSelectObject={handleSelectSceneObject}
+                        />
                     }
                     gamePanel={
                         <GameViewport

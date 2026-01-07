@@ -52,6 +52,12 @@ export interface IEngineService {
     updateObject(id: number, updates: Partial<SceneObject>): void;
     selectObject(id: number | null): void;
     getObjects(): SceneObject[];
+    getSelectedObjectId(): number | null;
+
+    // Hit testing
+    hitTest(screenX: number, screenY: number): SceneObject | null;
+    screenToWorld(screenX: number, screenY: number): { x: number; y: number };
+    worldToScreen(worldX: number, worldY: number): { x: number; y: number };
 }
 
 /**
@@ -195,6 +201,90 @@ export class PlaceholderEngineService implements IEngineService {
 
     getObjects(): SceneObject[] {
         return [...this.objects];
+    }
+
+    getSelectedObjectId(): number | null {
+        return this.selectedObjectId;
+    }
+
+    /**
+     * @zh 命中测试 - 检测屏幕坐标点击的对象
+     * @en Hit test - detect object at screen coordinates
+     */
+    hitTest(screenX: number, screenY: number): SceneObject | null {
+        if (!this.config) return null;
+
+        const world = this.screenToWorld(screenX, screenY);
+
+        // Iterate in reverse order (top objects first)
+        for (let i = this.objects.length - 1; i >= 0; i--) {
+            const obj = this.objects[i];
+            if (obj && this.isPointInObject(world.x, world.y, obj)) {
+                return obj;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @zh 检测点是否在对象内
+     * @en Check if point is inside object
+     */
+    private isPointInObject(worldX: number, worldY: number, obj: SceneObject): boolean {
+        // Transform point to object's local space
+        const dx = worldX - obj.x;
+        const dy = worldY - obj.y;
+
+        // Apply inverse rotation
+        const angle = -obj.rotation * Math.PI / 180;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+
+        const halfW = obj.width / 2;
+        const halfH = obj.height / 2;
+
+        if (obj.type === 'circle') {
+            const radius = Math.min(halfW, halfH);
+            return (localX * localX + localY * localY) <= radius * radius;
+        }
+
+        // Box and sprite use AABB in local space
+        return localX >= -halfW && localX <= halfW &&
+               localY >= -halfH && localY <= halfH;
+    }
+
+    /**
+     * @zh 屏幕坐标转世界坐标
+     * @en Convert screen coordinates to world coordinates
+     */
+    screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+        if (!this.config) return { x: 0, y: 0 };
+
+        const centerX = this.config.width / 2;
+        const centerY = this.config.height / 2;
+
+        return {
+            x: screenX - centerX,
+            y: centerY - screenY  // Y is inverted
+        };
+    }
+
+    /**
+     * @zh 世界坐标转屏幕坐标
+     * @en Convert world coordinates to screen coordinates
+     */
+    worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
+        if (!this.config) return { x: 0, y: 0 };
+
+        const centerX = this.config.width / 2;
+        const centerY = this.config.height / 2;
+
+        return {
+            x: centerX + worldX,
+            y: centerY - worldY  // Y is inverted
+        };
     }
 
     private gameLoop = (): void => {

@@ -1,17 +1,29 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Pause, Square, Maximize2, Grid } from 'lucide-react';
-import { getEngineService, IEngineService } from '../services/EngineService';
+import { getEngineService, IEngineService, SceneObject } from '../services/EngineService';
 import '../styles/GameViewport.css';
+
+type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
 
 interface GameViewportProps {
     mode: 'scene' | 'game';
     isPlaying?: boolean;
+    activeTool?: TransformTool;
     onPlay?: () => void;
     onPause?: () => void;
     onStop?: () => void;
+    onSelectObject?: (object: SceneObject | null) => void;
 }
 
-export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop }: GameViewportProps) {
+export function GameViewport({
+    mode,
+    isPlaying = false,
+    activeTool = 'select',
+    onPlay,
+    onPause,
+    onStop,
+    onSelectObject
+}: GameViewportProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const engineRef = useRef<IEngineService | null>(null);
@@ -19,6 +31,12 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
     const [showGrid, setShowGrid] = useState(mode === 'scene');
     const [engineState, setEngineState] = useState({ fps: 0, frameCount: 0 });
+
+    // Drag state
+    const isDraggingRef = useRef(false);
+    const dragStartRef = useRef({ x: 0, y: 0 });
+    const dragObjectStartRef = useRef({ x: 0, y: 0 });
+    const selectedObjectRef = useRef<SceneObject | null>(null);
 
     // Handle canvas resize
     useEffect(() => {
@@ -59,6 +77,54 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
             showGrid: mode === 'scene',
         }).then(() => {
             setIsEngineReady(true);
+
+            // Add demo objects in scene mode
+            if (mode === 'scene') {
+                engine.addObject({
+                    id: 1,
+                    name: 'Player',
+                    type: 'box',
+                    x: 0,
+                    y: 0,
+                    width: 60,
+                    height: 80,
+                    rotation: 0,
+                    color: '#4a9eff'
+                });
+                engine.addObject({
+                    id: 2,
+                    name: 'Enemy',
+                    type: 'circle',
+                    x: 120,
+                    y: 50,
+                    width: 50,
+                    height: 50,
+                    rotation: 0,
+                    color: '#ff4a4a'
+                });
+                engine.addObject({
+                    id: 3,
+                    name: 'Platform',
+                    type: 'box',
+                    x: -80,
+                    y: -100,
+                    width: 200,
+                    height: 30,
+                    rotation: 0,
+                    color: '#4aff4a'
+                });
+                engine.addObject({
+                    id: 4,
+                    name: 'Sprite',
+                    type: 'sprite',
+                    x: -150,
+                    y: 80,
+                    width: 64,
+                    height: 64,
+                    rotation: 15,
+                    color: '#ffaa00'
+                });
+            }
         });
 
         return () => {
@@ -101,6 +167,69 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
 
         return () => clearInterval(interval);
     }, [isPlaying]);
+
+    // Get canvas-relative coordinates
+    const getCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
+
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    }, []);
+
+    // Mouse down handler
+    const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (mode !== 'scene' || !engineRef.current || !isEngineReady) return;
+
+        const coords = getCanvasCoords(e);
+        const hitObject = engineRef.current.hitTest(coords.x, coords.y);
+
+        // Select object
+        engineRef.current.selectObject(hitObject?.id ?? null);
+        selectedObjectRef.current = hitObject;
+        onSelectObject?.(hitObject);
+
+        // Start drag if using move tool and hit an object
+        if (hitObject && (activeTool === 'move' || activeTool === 'select')) {
+            isDraggingRef.current = true;
+            dragStartRef.current = coords;
+            dragObjectStartRef.current = { x: hitObject.x, y: hitObject.y };
+        }
+    }, [mode, isEngineReady, activeTool, getCanvasCoords, onSelectObject]);
+
+    // Mouse move handler
+    const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isDraggingRef.current || !engineRef.current || !selectedObjectRef.current) return;
+
+        const coords = getCanvasCoords(e);
+        const dx = coords.x - dragStartRef.current.x;
+        const dy = coords.y - dragStartRef.current.y;
+
+        // Update object position (note: Y is inverted in world space)
+        engineRef.current.updateObject(selectedObjectRef.current.id, {
+            x: dragObjectStartRef.current.x + dx,
+            y: dragObjectStartRef.current.y - dy
+        });
+    }, [getCanvasCoords]);
+
+    // Mouse up handler
+    const handleMouseUp = useCallback(() => {
+        isDraggingRef.current = false;
+    }, []);
+
+    // Get cursor style based on active tool
+    const getCursorStyle = useCallback((): string => {
+        if (mode !== 'scene') return 'default';
+        switch (activeTool) {
+            case 'move': return 'move';
+            case 'rotate': return 'crosshair';
+            case 'scale': return 'nwse-resize';
+            default: return 'default';
+        }
+    }, [mode, activeTool]);
 
     const handleMaximize = useCallback(() => {
         const container = containerRef.current;
@@ -164,7 +293,15 @@ export function GameViewport({ mode, isPlaying = false, onPlay, onPause, onStop 
                 </div>
             </div>
             <div className="viewport-canvas-container">
-                <canvas ref={canvasRef} className="viewport-canvas" />
+                <canvas
+                    ref={canvasRef}
+                    className="viewport-canvas"
+                    style={{ cursor: getCursorStyle() }}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                />
                 {!isEngineReady && (
                     <div className="viewport-overlay">
                         <span className="viewport-status">
