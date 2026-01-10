@@ -2,20 +2,21 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #262626;
+  background-color: #252525;
   color: #ccc;
   position: relative;
   font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
 .inspector-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 6px;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
   border-bottom: 1px solid #1a1a1a;
-  background-color: #2d2d2d;
+  background: linear-gradient(180deg, #2e2e2e 0%, #2a2a2a 100%);
   flex-shrink: 0;
 }
 
@@ -71,37 +72,39 @@
 .inspector-search {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  background: #262626;
-  border-bottom: 1px solid #1a1a1a;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #252525;
+  border-bottom: 1px solid #1e1e1e;
 }
 
 .inspector-search svg {
-  color: #555;
+  color: #606060;
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .inspector-search input {
   flex: 1;
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
-  border-radius: 2px;
-  padding: 2px 6px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 4px;
+  padding: 4px 10px;
   font-size: 11px;
-  color: #ccc;
-  height: 18px;
+  color: #d0d0d0;
+  height: 24px;
+  transition: all 0.15s ease;
 }
 
 .inspector-search input:focus {
   outline: none;
-  border-color: #4a9eff;
+  border-color: #5a9fd4;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.12);
 }
 
 .inspector-search input::placeholder {
-  color: #555;
+  color: #606060;
 }
 
 .inspector-search-clear {
@@ -435,9 +438,10 @@
 }
 
 .entity-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8e8e8;
+  letter-spacing: 0.01em;
 }
 
 .section-title {
@@ -456,13 +460,14 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 11px;
-  gap: 8px;
+  gap: 10px;
   background-color: transparent;
   border-radius: 0;
-  margin-bottom: 1px;
-  min-height: 24px;
+  margin-bottom: 0;
+  min-height: 26px;
+  transition: background-color 0.1s ease;
 }
 
 /* 简单字段（文本、数字等）垂直居中 | Simple fields (text, number, etc.) center vertically */
@@ -479,12 +484,16 @@
 }
 
 .property-label {
-  color: #888;
+  color: #8a8a8a;
   font-weight: 400;
   flex-shrink: 0;
-  min-width: 70px;
+  min-width: 80px;
+  max-width: 100px;
   font-size: 11px;
   padding-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 简单字段的 label 不需要额外的 padding | Simple field labels don't need extra padding */
@@ -534,6 +543,27 @@
   padding: 48px 24px;
   text-align: center;
   height: 100%;
+  color: #606060;
+}
+
+.empty-inspector .empty-icon {
+  color: #404040;
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+
+.empty-inspector .empty-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #808080;
+  margin-bottom: 8px;
+}
+
+.empty-inspector .empty-hint {
+  font-size: 12px;
+  color: #606060;
+  max-width: 200px;
+  line-height: 1.5;
 }
 
 .child-node-item {
@@ -623,25 +653,30 @@
 .add-component-trigger {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 5px;
-  background: #3b82f6;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 16px;
+  background: linear-gradient(180deg, #4a9eff 0%, #3b82f6 100%);
   border: none;
-  border-radius: 2px;
+  border-radius: 4px;
   color: #fff;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  transition: all 0.1s ease;
-  height: 18px;
+  transition: all 0.15s ease;
+  height: 28px;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
 }
 
 .add-component-trigger:hover {
-  background: #2563eb;
+  background: linear-gradient(180deg, #5aafff 0%, #2563eb 100%);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
 }
 
 .add-component-trigger:active {
-  background: #1d4ed8;
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  transform: translateY(1px);
 }
 
 .component-dropdown-overlay {
@@ -837,29 +872,31 @@
 /* 组件列表项样式 */
 .component-item-card {
   margin-bottom: 0;
-  background: #262626;
+  background: #252525;
   border: none;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid #1e1e1e;
   overflow: visible;
+  transition: background-color 0.15s ease;
 }
 
 .component-item-card.expanded {
-  background: #262626;
+  background: #282828;
 }
 
 .component-item-header {
   display: flex;
   align-items: center;
-  padding: 0 8px;
-  background: #2d2d2d;
+  padding: 0 10px;
+  background: linear-gradient(180deg, #323232 0%, #2d2d2d 100%);
   cursor: pointer;
   user-select: none;
-  height: 26px;
-  gap: 6px;
+  height: 28px;
+  gap: 8px;
+  transition: all 0.1s ease;
 }
 
 .component-item-header:hover {
-  background: #333;
+  background: linear-gradient(180deg, #3a3a3a 0%, #333 100%);
 }
 
 .component-expand-icon {
@@ -888,11 +925,12 @@
   flex: 1;
   font-size: 12px;
   font-weight: 500;
-  color: #ccc;
+  color: #d0d0d0;
+  letter-spacing: 0.01em;
 }
 
 .component-item-card.expanded .component-item-name {
-  color: #fff;
+  color: #f0f0f0;
 }
 
 .component-item-card .component-remove-btn {
@@ -916,10 +954,11 @@
 }
 
 .component-item-content {
-  padding: 0;
-  background: #262626;
+  padding: 4px 0;
+  background: #252525;
   overflow: visible;
   min-width: 0;
+  border-top: 1px solid #1e1e1e;
 }
 
 /* Property rows inside component */
@@ -1445,32 +1484,32 @@
 /* ==================== Property Input ==================== */
 .property-input {
   flex: 1;
-  background: #1a1a1a;
-  border: 1px solid #3a3a3a;
-  border-radius: 2px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 3px;
   padding: 0 8px;
-  color: #ddd;
+  color: #e0e0e0;
   font-size: 11px;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: 'Consolas', 'Monaco', 'SF Mono', monospace;
   min-width: 0;
   height: 22px;
-  transition: border-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .property-input:hover {
   border-color: #4a4a4a;
-  background: #1e1e1e;
+  background: #202020;
 }
 
 .property-input:focus {
   outline: none;
-  border-color: #d4a029;
+  border-color: #5a9fd4;
   background: #1e1e1e;
-  box-shadow: none;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.15);
 }
 
 .property-input:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
   background: #1a1a1a;
 }
@@ -1492,67 +1531,49 @@ input[type="number"].property-input {
   appearance: textfield;
 }
 
-/* ==================== Boolean Toggle ==================== */
+/* ==================== Boolean Checkbox ==================== */
 .property-field-boolean {
   justify-content: space-between;
 }
 
-.property-toggle {
-  position: relative;
-  width: 36px;
-  height: 18px;
-  border-radius: 9px;
-  border: none;
+.property-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid #555;
+  background: #1c1c1c;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   transition: all 0.15s ease;
   flex-shrink: 0;
-  padding: 0;
+  color: #fff;
 }
 
-.property-toggle-off {
-  background: #2a2a2a;
-  border: 1px solid #444;
+.property-checkbox:hover:not(:disabled) {
+  border-color: #777;
+  background: #252525;
 }
 
-.property-toggle-off:hover:not(:disabled) {
-  background: #333;
-  border-color: #555;
-}
-
-.property-toggle-on {
+.property-checkbox-checked {
   background: #3b82f6;
-  border: 1px solid #3b82f6;
+  border-color: #3b82f6;
 }
 
-.property-toggle-on:hover:not(:disabled) {
+.property-checkbox-checked:hover:not(:disabled) {
   background: #2563eb;
   border-color: #2563eb;
 }
 
-.property-toggle:disabled {
-  opacity: 0.4;
+.property-checkbox-disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.property-toggle-thumb {
-  position: absolute;
-  top: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: white;
-  transition: transform 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.property-toggle-off .property-toggle-thumb {
-  left: 2px;
-  transform: translateX(0);
-}
-
-.property-toggle-on .property-toggle-thumb {
-  left: 2px;
-  transform: translateX(18px);
+.property-checkbox svg {
+  display: block;
 }
 
 /* ==================== Color Field ==================== */
@@ -1560,7 +1581,7 @@ input[type="number"].property-input {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   position: relative;
 }
@@ -1568,15 +1589,17 @@ input[type="number"].property-input {
 .property-color-preview {
   flex: 1;
   height: 22px;
-  border-radius: 2px;
-  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  border: 1px solid #383838;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: all 0.15s ease;
   min-width: 40px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .property-color-preview:hover {
   border-color: #4a4a4a;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(255, 255, 255, 0.05);
 }
 
 .property-input-color {
@@ -1588,28 +1611,31 @@ input[type="number"].property-input {
 }
 
 .property-input-color-text {
-  width: 70px;
+  width: 68px;
   flex-shrink: 0;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-family: 'Consolas', 'Monaco', monospace;
+  letter-spacing: 0.03em;
+  font-family: 'Consolas', 'Monaco', 'SF Mono', monospace;
   text-align: center;
-  background: #1a1a1a;
-  border: 1px solid #3a3a3a;
-  border-radius: 2px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 3px;
   padding: 0 4px;
-  color: #ddd;
+  color: #c0c0c0;
   font-size: 10px;
   height: 22px;
+  transition: all 0.15s ease;
 }
 
 .property-input-color-text:hover {
   border-color: #4a4a4a;
+  background: #202020;
 }
 
 .property-input-color-text:focus {
   outline: none;
-  border-color: #d4a029;
+  border-color: #5a9fd4;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.15);
 }
 
 /* Color Picker Popup */
@@ -1718,7 +1744,7 @@ input[type="number"].property-input {
 .property-vector-compact {
   flex: 1;
   display: flex;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -1728,20 +1754,22 @@ input[type="number"].property-input {
   align-items: center;
   min-width: 0;
   position: relative;
-  background: #1a1a1a;
-  border: 1px solid #3a3a3a;
-  border-radius: 2px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 3px;
   height: 22px;
   overflow: hidden;
+  transition: all 0.15s ease;
 }
 
 .property-vector-axis-compact:hover {
   border-color: #4a4a4a;
-  background: #1e1e1e;
+  background: #202020;
 }
 
 .property-vector-axis-compact:focus-within {
-  border-color: #d4a029;
+  border-color: #5a9fd4;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.15);
 }
 
 /* Color bar axis indicator */
@@ -1783,12 +1811,13 @@ input[type="number"].property-input {
   line-height: 22px;
   background: transparent;
   border: none;
-  color: #ddd;
-  font-family: 'Consolas', 'Monaco', monospace;
+  color: #e0e0e0;
+  font-family: 'Consolas', 'Monaco', 'SF Mono', monospace;
 }
 
 .property-input-number-compact:focus {
   outline: none;
+  background: rgba(90, 159, 212, 0.05);
 }
 
 .property-input-number-compact::-webkit-inner-spin-button,
@@ -1876,4 +1905,534 @@ input[type="number"].property-input {
 .property-dropdown-item.selected {
   background: #4a4a4a;
   color: #fff;
+}
+
+/* ==================== Asset Reference Field ==================== */
+.property-asset-ref {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: linear-gradient(180deg, #1e1e1e 0%, #1a1a1a 100%);
+  border: 1px solid #383838;
+  border-radius: 3px;
+  height: 24px;
+  min-width: 0;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.property-asset-ref:hover {
+  border-color: #4a4a4a;
+  background: linear-gradient(180deg, #242424 0%, #1e1e1e 100%);
+}
+
+.property-asset-ref svg {
+  flex-shrink: 0;
+  color: #6b9cd8;
+}
+
+.asset-uuid {
+  font-family: 'Consolas', 'Monaco', 'SF Mono', monospace;
+  font-size: 10px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==================== Droppable Reference Field ==================== */
+.property-ref-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background: linear-gradient(180deg, #1e1e1e 0%, #1a1a1a 100%);
+  border: 1px dashed #383838;
+  border-radius: 3px;
+  height: 24px;
+  min-width: 0;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.property-ref-field:hover {
+  border-color: #4a4a4a;
+  background: linear-gradient(180deg, #242424 0%, #1e1e1e 100%);
+  border-style: solid;
+}
+
+.property-ref-field.has-value {
+  border-style: solid;
+  color: #a0a0a0;
+}
+
+.property-ref-field.drag-over {
+  border-color: #4a9eff;
+  border-style: solid;
+  background: rgba(74, 158, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(74, 158, 255, 0.3);
+}
+
+.property-ref-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #6b9cd8;
+}
+
+.property-ref-field.has-value .property-ref-icon {
+  color: #70a8e0;
+}
+
+.property-ref-name {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.property-ref-field.has-value .property-ref-name {
+  color: #c0c0c0;
+}
+
+.property-ref-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: #606060;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.1s ease;
+}
+
+.property-ref-clear:hover {
+  background: rgba(255, 90, 90, 0.2);
+  color: #ff6b6b;
+}
+
+/* ==================== Read-only Property ==================== */
+.property-readonly {
+  flex: 1;
+  padding: 0 8px;
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==================== No Components Message ==================== */
+.no-components {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: #606060;
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ==================== Rect Field ==================== */
+.property-rect-compact {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.property-rect-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.property-rect-label {
+  width: 14px;
+  font-size: 10px;
+  color: #707070;
+  text-align: center;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+/* ==================== Select/Enum Field ==================== */
+.property-select-wrapper {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.property-select {
+  width: 100%;
+  height: 22px;
+  padding: 0 28px 0 8px;
+  background: linear-gradient(180deg, #262626 0%, #1e1e1e 100%);
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #e0e0e0;
+  font-size: 11px;
+  cursor: pointer;
+  appearance: none;
+  transition: all 0.15s ease;
+}
+
+.property-select:hover {
+  border-color: #555;
+  background: linear-gradient(180deg, #2a2a2a 0%, #222 100%);
+}
+
+.property-select:focus {
+  outline: none;
+  border-color: #5a9fd4;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.15);
+}
+
+.property-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 下拉箭头指示器 */
+.property-select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #888;
+  pointer-events: none;
+  transition: border-color 0.15s ease;
+}
+
+.property-select-wrapper:hover::after {
+  border-top-color: #aaa;
+}
+
+.property-select option {
+  background: #2a2a2a;
+  color: #e0e0e0;
+  padding: 8px;
+}
+
+/* ==================== Slider Field ==================== */
+.property-slider-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.property-slider {
+  flex: 1;
+  height: 4px;
+  background: linear-gradient(90deg, #383838 0%, #404040 100%);
+  border-radius: 2px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.property-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(180deg, #5aafff 0%, #4a9eff 100%);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.property-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(74, 158, 255, 0.4);
+}
+
+.property-slider::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+}
+
+.property-input-number-small {
+  width: 48px;
+  height: 22px;
+  padding: 0 6px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 3px;
+  color: #e0e0e0;
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', 'SF Mono', monospace;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.property-input-number-small:hover {
+  border-color: #4a4a4a;
+  background: #202020;
+}
+
+.property-input-number-small:focus {
+  outline: none;
+  border-color: #5a9fd4;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.15);
+}
+
+/* ==================== Asset Name Field ==================== */
+.asset-name {
+  font-size: 11px;
+  color: #7ec9ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-weight: 500;
+}
+
+/* Size axis labels */
+.property-vector-axis-h {
+  background: #40a040;
+}
+
+/* W axis for width */
+.property-vector-axis-label.property-vector-axis-w,
+.property-vector-axis-label.property-vector-axis-h {
+  width: auto;
+  padding: 0 4px;
+  font-size: 9px;
+  color: #888;
+  background: #333;
+}
+
+/* ==================== Unit Label ==================== */
+.property-unit {
+  display: inline-block;
+  font-size: 9px;
+  color: #606060;
+  margin-left: 3px;
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+/* ==================== Multiline Textarea ==================== */
+.property-field-multiline {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.property-field-multiline .property-label {
+  width: 100%;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+
+.property-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 3px;
+  color: #e0e0e0;
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', 'SF Mono', monospace;
+  resize: vertical;
+  transition: all 0.15s ease;
+  line-height: 1.5;
+}
+
+.property-textarea:hover {
+  border-color: #4a4a4a;
+  background: #202020;
+}
+
+.property-textarea:focus {
+  outline: none;
+  border-color: #5a9fd4;
+  background: #1e1e1e;
+  box-shadow: 0 0 0 2px rgba(90, 159, 212, 0.15);
+}
+
+.property-textarea:read-only {
+  opacity: 0.7;
+  cursor: default;
+  resize: none;
+}
+
+/* ==================== Property Group ==================== */
+.property-group {
+  margin-top: 6px;
+  border-top: 1px solid #333;
+}
+
+.property-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #2a2a2a;
+  cursor: pointer;
+  user-select: none;
+}
+
+.property-group-header:hover {
+  background: #2e2e2e;
+}
+
+.property-group-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.property-group-content {
+  padding: 2px 0;
+}
+
+/* ==================== Array / Event Handler Field ==================== */
+.property-field-array {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 10px;
+}
+
+.property-array-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.property-array-header .property-label {
+  flex: 1;
+}
+
+.property-array-count {
+  font-size: 10px;
+  color: #666;
+  font-family: monospace;
+}
+
+.property-array-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: #3a3a3a;
+  border: none;
+  border-radius: 2px;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+}
+
+.property-array-add-btn:hover {
+  background: #4a4a4a;
+  color: #ccc;
+}
+
+.property-array-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #1e1e1e;
+  border-radius: 3px;
+  padding: 6px;
+}
+
+.property-array-empty {
+  text-align: center;
+  font-size: 10px;
+  color: #666;
+  padding: 8px;
+  font-style: italic;
+}
+
+.property-event-item {
+  position: relative;
+  background: #262626;
+  border-radius: 3px;
+  padding: 6px 24px 6px 6px;
+  border: 1px solid #333;
+}
+
+.property-event-item:hover {
+  border-color: #444;
+}
+
+.property-event-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.property-event-row:last-child {
+  margin-bottom: 0;
+}
+
+.property-event-label {
+  font-size: 10px;
+  color: #666;
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.property-event-row .property-input {
+  flex: 1;
+  font-size: 10px;
+  padding: 2px 4px;
+  min-height: 18px;
+}
+
+.property-event-remove-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  border-radius: 2px;
+}
+
+.property-event-item:hover .property-event-remove-btn {
+  opacity: 1;
+}
+
+.property-event-remove-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }

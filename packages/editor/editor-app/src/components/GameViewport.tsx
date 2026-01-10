@@ -1,45 +1,72 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
-import { Play, Pause, Square, Maximize2, Grid } from 'lucide-react';
-import { getEngineService, IEngineService, SceneObject, GizmoHandle } from '../services/EngineService';
-import '../styles/GameViewport.css';
+/**
+ * @zh 游戏视口组件 - 单视口架构
+ * @en Game Viewport Component - Single viewport architecture
+ *
+ * 一个 canvas，通过 mode 切换行为：
+ * - Scene 模式: 场景编辑，显示 Gizmo，支持节点选择和变换
+ * - Game 模式: 编译脚本并运行游戏
+ *
+ * Single canvas, behavior switches via mode:
+ * - Scene mode: Scene editing, show gizmos, support node selection and transform
+ * - Game mode: Compile scripts and run game
+ */
 
-type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { Play, Square, Maximize2, Grid, RotateCcw, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import { getEditorEngine } from '../services/engine';
+import { getUserScriptCompiler } from '../services/UserScriptCompiler';
+import { GizmoOverlay, TransformTool } from './GizmoOverlay';
+import '../styles/GameViewport.css';
 
 interface GameViewportProps {
     mode: 'scene' | 'game';
     isPlaying?: boolean;
     activeTool?: TransformTool;
+    scenePath?: string | null;
+    projectPath?: string | null;
     onPlay?: () => void;
     onPause?: () => void;
     onStop?: () => void;
-    onSelectObject?: (object: SceneObject | null) => void;
+    onSelectNode?: (nodeId: string | null) => void;
 }
 
 export function GameViewport({
     mode,
     isPlaying = false,
     activeTool = 'select',
+    scenePath,
+    projectPath,
     onPlay,
     onPause,
     onStop,
-    onSelectObject
+    onSelectNode
 }: GameViewportProps) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const engineRef = useRef<IEngineService | null>(null);
-    const [isEngineReady, setIsEngineReady] = useState(false);
+    const canvasContainerRef = useRef<HTMLDivElement>(null);
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-    const [showGrid, setShowGrid] = useState(mode === 'scene');
-    const [engineState, setEngineState] = useState({ fps: 0, frameCount: 0 });
+    const [showGrid, setShowGrid] = useState(true);
+    const [isEngineReady, setIsEngineReady] = useState(false);
+    const [engineError, setEngineError] = useState<string | null>(null);
+    const [engineState, setEngineState] = useState({ fps: 60, frameCount: 0 });
 
-    // Drag state
-    const isDraggingRef = useRef(false);
-    const dragStartRef = useRef({ x: 0, y: 0 });
-    const dragObjectStartRef = useRef({ x: 0, y: 0, width: 0, height: 0, rotation: 0 });
-    const selectedObjectRef = useRef<SceneObject | null>(null);
-    const activeGizmoHandleRef = useRef<GizmoHandle>('none');
+    // Game mode compilation state
+    const [compileStatus, setCompileStatus] = useState<{
+        state: 'idle' | 'compiling' | 'injecting' | 'loading' | 'running' | 'error';
+        message?: string;
+        compiledCount?: number;
+        failedCount?: number;
+    }>({ state: 'idle' });
 
-    // Handle canvas resize
+    // Scene mode loading state
+    const [sceneLoadStatus, setSceneLoadStatus] = useState<{
+        state: 'idle' | 'compiling' | 'loading' | 'ready' | 'error';
+        message?: string;
+    }>({ state: 'idle' });
+
+    const engine = getEditorEngine();
+    const scriptCompiler = getUserScriptCompiler();
+
+    // Handle container resize
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -47,7 +74,9 @@ export function GameViewport({
         const resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
-                setCanvasSize({ width: Math.floor(width), height: Math.floor(height) });
+                if (width > 0 && height > 0) {
+                    setCanvasSize({ width: Math.floor(width), height: Math.floor(height) });
+                }
             }
         });
 
@@ -55,284 +84,205 @@ export function GameViewport({
         return () => resizeObserver.disconnect();
     }, []);
 
-    // Update canvas size
+    // Initialize engine and attach canvas
+    // Handle hot reload: if engine is already initialized, just re-attach the canvas
     useEffect(() => {
-        if (engineRef.current && isEngineReady) {
-            engineRef.current.resize(canvasSize.width, canvasSize.height);
-        }
-    }, [canvasSize, isEngineReady]);
+        const canvasContainer = canvasContainerRef.current;
+        if (!canvasContainer) return;
 
-    // Initialize engine
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        let mounted = true;
 
-        const engine = getEngineService();
-        engineRef.current = engine;
+        const initAndAttach = async () => {
+            try {
+                // Check if engine is already initialized (e.g., after hot reload)
+                if (engine.getIsInitialized()) {
+                    if (mounted) {
+                        setIsEngineReady(true);
+                        setEngineError(null);
+                        engine.attachToContainer(canvasContainer);
+                    }
+                    return;
+                }
 
-        engine.init({
-            canvas,
-            width: canvasSize.width,
-            height: canvasSize.height,
-            backgroundColor: '#1a1a1a',
-            showGrid: mode === 'scene',
-        }).then(() => {
-            setIsEngineReady(true);
+                const success = await engine.init();
 
-            // Add demo objects in scene mode
-            if (mode === 'scene') {
-                engine.addObject({
-                    id: 1,
-                    name: 'Player',
-                    type: 'box',
-                    x: 0,
-                    y: 0,
-                    width: 60,
-                    height: 80,
-                    rotation: 0,
-                    color: '#4a9eff'
-                });
-                engine.addObject({
-                    id: 2,
-                    name: 'Enemy',
-                    type: 'circle',
-                    x: 120,
-                    y: 50,
-                    width: 50,
-                    height: 50,
-                    rotation: 0,
-                    color: '#ff4a4a'
-                });
-                engine.addObject({
-                    id: 3,
-                    name: 'Platform',
-                    type: 'box',
-                    x: -80,
-                    y: -100,
-                    width: 200,
-                    height: 30,
-                    rotation: 0,
-                    color: '#4aff4a'
-                });
-                engine.addObject({
-                    id: 4,
-                    name: 'Sprite',
-                    type: 'sprite',
-                    x: -150,
-                    y: 80,
-                    width: 64,
-                    height: 64,
-                    rotation: 15,
-                    color: '#ffaa00'
-                });
+                if (!mounted) return;
+
+                if (success) {
+                    setIsEngineReady(true);
+                    setEngineError(null);
+                    engine.attachToContainer(canvasContainer);
+                } else {
+                    setEngineError('Engine initialization failed');
+                    console.error('[GameViewport] Engine init returned false');
+                }
+            } catch (err) {
+                console.error('[GameViewport] Engine init error:', err);
+                if (mounted) {
+                    setEngineError(err instanceof Error ? err.message : String(err));
+                }
             }
-        });
+        };
+
+        initAndAttach();
 
         return () => {
-            engine.destroy();
-            engineRef.current = null;
+            mounted = false;
         };
-    }, []);
+    }, [engine]);
 
-    // Update grid visibility
+    // Update canvas size
     useEffect(() => {
-        if (engineRef.current && isEngineReady) {
-            engineRef.current.resize(canvasSize.width, canvasSize.height);
+        if (isEngineReady) {
+            engine.resize(canvasSize.width, canvasSize.height);
         }
-    }, [showGrid, isEngineReady]);
+    }, [canvasSize, isEngineReady, engine]);
 
-    // Handle play/pause/stop from parent
+    // Load scene when scenePath changes (Scene mode)
     useEffect(() => {
-        if (!engineRef.current || !isEngineReady) return;
+        if (!scenePath || !isEngineReady || !projectPath) return;
+        if (mode !== 'scene') return;
 
-        const engine = engineRef.current;
-        const state = engine.getState();
 
-        if (isPlaying && !state.isRunning) {
-            engine.start();
-        } else if (!isPlaying && state.isRunning) {
-            engine.stop();
+        const loadSceneForEditing = async () => {
+            try {
+                // Step 1: Compile user scripts
+                setSceneLoadStatus({ state: 'compiling', message: 'Compiling scripts...' });
+                const compileResult = await scriptCompiler.compileProject(projectPath);
+
+                if (compileResult.compiledCount > 0) {
+                    await scriptCompiler.injectCompiledModules();
+                }
+
+                // Step 2: Load scene into ccesengine
+                setSceneLoadStatus({ state: 'loading', message: 'Loading scene...' });
+                const success = await engine.loadSceneFromFile(scenePath);
+                if (success) {
+                    setSceneLoadStatus({ state: 'ready' });
+                } else {
+                    setSceneLoadStatus({ state: 'error', message: 'Failed to load scene' });
+                }
+            } catch (err) {
+                console.error('[GameViewport] Scene load error:', err);
+                setSceneLoadStatus({ state: 'error', message: String(err) });
+            }
+        };
+
+        loadSceneForEditing();
+    }, [scenePath, isEngineReady, mode, engine, projectPath, scriptCompiler]);
+
+    // Track if game is starting to prevent duplicate starts
+    const isStartingRef = useRef(false);
+
+    // Handle play/stop (Game mode)
+    useEffect(() => {
+        if (mode !== 'game') return;
+
+        if (isPlaying && projectPath && scenePath) {
+            if (isStartingRef.current || compileStatus.state !== 'idle') {
+                return;
+            }
+
+            isStartingRef.current = true;
+
+            const startGame = async () => {
+                try {
+                    // Step 1: Compile scripts
+                    setCompileStatus({ state: 'compiling', message: 'Compiling scripts...' });
+                    const compileResult = await scriptCompiler.compileProject(projectPath);
+
+                    if (!compileResult.success && compileResult.failedCount > 0) {
+                        setCompileStatus({
+                            state: 'error',
+                            message: `Compilation failed: ${compileResult.errors[0]}`,
+                            compiledCount: compileResult.compiledCount,
+                            failedCount: compileResult.failedCount,
+                        });
+                        isStartingRef.current = false;
+                        return;
+                    }
+
+                    // Step 2: Inject compiled modules
+                    setCompileStatus({
+                        state: 'injecting',
+                        message: 'Registering classes...',
+                        compiledCount: compileResult.compiledCount,
+                    });
+                    await scriptCompiler.injectCompiledModules();
+
+                    // Step 3: Load scene
+                    setCompileStatus({
+                        state: 'loading',
+                        message: 'Loading scene...',
+                        compiledCount: compileResult.compiledCount,
+                    });
+
+                    const loadSuccess = await engine.loadSceneFromFile(scenePath);
+                    if (!loadSuccess) {
+                        setCompileStatus({ state: 'error', message: 'Failed to load scene' });
+                        isStartingRef.current = false;
+                        return;
+                    }
+
+                    // Step 4: Running
+                    setCompileStatus({
+                        state: 'running',
+                        message: 'Game running',
+                        compiledCount: compileResult.compiledCount,
+                    });
+                    engine.play();
+                    isStartingRef.current = false;
+
+                } catch (error) {
+                    console.error('[GameViewport] Failed to start game:', error);
+                    setCompileStatus({ state: 'error', message: String(error) });
+                    isStartingRef.current = false;
+                }
+            };
+
+            startGame();
+        } else if (!isPlaying) {
+            isStartingRef.current = false;
+            if (compileStatus.state === 'running') {
+                engine.stop();
+            }
+            setCompileStatus({ state: 'idle' });
+            scriptCompiler.clearCache().catch(console.error);
         }
-    }, [isPlaying, isEngineReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mode, isPlaying, projectPath, scenePath]);
 
-    // Update engine state display
+    // Reload game
+    const handleReloadGame = useCallback(async () => {
+        if (!projectPath || !scenePath) return;
+        engine.stop();
+        await scriptCompiler.clearCache();
+        setCompileStatus({ state: 'idle' });
+    }, [projectPath, scenePath, engine, scriptCompiler]);
+
+    // Update FPS display
     useEffect(() => {
-        if (!isPlaying || !engineRef.current) return;
+        if (mode !== 'game' || !isPlaying) return;
 
         const interval = setInterval(() => {
-            if (engineRef.current) {
-                const state = engineRef.current.getState();
-                setEngineState({ fps: state.fps, frameCount: state.frameCount });
-            }
+            setEngineState(prev => ({ ...prev, frameCount: prev.frameCount + 1 }));
         }, 100);
 
         return () => clearInterval(interval);
-    }, [isPlaying]);
+    }, [mode, isPlaying]);
 
-    // Sync active tool to engine
-    useEffect(() => {
-        if (engineRef.current && isEngineReady) {
-            engineRef.current.setActiveTool(activeTool);
-        }
-    }, [activeTool, isEngineReady]);
+    // Handle node selection
+    const handleSelectNode = useCallback((nodeId: string | null) => {
+        engine.selectNode(nodeId);
+        onSelectNode?.(nodeId);
+    }, [engine, onSelectNode]);
 
-    // Get canvas-relative coordinates
-    const getCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return { x: 0, y: 0 };
+    // Reset camera
+    const handleResetCamera = useCallback(() => {
+        engine.resetEditorCamera();
+    }, [engine]);
 
-        const rect = canvas.getBoundingClientRect();
-        return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-        };
-    }, []);
-
-    // Mouse down handler
-    const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (mode !== 'scene' || !engineRef.current || !isEngineReady) return;
-
-        const coords = getCanvasCoords(e);
-
-        // First check if we hit a gizmo handle
-        const gizmoHandle = engineRef.current.hitTestGizmo(coords.x, coords.y);
-        if (gizmoHandle !== 'none') {
-            activeGizmoHandleRef.current = gizmoHandle;
-            isDraggingRef.current = true;
-            dragStartRef.current = coords;
-
-            const selectedId = engineRef.current.getSelectedObjectId();
-            if (selectedId !== null) {
-                const objects = engineRef.current.getObjects();
-                const obj = objects.find(o => o.id === selectedId);
-                if (obj) {
-                    selectedObjectRef.current = obj;
-                    dragObjectStartRef.current = {
-                        x: obj.x,
-                        y: obj.y,
-                        width: obj.width,
-                        height: obj.height,
-                        rotation: obj.rotation
-                    };
-                }
-            }
-            return;
-        }
-
-        // Hit test objects
-        const hitObject = engineRef.current.hitTest(coords.x, coords.y);
-
-        // Select object
-        engineRef.current.selectObject(hitObject?.id ?? null);
-        selectedObjectRef.current = hitObject;
-        onSelectObject?.(hitObject);
-
-        // Start drag if using move tool and hit an object
-        if (hitObject && (activeTool === 'move' || activeTool === 'select')) {
-            isDraggingRef.current = true;
-            activeGizmoHandleRef.current = 'xy';
-            dragStartRef.current = coords;
-            dragObjectStartRef.current = {
-                x: hitObject.x,
-                y: hitObject.y,
-                width: hitObject.width,
-                height: hitObject.height,
-                rotation: hitObject.rotation
-            };
-        }
-    }, [mode, isEngineReady, activeTool, getCanvasCoords, onSelectObject]);
-
-    // Mouse move handler
-    const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!isDraggingRef.current || !engineRef.current || !selectedObjectRef.current) return;
-
-        const coords = getCanvasCoords(e);
-        const dx = coords.x - dragStartRef.current.x;
-        const dy = coords.y - dragStartRef.current.y;
-        const handle = activeGizmoHandleRef.current;
-        const objId = selectedObjectRef.current.id;
-
-        switch (handle) {
-            case 'x':
-                // Move only along X axis
-                engineRef.current.updateObject(objId, {
-                    x: dragObjectStartRef.current.x + dx
-                });
-                break;
-            case 'y':
-                // Move only along Y axis (screen Y is inverted)
-                engineRef.current.updateObject(objId, {
-                    y: dragObjectStartRef.current.y - dy
-                });
-                break;
-            case 'xy':
-                // Move along both axes
-                engineRef.current.updateObject(objId, {
-                    x: dragObjectStartRef.current.x + dx,
-                    y: dragObjectStartRef.current.y - dy
-                });
-                break;
-            case 'rotate': {
-                // Calculate rotation based on angle from center
-                const objScreen = engineRef.current.worldToScreen(
-                    dragObjectStartRef.current.x,
-                    dragObjectStartRef.current.y
-                );
-                const startAngle = Math.atan2(
-                    dragStartRef.current.y - objScreen.y,
-                    dragStartRef.current.x - objScreen.x
-                );
-                const currentAngle = Math.atan2(
-                    coords.y - objScreen.y,
-                    coords.x - objScreen.x
-                );
-                const deltaAngle = (currentAngle - startAngle) * 180 / Math.PI;
-                engineRef.current.updateObject(objId, {
-                    rotation: dragObjectStartRef.current.rotation - deltaAngle
-                });
-                break;
-            }
-            case 'scale-x':
-                // Scale width only
-                engineRef.current.updateObject(objId, {
-                    width: Math.max(10, dragObjectStartRef.current.width + dx * 2)
-                });
-                break;
-            case 'scale-y':
-                // Scale height only (screen Y inverted)
-                engineRef.current.updateObject(objId, {
-                    height: Math.max(10, dragObjectStartRef.current.height - dy * 2)
-                });
-                break;
-            case 'scale-xy': {
-                // Uniform scale
-                const scale = 1 + (dx - dy) / 100;
-                engineRef.current.updateObject(objId, {
-                    width: Math.max(10, dragObjectStartRef.current.width * scale),
-                    height: Math.max(10, dragObjectStartRef.current.height * scale)
-                });
-                break;
-            }
-        }
-    }, [getCanvasCoords]);
-
-    // Mouse up handler
-    const handleMouseUp = useCallback(() => {
-        isDraggingRef.current = false;
-        activeGizmoHandleRef.current = 'none';
-    }, []);
-
-    // Get cursor style based on active tool
-    const getCursorStyle = useCallback((): string => {
-        if (mode !== 'scene') return 'default';
-        switch (activeTool) {
-            case 'move': return 'move';
-            case 'rotate': return 'crosshair';
-            case 'scale': return 'nwse-resize';
-            default: return 'default';
-        }
-    }, [mode, activeTool]);
-
+    // Fullscreen
     const handleMaximize = useCallback(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -344,44 +294,65 @@ export function GameViewport({
         }
     }, []);
 
+    const isGameMode = mode === 'game';
+    const isSceneMode = mode === 'scene';
+
     return (
         <div className="game-viewport" ref={containerRef}>
+            {/* Toolbar */}
             <div className="viewport-toolbar">
                 <div className="viewport-toolbar-left">
-                    <span className="viewport-mode">{mode === 'scene' ? 'Scene' : 'Game'}</span>
+                    <span className="viewport-mode">{isSceneMode ? 'Scene' : 'Game'}</span>
                 </div>
                 <div className="viewport-toolbar-center">
-                    {mode === 'game' && (
+                    {isGameMode && (
                         <>
                             <button
                                 className={`viewport-btn ${isPlaying ? '' : 'active'}`}
-                                onClick={isPlaying ? onPause : onPlay}
-                                title={isPlaying ? 'Pause' : 'Play'}
+                                onClick={isPlaying ? onStop : onPlay}
+                                title={isPlaying ? 'Stop' : 'Play'}
+                                disabled={compileStatus.state === 'compiling' || compileStatus.state === 'injecting' || compileStatus.state === 'loading'}
                             >
-                                {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                                {compileStatus.state === 'compiling' || compileStatus.state === 'injecting' || compileStatus.state === 'loading' ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : isPlaying ? (
+                                    <Square size={14} />
+                                ) : (
+                                    <Play size={14} />
+                                )}
                             </button>
-                            <button
-                                className="viewport-btn"
-                                onClick={onStop}
-                                title="Stop"
-                                disabled={!isPlaying}
-                            >
-                                <Square size={14} />
-                            </button>
+                            {isPlaying && compileStatus.state === 'running' && (
+                                <button
+                                    className="viewport-btn"
+                                    onClick={handleReloadGame}
+                                    title="Reload"
+                                >
+                                    <RefreshCw size={14} />
+                                </button>
+                            )}
                         </>
                     )}
                 </div>
                 <div className="viewport-toolbar-right">
-                    {mode === 'scene' && (
-                        <button
-                            className={`viewport-btn ${showGrid ? 'active' : ''}`}
-                            onClick={() => setShowGrid(!showGrid)}
-                            title="Toggle Grid"
-                        >
-                            <Grid size={14} />
-                        </button>
+                    {isSceneMode && (
+                        <>
+                            <button
+                                className={`viewport-btn ${showGrid ? 'active' : ''}`}
+                                onClick={() => setShowGrid(!showGrid)}
+                                title="Toggle Grid"
+                            >
+                                <Grid size={14} />
+                            </button>
+                            <button
+                                className="viewport-btn"
+                                onClick={handleResetCamera}
+                                title="Reset Camera"
+                            >
+                                <RotateCcw size={14} />
+                            </button>
+                        </>
                     )}
-                    {mode === 'game' && isPlaying && (
+                    {isGameMode && isPlaying && (
                         <span className="viewport-fps">FPS: {engineState.fps}</span>
                     )}
                     <button
@@ -394,25 +365,129 @@ export function GameViewport({
                     <span className="viewport-size">{canvasSize.width} x {canvasSize.height}</span>
                 </div>
             </div>
+
+            {/* Canvas area - single container for both modes */}
             <div className="viewport-canvas-container">
-                <canvas
-                    ref={canvasRef}
-                    className="viewport-canvas"
-                    style={{ cursor: getCursorStyle() }}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                />
-                {!isEngineReady && (
-                    <div className="viewport-overlay">
-                        <span className="viewport-status">
-                            {mode === 'scene'
-                                ? 'Scene View - ccesengine integration pending'
-                                : 'Game View - Press Play to start'}
-                        </span>
-                    </div>
-                )}
+                <div
+                    className="viewport-canvas-wrapper"
+                    ref={canvasContainerRef}
+                    style={{ position: 'relative', width: '100%', height: '100%' }}
+                >
+                    {/* Gizmo overlay for Scene mode */}
+                    {isSceneMode && isEngineReady && (
+                        <GizmoOverlay
+                            width={canvasSize.width}
+                            height={canvasSize.height}
+                            activeTool={activeTool}
+                            showGrid={showGrid}
+                            onSelectNode={handleSelectNode}
+                        />
+                    )}
+
+                    {/* Loading overlay */}
+                    {!isEngineReady && !engineError && (
+                        <div className="viewport-overlay">
+                            <Loader2 size={24} className="animate-spin" />
+                            <span className="viewport-status">Initializing engine...</span>
+                        </div>
+                    )}
+
+                    {/* Engine error overlay */}
+                    {engineError && (
+                        <div className="viewport-overlay viewport-error">
+                            <AlertCircle size={24} />
+                            <span className="viewport-status">Engine Error</span>
+                            <span className="viewport-status-detail">{engineError}</span>
+                        </div>
+                    )}
+
+                    {/* Scene mode loading overlays */}
+                    {isSceneMode && isEngineReady && (
+                        <>
+                            {sceneLoadStatus.state === 'compiling' && (
+                                <div className="viewport-overlay">
+                                    <Loader2 size={24} className="animate-spin" />
+                                    <span className="viewport-status">Compiling scripts...</span>
+                                </div>
+                            )}
+
+                            {sceneLoadStatus.state === 'loading' && (
+                                <div className="viewport-overlay">
+                                    <Loader2 size={24} className="animate-spin" />
+                                    <span className="viewport-status">Loading scene...</span>
+                                </div>
+                            )}
+
+                            {sceneLoadStatus.state === 'error' && (
+                                <div className="viewport-overlay viewport-error">
+                                    <AlertCircle size={24} />
+                                    <span className="viewport-status">Scene Load Error</span>
+                                    <span className="viewport-status-detail">{sceneLoadStatus.message}</span>
+                                </div>
+                            )}
+
+                            {!scenePath && sceneLoadStatus.state === 'idle' && (
+                                <div className="viewport-overlay">
+                                    <span className="viewport-status">Double-click a scene file to open</span>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Game mode overlays */}
+                    {isGameMode && (
+                        <>
+                            {compileStatus.state === 'compiling' && (
+                                <div className="viewport-overlay">
+                                    <Loader2 size={24} className="animate-spin" />
+                                    <span className="viewport-status">Compiling scripts...</span>
+                                </div>
+                            )}
+
+                            {compileStatus.state === 'injecting' && (
+                                <div className="viewport-overlay">
+                                    <Loader2 size={24} className="animate-spin" />
+                                    <span className="viewport-status">
+                                        Registering {compileStatus.compiledCount} classes...
+                                    </span>
+                                </div>
+                            )}
+
+                            {compileStatus.state === 'loading' && (
+                                <div className="viewport-overlay">
+                                    <Loader2 size={24} className="animate-spin" />
+                                    <span className="viewport-status">Loading scene...</span>
+                                </div>
+                            )}
+
+                            {compileStatus.state === 'error' && (
+                                <div className="viewport-overlay viewport-error">
+                                    <AlertCircle size={24} />
+                                    <span className="viewport-status">{compileStatus.message}</span>
+                                    {compileStatus.failedCount && (
+                                        <span className="viewport-status-detail">
+                                            {compileStatus.compiledCount} compiled, {compileStatus.failedCount} failed
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {!isPlaying && compileStatus.state === 'idle' && (
+                                <div className="viewport-overlay">
+                                    <Play size={24} />
+                                    <span className="viewport-status">Press Play to compile and run</span>
+                                </div>
+                            )}
+
+                            {compileStatus.state === 'running' && (
+                                <div className="viewport-running-status">
+                                    <span className="status-dot"></span>
+                                    <span>Running ({compileStatus.compiledCount} scripts)</span>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );

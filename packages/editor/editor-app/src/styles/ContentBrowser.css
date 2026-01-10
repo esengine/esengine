@@ -198,6 +198,20 @@
     border-radius: 4px;
 }
 
+/* 正在被拖拽的资源项 | Asset item being dragged */
+.cb-asset-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.cb-asset-item[draggable="true"] {
+    cursor: grab;
+}
+
+.cb-asset-item[draggable="true"]:active {
+    cursor: grabbing;
+}
+
 /* ==================== Right Panel - Content Area ==================== */
 .content-browser-right {
     flex: 1;
@@ -546,7 +560,8 @@
 }
 
 /* Empty State | 空状态 */
-.cb-empty {
+.cb-empty,
+.cb-empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -914,13 +929,20 @@
 }
 
 /* Spinning animation for loading */
-.cb-asset-expand-btn .spinning {
+.cb-asset-expand-btn .spinning,
+.spinning {
     animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+/* Disabled button state */
+.cb-toolbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Grid view adjustments for expandable items */

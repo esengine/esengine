@@ -11,6 +11,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "sync:ccesengine": "node scripts/sync-ccesengine.mjs",
+    "build:ccesengine": "node scripts/sync-ccesengine.mjs --build",
+    "prebuild": "node scripts/sync-ccesengine.mjs",
     "version": "node scripts/sync-version.js && git add src-tauri/tauri.conf.json"
   },
   "dependencies": {
@@ -38,6 +41,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@swc/cli": "^0.5.2",
     "@swc/core": "^1.13.5",
     "@tauri-apps/cli": "^2.2.0",
     "@tauri-apps/plugin-updater": "^2.9.0",

@@ -99,12 +99,40 @@
     overflow: hidden;
 }
 
+/* ccesengine DOM structure */
+.viewport-game-frame,
+#GameDiv {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.viewport-game-container,
+#Cocos3dGameContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Scene canvas uses CSS sizing (placeholder renderer) */
 .viewport-canvas {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+}
+
+/* Game canvas uses pixel sizing (ccesengine controls size) */
+#GameCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Don't use CSS width/height - let ccesengine control canvas size */
 }
 
 .viewport-overlay {
@@ -114,9 +142,12 @@
     right: 0;
     bottom: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     pointer-events: none;
+    background: rgba(0, 0, 0, 0.3);
 }
 
 .viewport-status {
@@ -124,5 +155,65 @@
     background: rgba(0, 0, 0, 0.6);
     border-radius: 4px;
     font-size: 12px;
+    color: #cccccc;
+}
+
+.viewport-status-detail {
+    font-size: 10px;
     color: #858585;
+}
+
+.viewport-error {
+    background: rgba(180, 50, 50, 0.2);
+}
+
+.viewport-error .viewport-status {
+    background: rgba(180, 50, 50, 0.8);
+    color: #ffffff;
+}
+
+/* Running status bar */
+.viewport-running-status {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(0, 128, 0, 0.8);
+    border-radius: 4px;
+    font-size: 10px;
+    color: #ffffff;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: #4cff4c;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Spinning animation for Loader2 icon */
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.4;
+    }
 }

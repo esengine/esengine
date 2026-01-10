@@ -100,6 +100,11 @@ fn main() {
             commands::stop_watch_scripts,
             commands::check_environment,
             commands::install_esbuild,
+            // SWC compilation | SWC 编译
+            commands::compile_with_swc,
+            commands::batch_compile_with_swc,
+            commands::check_swc_environment,
+            commands::install_swc,
             // Build commands | 构建命令
             commands::prepare_build_directory,
             commands::copy_directory,
@@ -115,6 +120,9 @@ fn main() {
             commands::read_engine_modules_index,
             commands::read_module_manifest,
             commands::get_engine_modules_base_path,
+            // Effect compiler | 效果编译器
+            commands::compile_effect,
+            commands::compile_builtin_effects,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

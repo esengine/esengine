@@ -19,11 +19,6 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "bin/**", "pkg/**"]
     },
-    "copy-modules": {
-      "dependsOn": ["build"],
-      "outputs": ["packages/editor-app/dist/engine/**"],
-      "cache": false
-    },
     "type-check": {
       "dependsOn": ["^build"],
       "outputs": []

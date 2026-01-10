@@ -4,59 +4,7 @@ import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import fs from 'fs';
 import path from 'path';
-
-function copyPluginModulesPlugin(): Plugin {
-  const modulePaths = [
-    { name: 'editor-runtime', path: path.resolve(__dirname, '../editor-runtime/dist') },
-    { name: 'behavior-tree', path: path.resolve(__dirname, '../behavior-tree/dist') },
-  ];
-
-  /**
-   * 递归复制目录中的 JS 文件
-   */
-  function copyJsFilesRecursively(srcDir: string, destDir: string, relativePath: string = '') {
-    const entries = fs.readdirSync(srcDir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const srcPath = path.join(srcDir, entry.name);
-      const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-
-      if (entry.isDirectory()) {
-        // 递归复制子目录
-        const subDestDir = path.join(destDir, entry.name);
-        if (!fs.existsSync(subDestDir)) {
-          fs.mkdirSync(subDestDir, { recursive: true });
-        }
-        copyJsFilesRecursively(srcPath, subDestDir, relPath);
-      } else if (entry.name.endsWith('.js')) {
-        // 复制 JS 文件
-        const destPath = path.join(destDir, entry.name);
-        fs.copyFileSync(srcPath, destPath);
-        console.log(`[copy-plugin-modules] Copied ${relPath}`);
-      }
-    }
-  }
-
-  return {
-    name: 'copy-plugin-modules',
-    writeBundle(options) {
-      const outDir = options.dir || 'dist';
-      const assetsDir = path.join(outDir, 'assets');
-
-      if (!fs.existsSync(assetsDir)) {
-        fs.mkdirSync(assetsDir, { recursive: true });
-      }
-
-      for (const mod of modulePaths) {
-        if (!fs.existsSync(mod.path)) {
-          console.warn(`[copy-plugin-modules] ${mod.name} dist not found: ${mod.path}`);
-          continue;
-        }
-        copyJsFilesRecursively(mod.path, assetsDir);
-      }
-    }
-  };
-}
+import type { Connect } from 'vite';
 
 /**
  * Plugin to copy engine modules after each build.
@@ -499,15 +447,439 @@ function scanNodeModulesForWasm(nodeModulesDir: string) {
 
 detectWasmPackages();
 
+/**
+ * Plugin to serve engine editor assets from engine/editor/assets directory.
+ * 插件：从 engine/editor/assets 目录提供引擎编辑器资源服务。
+ *
+ * In dev mode: serves via middleware
+ * In build mode: copies assets to dist/engine-assets/
+ */
+function serveEngineEditorAssets(): Plugin {
+  // Engine editor assets path (relative to project root)
+  const engineAssetsPath = path.resolve(__dirname, '../../../engine/editor/assets');
+
+  /**
+   * Recursively copy directory with specific file patterns
+   */
+  function copyDirFiltered(srcDir: string, destDir: string, patterns: string[]): void {
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const srcPath = path.join(srcDir, entry.name);
+      const destPath = path.join(destDir, entry.name);
+
+      if (entry.isDirectory()) {
+        // Always recurse into directories
+        copyDirFiltered(srcPath, destPath, patterns);
+      } else if (entry.isFile()) {
+        // Only copy files matching patterns
+        const ext = path.extname(entry.name).toLowerCase();
+        if (patterns.some(p => entry.name.endsWith(p))) {
+          fs.copyFileSync(srcPath, destPath);
+        }
+      }
+    }
+  }
+
+  return {
+    name: 'serve-engine-editor-assets',
+
+    // For dev server: add middleware
+    configureServer(server) {
+      // Add middleware to serve engine editor assets under /engine-assets/
+      server.middlewares.use('/engine-assets', (req, res, next) => {
+        if (!req.url) {
+          next();
+          return;
+        }
+
+        const filePath = path.join(engineAssetsPath, decodeURIComponent(req.url));
+
+        // Security: ensure path is within engine assets directory
+        if (!filePath.startsWith(engineAssetsPath)) {
+          res.statusCode = 403;
+          res.end('Forbidden');
+          return;
+        }
+
+        fs.stat(filePath, (err, stats) => {
+          if (err || !stats.isFile()) {
+            next();
+            return;
+          }
+
+          // Set content type based on extension
+          const ext = path.extname(filePath).toLowerCase();
+          const contentTypes: Record<string, string> = {
+            '.json': 'application/json',
+            '.meta': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.hdr': 'application/octet-stream',
+          };
+          res.setHeader('Content-Type', contentTypes[ext] || 'application/octet-stream');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+
+          const stream = fs.createReadStream(filePath);
+          stream.pipe(res);
+        });
+      });
+
+      console.log(`[serve-engine-editor-assets] Serving engine assets from: ${engineAssetsPath}`);
+    },
+
+    // For production build: copy assets to dist
+    writeBundle(options) {
+      const outDir = options.dir || 'dist';
+      const destDir = path.join(outDir, 'engine-assets');
+
+      // Only copy specific subdirectories needed by the editor
+      const assetDirs = ['default_skybox', 'default_ui'];
+      const filePatterns = ['.png', '.jpg', '.jpeg', '.hdr', '.meta', '.json'];
+
+      let copiedCount = 0;
+      for (const dir of assetDirs) {
+        const srcPath = path.join(engineAssetsPath, dir);
+        const destPath = path.join(destDir, dir);
+
+        if (fs.existsSync(srcPath)) {
+          copyDirFiltered(srcPath, destPath, filePatterns);
+          copiedCount++;
+        }
+      }
+
+      if (copiedCount > 0) {
+        console.log(`[serve-engine-editor-assets] Copied ${copiedCount} asset directories to ${destDir}`);
+      }
+    }
+  };
+}
+
+/**
+ * Plugin to handle ccesengine PREVIEW mode requests.
+ * 处理 ccesengine PREVIEW 模式的请求。
+ *
+ * PREVIEW mode uses:
+ * 1. /engine_external/?url=<path> for WASM files
+ * 2. virtual:///prerequisite-imports/<bundle> for bundle prerequisites
+ */
+function serveCcesenginePreviewMode(): Plugin {
+  const ccesengineDir = path.resolve(__dirname, 'public/ccesengine');
+
+  return {
+    name: 'serve-ccesengine-preview-mode',
+
+    configureServer(server) {
+      // Handle /engine_external/?url=<path> requests for WASM and other assets
+      // Must be registered early to intercept before Vite's default handlers
+      server.middlewares.use((req, res, next) => {
+        // Only handle /engine_external/ requests
+        if (!req.url || !req.url.startsWith('/engine_external/')) {
+          next();
+          return;
+        }
+
+        console.log(`[engine_external] Request: ${req.url}`);
+
+        // Parse the url parameter from the full URL
+        const fullUrl = new URL(req.url, 'http://localhost');
+        const assetPath = fullUrl.searchParams.get('url');
+
+        if (!assetPath) {
+          console.warn(`[engine_external] Missing url parameter: ${req.url}`);
+          res.statusCode = 400;
+          res.end('Missing url parameter');
+          return;
+        }
+
+        // Construct the file path - assets are in public/ccesengine/
+        const filePath = path.join(ccesengineDir, assetPath);
+
+        console.log(`[engine_external] Loading: ${assetPath} -> ${filePath}`);
+
+        // Security: ensure path is within ccesengine directory
+        const normalizedPath = path.normalize(filePath);
+        if (!normalizedPath.startsWith(ccesengineDir)) {
+          res.statusCode = 403;
+          res.end('Forbidden');
+          return;
+        }
+
+        fs.stat(filePath, (err, stats) => {
+          if (err || !stats.isFile()) {
+            console.warn(`[engine_external] File not found: ${assetPath} (${filePath})`);
+            res.statusCode = 404;
+            res.end(`File not found: ${assetPath}`);
+            return;
+          }
+
+          // Set content type based on extension
+          const ext = path.extname(filePath).toLowerCase();
+          const contentTypes: Record<string, string> = {
+            '.wasm': 'application/wasm',
+            '.js': 'application/javascript',
+            '.json': 'application/json',
+            '.bin': 'application/octet-stream',
+            '.mem': 'application/octet-stream',
+          };
+          res.setHeader('Content-Type', contentTypes[ext] || 'application/octet-stream');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+
+          console.log(`[engine_external] Serving: ${assetPath} (${ext})`);
+          const stream = fs.createReadStream(filePath);
+          stream.pipe(res);
+        });
+      });
+
+      console.log(`[ccesengine-preview] Serving /engine_external/ from: ${ccesengineDir}`);
+    },
+
+    // Handle virtual:///prerequisite-imports/ requests at dev time
+    // This is used by ccesengine bundle system - return empty module since we don't use bundles
+    resolveId(id) {
+      if (id.startsWith('virtual:///prerequisite-imports/')) {
+        return id;
+      }
+      return null;
+    },
+
+    load(id) {
+      if (id.startsWith('virtual:///prerequisite-imports/')) {
+        // Return empty module - we don't use bundle prerequisites in editor
+        return 'export default {};';
+      }
+      return null;
+    },
+  };
+}
+
+/**
+ * Plugin to serve project files (library, assets) via HTTP.
+ * 通过 HTTP 提供项目文件服务（library、assets）。
+ *
+ * This replaces the problematic asset:// protocol with HTTP endpoints.
+ * 用 HTTP 端点替代有问题的 asset:// 协议。
+ *
+ * URL format: /__project__/<drive>/<path>
+ * Example: /__project__/F/ecs-framework/examples/demo/library/imports/xx/uuid.json
+ *
+ * This path-based format allows ccesengine to append path segments correctly.
+ *
+ * ccesengine appends version hash to UUIDs: uuid@hash
+ * Actual files are stored as uuid.json (for imports) or uuid.bin (for native)
+ * ccesengine 会在 UUID 后追加版本哈希：uuid@hash
+ * 实际文件存储为 uuid.json（imports）或 uuid.bin（native）
+ */
+function serveProjectFilesPlugin(): Plugin {
+  return {
+    name: 'serve-project-files',
+
+    configureServer(server) {
+      // Serve project files from /__project__/<drive>/<path>
+      // Windows path F:/foo/bar becomes /__project__/F/foo/bar
+      // NOTE: Don't use path prefix in .use() - check URL inside handler instead
+      // 注意：不要在 .use() 中使用路径前缀 - 在 handler 内部检查 URL
+      server.middlewares.use(((req, res, next) => {
+        if (!req.url || !req.url.startsWith('/__project__/')) {
+          next();
+          return;
+        }
+
+        // Remove /__project__ prefix and query string
+        let urlPath = req.url.substring('/__project__'.length).split('?')[0];
+        if (urlPath.startsWith('/')) {
+          urlPath = urlPath.substring(1);
+        }
+
+        console.log(`[serve-project-files] Request: ${req.url.substring(0, 100)}...`);
+
+        // Decode URL-encoded characters
+        urlPath = decodeURIComponent(urlPath);
+
+        // Convert back to Windows path: F/foo/bar -> F:/foo/bar
+        // The first segment is the drive letter
+        let filePath = urlPath.replace(/^([A-Za-z])\//, '$1:/');
+
+        if (!filePath) {
+          res.statusCode = 400;
+          res.end('Invalid path');
+          return;
+        }
+
+        // Handle ccesengine asset URLs: uuid@hash -> uuid@hash.json
+        // Cocos Creator 3.x library format stores files WITH the hash in filename
+        // Example: bd1bcaba-bd7d-4a71-b143-997c882383e4@f9941.json
+        // 处理 ccesengine 资源 URL：uuid@hash -> uuid@hash.json
+        // Cocos Creator 3.x 库格式在文件名中保留哈希
+        const hasExtension = /\.[a-z0-9]+$/i.test(filePath);
+        if (!hasExtension && filePath.includes('/library/')) {
+          // Try common extensions in order of likelihood
+          const extensions = ['.json', '.png', '.jpg', '.jpeg', '.webp', '.bin', '.mp3', '.ogg', '.wav', '.ttf', '.woff', '.woff2'];
+          let found = false;
+          for (const ext of extensions) {
+            const testPath = filePath + ext;
+            if (fs.existsSync(testPath)) {
+              filePath = testPath;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            // Default to .json for library assets
+            filePath = filePath + '.json';
+          }
+        }
+
+        fs.stat(filePath, (err, stats) => {
+          if (err || !stats.isFile()) {
+            console.warn(`[serve-project-files] File not found: ${filePath}`);
+            res.statusCode = 404;
+            res.end(`File not found: ${filePath}`);
+            return;
+          }
+
+          // Set content type based on extension
+          const ext = path.extname(filePath).toLowerCase();
+          const contentTypes: Record<string, string> = {
+            '.json': 'application/json',
+            '.bin': 'application/octet-stream',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
+            '.mp3': 'audio/mpeg',
+            '.ogg': 'audio/ogg',
+            '.wav': 'audio/wav',
+            '.ttf': 'font/ttf',
+            '.woff': 'font/woff',
+            '.woff2': 'font/woff2',
+          };
+          res.setHeader('Content-Type', contentTypes[ext] || 'application/octet-stream');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+
+          const stream = fs.createReadStream(filePath);
+          stream.on('error', () => {
+            res.statusCode = 500;
+            res.end('Error reading file');
+          });
+          stream.pipe(res);
+        });
+      }) as Connect.NextHandleFunction);
+
+      console.log('[serve-project-files] Serving project files at /__project__/<drive>/<path>');
+    },
+  };
+}
+
+/**
+ * Plugin to patch ccesengine files to work in non-Cocos-Creator environment.
+ * 修补 ccesengine 文件以在非 Cocos Creator 环境中工作。
+ *
+ * Patches applied at runtime (not modifying built files):
+ * 1. cce://internal/x/prerequisite-imports -> /prerequisite-imports
+ * 2. _loadCCEScripts -> return empty (skip cce:// protocol)
+ * 3. virtual:///prerequisite-imports -> skip in bundle creation
+ * 4. WASM loading path: /engine_external/?url= -> /ccesengine/
+ */
+function patchCcesenginePlugin(): Plugin {
+  const ccesengineDir = path.resolve(__dirname, 'public/ccesengine');
+
+  return {
+    name: 'patch-ccesengine',
+    enforce: 'pre',
+
+    configureServer(server) {
+      // Handle /prerequisite-imports requests - return empty module
+      server.middlewares.use('/prerequisite-imports', ((req, res) => {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.end('export default {};');
+      }) as Connect.NextHandleFunction);
+
+      // Intercept ALL ccesengine JS files and apply patches BEFORE Vite serves them
+      // NOT returning a function means this runs BEFORE Vite's internal handlers
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || !req.url.startsWith('/ccesengine/')) {
+          next();
+          return;
+        }
+
+        // Remove query string for file lookup
+        const urlPath = req.url.split('?')[0];
+
+        // Only process JS files
+        if (!urlPath.endsWith('.js')) {
+          next();
+          return;
+        }
+
+        // urlPath is /ccesengine/xxx.js, need to remove /ccesengine prefix
+        const relativePath = urlPath.replace('/ccesengine', '');
+        const filePath = path.join(ccesengineDir, relativePath);
+
+        // Security check
+        const normalizedPath = path.normalize(filePath);
+        if (!normalizedPath.startsWith(ccesengineDir)) {
+          next();
+          return;
+        }
+
+        fs.readFile(filePath, 'utf-8', (err, content) => {
+          if (err) {
+            next();
+            return;
+          }
+
+          let patched = content;
+
+          // Patch 1: Replace cce:// protocol URLs with HTTP endpoint
+          // This handles the _loadCCEScripts function which imports 'cce:/internal/x/prerequisite-imports'
+          if (patched.includes('cce:/internal/x/prerequisite-imports')) {
+            patched = patched.replace(
+              /['"]cce:\/internal\/x\/prerequisite-imports['"]/g,
+              '"/prerequisite-imports"'
+            );
+          }
+
+          // Patch 2: Skip virtual:///prerequisite-imports in bundle creation
+          // Look for bundle.create calls that try to load prerequisite-imports
+          if (patched.includes('virtual:///prerequisite-imports')) {
+            // Replace dynamic import of virtual modules with immediate resolution
+            patched = patched.replace(
+              /import\s*\(\s*['"]virtual:\/\/\/prerequisite-imports\/[^'"]*['"]\s*\)/g,
+              'Promise.resolve({})'
+            );
+          }
+
+          // Note: WASM loading uses /engine_external/?url= which is handled by
+          // serveCcesenginePreviewMode middleware - no patching needed
+
+          res.setHeader('Content-Type', 'application/javascript');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.end(patched);
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    patchCcesenginePlugin(),
+    serveProjectFilesPlugin(),
     wasm(),
     topLevelAwait(),
     ...react({
       tsDecorators: true,
     }),
-    copyPluginModulesPlugin(),
     copyEngineModulesPlugin(),
+    serveEngineEditorAssets(),
+    serveCcesenginePreviewMode(),
   ],
   clearScreen: false,
   server: {
@@ -530,6 +902,10 @@ export default defineConfig({
     target: 'es2021',
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      // Externalize ccesengine - loaded at runtime from public folder
+      external: [/^\/ccesengine\/.*/],
+    },
   },
   esbuild: {
     // 保留类名和函数名，用于跨包插件服务匹配

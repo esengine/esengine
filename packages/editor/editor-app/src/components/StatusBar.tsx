@@ -3,7 +3,12 @@ import { FolderOpen, Terminal, ChevronDown, ChevronUp, X, LayoutGrid } from 'luc
 import { ContentBrowser } from './ContentBrowser';
 import '../styles/StatusBar.css';
 
-export function StatusBar() {
+interface StatusBarProps {
+    projectPath?: string;
+    onOpenScene?: (scenePath: string) => void;
+}
+
+export function StatusBar({ projectPath, onOpenScene }: StatusBarProps) {
     const [contentDrawerOpen, setContentDrawerOpen] = useState(false);
     const [outputDrawerOpen, setOutputDrawerOpen] = useState(false);
     const [drawerHeight, setDrawerHeight] = useState(300);
@@ -63,7 +68,11 @@ export function StatusBar() {
                     </div>
                 </div>
                 <div className="drawer-body">
-                    <ContentBrowser isDrawer />
+                    <ContentBrowser
+                        isDrawer
+                        projectPath={projectPath}
+                        onOpenScene={onOpenScene}
+                    />
                 </div>
             </div>
 

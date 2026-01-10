@@ -17,7 +17,12 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "typeRoots": ["@types", "node_modules/@types"],
+    "paths": {
+      "cc": ["./@types/cc.d.ts"]
+    }
   },
   "include": ["src"]
 }

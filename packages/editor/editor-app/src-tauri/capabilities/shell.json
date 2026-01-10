@@ -1,0 +1,61 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "shell-capability",
+  "description": "Shell permissions for running dev server",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "cmd",
+          "cmd": "cmd",
+          "args": true
+        },
+        {
+          "name": "pnpm",
+          "cmd": "pnpm",
+          "args": true
+        },
+        {
+          "name": "npm",
+          "cmd": "npm",
+          "args": true
+        },
+        {
+          "name": "npx",
+          "cmd": "npx",
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "cmd",
+          "cmd": "cmd",
+          "args": true
+        },
+        {
+          "name": "pnpm",
+          "cmd": "pnpm",
+          "args": true
+        },
+        {
+          "name": "npm",
+          "cmd": "npm",
+          "args": true
+        },
+        {
+          "name": "npx",
+          "cmd": "npx",
+          "args": true
+        }
+      ]
+    },
+    "shell:allow-stdin-write",
+    "shell:allow-kill"
+  ]
+}

@@ -1,20 +1,16 @@
 import { useRef, useCallback, useState, ReactNode } from 'react';
-import { Layout, Model, IJsonModel, TabNode, Actions, ITabSetRenderValues, TabSetNode, BorderNode } from 'flexlayout-react';
+import { Layout, Model, IJsonModel, TabNode } from 'flexlayout-react';
 import 'flexlayout-react/style/dark.css';
 import '../styles/DockContainer.css';
 
-interface PanelConfig {
-    id: string;
-    name: string;
-    component: ReactNode;
-    enableClose?: boolean;
-}
-
-interface DockContainerProps {
-    panels: PanelConfig[];
-    onLayoutChange?: (model: Model) => void;
-}
-
+/**
+ * @zh 默认布局配置 - 单视口架构
+ * @en Default layout config - single viewport architecture
+ *
+ * 左侧: Hierarchy
+ * 中间: Viewport (Scene/Game 共用)
+ * 右侧: Inspector
+ */
 const defaultLayout: IJsonModel = {
     global: {
         tabEnableClose: false,
@@ -54,16 +50,9 @@ const defaultLayout: IJsonModel = {
                 children: [
                     {
                         type: 'tab',
-                        id: 'scene',
-                        name: 'Scene',
-                        component: 'scene',
-                        enableClose: false,
-                    },
-                    {
-                        type: 'tab',
-                        id: 'game',
-                        name: 'Game',
-                        component: 'game',
+                        id: 'viewport',
+                        name: 'Viewport',
+                        component: 'viewport',
                         enableClose: false,
                     }
                 ]
@@ -86,29 +75,41 @@ const defaultLayout: IJsonModel = {
     }
 };
 
+/**
+ * @zh Dock 布局属性 - 单视口架构
+ * @en Dock layout props - single viewport architecture
+ */
 interface DockLayoutProps {
     hierarchyPanel: ReactNode;
-    scenePanel: ReactNode;
-    gamePanel: ReactNode;
+    viewportPanel: ReactNode;
     inspectorPanel: ReactNode;
 }
 
+// Layout version - increment when layout structure changes
+const LAYOUT_VERSION = 2;
+
 export function DockContainer({
     hierarchyPanel,
-    scenePanel,
-    gamePanel,
+    viewportPanel,
     inspectorPanel
 }: DockLayoutProps) {
     const layoutRef = useRef<Layout>(null);
     const [model] = useState(() => {
         const savedLayout = localStorage.getItem('editor-layout');
-        if (savedLayout) {
+        const savedVersion = localStorage.getItem('editor-layout-version');
+
+        // Check if layout version matches, otherwise use default
+        if (savedLayout && savedVersion === String(LAYOUT_VERSION)) {
             try {
                 return Model.fromJson(JSON.parse(savedLayout));
             } catch {
                 // If parsing fails, use default layout
             }
         }
+
+        // Clear old layout and save new version
+        localStorage.removeItem('editor-layout');
+        localStorage.setItem('editor-layout-version', String(LAYOUT_VERSION));
         return Model.fromJson(defaultLayout);
     });
 
@@ -118,26 +119,17 @@ export function DockContainer({
         switch (component) {
             case 'hierarchy':
                 return <div className="dock-panel-content">{hierarchyPanel}</div>;
-            case 'scene':
-                return <div className="dock-panel-content dock-panel-viewport">{scenePanel}</div>;
-            case 'game':
-                return <div className="dock-panel-content dock-panel-viewport">{gamePanel}</div>;
+            case 'viewport':
+                return <div className="dock-panel-content dock-panel-viewport">{viewportPanel}</div>;
             case 'inspector':
                 return <div className="dock-panel-content">{inspectorPanel}</div>;
             default:
                 return <div className="dock-panel-content">Unknown Panel: {component}</div>;
         }
-    }, [hierarchyPanel, scenePanel, gamePanel, inspectorPanel]);
+    }, [hierarchyPanel, viewportPanel, inspectorPanel]);
 
     const handleModelChange = useCallback((model: Model) => {
         localStorage.setItem('editor-layout', JSON.stringify(model.toJson()));
-    }, []);
-
-    const onRenderTabSet = useCallback((
-        tabSetNode: TabSetNode | BorderNode,
-        renderValues: ITabSetRenderValues
-    ) => {
-        // Custom tab set rendering if needed
     }, []);
 
     return (
@@ -147,7 +139,6 @@ export function DockContainer({
                 model={model}
                 factory={factory}
                 onModelChange={handleModelChange}
-                onRenderTabSet={onRenderTabSet}
             />
         </div>
     );

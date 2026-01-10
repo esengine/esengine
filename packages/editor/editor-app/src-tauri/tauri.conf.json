@@ -3,7 +3,8 @@
   "version": "1.0.14",
   "identifier": "com.esengine.editor",
   "build": {
-    "beforeDevCommand": "npm run build:watch",
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -23,7 +24,7 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
-      "webviewInstallMode": {
+    "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
     },
@@ -64,7 +65,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' tauri: project: asset: https: http: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' tauri: project: asset: https: http: blob:; style-src 'self' 'unsafe-inline' tauri: https: http:; img-src 'self' tauri: project: asset: https: http: data: blob:; connect-src 'self' tauri: project: asset: https: http: ws: wss:",
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' tauri: project: asset: https: http: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' tauri: project: asset: https: http: blob:; style-src 'self' 'unsafe-inline' tauri: https: http:; img-src 'self' tauri: project: asset: https: http: data: blob:; connect-src 'self' tauri: project: asset: https: http: ws: wss:; frame-src 'self' http://localhost:* https://localhost:* http://127.0.0.1:*",
       "assetProtocol": {
         "enable": true,
         "scope": {
@@ -126,7 +127,8 @@
             ]
           }
         },
-        "http-capability"
+        "http-capability",
+        "shell-capability"
       ]
     }
   },

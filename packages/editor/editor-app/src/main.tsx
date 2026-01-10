@@ -17,7 +17,6 @@ async function logErrorToFile(type: string, error: unknown) {
         const tempDir = await invoke<string>('get_temp_dir');
         const logPath = `${tempDir}/esengine-editor-crash.log`;
         await invoke('append_to_log', { path: logPath, content: logEntry });
-        console.log(`[Error logged to ${logPath}]`);
     } catch (e) {
         console.error('Failed to write error log:', e);
     }

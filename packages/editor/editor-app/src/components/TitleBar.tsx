@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { resetDockLayout } from './DockContainer';
 import '../styles/TitleBar.css';
 
 interface TitleBarProps {
     title?: string;
+    onOpenProject?: (path: string) => void;
 }
 
 interface MenuItem {
@@ -20,37 +22,51 @@ interface Menu {
     items: MenuItem[];
 }
 
-const menus: Menu[] = [
-    {
-        label: 'File',
-        items: [
-            { label: 'New Scene', shortcut: 'Ctrl+N', disabled: true },
-            { label: 'Open Scene', shortcut: 'Ctrl+O', disabled: true },
-            { separator: true, label: '' },
-            { label: 'Save', shortcut: 'Ctrl+S', disabled: true },
-            { label: 'Save As...', shortcut: 'Ctrl+Shift+S', disabled: true },
-        ]
-    },
-    {
-        label: 'Edit',
-        items: [
-            { label: 'Undo', shortcut: 'Ctrl+Z', disabled: true },
-            { label: 'Redo', shortcut: 'Ctrl+Y', disabled: true },
-            { separator: true, label: '' },
-            { label: 'Cut', shortcut: 'Ctrl+X', disabled: true },
-            { label: 'Copy', shortcut: 'Ctrl+C', disabled: true },
-            { label: 'Paste', shortcut: 'Ctrl+V', disabled: true },
-        ]
-    },
-    {
-        label: 'View',
-        items: [
-            { label: 'Reset Layout', action: () => resetDockLayout() },
-        ]
-    }
-];
+export function TitleBar({ title = 'ESEngine Editor', onOpenProject }: TitleBarProps) {
+    const handleOpenProject = async () => {
+        try {
+            const selectedPath = await invoke<string | null>('open_folder_dialog', {
+                title: 'Open Project Folder'
+            });
+            if (selectedPath) {
+                onOpenProject?.(selectedPath);
+            }
+        } catch (error) {
+            console.error('[TitleBar] Failed to open project:', error);
+        }
+    };
 
-export function TitleBar({ title = 'ESEngine Editor' }: TitleBarProps) {
+    const menus: Menu[] = [
+        {
+            label: 'File',
+            items: [
+                { label: 'Open Project...', action: handleOpenProject },
+                { separator: true, label: '' },
+                { label: 'New Scene', shortcut: 'Ctrl+N', disabled: true },
+                { label: 'Open Scene', shortcut: 'Ctrl+O', disabled: true },
+                { separator: true, label: '' },
+                { label: 'Save', shortcut: 'Ctrl+S', disabled: true },
+                { label: 'Save As...', shortcut: 'Ctrl+Shift+S', disabled: true },
+            ]
+        },
+        {
+            label: 'Edit',
+            items: [
+                { label: 'Undo', shortcut: 'Ctrl+Z', disabled: true },
+                { label: 'Redo', shortcut: 'Ctrl+Y', disabled: true },
+                { separator: true, label: '' },
+                { label: 'Cut', shortcut: 'Ctrl+X', disabled: true },
+                { label: 'Copy', shortcut: 'Ctrl+C', disabled: true },
+                { label: 'Paste', shortcut: 'Ctrl+V', disabled: true },
+            ]
+        },
+        {
+            label: 'View',
+            items: [
+                { label: 'Reset Layout', action: () => resetDockLayout() },
+            ]
+        }
+    ];
     const [isMaximized, setIsMaximized] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);

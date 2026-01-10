@@ -76,7 +76,11 @@
     "build:wasm": "cd packages/rust/engine && wasm-pack build --dev --out-dir pkg",
     "build:wasm:release": "cd packages/rust/engine && wasm-pack build --release --out-dir pkg",
     "build:rapier2d": "node scripts/build-rapier2d.mjs",
-    "copy-modules": "node scripts/copy-engine-modules.mjs"
+    "copy:ccesengine": "node scripts/copy-ccesengine.mjs --mode=editor",
+    "copy:ccesengine:dev": "node scripts/copy-ccesengine.mjs --mode=dev",
+    "build:ccesengine": "cd engine && npm run build:editor && cd .. && npm run copy:ccesengine",
+    "build:ccesengine:dev": "cd engine && npm run build:dev && cd .. && npm run copy:ccesengine:dev",
+    "setup:ccesengine": "git submodule update --init engine && cd engine && npm install && npm run build:editor && cd .. && npm run copy:ccesengine"
   },
   "author": "yhh",
   "license": "MIT",

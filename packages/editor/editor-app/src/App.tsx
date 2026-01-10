@@ -6,30 +6,43 @@ import { Inspector } from './components/Inspector';
 import { StatusBar } from './components/StatusBar';
 import { DockContainer } from './components/DockContainer';
 import { GameViewport } from './components/GameViewport';
-import { SceneObject } from './services/EngineService';
+import { getProjectManager } from './services/ProjectManager';
+import { getEditorEngine } from './services/engine';
 import './styles/App.css';
 
 type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
 type TransformSpace = 'local' | 'world';
 type PivotMode = 'pivot' | 'center';
+type ViewportMode = 'scene' | 'game';
 
 function App() {
-    const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
+    const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
     const [selectedEntityName, setSelectedEntityName] = useState<string>('');
     const [isPlaying, setIsPlaying] = useState(false);
     const [activeTool, setActiveTool] = useState<TransformTool>('select');
     const [transformSpace, setTransformSpace] = useState<TransformSpace>('local');
     const [pivotMode, setPivotMode] = useState<PivotMode>('pivot');
+    const [projectPath, setProjectPath] = useState<string | null>(null);
+    const [currentScenePath, setCurrentScenePath] = useState<string | null>(null);
+    /**
+     * @zh 视口模式（Scene 编辑模式 或 Game 运行模式）
+     * @en Viewport mode (Scene edit mode or Game run mode)
+     *
+     * 单视图架构：一个 canvas，通过 mode 切换行为
+     * Single viewport architecture: one canvas, behavior switches via mode
+     */
+    const [viewportMode, setViewportMode] = useState<ViewportMode>('scene');
 
-    const handleSelectEntity = useCallback((id: number) => {
-        setSelectedEntityId(id);
+    const handleSelectEntity = useCallback((uuid: string) => {
+        setSelectedEntityId(uuid);
         setSelectedEntityName('Entity');
     }, []);
 
-    const handleSelectSceneObject = useCallback((object: SceneObject | null) => {
-        if (object) {
-            setSelectedEntityId(object.id);
-            setSelectedEntityName(object.name);
+    const handleSelectNode = useCallback((nodeId: string | null) => {
+        if (nodeId) {
+            // TODO: Get node name from getSceneService()
+            setSelectedEntityId(nodeId);
+            setSelectedEntityName('Node');
         } else {
             setSelectedEntityId(null);
             setSelectedEntityName('');
@@ -37,6 +50,7 @@ function App() {
     }, []);
 
     const handlePlay = useCallback(() => {
+        setViewportMode('game');
         setIsPlaying(true);
     }, []);
 
@@ -46,6 +60,7 @@ function App() {
 
     const handleStop = useCallback(() => {
         setIsPlaying(false);
+        setViewportMode('scene');
     }, []);
 
     const toggleTransformSpace = useCallback(() => {
@@ -54,6 +69,65 @@ function App() {
 
     const togglePivotMode = useCallback(() => {
         setPivotMode(prev => prev === 'pivot' ? 'center' : 'pivot');
+    }, []);
+
+    const handleProjectOpen = useCallback(async (path: string) => {
+        setProjectPath(path);
+
+        try {
+            const projectManager = getProjectManager();
+            const engine = getEditorEngine();
+
+            const { invoke } = await import('@tauri-apps/api/core');
+            try {
+                const currentDir = await invoke<string>('get_current_dir');
+                const workspaceRoot = currentDir.replace(/[\\/]packages[\\/]editor[\\/]editor-app([\\/]src-tauri)?$/, '');
+                const enginePath = `${workspaceRoot}/engine`;
+                engine.setEngineSourcePath(enginePath);
+            } catch {
+                // Running outside Tauri, engine path will use default
+            }
+
+            await engine.init();
+
+            await projectManager.init();
+            await projectManager.openProject({ projectPath: path });
+        } catch (error) {
+            console.error('[App] Failed to open project:', error);
+        }
+    }, []);
+
+    const handleOpenScene = useCallback(async (scenePath: string) => {
+
+        const projectManager = getProjectManager();
+        const project = projectManager.getCurrentProject();
+
+        // Extract scene name from path
+        const sceneName = scenePath.split(/[/\\]/).pop()?.replace(/\.(scene|json)$/i, '') || '';
+
+        if (project?.hasEditorCache) {
+            // 编辑器模式：从 library 加载场景
+
+            const success = await projectManager.loadSceneFromLibrary(sceneName);
+            if (success) {
+                setCurrentScenePath(scenePath);
+            } else {
+                // 尝试直接加载（可能有缺失类）
+                setCurrentScenePath(scenePath);
+            }
+        } else if (project?.hasValidBuild) {
+            // 构建模式：从 bundle 加载场景
+
+            const success = await projectManager.loadScene(sceneName);
+            if (success) {
+                setCurrentScenePath(scenePath);
+            } else {
+                setCurrentScenePath(scenePath);
+            }
+        } else {
+            // 无缓存也无构建，直接加载（会有缺失类错误）
+            setCurrentScenePath(scenePath);
+        }
     }, []);
 
     // Keyboard shortcuts
@@ -105,7 +179,7 @@ function App() {
 
     return (
         <div className="editor-container">
-            <TitleBar title="ESEngine Editor" />
+            <TitleBar title="ESEngine Editor" onOpenProject={handleProjectOpen} />
 
             {/* Main Toolbar */}
             <div className="main-toolbar">
@@ -229,20 +303,17 @@ function App() {
                             onSelectEntity={handleSelectEntity}
                         />
                     }
-                    scenePanel={
+                    viewportPanel={
                         <GameViewport
-                            mode="scene"
-                            activeTool={activeTool}
-                            onSelectObject={handleSelectSceneObject}
-                        />
-                    }
-                    gamePanel={
-                        <GameViewport
-                            mode="game"
+                            mode={viewportMode}
                             isPlaying={isPlaying}
+                            activeTool={activeTool}
+                            scenePath={currentScenePath}
+                            projectPath={projectPath}
                             onPlay={handlePlay}
                             onPause={handlePause}
                             onStop={handleStop}
+                            onSelectNode={handleSelectNode}
                         />
                     }
                     inspectorPanel={
@@ -255,7 +326,10 @@ function App() {
             </div>
 
             {/* Status Bar */}
-            <StatusBar />
+            <StatusBar
+                projectPath={projectPath ?? undefined}
+                onOpenScene={handleOpenScene}
+            />
         </div>
     );
 }

@@ -264,6 +264,15 @@
 .outliner-item.dragging {
     opacity: 0.5;
     background: rgba(74, 158, 255, 0.1);
+    cursor: grabbing;
+}
+
+.outliner-item[draggable="true"] {
+    cursor: grab;
+}
+
+.outliner-item[draggable="true"]:active {
+    cursor: grabbing;
 }
 
 /* Drop Indicators | 拖放指示器 */
