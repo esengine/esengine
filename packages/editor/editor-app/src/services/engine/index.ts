@@ -31,6 +31,10 @@ export { getTransformService, resetTransformService, type ITransformService } fr
 export { getSelectionService, resetSelectionService, type ISelectionService } from './SelectionService';
 export { getGizmoRenderService, resetGizmoRenderService, type IGizmoRenderService, type TransformTool } from './GizmoRenderService';
 
+// Constants
+
+export { GIZMO_SIZE, GIZMO_COLORS, GIZMO_HIT_TOLERANCE, DEFAULT_OBJECT, type GizmoColor } from './GizmoConstants';
+
 // Compatibility Facade (for migration)
 
 export {

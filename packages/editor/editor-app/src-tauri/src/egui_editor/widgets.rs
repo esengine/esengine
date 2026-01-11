@@ -22,53 +22,24 @@ pub fn drag_value(
 ) -> egui::Response {
     let width = 52.0;
     let height = 20.0;
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click_and_drag());
 
-    let bg_color = if response.dragged() {
-        egui::Color32::from_rgb(0x3a, 0x3a, 0x3a)
-    } else if response.hovered() {
-        egui::Color32::from_rgb(0x2a, 0x2a, 0x2a)
-    } else {
-        egui::Color32::from_rgb(0x1c, 0x1c, 0x1c)
-    };
+    // Use egui's built-in DragValue for proper interaction
+    let dv = egui::DragValue::new(value)
+        .speed(speed)
+        .clamp_range(f32::NEG_INFINITY..=f32::INFINITY)
+        .max_decimals(2)
+        .min_decimals(2);
 
-    // Background
-    ui.painter().rect_filled(rect, 2.0, bg_color);
-    ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x38, 0x38, 0x38)));
+    let response = ui.add_sized([width, height], dv);
 
-    // Axis color indicator (left edge)
+    // Draw axis color indicator on top
+    let rect = response.rect;
     let indicator_rect = egui::Rect::from_min_size(rect.min, egui::vec2(2.0, height));
     ui.painter().rect_filled(
         indicator_rect,
         egui::Rounding { nw: 2.0, sw: 2.0, ne: 0.0, se: 0.0 },
         axis_color,
     );
-
-    // Handle drag
-    if response.dragged() {
-        let delta = response.drag_delta();
-        *value += delta.x * speed;
-        ui.ctx().request_repaint();
-    }
-
-    // Value text
-    let text_color = if response.dragged() {
-        egui::Color32::WHITE
-    } else {
-        egui::Color32::from_rgb(0xdd, 0xdd, 0xdd)
-    };
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        format!("{:.2}", value),
-        egui::FontId::monospace(11.0),
-        text_color,
-    );
-
-    // Cursor hint
-    if response.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-    }
 
     response
 }
@@ -80,50 +51,38 @@ pub fn drag_value(
 /// @zh Vec3 属性行
 /// @en Vec3 property row
 pub fn property_row_vec3(ui: &mut egui::Ui, label: &str, values: &mut [f32; 3]) {
-    let row_height = 22.0;
-    let (row_rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+    ui.horizontal(|ui| {
+        ui.set_height(22.0);
+        ui.add_space(8.0);
 
-    // Label (left side, 100px)
-    ui.painter().text(
-        egui::pos2(row_rect.left() + 8.0, row_rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        label,
-        egui::FontId::proportional(11.0),
-        egui::Color32::from_rgb(0xaa, 0xaa, 0xaa),
-    );
+        // Label (fixed width)
+        ui.label(
+            egui::RichText::new(label)
+                .size(11.0)
+                .color(egui::Color32::from_rgb(0xaa, 0xaa, 0xaa))
+        );
 
-    // Values (right side)
-    let value_start = row_rect.left() + 100.0;
-    let value_width = 56.0;
-    let spacing = 4.0;
+        // Spacer to push values to consistent position
+        let label_width = 90.0;
+        let used = ui.min_rect().width();
+        if used < label_width {
+            ui.add_space(label_width - used);
+        }
 
-    // X
-    let x_rect = egui::Rect::from_min_size(
-        egui::pos2(value_start, row_rect.top() + 1.0),
-        egui::vec2(value_width, row_height - 2.0),
-    );
-    let x_id = ui.id().with(format!("{}_x", label));
-    ui.allocate_ui_at_rect(x_rect, |ui| {
+        // X value
+        let x_id = ui.id().with(format!("{}_x", label));
         drag_value(ui, x_id, &mut values[0], 0.1, ui::AXIS_X);
-    });
 
-    // Y
-    let y_rect = egui::Rect::from_min_size(
-        egui::pos2(value_start + value_width + spacing, row_rect.top() + 1.0),
-        egui::vec2(value_width, row_height - 2.0),
-    );
-    let y_id = ui.id().with(format!("{}_y", label));
-    ui.allocate_ui_at_rect(y_rect, |ui| {
+        ui.add_space(2.0);
+
+        // Y value
+        let y_id = ui.id().with(format!("{}_y", label));
         drag_value(ui, y_id, &mut values[1], 0.1, ui::AXIS_Y);
-    });
 
-    // Z
-    let z_rect = egui::Rect::from_min_size(
-        egui::pos2(value_start + (value_width + spacing) * 2.0, row_rect.top() + 1.0),
-        egui::vec2(value_width, row_height - 2.0),
-    );
-    let z_id = ui.id().with(format!("{}_z", label));
-    ui.allocate_ui_at_rect(z_rect, |ui| {
+        ui.add_space(2.0);
+
+        // Z value
+        let z_id = ui.id().with(format!("{}_z", label));
         drag_value(ui, z_id, &mut values[2], 0.1, ui::AXIS_Z);
     });
 }
@@ -131,26 +90,26 @@ pub fn property_row_vec3(ui: &mut egui::Ui, label: &str, values: &mut [f32; 3]) 
 /// @zh 数值属性行
 /// @en Number property row
 pub fn property_row_number(ui: &mut egui::Ui, label: &str, value: &mut f32, speed: f32) {
-    let row_height = 22.0;
-    let (row_rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+    ui.horizontal(|ui| {
+        ui.set_height(22.0);
+        ui.add_space(8.0);
 
-    // Label
-    ui.painter().text(
-        egui::pos2(row_rect.left() + 8.0, row_rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        label,
-        egui::FontId::proportional(11.0),
-        egui::Color32::from_rgb(0xaa, 0xaa, 0xaa),
-    );
+        // Label
+        ui.label(
+            egui::RichText::new(label)
+                .size(11.0)
+                .color(egui::Color32::from_rgb(0xaa, 0xaa, 0xaa))
+        );
 
-    // Value
-    let value_start = row_rect.left() + 100.0;
-    let value_rect = egui::Rect::from_min_size(
-        egui::pos2(value_start, row_rect.top() + 1.0),
-        egui::vec2(80.0, row_height - 2.0),
-    );
-    let id = ui.id().with(label);
-    ui.allocate_ui_at_rect(value_rect, |ui| {
+        // Spacer
+        let label_width = 90.0;
+        let used = ui.min_rect().width();
+        if used < label_width {
+            ui.add_space(label_width - used);
+        }
+
+        // Value
+        let id = ui.id().with(label);
         drag_value(ui, id, value, speed, egui::Color32::from_rgb(0x55, 0x55, 0x55));
     });
 }

@@ -11,6 +11,7 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { getEditorEngine, getGizmoRenderService } from '../services/engine';
+import { GIZMO_SIZE, GIZMO_HIT_TOLERANCE, DEFAULT_OBJECT } from '../services/engine/GizmoConstants';
 
 export type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
 export type GizmoHandle = 'none' | 'x' | 'y' | 'xy' | 'rotate' | 'scale-x' | 'scale-y' | 'scale-xy';
@@ -34,12 +35,6 @@ interface GizmoOverlayProps {
     showGrid: boolean;
     onSelectNode?: (nodeId: string | null) => void;
 }
-
-// Gizmo constants (for hit testing)
-const GIZMO_AXIS_LENGTH = 80;
-const GIZMO_ARROW_SIZE = 12;
-const GIZMO_ROTATE_RADIUS = 60;
-const GIZMO_HANDLE_SIZE = 10;
 
 export function GizmoOverlay({
     width,
@@ -70,28 +65,40 @@ export function GizmoOverlay({
     // Current gizmo screen position (for hit testing)
     const gizmoScreenPosRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
-    // Initialize gizmo service when scene is loaded
+    // Initialize gizmo service when engine is ready
     useEffect(() => {
+        let retryCount = 0;
+        const maxRetries = 10;
+        let retryTimeout: number | null = null;
+
         const initGizmo = async () => {
-            // Wait a bit to ensure scene is fully loaded
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait a bit to ensure engine is ready
+            await new Promise(resolve => setTimeout(resolve, 200));
 
             const success = await gizmoService.initialize();
             if (success) {
                 gizmoService.setShowGrid(showGrid);
                 gizmoService.setActiveTool(activeTool);
-            } else {
+                console.log('[GizmoOverlay] Gizmo initialized successfully');
+            } else if (retryCount < maxRetries) {
+                // Retry initialization after a delay
+                retryCount++;
+                console.log(`[GizmoOverlay] Gizmo init failed, retrying (${retryCount}/${maxRetries})...`);
+                retryTimeout = window.setTimeout(initGizmo, 500);
             }
         };
 
-        // Subscribe to scene loaded events
+        // Subscribe to scene loaded events (reinitialize when new scene loads)
         engine.onSceneLoaded(initGizmo);
 
-        // Also try to initialize immediately in case scene is already loaded
+        // Try to initialize immediately (even without a scene, grid should show)
         initGizmo();
 
         return () => {
             engine.offSceneLoaded(initGizmo);
+            if (retryTimeout !== null) {
+                window.clearTimeout(retryTimeout);
+            }
         };
     }, [gizmoService, engine, showGrid, activeTool]);
 
@@ -118,8 +125,8 @@ export function GizmoOverlay({
             if (transform) {
                 const screenX = width / 2 + (transform.position.x + camera.x) * camera.zoom;
                 const screenY = height / 2 - (transform.position.y + camera.y) * camera.zoom;
-                const objWidth = 100 * transform.scale.x * camera.zoom;
-                const objHeight = 100 * transform.scale.y * camera.zoom;
+                const objWidth = DEFAULT_OBJECT.HALF_SIZE * 2 * transform.scale.x * camera.zoom;
+                const objHeight = DEFAULT_OBJECT.HALF_SIZE * 2 * transform.scale.y * camera.zoom;
 
                 gizmoScreenPosRef.current = { x: screenX, y: screenY, width: objWidth, height: objHeight };
             }
@@ -141,27 +148,28 @@ export function GizmoOverlay({
 
         if (activeTool === 'move') {
             // Check XY handle (center square)
-            if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+            if (Math.abs(dx) < GIZMO_HIT_TOLERANCE.CENTER && Math.abs(dy) < GIZMO_HIT_TOLERANCE.CENTER) {
                 return 'xy';
             }
             // Check X axis (right side, allowing some tolerance)
-            if (dx > 10 && dx < GIZMO_AXIS_LENGTH + GIZMO_ARROW_SIZE + 10 && Math.abs(dy) < 15) {
+            const axisEnd = GIZMO_SIZE.AXIS_LENGTH + GIZMO_SIZE.ARROW_SIZE + 10;
+            if (dx > 10 && dx < axisEnd && Math.abs(dy) < GIZMO_HIT_TOLERANCE.AXIS) {
                 return 'x';
             }
             // Check Y axis (up, screen Y is inverted)
-            if (dy < -10 && dy > -(GIZMO_AXIS_LENGTH + GIZMO_ARROW_SIZE + 10) && Math.abs(dx) < 15) {
+            if (dy < -10 && dy > -axisEnd && Math.abs(dx) < GIZMO_HIT_TOLERANCE.AXIS) {
                 return 'y';
             }
         } else if (activeTool === 'rotate') {
             // Check rotate circle
             const dist = Math.sqrt(dx * dx + dy * dy);
-            if (Math.abs(dist - GIZMO_ROTATE_RADIUS) < 12) {
+            if (Math.abs(dist - GIZMO_SIZE.ROTATE_RADIUS) < GIZMO_HIT_TOLERANCE.ROTATE) {
                 return 'rotate';
             }
         } else if (activeTool === 'scale') {
             const halfW = gizmoPos.width / 2;
             const halfH = gizmoPos.height / 2;
-            const handleSize = GIZMO_HANDLE_SIZE + 5;
+            const handleSize = GIZMO_SIZE.HANDLE_SIZE + GIZMO_HIT_TOLERANCE.HANDLE;
 
             // Check corner handles (scale XY)
             const corners = [
@@ -186,16 +194,22 @@ export function GizmoOverlay({
         return 'none';
     }, [activeTool]);
 
-    // Handle mouse events for camera control and gizmo interaction
-    const handleWheel = useCallback((e: React.WheelEvent) => {
-        e.preventDefault();
-        const delta = -e.deltaY * 0.001;
-        const rect = overlayRef.current?.getBoundingClientRect();
-        if (rect) {
+    // Handle wheel events with native listener (passive: false to allow preventDefault)
+    useEffect(() => {
+        const overlay = overlayRef.current;
+        if (!overlay) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            const delta = -e.deltaY * 0.001;
+            const rect = overlay.getBoundingClientRect();
             const centerX = e.clientX - rect.left - width / 2;
             const centerY = e.clientY - rect.top - height / 2;
             engine.zoomEditorCamera(delta, centerX, centerY);
-        }
+        };
+
+        overlay.addEventListener('wheel', handleWheel, { passive: false });
+        return () => overlay.removeEventListener('wheel', handleWheel);
     }, [engine, width, height]);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -396,7 +410,6 @@ export function GizmoOverlay({
                 // Transparent - no drawing, just interaction
                 background: 'transparent',
             }}
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

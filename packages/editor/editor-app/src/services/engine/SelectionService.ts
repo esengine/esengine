@@ -7,6 +7,8 @@
  */
 
 import type { ComponentInfo, ComponentPropertyInfo, SelectedNodeInfo, TransformInfo, Unsubscribe, Vec2 } from './types';
+import { quaternionToEuler } from './types';
+import { DEFAULT_OBJECT } from './GizmoConstants';
 import type { CCESNode, CCESComponent } from './types/ccesengine';
 import type { IEngineAdapter } from './EngineAdapter';
 import type { ISceneService } from './SceneService';
@@ -192,8 +194,8 @@ class SelectionServiceImpl implements ISelectionService {
             // Get node bounds (approximate with position and scale)
             const pos = node.position;
             const scale = node.scale;
-            const halfWidth = 50 * Math.abs(scale.x);  // Default size 100
-            const halfHeight = 50 * Math.abs(scale.y);
+            const halfWidth = DEFAULT_OBJECT.HALF_SIZE * Math.abs(scale.x);
+            const halfHeight = DEFAULT_OBJECT.HALF_SIZE * Math.abs(scale.y);
 
             // Simple AABB test
             if (worldPos.x >= pos.x - halfWidth && worldPos.x <= pos.x + halfWidth &&
@@ -220,33 +222,12 @@ class SelectionServiceImpl implements ISelectionService {
     private getNodeTransform(node: CCESNode): TransformInfo {
         const rotation = node.rotation;
 
-        // Convert quaternion to euler angles
-        const eulerAngles = this.quaternionToEuler(rotation);
-
         return {
             position: { ...node.position },
             rotation: { ...rotation },
-            eulerAngles,
+            eulerAngles: quaternionToEuler(rotation),
             scale: { ...node.scale },
         };
-    }
-
-    private quaternionToEuler(q: { x: number; y: number; z: number; w: number }): { x: number; y: number; z: number } {
-        // Simplified conversion (primarily for Z-axis rotation in 2D)
-        const sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-        const cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-        const x = Math.atan2(sinr_cosp, cosr_cosp) * (180 / Math.PI);
-
-        const sinp = 2 * (q.w * q.y - q.z * q.x);
-        const y = Math.abs(sinp) >= 1
-            ? Math.sign(sinp) * 90
-            : Math.asin(sinp) * (180 / Math.PI);
-
-        const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-        const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-        const z = Math.atan2(siny_cosp, cosy_cosp) * (180 / Math.PI);
-
-        return { x, y, z };
     }
 
     private getNodeComponents(node: CCESNode): ComponentInfo[] {

@@ -201,3 +201,32 @@ export interface OperationResult<T = void> {
  * @en Unsubscribe function
  */
 export type Unsubscribe = () => void;
+
+// Utility Functions
+
+/**
+ * @zh 四元数转欧拉角（度）
+ * @en Convert quaternion to euler angles (degrees)
+ *
+ * 使用标准的 XYZ 旋转顺序。对于 2D 场景，主要使用 Z 轴分量。
+ * Uses standard XYZ rotation order. For 2D scenes, primarily uses Z component.
+ *
+ * @param q - 输入四元数 / Input quaternion
+ * @returns 欧拉角（度）/ Euler angles (degrees)
+ */
+export function quaternionToEuler(q: Quat): Vec3 {
+    const sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+    const cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+    const x = Math.atan2(sinr_cosp, cosr_cosp) * (180 / Math.PI);
+
+    const sinp = 2 * (q.w * q.y - q.z * q.x);
+    const y = Math.abs(sinp) >= 1
+        ? Math.sign(sinp) * 90
+        : Math.asin(sinp) * (180 / Math.PI);
+
+    const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+    const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+    const z = Math.atan2(siny_cosp, cosy_cosp) * (180 / Math.PI);
+
+    return { x, y, z };
+}

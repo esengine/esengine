@@ -34,7 +34,8 @@ export type EngineModule =
     | 'animation'
     | 'physics'
     | 'audio'
-    | 'graphics';
+    | 'graphics'
+    | 'geometry-renderer';
 
 /**
  * @zh 反序列化详情

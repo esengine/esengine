@@ -38,7 +38,24 @@ image = "0.25"
 notify = "7.0"
 notify-debouncer-mini = "0.5"
 regex = "1"
+thiserror = "1"
+egui = "0.27"
+csscolorparser = "0.6"
+egui_extras = { version = "0.27", features = ["svg"] }
+eframe = { version = "0.27", default-features = true, features = ["wgpu", "glow"] }
+rfd = "0.14"
+open = "5"
+wry = "0.47"
+tao = "0.30"
+raw-window-handle = "0.6"
 
+[[bin]]
+name = "egui-editor"
+path = "src/bin/egui_editor.rs"
+
+[[bin]]
+name = "egui-webview"
+path = "src/bin/egui_webview.rs"
 
 [profile.dev]
 incremental = true

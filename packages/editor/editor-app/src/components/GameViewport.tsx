@@ -15,6 +15,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Square, Maximize2, Grid, RotateCcw, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
 import { getEditorEngine } from '../services/engine';
 import { getUserScriptCompiler } from '../services/UserScriptCompiler';
+import { getCameraService } from '../services/engine/CameraService';
 import { GizmoOverlay, TransformTool } from './GizmoOverlay';
 import '../styles/GameViewport.css';
 
@@ -45,6 +46,7 @@ export function GameViewport({
     const canvasContainerRef = useRef<HTMLDivElement>(null);
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
     const [showGrid, setShowGrid] = useState(true);
+    const [zoomLevel, setZoomLevel] = useState(1);
     const [isEngineReady, setIsEngineReady] = useState(false);
     const [engineError, setEngineError] = useState<string | null>(null);
     const [engineState, setEngineState] = useState({ fps: 60, frameCount: 0 });
@@ -66,6 +68,8 @@ export function GameViewport({
     const engine = getEditorEngine();
     const scriptCompiler = getUserScriptCompiler();
 
+    const cameraService = getCameraService();
+
     // Handle container resize
     useEffect(() => {
         const container = containerRef.current;
@@ -83,6 +87,19 @@ export function GameViewport({
         resizeObserver.observe(container);
         return () => resizeObserver.disconnect();
     }, []);
+
+    // Subscribe to camera changes to get zoom level
+    useEffect(() => {
+        // Initialize with current zoom
+        setZoomLevel(cameraService.zoom);
+
+        // Subscribe to changes
+        const unsubscribe = cameraService.onCameraChanged(() => {
+            setZoomLevel(cameraService.zoom);
+        });
+
+        return unsubscribe;
+    }, [cameraService]);
 
     // Initialize engine and attach canvas
     // Handle hot reload: if engine is already initialized, just re-attach the canvas
@@ -102,6 +119,20 @@ export function GameViewport({
                         engine.attachToContainer(canvasContainer);
                     }
                     return;
+                }
+
+                // Set engine source path before init (needed for effect compilation)
+                if (!engine.getEngineSourcePath()) {
+                    try {
+                        const { invoke } = await import('@tauri-apps/api/core');
+                        const currentDir = await invoke<string>('get_current_dir');
+                        const workspaceRoot = currentDir.replace(/[\\/]packages[\\/]editor[\\/]editor-app([\\/]src-tauri)?$/, '');
+                        const enginePath = `${workspaceRoot}/engine`;
+                        engine.setEngineSourcePath(enginePath);
+                    } catch {
+                        // Running outside Tauri, engine path will be unavailable
+                        console.warn('[GameViewport] Could not determine engine path');
+                    }
                 }
 
                 const success = await engine.init();
@@ -362,6 +393,11 @@ export function GameViewport({
                     >
                         <Maximize2 size={14} />
                     </button>
+                    {isSceneMode && (
+                        <span className="viewport-zoom" title="Zoom Level">
+                            {(zoomLevel * 100).toFixed(0)}%
+                        </span>
+                    )}
                     <span className="viewport-size">{canvasSize.width} x {canvasSize.height}</span>
                 </div>
             </div>
@@ -423,12 +459,6 @@ export function GameViewport({
                                     <AlertCircle size={24} />
                                     <span className="viewport-status">Scene Load Error</span>
                                     <span className="viewport-status-detail">{sceneLoadStatus.message}</span>
-                                </div>
-                            )}
-
-                            {!scenePath && sceneLoadStatus.state === 'idle' && (
-                                <div className="viewport-overlay">
-                                    <span className="viewport-status">Double-click a scene file to open</span>
                                 </div>
                             )}
                         </>

@@ -21,14 +21,19 @@ import { getEngineAdapter } from './EngineAdapter';
 
 
 /**
- * @zh ccesengine 层级常量
- * @en ccesengine layer constants
+ * @zh ccesengine 层级常量（必须与引擎定义一致）
+ * @en ccesengine layer constants (must match engine definitions)
+ *
+ * 参考 ccesengine 的 layerList 定义:
+ * - GIZMOS: 1 << 21
+ * - EDITOR: 1 << 22
+ * - UI_2D: 1 << 25
+ * - DEFAULT: 1 << 30
  */
 const Layers = {
     DEFAULT: 1 << 30,
     UI_2D: 1 << 25,
-    // Gizmo 使用单独的层，只有 Gizmo 相机能看到
-    GIZMO: 1 << 22, // 使用一个未使用的层
+    GIZMO: 1 << 21, // 必须使用 ccesengine 的 GIZMOS 层
 };
 
 /**
@@ -39,6 +44,15 @@ const ClearFlags = {
     SOLID_COLOR: 7,      // 清除所有（颜色+深度+模板）
     DEPTH_ONLY: 6,       // 只清除深度和模板
     DONT_CLEAR: 0,       // 不清除
+};
+
+/**
+ * @zh CCObjectFlags 常量（用于隐藏编辑器节点）
+ * @en CCObjectFlags constants (for hiding editor nodes)
+ */
+const CCObjectFlags = {
+    DontSave: 1 << 4,
+    HideInHierarchy: 1 << 10,
 };
 
 
@@ -59,6 +73,8 @@ export interface ICameraService {
     // Editor Camera Management
     createGizmoCamera(): Promise<boolean>;
     destroyGizmoCamera(): void;
+    getGizmoCameraRenderCamera(): unknown | null;
+    getGizmoGeometryRenderer(): unknown | null;
 
     // Coordinate Conversion
     screenToWorld(screenX: number, screenY: number, viewportWidth: number, viewportHeight: number): Vec2;
@@ -92,9 +108,14 @@ class CameraServiceImpl implements ICameraService {
     private _viewportHeight = 600;
     private _changeCallbacks: Array<() => void> = [];
 
+    // Background camera node (clears screen with editor background color)
+    private _backgroundCameraNode: unknown = null;
+    private _backgroundCamera: unknown = null;
+
     // Gizmo camera node and component (only for rendering gizmos)
     private _gizmoCameraNode: unknown = null;
     private _gizmoCamera: unknown = null;
+    private _gizmoGeometryRenderer: unknown = null;
 
 
 
@@ -178,38 +199,117 @@ class CameraServiceImpl implements ICameraService {
             return false;
         }
 
-        const scene = director.getScene?.();
-        if (!scene) {
-            return false;
+        // Check if gizmo camera already exists and is still valid
+        if (this._gizmoCameraNode) {
+            const node = this._gizmoCameraNode as { isValid?: boolean };
+            if (node.isValid === false) {
+                // Node was destroyed (scene change), clean up references
+                this._gizmoCameraNode = null;
+                this._gizmoCamera = null;
+                this._backgroundCameraNode = null;
+                this._backgroundCamera = null;
+                this._gizmoGeometryRenderer = null;
+            } else {
+                this.syncAllCameras();
+                return true;
+            }
         }
 
-        // Check if gizmo camera already exists
-        if (this._gizmoCameraNode) {
-            this.syncAllCameras();
-            return true;
+        // Get or create a scene
+        let scene = director.getScene?.();
+        if (!scene) {
+            // Create an empty scene if none exists
+            const SceneClass = cc.Scene as { new(name?: string): unknown } | undefined;
+            if (SceneClass) {
+                scene = new SceneClass('__GizmoScene__') as typeof scene;
+                if (scene) {
+                    director.runSceneImmediate?.(scene);
+                    console.log('[CameraService] Created empty scene for gizmo rendering');
+                }
+            } else {
+                console.warn('[CameraService] Cannot create scene - Scene class not available');
+                return false;
+            }
         }
 
         try {
-            // Create gizmo camera node
             const NodeClass = cc.Node as { new(name: string): unknown };
-            this._gizmoCameraNode = new NodeClass('__GizmoCamera__');
+            const sceneNode = scene as { addChild?: (child: unknown) => void };
 
-            const cameraNode = this._gizmoCameraNode as {
+            // === Create background camera (clears screen with editor background) ===
+            this._backgroundCameraNode = new NodeClass('__BackgroundCamera__');
+            const bgCameraNode = this._backgroundCameraNode as {
                 layer?: number;
+                hideFlags?: number;
+                _objFlags?: number;
                 setPosition?: (x: number, y: number, z: number) => void;
                 addComponent?: (type: string) => unknown;
             };
+            bgCameraNode.layer = Layers.DEFAULT;
+            // Hide from hierarchy and don't save
+            if (typeof bgCameraNode.hideFlags === 'number') {
+                bgCameraNode.hideFlags |= CCObjectFlags.DontSave | CCObjectFlags.HideInHierarchy;
+            } else if (typeof bgCameraNode._objFlags === 'number') {
+                bgCameraNode._objFlags |= CCObjectFlags.DontSave | CCObjectFlags.HideInHierarchy;
+            }
+            sceneNode.addChild?.(this._backgroundCameraNode);
 
-            // Set layer
+            this._backgroundCamera = bgCameraNode.addComponent?.('cc.Camera');
+            if (this._backgroundCamera) {
+                const bgCamera = this._backgroundCamera as {
+                    projection?: number;
+                    orthoHeight?: number;
+                    near?: number;
+                    far?: number;
+                    clearFlags?: number;
+                    clearColor?: { set?: (r: number, g: number, b: number, a: number) => void };
+                    visibility?: number;
+                    priority?: number;
+                    rect?: { set?: (x: number, y: number, w: number, h: number) => void; x?: number; y?: number; width?: number; height?: number };
+                };
+                bgCamera.projection = 1;
+                bgCamera.orthoHeight = this._viewportHeight / 2;
+                bgCamera.near = 0.1;
+                bgCamera.far = 2000;
+                bgCamera.clearFlags = ClearFlags.SOLID_COLOR;
+                if (bgCamera.clearColor?.set) {
+                    bgCamera.clearColor.set(30 / 255, 30 / 255, 30 / 255, 1); // #1e1e1e
+                }
+                bgCamera.visibility = 0; // See nothing - just clears the screen
+                bgCamera.priority = -2000; // Render FIRST (lowest priority)
+
+                // Set viewport rect to full screen (normalized 0-1)
+                if (bgCamera.rect?.set) {
+                    bgCamera.rect.set(0, 0, 1, 1);
+                } else if (bgCamera.rect) {
+                    bgCamera.rect.x = 0;
+                    bgCamera.rect.y = 0;
+                    bgCamera.rect.width = 1;
+                    bgCamera.rect.height = 1;
+                }
+
+                bgCameraNode.setPosition?.(0, 0, 1000);
+            }
+
+            // === Create gizmo camera (renders gizmos on top) ===
+            this._gizmoCameraNode = new NodeClass('__GizmoCamera__');
+            const cameraNode = this._gizmoCameraNode as {
+                layer?: number;
+                hideFlags?: number;
+                _objFlags?: number;
+                setPosition?: (x: number, y: number, z: number) => void;
+                addComponent?: (type: string) => unknown;
+            };
             cameraNode.layer = Layers.DEFAULT;
-
-            // Add to scene
-            const sceneNode = scene as { addChild?: (child: unknown) => void };
+            // Hide from hierarchy and don't save
+            if (typeof cameraNode.hideFlags === 'number') {
+                cameraNode.hideFlags |= CCObjectFlags.DontSave | CCObjectFlags.HideInHierarchy;
+            } else if (typeof cameraNode._objFlags === 'number') {
+                cameraNode._objFlags |= CCObjectFlags.DontSave | CCObjectFlags.HideInHierarchy;
+            }
             sceneNode.addChild?.(this._gizmoCameraNode);
 
-            // Add Camera component
             this._gizmoCamera = cameraNode.addComponent?.('cc.Camera');
-
             if (!this._gizmoCamera) {
                 console.error('[CameraService] Failed to add Camera component');
                 this.destroyGizmoCamera();
@@ -223,9 +323,10 @@ class CameraServiceImpl implements ICameraService {
                 near?: number;
                 far?: number;
                 clearFlags?: number;
-                clearColor?: unknown;
+                clearColor?: { set?: (r: number, g: number, b: number, a: number) => void };
                 visibility?: number;
                 priority?: number;
+                rect?: { set?: (x: number, y: number, w: number, h: number) => void; x?: number; y?: number; width?: number; height?: number };
             };
 
             // Orthographic projection
@@ -234,17 +335,32 @@ class CameraServiceImpl implements ICameraService {
             camera.near = 0.1;
             camera.far = 2000;
 
-            // DEPTH_ONLY - don't clear color buffer, overlay on user camera
+            // Use DEPTH_ONLY to overlay on top of scene rendering
+            // The scene camera clears and renders first, then gizmo camera overlays
             camera.clearFlags = ClearFlags.DEPTH_ONLY;
 
             // Only see GIZMO layer
             camera.visibility = Layers.GIZMO;
 
-            // High priority - render after all user cameras
-            camera.priority = 1000;
+            // Highest priority - render LAST to overlay on everything including UI
+            // UI Canvas in OVERLAY mode uses priority = 1 << 30, so we use higher
+            camera.priority = (1 << 30) + 10000;
+
+            // Set viewport rect to full screen (normalized 0-1)
+            if (camera.rect?.set) {
+                camera.rect.set(0, 0, 1, 1);
+            } else if (camera.rect) {
+                camera.rect.x = 0;
+                camera.rect.y = 0;
+                camera.rect.width = 1;
+                camera.rect.height = 1;
+            }
 
             // Set initial position
             cameraNode.setPosition?.(0, 0, 1000);
+
+            // Initialize GeometryRenderer for gizmo drawing
+            await this.initGizmoGeometryRenderer();
 
             // Sync with current state
             this.syncAllCameras();
@@ -262,12 +378,110 @@ class CameraServiceImpl implements ICameraService {
      * @en Destroy Gizmo camera
      */
     destroyGizmoCamera(): void {
+        // Destroy geometry renderer
+        if (this._gizmoGeometryRenderer) {
+            const gr = this._gizmoGeometryRenderer as { destroy?: () => void };
+            gr.destroy?.();
+            this._gizmoGeometryRenderer = null;
+        }
+
+        // Destroy gizmo camera
         if (this._gizmoCameraNode) {
             const node = this._gizmoCameraNode as { destroy?: () => void };
             node.destroy?.();
             this._gizmoCameraNode = null;
             this._gizmoCamera = null;
         }
+
+        // Destroy background camera
+        if (this._backgroundCameraNode) {
+            const node = this._backgroundCameraNode as { destroy?: () => void };
+            node.destroy?.();
+            this._backgroundCameraNode = null;
+            this._backgroundCamera = null;
+        }
+    }
+
+    /**
+     * @zh 获取 Gizmo 相机的内部渲染相机
+     * @en Get the internal render camera of the Gizmo camera
+     *
+     * 用于 GizmoRenderService 获取 geometryRenderer。
+     * Used by GizmoRenderService to get geometryRenderer.
+     */
+    getGizmoCameraRenderCamera(): unknown | null {
+        if (!this._gizmoCamera) return null;
+        const cameraComp = this._gizmoCamera as { camera?: unknown };
+        return cameraComp.camera ?? null;
+    }
+
+    /**
+     * @zh 获取 Gizmo GeometryRenderer
+     * @en Get Gizmo GeometryRenderer
+     */
+    getGizmoGeometryRenderer(): unknown | null {
+        return this._gizmoGeometryRenderer;
+    }
+
+    /**
+     * @zh 初始化 Gizmo GeometryRenderer
+     * @en Initialize Gizmo GeometryRenderer
+     *
+     * 使用相机组件自带的 initGeometryRenderer() 方法，
+     * 这样可以确保 PipelineSceneData 中的材质和着色器正确初始化。
+     *
+     * Uses the camera component's built-in initGeometryRenderer() method,
+     * which ensures PipelineSceneData materials and shaders are properly initialized.
+     */
+    private async initGizmoGeometryRenderer(): Promise<void> {
+        // Wait for the render camera to be available
+        await this.waitForRenderCamera();
+
+        // Get the camera component and call its initGeometryRenderer method
+        const cameraComp = this._gizmoCamera as {
+            camera?: {
+                initGeometryRenderer?: () => void;
+                geometryRenderer?: unknown;
+            };
+        } | null;
+
+        if (cameraComp?.camera?.initGeometryRenderer) {
+            // Use the camera's built-in method to properly initialize GeometryRenderer
+            // This ensures the geometry-renderer effect and materials are loaded
+            cameraComp.camera.initGeometryRenderer();
+            this._gizmoGeometryRenderer = cameraComp.camera.geometryRenderer ?? null;
+
+            if (this._gizmoGeometryRenderer) {
+                console.log('[CameraService] GeometryRenderer initialized via camera.initGeometryRenderer()');
+            } else {
+                console.warn('[CameraService] GeometryRenderer not available after initGeometryRenderer()');
+            }
+        } else {
+            console.warn('[CameraService] camera.initGeometryRenderer not available');
+        }
+    }
+
+    /**
+     * @zh 等待渲染相机可用
+     * @en Wait for render camera to be available
+     */
+    private waitForRenderCamera(): Promise<void> {
+        return new Promise((resolve) => {
+            const maxAttempts = 30;
+            let attempts = 0;
+
+            const check = () => {
+                const renderCamera = this.getGizmoCameraRenderCamera();
+                if (renderCamera || attempts >= maxAttempts) {
+                    resolve();
+                    return;
+                }
+                attempts++;
+                requestAnimationFrame(check);
+            };
+
+            check();
+        });
     }
 
 
@@ -409,38 +623,107 @@ class CameraServiceImpl implements ICameraService {
     }
 
     /**
-     * @zh 同步 Gizmo 相机
-     * @en Sync Gizmo camera
+     * @zh 同步 Gizmo 相机和 Background 相机
+     * @en Sync Gizmo camera and Background camera
      */
     private syncGizmoCamera(): void {
-        if (!this._gizmoCameraNode || !this._gizmoCamera) return;
-
-        const node = this._gizmoCameraNode as {
-            position?: { x: number; y: number; z: number };
-            setPosition?: (x: number, y: number, z: number) => void;
-        };
-
-        const camera = this._gizmoCamera as {
-            orthoHeight?: number;
-        };
-
-        // Update position (same as user cameras)
         const cameraX = -this._state.x;
         const cameraY = -this._state.y;
-        const cameraZ = node.position?.z ?? 1000;
 
-        if (node.setPosition) {
-            node.setPosition(cameraX, cameraY, cameraZ);
-        } else if (node.position) {
-            node.position.x = cameraX;
-            node.position.y = cameraY;
+        // Calculate orthoHeight: viewport height / 2 / zoom
+        // This gives us the vertical half-extent of the visible world in world units
+        const orthoHeight = this._viewportHeight / 2 / this._state.zoom;
+
+        // Sync background camera
+        if (this._backgroundCameraNode && this._backgroundCamera) {
+            const bgNode = this._backgroundCameraNode as {
+                position?: { x: number; y: number; z: number };
+                setPosition?: (x: number, y: number, z: number) => void;
+            };
+            const bgCamera = this._backgroundCamera as { orthoHeight?: number };
+
+            const bgZ = bgNode.position?.z ?? 1000;
+            if (bgNode.setPosition) {
+                bgNode.setPosition(cameraX, cameraY, bgZ);
+            }
+            if (typeof bgCamera.orthoHeight === 'number') {
+                bgCamera.orthoHeight = orthoHeight;
+            }
         }
 
-        // Update ortho height for zoom
-        if (typeof camera.orthoHeight === 'number') {
-            const baseHeight = this._viewportHeight / 2;
-            camera.orthoHeight = baseHeight / this._state.zoom;
+        // Sync gizmo camera
+        if (this._gizmoCameraNode && this._gizmoCamera) {
+            const node = this._gizmoCameraNode as {
+                position?: { x: number; y: number; z: number };
+                setPosition?: (x: number, y: number, z: number) => void;
+            };
+            const camera = this._gizmoCamera as { orthoHeight?: number };
+
+            const cameraZ = node.position?.z ?? 1000;
+            if (node.setPosition) {
+                node.setPosition(cameraX, cameraY, cameraZ);
+            } else if (node.position) {
+                node.position.x = cameraX;
+                node.position.y = cameraY;
+            }
+            if (typeof camera.orthoHeight === 'number') {
+                camera.orthoHeight = orthoHeight;
+            }
         }
+    }
+
+    /**
+     * @zh 查找用户场景中主相机的原始 orthoHeight
+     * @en Find the original orthoHeight of the main camera in user scene
+     *
+     * 这个值反映了 Canvas 适配后相机的实际可见范围。
+     * This value reflects the camera's actual visible range after Canvas adaptation.
+     */
+    private findMainCameraOrthoHeight(): number | null {
+        const adapter = getEngineAdapter();
+        const director = adapter.director;
+        if (!director) return null;
+
+        const scene = director.getScene?.();
+        if (!scene) return null;
+
+        // Find the first non-editor camera in the scene
+        const findCamera = (nodes: unknown[]): number | null => {
+            for (const node of nodes) {
+                const n = node as {
+                    name?: string;
+                    getComponent?: (type: string) => unknown;
+                    children?: unknown[];
+                };
+
+                // Skip editor nodes
+                if (n.name?.startsWith('__')) continue;
+
+                if (n.getComponent) {
+                    const camera = n.getComponent('cc.Camera') || n.getComponent('Camera');
+                    if (camera) {
+                        const cam = camera as { orthoHeight?: number; projection?: number };
+                        // Only consider orthographic cameras (projection === 1)
+                        if (cam.projection === 1 && typeof cam.orthoHeight === 'number') {
+                            return cam.orthoHeight;
+                        }
+                    }
+                }
+
+                if (n.children && n.children.length > 0) {
+                    const found = findCamera(n.children);
+                    if (found !== null) return found;
+                }
+            }
+            return null;
+        };
+
+        const sceneTyped = scene as { children?: unknown[] };
+        if (sceneTyped.children) {
+            return findCamera(sceneTyped.children);
+        }
+
+        return null;
     }
 }
 

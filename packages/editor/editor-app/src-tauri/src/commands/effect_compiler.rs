@@ -45,6 +45,10 @@ struct YamlPass {
     depth_stencil_state: Option<YamlDepthStencilState>,
     #[serde(default)]
     rasterizer_state: Option<YamlRasterizerState>,
+    #[serde(default)]
+    primitive: Option<String>,
+    #[serde(default)]
+    priority: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,6 +163,10 @@ pub struct TechniqueInfo {
 #[serde(rename_all = "camelCase")]
 pub struct PassInfo {
     pub program: String,
+    /// @zh Pass 使用的属性索引，默认为 0
+    /// @en Property index used by the pass, default is 0
+    #[serde(default)]
+    pub property_index: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blend_state: Option<BlendStateInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -167,6 +175,10 @@ pub struct PassInfo {
     pub depth_stencil_state: Option<DepthStencilStateInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub properties: Option<HashMap<String, PropertyInfo>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub primitive: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -446,12 +458,24 @@ impl EffectCompiler {
                     }
                 });
 
+                // Convert primitive type
+                let primitive = yaml_pass.primitive.map(|p| parse_primitive_type(&p));
+
+                // Convert priority
+                let priority = yaml_pass.priority.as_ref().map(|p| parse_priority(p));
+
+                // Get property_index from YAML, default to 0
+                let property_index = yaml_pass.property_index.unwrap_or(0);
+
                 passes.push(PassInfo {
                     program,
+                    property_index,
                     blend_state,
                     rasterizer_state,
                     depth_stencil_state,
                     properties: None,
+                    primitive,
+                    priority,
                 });
             }
 
@@ -686,10 +710,13 @@ impl EffectCompiler {
 
         // Determine effect name based on path
         // - Effects in "pipeline/" folder need "pipeline/" prefix (e.g., "pipeline/skybox")
-        // - Effects in "for2d/", "internal/", or root just use filename (e.g., "builtin-sprite")
+        // - Effects in "internal/" folder need "internal/" prefix (e.g., "internal/builtin-geometry-renderer")
+        // - Effects in "for2d/" or root just use filename (e.g., "builtin-sprite")
         let path_str = effect_path.to_string_lossy();
         let name = if path_str.contains("pipeline/") || path_str.contains("pipeline\\") {
             format!("pipeline/{}", file_stem)
+        } else if path_str.contains("internal/") || path_str.contains("internal\\") {
+            format!("internal/{}", file_stem)
         } else {
             file_stem
         };
@@ -706,11 +733,21 @@ impl EffectCompiler {
 
         // Build shader program name prefix:
         // "builtin-sprite" -> "sprite"
-        // "pipeline/skybox" -> "pipeline/skybox" (keep as-is)
-        let shader_prefix = if name.starts_with("builtin-") {
-            name.strip_prefix("builtin-").unwrap_or(&name)
-        } else {
-            &name
+        // "internal/builtin-graphics" -> "graphics"
+        // "pipeline/skybox" -> "skybox"
+        let shader_prefix: String = {
+            // Extract the base name (after any path prefix)
+            let base_name = name
+                .rsplit('/')
+                .next()
+                .unwrap_or(&name);
+
+            // Remove "builtin-" prefix if present
+            let prefix = base_name
+                .strip_prefix("builtin-")
+                .unwrap_or(base_name);
+
+            prefix.to_string()
         };
 
         // Update pass.program to include the effect name prefix
@@ -753,9 +790,11 @@ impl EffectCompiler {
                         if let Some(code) = programs.get(prog_name) {
                             let resolved = self.resolve_includes(code)?;
                             if func_name == "vert" {
-                                vert_source = self.build_glsl_source(&resolved, "vert")?;
-                            } else if func_name == "frag" {
-                                frag_source = self.build_glsl_source(&resolved, "frag")?;
+                                vert_source = self.build_glsl_source(&resolved, "vert", func_name)?;
+                            } else {
+                                // Handle all fragment entry points: frag, front, back, etc.
+                                // 处理所有片段着色器入口点：frag, front, back 等
+                                frag_source = self.build_glsl_source(&resolved, "frag", func_name)?;
                             }
                         }
                     }
@@ -805,11 +844,31 @@ impl EffectCompiler {
 
     /// Build final GLSL source with proper structure
     /// 构建带有正确结构的最终 GLSL 源码
-    fn build_glsl_source(&self, code: &str, stage: &str) -> Result<String, String> {
+    ///
+    /// # Arguments
+    /// - `code`: The GLSL source code with includes resolved
+    /// - `stage`: "vert" for vertex shader, "frag" for fragment shader
+    /// - `entry_func`: The entry function name (e.g., "vert", "frag", "front", "back")
+    fn build_glsl_source(&self, code: &str, stage: &str, entry_func: &str) -> Result<String, String> {
         // Transform GLSL for WebGL2/GLSL ES 3.0 compatibility
         let transformed = self.transform_glsl_for_webgl2(code);
 
         let mut output = String::new();
+
+        // Add required debug view defines that may be referenced in chunks
+        // These are needed because some chunks use #ifdef CC_USE_SURFACE_SHADER
+        // which enters the block even when CC_USE_SURFACE_SHADER is defined as 0
+        // 添加必需的调试视图定义，这些定义可能在 chunks 中被引用
+        output.push_str("#ifndef CC_SURFACES_DEBUG_VIEW_COMPOSITE_AND_MISC\n");
+        output.push_str("#define CC_SURFACES_DEBUG_VIEW_COMPOSITE_AND_MISC 0\n");
+        output.push_str("#endif\n");
+        output.push_str("#ifndef CC_SURFACES_ENABLE_DEBUG_VIEW\n");
+        output.push_str("#define CC_SURFACES_ENABLE_DEBUG_VIEW 0\n");
+        output.push_str("#endif\n");
+        output.push_str("#ifndef IS_DEBUG_VIEW_COMPOSITE_ENABLE_GAMMA_CORRECTION\n");
+        output.push_str("#define IS_DEBUG_VIEW_COMPOSITE_ENABLE_GAMMA_CORRECTION 0\n");
+        output.push_str("#endif\n\n");
+
         output.push_str("precision highp float;\n");
 
         // Add the processed code
@@ -818,10 +877,10 @@ impl EffectCompiler {
         // Add main function wrapper if needed
         if !transformed.contains("void main()") {
             if stage == "vert" {
-                output.push_str("\nvoid main() { gl_Position = vert(); }\n");
+                output.push_str(&format!("\nvoid main() {{ gl_Position = {}(); }}\n", entry_func));
             } else {
                 output.push_str("\nlayout(location = 0) out vec4 cc_FragColor;\n");
-                output.push_str("void main() { cc_FragColor = frag(); }\n");
+                output.push_str(&format!("void main() {{ cc_FragColor = {}(); }}\n", entry_func));
             }
         }
 
@@ -910,6 +969,62 @@ fn parse_uniform_type(type_str: &str) -> u32 {
     }
 }
 
+/// Parse primitive type from YAML string to GFX PrimitiveMode enum value
+/// 将 YAML 字符串解析为 GFX PrimitiveMode 枚举值
+fn parse_primitive_type(value: &str) -> u32 {
+    match value.to_uppercase().as_str() {
+        "POINT_LIST" => 0,
+        "LINE_LIST" => 1,
+        "LINE_STRIP" => 2,
+        "LINE_LOOP" => 3,
+        "TRIANGLE_LIST" => 4,
+        "TRIANGLE_STRIP" => 5,
+        "TRIANGLE_FAN" => 6,
+        _ => 4, // Default to TRIANGLE_LIST
+    }
+}
+
+/// Parse priority expression from YAML (e.g., "max - 10")
+/// 解析 YAML 中的优先级表达式（如 "max - 10"）
+fn parse_priority(value: &str) -> i32 {
+    let trimmed = value.trim().to_lowercase();
+
+    // Handle "max - N" pattern
+    if trimmed.starts_with("max") {
+        let max_priority: i32 = 255; // ccesengine uses 255 as max
+        if let Some(rest) = trimmed.strip_prefix("max") {
+            let rest = rest.trim();
+            if let Some(minus_part) = rest.strip_prefix('-') {
+                if let Ok(n) = minus_part.trim().parse::<i32>() {
+                    return max_priority - n;
+                }
+            } else if let Some(plus_part) = rest.strip_prefix('+') {
+                if let Ok(n) = plus_part.trim().parse::<i32>() {
+                    return max_priority + n;
+                }
+            }
+        }
+        return max_priority;
+    }
+
+    // Handle "min + N" pattern
+    if trimmed.starts_with("min") {
+        let min_priority: i32 = 0;
+        if let Some(rest) = trimmed.strip_prefix("min") {
+            let rest = rest.trim();
+            if let Some(plus_part) = rest.strip_prefix('+') {
+                if let Ok(n) = plus_part.trim().parse::<i32>() {
+                    return min_priority + n;
+                }
+            }
+        }
+        return min_priority;
+    }
+
+    // Try parsing as a plain number
+    value.trim().parse::<i32>().unwrap_or(128) // Default to 128 (middle priority)
+}
+
 // ============================================================================
 // Tauri Commands
 // Tauri 命令
@@ -943,6 +1058,8 @@ pub async fn compile_builtin_effects(
         "editor/assets/effects/builtin-unlit.effect",
         // Pipeline effects (required for Skybox, etc.)
         "editor/assets/effects/pipeline/skybox.effect",
+        // Geometry renderer (required for Gizmo rendering)
+        "editor/assets/effects/internal/builtin-geometry-renderer.effect",
     ];
 
     let mut results = Vec::new();

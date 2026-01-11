@@ -188,7 +188,18 @@ class SceneServiceImpl implements ISceneService {
     }
 
     private buildSceneTree(nodes: CCESNode[]): SceneNodeInfo[] {
-        return nodes.map((node) => this.nodeToInfo(node));
+        // Filter out editor nodes (names starting with __ or with HideInHierarchy flag)
+        const HideInHierarchy = 1 << 10;
+        return nodes
+            .filter((node) => {
+                // Skip nodes with names starting with __
+                if (node.name?.startsWith('__')) return false;
+                // Skip nodes with HideInHierarchy flag
+                const objFlags = (node as unknown as { _objFlags?: number })._objFlags;
+                if (typeof objFlags === 'number' && (objFlags & HideInHierarchy)) return false;
+                return true;
+            })
+            .map((node) => this.nodeToInfo(node));
     }
 
     private nodeToInfo(node: CCESNode): SceneNodeInfo {

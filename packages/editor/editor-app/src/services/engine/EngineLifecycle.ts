@@ -11,7 +11,7 @@ import type { IEngineAdapter } from './EngineAdapter';
 import type { renderer } from 'cc';
 import { getEngineAdapter } from './EngineAdapter';
 import { getEffectCompiler, type CompiledEffect } from '../EffectCompiler';
-import { builtinEffects } from '../builtinEffectsData';
+import { getCameraService } from './CameraService';
 
 /**
  * @zh 引擎状态
@@ -348,6 +348,10 @@ class EngineLifecycleImpl implements IEngineLifecycle {
 
         const director = this._adapter.director;
         director?.root?.resize(physicalWidth, physicalHeight);
+
+        // Update CameraService viewport size for correct gizmo rendering
+        // Use physical pixels to match the engine's internal size
+        getCameraService().setViewportSize(physicalWidth, physicalHeight);
     }
 
     onStateChange(callback: (state: EngineState) => void): Unsubscribe {
@@ -405,8 +409,9 @@ class EngineLifecycleImpl implements IEngineLifecycle {
     }
 
     private async loadModules(): Promise<void> {
-        // Note: 'graphics' module is required for cc.Graphics component (used by GizmoRenderService)
-        const modules = ['base', 'gfx-webgl2', 'legacy-pipeline', '2d', 'ui', '3d', 'primitive', 'graphics'] as const;
+        // Note: 'graphics' module is required for cc.Graphics component
+        // Note: 'geometry-renderer' module is required for GeometryRenderer (used by GizmoRenderService)
+        const modules = ['base', 'gfx-webgl2', 'legacy-pipeline', '2d', 'ui', '3d', 'primitive', 'graphics', 'geometry-renderer'] as const;
         await this._adapter.loadModules([...modules]);
         this._adapter.exposeGlobal();
     }
@@ -513,25 +518,25 @@ class EngineLifecycleImpl implements IEngineLifecycle {
             return;
         }
 
-        // Try to compile effects from engine source
-        let effectsToRegister: Array<{ name: string; techniques: unknown[]; shaders: unknown[] }> = [];
+        // Compile effects from engine source (required)
+        if (!this._config.engineSourcePath) {
+            console.warn('[EngineLifecycle] No engineSourcePath provided, effects will not be compiled');
+            return;
+        }
 
-        if (this._config.engineSourcePath) {
-            try {
-                const compiler = getEffectCompiler();
-                compiler.setEnginePath(this._config.engineSourcePath);
-                this._compiledEffects = await compiler.compileBuiltinEffects();
-                effectsToRegister = this._compiledEffects as unknown as typeof effectsToRegister;
-                this._effectsRegisteredWithPath = this._config.engineSourcePath;
-            } catch (error) {
-                effectsToRegister = builtinEffects as unknown as typeof effectsToRegister;
-            }
-        } else {
-            effectsToRegister = builtinEffects as unknown as typeof effectsToRegister;
+        try {
+            const compiler = getEffectCompiler();
+            compiler.setEnginePath(this._config.engineSourcePath);
+            this._compiledEffects = await compiler.compileBuiltinEffects();
+            this._effectsRegisteredWithPath = this._config.engineSourcePath;
+        } catch (error) {
+            console.error('[EngineLifecycle] Failed to compile effects:', error);
+            return;
         }
 
         // Register effects
-        for (const effectData of effectsToRegister) {
+        console.log(`[EngineLifecycle] Registering ${this._compiledEffects.length} effects...`);
+        for (const effectData of this._compiledEffects) {
             try {
                 const effect = Object.assign(new EffectAsset(), effectData);
                 effect.shaders.forEach((shaderInfo: unknown, index: number) => {
@@ -542,9 +547,52 @@ class EngineLifecycleImpl implements IEngineLifecycle {
                 });
                 effect.hideInEditor = true;
                 effect.onLoaded();
+                console.log(`[EngineLifecycle] Registered effect: ${effectData.name}`);
             } catch (e) {
                 console.error(`[EngineLifecycle] Failed to register effect ${effectData.name}:`, e);
             }
+        }
+
+        // Verify geometry-renderer effect is registered
+        const allEffects = EffectAsset.getAll?.() ?? {};
+        const geometryRendererEffect = allEffects['internal/builtin-geometry-renderer'];
+        if (geometryRendererEffect) {
+            console.log('[EngineLifecycle] ✓ geometry-renderer effect registered successfully');
+        } else {
+            console.warn('[EngineLifecycle] ✗ geometry-renderer effect NOT found! Available effects:', Object.keys(allEffects));
+        }
+
+        // Re-initialize PipelineSceneData geometry materials now that effects are registered
+        // This is necessary because PipelineSceneData.activate() is called during engine startup
+        // before our effects are registered
+        this.reinitGeometryRendererMaterials();
+    }
+
+    /**
+     * @zh 重新初始化 GeometryRenderer 材质
+     * @en Re-initialize GeometryRenderer materials
+     *
+     * 在 effects 注册后调用，确保 PipelineSceneData 中的材质正确初始化。
+     * Called after effects are registered to ensure PipelineSceneData materials are properly initialized.
+     */
+    private reinitGeometryRendererMaterials(): void {
+        const director = this._adapter.director;
+        if (!director?.root?.pipeline) {
+            console.warn('[EngineLifecycle] Pipeline not available for geometry material init');
+            return;
+        }
+
+        const pipelineSceneData = director.root.pipeline.pipelineSceneData as {
+            initGeometryRendererMaterials?: () => void;
+            geometryRendererPasses?: unknown[];
+        } | undefined;
+
+        if (pipelineSceneData?.initGeometryRendererMaterials) {
+            pipelineSceneData.initGeometryRendererMaterials();
+            const passCount = pipelineSceneData.geometryRendererPasses?.length ?? 0;
+            console.log(`[EngineLifecycle] ✓ GeometryRenderer materials re-initialized (${passCount} passes)`);
+        } else {
+            console.warn('[EngineLifecycle] PipelineSceneData.initGeometryRendererMaterials not available');
         }
     }
 

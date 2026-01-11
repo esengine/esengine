@@ -14,4 +14,10 @@ pub mod theme_tokens;
 pub use state::{ProfilerState, ProjectPaths};
 
 // Re-export egui editor
-pub use egui_editor::{run_editor, EditorApp, EditorState};
+pub use egui_editor::{
+    run_editor,
+    run_editor_with_ccesengine,
+    run_editor_with_webview,
+    EditorApp,
+    EditorState,
+};

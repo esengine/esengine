@@ -1,16 +1,27 @@
 /**
- * @zh Gizmo 渲染服务 - 在 ccesengine 内绘制编辑器 Gizmo
- * @en Gizmo Render Service - Draw editor gizmos inside ccesengine
+ * @zh Gizmo 渲染服务 - 使用 GeometryRenderer 绘制编辑器 Gizmo
+ * @en Gizmo Render Service - Draw editor gizmos using GeometryRenderer
  *
- * 使用 ccesengine 的 Graphics 组件绘制，确保与场景渲染使用相同的坐标系统。
- * Uses ccesengine's Graphics component for drawing, ensuring same coordinate system as scene rendering.
+ * 使用 ccesengine 内置的 GeometryRenderer 进行高效的几何绘制。
+ * 支持 2D 和 3D 场景，无需 Canvas/RenderRoot2D 依赖。
+ *
+ * Uses ccesengine's built-in GeometryRenderer for efficient geometry drawing.
+ * Supports both 2D and 3D scenes without Canvas/RenderRoot2D dependencies.
  */
 
-import type { Unsubscribe } from './types';
 import { getEngineAdapter } from './EngineAdapter';
-import { getCameraService, Layers } from './CameraService';
+import { getCameraService } from './CameraService';
 import { getSelectionService } from './SelectionService';
 import { getTransformService } from './TransformService';
+import { GIZMO_SIZE, GIZMO_COLORS, DEFAULT_OBJECT } from './GizmoConstants';
+
+/**
+ * @zh DirectorEvent 常量（与渲染循环同步）
+ * @en DirectorEvent constants (sync with render loop)
+ */
+const DirectorEvent = {
+    BEFORE_DRAW: 'director_before_draw',
+};
 
 export type TransformTool = 'select' | 'move' | 'rotate' | 'scale';
 
@@ -18,10 +29,51 @@ interface GizmoConfig {
     showGrid: boolean;
     activeTool: TransformTool;
     gridSize: number;
-    gridColor: string;
-    axisXColor: string;
-    axisYColor: string;
-    selectionColor: string;
+}
+
+/**
+ * @zh Vec3 类型接口
+ * @en Vec3 type interface
+ */
+interface Vec3Like {
+    x: number;
+    y: number;
+    z: number;
+    set(x: number, y: number, z: number): Vec3Like;
+}
+
+/**
+ * @zh Color 类型接口
+ * @en Color type interface
+ */
+interface ColorLike {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+    set(r: number, g: number, b: number, a?: number): ColorLike;
+}
+
+/**
+ * @zh GeometryRenderer 接口
+ * @en GeometryRenderer interface
+ */
+interface IGeometryRenderer {
+    activate(device: unknown, info?: { maxLines?: number; maxDashedLines?: number; maxTriangles?: number }): void;
+    destroy(): void;
+    update(): void;
+    reset(): void;
+    empty(): boolean;
+
+    addLine(v0: Vec3Like, v1: Vec3Like, color: ColorLike, depthTest?: boolean): void;
+    addDashedLine(v0: Vec3Like, v1: Vec3Like, color: ColorLike, depthTest?: boolean): void;
+    addTriangle(v0: Vec3Like, v1: Vec3Like, v2: Vec3Like, color: ColorLike, wireframe?: boolean, depthTest?: boolean, unlit?: boolean): void;
+    addQuad(v0: Vec3Like, v1: Vec3Like, v2: Vec3Like, v3: Vec3Like, color: ColorLike, wireframe?: boolean, depthTest?: boolean, unlit?: boolean): void;
+    addCircle(center: Vec3Like, radius: number, color: ColorLike, segments?: number, depthTest?: boolean, useTransform?: boolean, transform?: unknown): void;
+    addArc(center: Vec3Like, radius: number, color: ColorLike, startAngle: number, endAngle: number, segments?: number, depthTest?: boolean, useTransform?: boolean, transform?: unknown): void;
+    addDisc(center: Vec3Like, radius: number, color: ColorLike, segments?: number, wireframe?: boolean, depthTest?: boolean, unlit?: boolean, useTransform?: boolean, transform?: unknown): void;
+    addCross(position: Vec3Like, size: number, color: ColorLike, depthTest?: boolean): void;
+    addPolygon(center: Vec3Like, radius: number, color: ColorLike, segments?: number, wireframe?: boolean, depthTest?: boolean, unlit?: boolean, useTransform?: boolean, transform?: unknown): void;
 }
 
 export interface IGizmoRenderService {
@@ -36,70 +88,91 @@ export interface IGizmoRenderService {
     readonly isInitialized: boolean;
 }
 
+
 class GizmoRenderServiceImpl implements IGizmoRenderService {
     private _isInitialized = false;
-    private _gizmoNode: unknown = null;
-    private _gridGraphics: unknown = null;
-    private _gizmoGraphics: unknown = null;
+    private _geometryRenderer: IGeometryRenderer | null = null;
     private _config: GizmoConfig = {
         showGrid: true,
         activeTool: 'select',
         gridSize: 50,
-        gridColor: 'rgba(255, 255, 255, 0.1)',
-        axisXColor: '#ff4444',
-        axisYColor: '#44ff44',
-        selectionColor: '#4a9eff',
     };
 
-    private _cameraUnsubscribe: Unsubscribe | null = null;
-    private _selectionUnsubscribe: Unsubscribe | null = null;
-    private _updateInterval: number | null = null;
+    private _boundUpdate: (() => void) | null = null;
 
-    // Gizmo constants
-    private readonly GIZMO_AXIS_LENGTH = 80;
-    private readonly GIZMO_ARROW_SIZE = 12;
-    private readonly GIZMO_ROTATE_RADIUS = 60;
-    private readonly GIZMO_HANDLE_SIZE = 10;
+    // Cached Vec3 and Color objects for performance
+    private _v0: Vec3Like | null = null;
+    private _v1: Vec3Like | null = null;
+    private _v2: Vec3Like | null = null;
+    private _v3: Vec3Like | null = null;
+    private _center: Vec3Like | null = null;
+    private _color: ColorLike | null = null;
+
 
     get isInitialized(): boolean {
         return this._isInitialized;
     }
 
     async initialize(): Promise<boolean> {
-        if (this._isInitialized) return true;
-
         const adapter = getEngineAdapter();
-        const director = adapter.director;
-        if (!director) {
+        const cc = adapter.getCC();
+
+        if (!cc) {
+            console.warn('[GizmoRenderService] CC not available');
             return false;
         }
 
-        const scene = director.getScene?.();
-        if (!scene) {
+        // Get the gizmo camera service
+        const cameraService = getCameraService();
+
+        // Ensure gizmo camera exists (this also initializes GeometryRenderer)
+        // This will also detect and recreate cameras if they were destroyed
+        const gizmoCameraCreated = await cameraService.createGizmoCamera();
+        if (!gizmoCameraCreated) {
+            console.warn('[GizmoRenderService] Gizmo camera not created yet');
             return false;
+        }
+
+        // Get the geometry renderer from camera service
+        const newRenderer = cameraService.getGizmoGeometryRenderer() as IGeometryRenderer | null;
+
+        if (!newRenderer) {
+            console.warn('[GizmoRenderService] GeometryRenderer not available');
+            return false;
+        }
+
+        // Check if this is a reinitialization (scene change)
+        if (this._geometryRenderer !== newRenderer) {
+            this._geometryRenderer = newRenderer;
+        }
+
+        // Already initialized with valid renderer
+        if (this._isInitialized) {
+            return true;
         }
 
         try {
-            await this.createGizmoNodes(scene);
+            // Create cached objects first
+            this.createCachedObjects(cc);
+
             this._isInitialized = true;
 
-            // Subscribe to camera changes
-            const cameraService = getCameraService();
-            this._cameraUnsubscribe = cameraService.onCameraChanged(() => {
-                this.update();
-            });
+            // Note: We don't subscribe to camera/selection changes here
+            // All updates happen via BEFORE_DRAW event for perfect synchronization
 
-            // Subscribe to selection changes
-            const selectionService = getSelectionService();
-            this._selectionUnsubscribe = selectionService.onSelectionChanged(() => {
-                this.update();
-            });
+            // Subscribe to director's BEFORE_DRAW event for synchronized updates
+            // This ensures geometry is ready exactly when rendering happens
+            const adapter = getEngineAdapter();
+            const director = adapter.director;
+            if (director?.on) {
+                this._boundUpdate = this.update.bind(this);
+                director.on(DirectorEvent.BEFORE_DRAW, this._boundUpdate);
+            }
 
-            // Set up periodic update for smooth gizmo rendering
-            this._updateInterval = window.setInterval(() => {
-                this.update();
-            }, 1000 / 30) as unknown as number; // 30 FPS
+            // Initial draw
+            this.update();
 
+            console.log('[GizmoRenderService] Initialized with BEFORE_DRAW sync');
             return true;
         } catch (error) {
             console.error('[GizmoRenderService] Failed to initialize:', error);
@@ -107,30 +180,45 @@ class GizmoRenderServiceImpl implements IGizmoRenderService {
         }
     }
 
+    private createCachedObjects(cc: unknown): void {
+        const Vec3Class = (cc as { Vec3?: new () => Vec3Like }).Vec3;
+        const ColorClass = (cc as { Color?: new () => ColorLike }).Color;
+
+        if (Vec3Class) {
+            this._v0 = new Vec3Class();
+            this._v1 = new Vec3Class();
+            this._v2 = new Vec3Class();
+            this._v3 = new Vec3Class();
+            this._center = new Vec3Class();
+        }
+
+        if (ColorClass) {
+            this._color = new ColorClass();
+        }
+    }
+
     dispose(): void {
-        if (this._updateInterval !== null) {
-            window.clearInterval(this._updateInterval);
-            this._updateInterval = null;
+        // Unsubscribe from director event
+        if (this._boundUpdate) {
+            const adapter = getEngineAdapter();
+            const director = adapter.director;
+            if (director?.off) {
+                director.off(DirectorEvent.BEFORE_DRAW, this._boundUpdate);
+            }
+            this._boundUpdate = null;
         }
 
-        if (this._cameraUnsubscribe) {
-            this._cameraUnsubscribe();
-            this._cameraUnsubscribe = null;
-        }
+        // Note: We don't destroy the geometry renderer because it's owned by the camera
+        // The camera will clean up its own geometry renderer when destroyed
+        this._geometryRenderer = null;
 
-        if (this._selectionUnsubscribe) {
-            this._selectionUnsubscribe();
-            this._selectionUnsubscribe = null;
-        }
+        this._v0 = null;
+        this._v1 = null;
+        this._v2 = null;
+        this._v3 = null;
+        this._center = null;
+        this._color = null;
 
-        if (this._gizmoNode) {
-            const node = this._gizmoNode as { destroy?: () => void };
-            node.destroy?.();
-            this._gizmoNode = null;
-        }
-
-        this._gridGraphics = null;
-        this._gizmoGraphics = null;
         this._isInitialized = false;
     }
 
@@ -145,212 +233,194 @@ class GizmoRenderServiceImpl implements IGizmoRenderService {
     }
 
     update(): void {
-        if (!this._isInitialized) return;
+        if (!this._isInitialized || !this._geometryRenderer) {
+            return;
+        }
 
+        // Check if geometry renderer is still valid (might be destroyed on scene change)
+        try {
+            // Reset geometry buffers
+            this._geometryRenderer.reset();
+        } catch {
+            // Geometry renderer became invalid, need to reinitialize
+            this._geometryRenderer = null;
+            this.initialize();
+            return;
+        }
+
+        // Force update gizmo camera's internal state before drawing
+        // This ensures the frustum culling uses the latest orthoHeight
+        this.updateGizmoCameraState();
+
+        // Draw grid
         this.drawGrid();
+
+        // Draw gizmo for selected object
         this.drawGizmo();
-    }
 
-    private async createGizmoNodes(scene: unknown): Promise<void> {
-        const adapter = getEngineAdapter();
-        const cc = adapter.getCC();
-        if (!cc) throw new Error('CC not available');
-
-        const NodeClass = cc.Node as { new (name: string): unknown };
-        if (!NodeClass) throw new Error('cc.Node not available');
-
-        const sceneNode = scene as { addChild?: (child: unknown) => void };
-
-
-        // Create main gizmo container node
-        this._gizmoNode = new NodeClass('__EditorGizmo__');
-        const gizmoNode = this._gizmoNode as {
-            layer?: number;
-            setSiblingIndex?: (index: number) => void;
-            addComponent?: (type: string) => unknown;
-            addChild?: (child: unknown) => void;
-        };
-
-        // Use GIZMO layer so only the gizmo camera can see it
-        gizmoNode.layer = Layers.GIZMO;
-
-        // Add to scene
-        sceneNode.addChild?.(this._gizmoNode);
-
-        // Move to end of sibling list to render last
-        gizmoNode.setSiblingIndex?.(999999);
-
-        // Create grid node with Graphics
-        const gridNode = new NodeClass('__Grid__');
-        const gridNodeTyped = gridNode as {
-            layer?: number;
-            addComponent?: (type: string) => unknown;
-        };
-        gridNodeTyped.layer = Layers.GIZMO;
-        this._gridGraphics = gridNodeTyped.addComponent?.('cc.Graphics');
-        gizmoNode.addChild?.(gridNode);
-
-        // Create gizmo node with Graphics
-        const gizmoGraphicsNode = new NodeClass('__GizmoGraphics__');
-        const gizmoGraphicsNodeTyped = gizmoGraphicsNode as {
-            layer?: number;
-            addComponent?: (type: string) => unknown;
-        };
-        gizmoGraphicsNodeTyped.layer = Layers.GIZMO;
-        this._gizmoGraphics = gizmoGraphicsNodeTyped.addComponent?.('cc.Graphics');
-        gizmoNode.addChild?.(gizmoGraphicsNode);
-
-        // Configure graphics
-        this.configureGraphics(this._gridGraphics);
-        this.configureGraphics(this._gizmoGraphics);
-    }
-
-    private configureGraphics(graphics: unknown): void {
-        if (!graphics) return;
-
-        const g = graphics as {
-            lineWidth?: number;
-            strokeColor?: unknown;
-            fillColor?: unknown;
-        };
-
-        g.lineWidth = 1;
+        // Upload vertex data to GPU
+        this._geometryRenderer.update();
     }
 
     /**
-     * @zh 创建颜色对象
-     * @en Create color object
+     * @zh 强制更新 Gizmo 相机的内部状态
+     * @en Force update gizmo camera's internal state
+     *
+     * 确保相机的投影矩阵和视锥在绘制前更新，避免裁剪问题。
+     * Ensures camera's projection matrix and frustum are updated before drawing.
      */
-    private createColor(r: number, g: number, b: number, a = 255): unknown {
-        const adapter = getEngineAdapter();
-        const cc = adapter.getCC();
+    private updateGizmoCameraState(): void {
+        const cameraService = getCameraService();
+        const renderCamera = cameraService.getGizmoCameraRenderCamera();
 
-        if (cc?.Color) {
-            try {
-                const Color = cc.Color as { new (r?: number, g?: number, b?: number, a?: number): unknown };
-                const color = new Color(r, g, b, a);
-                if (color) return color;
-            } catch {
-                // Fall through to next approach
-            }
+        if (renderCamera) {
+            const cam = renderCamera as {
+                update?: (forceUpdate?: boolean) => void;
+                updateExposure?: () => void;
+            };
+            // Force update the internal render camera state with forceUpdate=true
+            // This ensures projection matrix and frustum are recalculated
+            cam.update?.(true);
         }
-
-        if (cc?.color) {
-            try {
-                const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-                const color = cc.color(hex);
-                if (color) {
-                    (color as { a?: number }).a = a;
-                    return color;
-                }
-            } catch {
-                // Fall through to fallback
-            }
-        }
-
-        // Last fallback: return a plain object with color properties
-        // This prevents null reference errors when Graphics.stroke tries to copy the color
-        return { r, g, b, a };
     }
 
+    /**
+     * @zh 设置颜色
+     * @en Set color
+     */
+    private setColor(colorDef: { r: number; g: number; b: number; a: number }): ColorLike {
+        if (this._color) {
+            this._color.set(colorDef.r, colorDef.g, colorDef.b, colorDef.a);
+            return this._color;
+        }
+        return colorDef as ColorLike;
+    }
+
+    /**
+     * @zh 绘制多层级自适应网格（类似虚幻引擎）
+     * @en Draw multi-level adaptive grid (like Unreal Engine)
+     *
+     * 网格会根据缩放级别自动调整：
+     * - 缩小时显示更大的网格间距
+     * - 放大时显示更细的网格
+     * - 多层级网格叠加显示，粗网格颜色更亮
+     */
     private drawGrid(): void {
-        const graphics = this._gridGraphics as {
-            clear?: () => void;
-            strokeColor?: unknown;
-            lineWidth?: number;
-            moveTo?: (x: number, y: number) => void;
-            lineTo?: (x: number, y: number) => void;
-            stroke?: () => void;
-            circle?: (x: number, y: number, radius: number) => void;
-            fill?: () => void;
-            fillColor?: unknown;
-        };
-
-        if (!graphics || !graphics.clear) return;
-
-        graphics.clear();
-
-        if (!this._config.showGrid) return;
+        if (!this._config.showGrid || !this._geometryRenderer) return;
+        if (!this._v0 || !this._v1) return;
 
         const cameraService = getCameraService();
         const camera = cameraService.state;
         const viewport = cameraService.getViewportSize();
 
-        const gridSize = this._config.gridSize;
-        const halfWidth = viewport.width / 2 / camera.zoom;
+        // Calculate visible bounds based on viewport size and zoom
+        // Always use calculated values to ensure consistency with camera sync
+        // orthoHeight = viewportHeight / 2 / zoom (same formula as CameraService.syncGizmoCamera)
         const halfHeight = viewport.height / 2 / camera.zoom;
+        const halfWidth = viewport.width / 2 / camera.zoom;
 
-        // Calculate visible grid range in world coordinates
         const cameraX = -camera.x;
         const cameraY = -camera.y;
 
-        const left = cameraX - halfWidth - gridSize;
-        const right = cameraX + halfWidth + gridSize;
-        const bottom = cameraY - halfHeight - gridSize;
-        const top = cameraY + halfHeight + gridSize;
+        // Add safety margin to ensure lines at edges are visible
+        // GPU clipping can be slightly different from our calculation
+        const margin = Math.max(halfWidth, halfHeight) * 0.15;
+        const left = cameraX - halfWidth - margin;
+        const right = cameraX + halfWidth + margin;
+        const bottom = cameraY - halfHeight - margin;
+        const top = cameraY + halfHeight + margin;
 
-        // Snap to grid
-        const startX = Math.floor(left / gridSize) * gridSize;
-        const startY = Math.floor(bottom / gridSize) * gridSize;
+        // Multi-level grid sizes (each level is 10x the previous)
+        // Extended to support high zoom levels (zoom > 1)
+        const GRID_SIZE_LEVELS = [0.1, 1, 10, 100, 1000, 10000] as const;
 
-        // Draw minor grid lines
-        graphics.strokeColor = this.createColor(51, 51, 51); // #333333
-        graphics.lineWidth = 1;
+        // Calculate which grid levels to show based on zoom
+        // We want roughly 10-50 lines visible at any zoom level
+        const viewSize = Math.max(halfWidth, halfHeight) * 2;
+        const targetLineCount = 20;
+        const idealGridSize = viewSize / targetLineCount;
 
-        // Vertical lines
-        for (let x = startX; x <= right; x += gridSize) {
-            graphics.moveTo?.(x, bottom);
-            graphics.lineTo?.(x, top);
+        // Find the best base grid size (the largest size that gives reasonable line count)
+        let primaryGridSize: number = GRID_SIZE_LEVELS[0];
+        for (const size of GRID_SIZE_LEVELS) {
+            if (size <= idealGridSize * 2) {
+                primaryGridSize = size;
+            }
         }
-        // Horizontal lines
-        for (let y = startY; y <= top; y += gridSize) {
-            graphics.moveTo?.(left, y);
-            graphics.lineTo?.(right, y);
+
+        // Build grid levels to draw
+        const gridLevels: Array<{ size: number; alpha: number }> = [];
+
+        // Add finer grid if zoomed in enough (1/10 of primary)
+        const finerSize = primaryGridSize / 10;
+        if (finerSize >= 0.01 && viewSize < primaryGridSize * 30) {
+            gridLevels.push({ size: finerSize, alpha: 60 });
         }
-        graphics.stroke?.();
 
-        // Draw origin axes
-        // X axis (red)
-        graphics.strokeColor = this.createColor(255, 68, 68); // #ff4444
-        graphics.lineWidth = 2;
-        graphics.moveTo?.(left, 0);
-        graphics.lineTo?.(right, 0);
-        graphics.stroke?.();
+        // Primary grid
+        gridLevels.push({ size: primaryGridSize, alpha: 150 });
 
-        // Y axis (green)
-        graphics.strokeColor = this.createColor(68, 255, 68); // #44ff44
-        graphics.moveTo?.(0, bottom);
-        graphics.lineTo?.(0, top);
-        graphics.stroke?.();
+        // Major grid (10x primary, brighter)
+        const majorSize = primaryGridSize * 10;
+        if (majorSize <= 10000) {
+            gridLevels.push({ size: majorSize, alpha: 220 });
+        }
 
-        // Origin marker
-        graphics.fillColor = this.createColor(74, 158, 255); // #4a9eff
-        graphics.circle?.(0, 0, 5 / camera.zoom);
-        graphics.fill?.();
+        // Draw each grid level
+        for (const level of gridLevels) {
+            const gridSize = level.size;
+            const alpha = level.alpha;
+
+            // Limit line count to prevent performance issues
+            const lineCountX = Math.ceil((right - left) / gridSize) + 2;
+            const lineCountY = Math.ceil((top - bottom) / gridSize) + 2;
+
+            if (lineCountX > 200 || lineCountY > 200) continue; // Skip if too many lines
+
+            const startX = Math.floor(left / gridSize) * gridSize;
+            const startY = Math.floor(bottom / gridSize) * gridSize;
+
+            // Grid color with dynamic alpha
+            const gridColor = this.setColor({ r: 80, g: 80, b: 80, a: alpha });
+
+            // Draw vertical lines
+            for (let x = startX; x <= right + gridSize; x += gridSize) {
+                // Skip axis lines (drawn separately)
+                if (Math.abs(x) < 0.001) continue;
+                this._v0.set(x, bottom, 0);
+                this._v1.set(x, top, 0);
+                this._geometryRenderer.addLine(this._v0, this._v1, gridColor, false);
+            }
+
+            // Draw horizontal lines
+            for (let y = startY; y <= top + gridSize; y += gridSize) {
+                // Skip axis lines (drawn separately)
+                if (Math.abs(y) < 0.001) continue;
+                this._v0.set(left, y, 0);
+                this._v1.set(right, y, 0);
+                this._geometryRenderer.addLine(this._v0, this._v1, gridColor, false);
+            }
+        }
+
+        // Draw X axis (red) - always on top
+        const xAxisColor = this.setColor(GIZMO_COLORS.AXIS_X);
+        this._v0.set(left, 0, 0);
+        this._v1.set(right, 0, 0);
+        this._geometryRenderer.addLine(this._v0, this._v1, xAxisColor, false);
+
+        // Draw Y axis (green) - always on top
+        const yAxisColor = this.setColor(GIZMO_COLORS.AXIS_Y);
+        this._v0.set(0, bottom, 0);
+        this._v1.set(0, top, 0);
+        this._geometryRenderer.addLine(this._v0, this._v1, yAxisColor, false);
     }
 
+    /**
+     * @zh 绘制 Gizmo
+     * @en Draw Gizmo
+     */
     private drawGizmo(): void {
-        const graphics = this._gizmoGraphics as {
-            clear?: () => void;
-            strokeColor?: unknown;
-            fillColor?: unknown;
-            lineWidth?: number;
-            moveTo?: (x: number, y: number) => void;
-            lineTo?: (x: number, y: number) => void;
-            stroke?: () => void;
-            circle?: (x: number, y: number, radius: number) => void;
-            rect?: (x: number, y: number, width: number, height: number) => void;
-            fill?: () => void;
-            close?: () => void;
-        };
-
-        if (!graphics || !graphics.clear) return;
-
-        const adapter = getEngineAdapter();
-        const cc = adapter.getCC();
-        if (!cc) return;
-
-        graphics.clear();
+        if (!this._geometryRenderer) return;
 
         const selectionService = getSelectionService();
         const selectedId = selectionService.primarySelectedId;
@@ -372,232 +442,219 @@ class GizmoRenderServiceImpl implements IGizmoRenderService {
         const worldY = transform.position.y;
 
         // Draw selection outline
-        this.drawSelectionOutline(graphics, worldX, worldY, transform.scale.x, transform.scale.y, scale);
+        this.drawSelectionOutline(worldX, worldY, transform.scale.x, transform.scale.y, scale);
 
         // Draw tool-specific gizmo
         switch (this._config.activeTool) {
             case 'move':
-                this.drawMoveGizmo(graphics, worldX, worldY, scale);
+                this.drawMoveGizmo(worldX, worldY, scale);
                 break;
             case 'rotate':
-                this.drawRotateGizmo(graphics, worldX, worldY, scale);
+                this.drawRotateGizmo(worldX, worldY, scale);
                 break;
             case 'scale':
-                this.drawScaleGizmo(graphics, worldX, worldY, transform.scale.x, transform.scale.y, scale);
+                this.drawScaleGizmo(worldX, worldY, transform.scale.x, transform.scale.y, scale);
                 break;
         }
     }
 
+    /**
+     * @zh 绘制选择轮廓
+     * @en Draw selection outline
+     */
     private drawSelectionOutline(
-        graphics: unknown,
         x: number,
         y: number,
         scaleX: number,
         scaleY: number,
         gizmoScale: number
     ): void {
-        const g = graphics as {
-            strokeColor?: unknown;
-            lineWidth?: number;
-            rect?: (x: number, y: number, width: number, height: number) => void;
-            stroke?: () => void;
-            fillColor?: unknown;
-            fill?: () => void;
-        };
+        if (!this._geometryRenderer || !this._v0 || !this._v1 || !this._v2 || !this._v3) return;
 
-        // Assume 100 unit base size
-        const halfW = 50 * scaleX + 4 * gizmoScale;
-        const halfH = 50 * scaleY + 4 * gizmoScale;
+        const halfW = DEFAULT_OBJECT.HALF_SIZE * scaleX + DEFAULT_OBJECT.SELECTION_PADDING * gizmoScale;
+        const halfH = DEFAULT_OBJECT.HALF_SIZE * scaleY + DEFAULT_OBJECT.SELECTION_PADDING * gizmoScale;
 
-        g.strokeColor = this.createColor(74, 158, 255); // #4a9eff
-        g.lineWidth = 2 * gizmoScale;
-        g.rect?.(x - halfW, y - halfH, halfW * 2, halfH * 2);
-        g.stroke?.();
+        const selectionColor = this.setColor(GIZMO_COLORS.SELECTION);
 
-        // Corner handles
-        const handleSize = 6 * gizmoScale;
-        g.fillColor = this.createColor(74, 158, 255); // #4a9eff
+        // Draw bounding box (4 lines)
+        this._v0.set(x - halfW, y - halfH, 0);
+        this._v1.set(x + halfW, y - halfH, 0);
+        this._v2.set(x + halfW, y + halfH, 0);
+        this._v3.set(x - halfW, y + halfH, 0);
+
+        this._geometryRenderer.addLine(this._v0, this._v1, selectionColor, false);
+        this._geometryRenderer.addLine(this._v1, this._v2, selectionColor, false);
+        this._geometryRenderer.addLine(this._v2, this._v3, selectionColor, false);
+        this._geometryRenderer.addLine(this._v3, this._v0, selectionColor, false);
+
+        // Draw corner handles as small quads
+        const handleSize = GIZMO_SIZE.CORNER_HANDLE_SIZE * gizmoScale;
         const corners = [
-            [x - halfW, y - halfH],
-            [x + halfW, y - halfH],
-            [x - halfW, y + halfH],
-            [x + halfW, y + halfH],
+            { x: x - halfW, y: y - halfH },
+            { x: x + halfW, y: y - halfH },
+            { x: x - halfW, y: y + halfH },
+            { x: x + halfW, y: y + halfH },
         ];
+
         for (const corner of corners) {
-            const cx = corner[0]!;
-            const cy = corner[1]!;
-            g.rect?.(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
-            g.fill?.();
+            this.drawFilledRect(corner.x, corner.y, handleSize, selectionColor);
         }
     }
 
-    private drawMoveGizmo(
-        graphics: unknown,
-        x: number,
-        y: number,
-        scale: number
-    ): void {
-        const g = graphics as {
-            strokeColor?: unknown;
-            fillColor?: unknown;
-            lineWidth?: number;
-            moveTo?: (x: number, y: number) => void;
-            lineTo?: (x: number, y: number) => void;
-            stroke?: () => void;
-            rect?: (x: number, y: number, width: number, height: number) => void;
-            fill?: () => void;
-            close?: () => void;
-        };
+    /**
+     * @zh 绘制移动 Gizmo
+     * @en Draw move gizmo
+     */
+    private drawMoveGizmo(x: number, y: number, scale: number): void {
+        if (!this._geometryRenderer || !this._v0 || !this._v1 || !this._v2 || !this._center) return;
 
-        const axisLength = this.GIZMO_AXIS_LENGTH * scale;
-        const arrowSize = this.GIZMO_ARROW_SIZE * scale;
+        const axisLength = GIZMO_SIZE.AXIS_LENGTH * scale;
+        const arrowSize = GIZMO_SIZE.ARROW_SIZE * scale;
 
         // X axis (red)
-        g.strokeColor = this.createColor(255, 68, 68); // #ff4444
-        g.fillColor = this.createColor(255, 68, 68);
-        g.lineWidth = 3 * scale;
-        g.moveTo?.(x, y);
-        g.lineTo?.(x + axisLength, y);
-        g.stroke?.();
+        const xColor = this.setColor(GIZMO_COLORS.AXIS_X);
+        this._v0.set(x, y, 0);
+        this._v1.set(x + axisLength, y, 0);
+        this._geometryRenderer.addLine(this._v0, this._v1, xColor, false);
 
-        // X arrow
-        g.moveTo?.(x + axisLength + arrowSize, y);
-        g.lineTo?.(x + axisLength - 4 * scale, y + 6 * scale);
-        g.lineTo?.(x + axisLength - 4 * scale, y - 6 * scale);
-        g.close?.();
-        g.fill?.();
+        // X arrow (triangle)
+        this._v0.set(x + axisLength + arrowSize, y, 0);
+        this._v1.set(x + axisLength - 4 * scale, y + 6 * scale, 0);
+        this._v2.set(x + axisLength - 4 * scale, y - 6 * scale, 0);
+        this._geometryRenderer.addTriangle(this._v0, this._v1, this._v2, xColor, false, false, true);
 
         // Y axis (green)
-        g.strokeColor = this.createColor(68, 255, 68); // #44ff44
-        g.fillColor = this.createColor(68, 255, 68);
-        g.moveTo?.(x, y);
-        g.lineTo?.(x, y + axisLength);
-        g.stroke?.();
+        const yColor = this.setColor(GIZMO_COLORS.AXIS_Y);
+        this._v0.set(x, y, 0);
+        this._v1.set(x, y + axisLength, 0);
+        this._geometryRenderer.addLine(this._v0, this._v1, yColor, false);
 
-        // Y arrow
-        g.moveTo?.(x, y + axisLength + arrowSize);
-        g.lineTo?.(x - 6 * scale, y + axisLength - 4 * scale);
-        g.lineTo?.(x + 6 * scale, y + axisLength - 4 * scale);
-        g.close?.();
-        g.fill?.();
+        // Y arrow (triangle)
+        this._v0.set(x, y + axisLength + arrowSize, 0);
+        this._v1.set(x - 6 * scale, y + axisLength - 4 * scale, 0);
+        this._v2.set(x + 6 * scale, y + axisLength - 4 * scale, 0);
+        this._geometryRenderer.addTriangle(this._v0, this._v1, this._v2, yColor, false, false, true);
 
-        // Center XY handle (yellow)
-        g.fillColor = this.createColor(255, 255, 68); // #ffff44
-        g.strokeColor = this.createColor(204, 204, 0); // #cccc00
-        g.lineWidth = 2 * scale;
-        const handleSize = 16 * scale;
-        g.rect?.(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-        g.fill?.();
-        g.stroke?.();
+        // Center XY handle (yellow square)
+        const centerColor = this.setColor(GIZMO_COLORS.MOVE_CENTER);
+        const handleSize = GIZMO_SIZE.CENTER_HANDLE_SIZE * scale;
+        this.drawFilledRect(x, y, handleSize, centerColor);
     }
 
-    private drawRotateGizmo(
-        graphics: unknown,
-        x: number,
-        y: number,
-        scale: number
-    ): void {
-        const g = graphics as {
-            strokeColor?: unknown;
-            fillColor?: unknown;
-            lineWidth?: number;
-            circle?: (x: number, y: number, radius: number) => void;
-            stroke?: () => void;
-            fill?: () => void;
-            moveTo?: (x: number, y: number) => void;
-            lineTo?: (x: number, y: number) => void;
-        };
+    /**
+     * @zh 绘制旋转 Gizmo
+     * @en Draw rotate gizmo
+     */
+    private drawRotateGizmo(x: number, y: number, scale: number): void {
+        if (!this._geometryRenderer || !this._center || !this._v0 || !this._v1) return;
 
-        const radius = this.GIZMO_ROTATE_RADIUS * scale;
+        const radius = GIZMO_SIZE.ROTATE_RADIUS * scale;
+        const rotateColor = this.setColor(GIZMO_COLORS.ROTATE);
 
         // Rotation circle
-        g.strokeColor = this.createColor(74, 158, 255); // #4a9eff
-        g.lineWidth = 3 * scale;
-        g.circle?.(x, y, radius);
-        g.stroke?.();
+        this._center.set(x, y, 0);
+        this._geometryRenderer.addCircle(this._center, radius, rotateColor, 64, false);
 
         // Handle at 0 degrees
-        g.fillColor = this.createColor(74, 158, 255); // #4a9eff
-        g.circle?.(x + radius, y, 8 * scale);
-        g.fill?.();
+        const handlePos = { x: x + radius, y: y };
+        this._center.set(handlePos.x, handlePos.y, 0);
+        this._geometryRenderer.addDisc(this._center, 8 * scale, rotateColor, 16, false, false, true);
 
-        // Angle indicators
-        g.strokeColor = this.createColor(74, 158, 255, 77); // rgba(74, 158, 255, 0.3)
-        g.lineWidth = 1 * scale;
+        // Angle indicators (8 lines from center)
+        const indicatorColor = this.setColor({ r: 74, g: 158, b: 255, a: 77 }); // 30% alpha
         for (let i = 0; i < 8; i++) {
             const angle = (i * Math.PI) / 4;
-            g.moveTo?.(x, y);
-            g.lineTo?.(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+            this._v0.set(x, y, 0);
+            this._v1.set(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, 0);
+            this._geometryRenderer.addLine(this._v0, this._v1, indicatorColor, false);
         }
-        g.stroke?.();
 
         // Center dot
-        g.fillColor = this.createColor(74, 158, 255); // #4a9eff
-        g.circle?.(x, y, 5 * scale);
-        g.fill?.();
+        this._center.set(x, y, 0);
+        this._geometryRenderer.addDisc(this._center, 5 * scale, rotateColor, 16, false, false, true);
     }
 
+    /**
+     * @zh 绘制缩放 Gizmo
+     * @en Draw scale gizmo
+     */
     private drawScaleGizmo(
-        graphics: unknown,
         x: number,
         y: number,
         scaleX: number,
         scaleY: number,
         gizmoScale: number
     ): void {
-        const g = graphics as {
-            strokeColor?: unknown;
-            fillColor?: unknown;
-            lineWidth?: number;
-            rect?: (x: number, y: number, width: number, height: number) => void;
-            stroke?: () => void;
-            fill?: () => void;
-            circle?: (x: number, y: number, radius: number) => void;
-        };
+        if (!this._geometryRenderer || !this._v0 || !this._v1 || !this._v2 || !this._v3 || !this._center) return;
 
-        const halfW = 50 * scaleX;
-        const halfH = 50 * scaleY;
-        const handleSize = this.GIZMO_HANDLE_SIZE * gizmoScale;
+        const halfW = DEFAULT_OBJECT.HALF_SIZE * scaleX;
+        const halfH = DEFAULT_OBJECT.HALF_SIZE * scaleY;
+        const handleSize = GIZMO_SIZE.HANDLE_SIZE * gizmoScale;
 
-        // Bounding box
-        g.strokeColor = this.createColor(255, 170, 0); // #ffaa00
-        g.lineWidth = 2 * gizmoScale;
-        g.rect?.(x - halfW, y - halfH, halfW * 2, halfH * 2);
-        g.stroke?.();
+        const scaleColor = this.setColor(GIZMO_COLORS.SCALE);
 
-        // Corner handles (yellow)
-        g.fillColor = this.createColor(255, 170, 0); // #ffaa00
+        // Bounding box (4 lines)
+        this._v0.set(x - halfW, y - halfH, 0);
+        this._v1.set(x + halfW, y - halfH, 0);
+        this._v2.set(x + halfW, y + halfH, 0);
+        this._v3.set(x - halfW, y + halfH, 0);
+
+        this._geometryRenderer.addLine(this._v0, this._v1, scaleColor, false);
+        this._geometryRenderer.addLine(this._v1, this._v2, scaleColor, false);
+        this._geometryRenderer.addLine(this._v2, this._v3, scaleColor, false);
+        this._geometryRenderer.addLine(this._v3, this._v0, scaleColor, false);
+
+        // Corner handles (orange)
         const corners = [
-            [x - halfW, y - halfH],
-            [x + halfW, y - halfH],
-            [x - halfW, y + halfH],
-            [x + halfW, y + halfH],
+            { x: x - halfW, y: y - halfH },
+            { x: x + halfW, y: y - halfH },
+            { x: x - halfW, y: y + halfH },
+            { x: x + halfW, y: y + halfH },
         ];
         for (const corner of corners) {
-            const cx = corner[0]!;
-            const cy = corner[1]!;
-            g.rect?.(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
-            g.fill?.();
+            this.drawFilledRect(corner.x, corner.y, handleSize, scaleColor);
         }
 
-        // X handles (red)
-        g.fillColor = this.createColor(255, 68, 68); // #ff4444
-        g.rect?.(x - halfW - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-        g.fill?.();
-        g.rect?.(x + halfW - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-        g.fill?.();
+        // X handles (red) - left and right edges
+        const xColor = this.setColor(GIZMO_COLORS.AXIS_X);
+        this.drawFilledRect(x - halfW, y, handleSize, xColor);
+        this.drawFilledRect(x + halfW, y, handleSize, xColor);
 
-        // Y handles (green)
-        g.fillColor = this.createColor(68, 255, 68); // #44ff44
-        g.rect?.(x - handleSize / 2, y - halfH - handleSize / 2, handleSize, handleSize);
-        g.fill?.();
-        g.rect?.(x - handleSize / 2, y + halfH - handleSize / 2, handleSize, handleSize);
-        g.fill?.();
+        // Y handles (green) - top and bottom edges
+        const yColor = this.setColor(GIZMO_COLORS.AXIS_Y);
+        this.drawFilledRect(x, y - halfH, handleSize, yColor);
+        this.drawFilledRect(x, y + halfH, handleSize, yColor);
 
-        // Center
-        g.fillColor = this.createColor(255, 170, 0); // #ffaa00
-        g.circle?.(x, y, 6 * gizmoScale);
-        g.fill?.();
+        // Center dot
+        this._center.set(x, y, 0);
+        this._geometryRenderer.addDisc(this._center, 6 * gizmoScale, scaleColor, 16, false, false, true);
+    }
+
+    /**
+     * @zh 绘制填充矩形（作为两个三角形）
+     * @en Draw filled rectangle (as two triangles)
+     */
+    private drawFilledRect(cx: number, cy: number, size: number, color: ColorLike): void {
+        if (!this._geometryRenderer || !this._v0 || !this._v1 || !this._v2 || !this._v3) return;
+
+        const halfSize = size / 2;
+
+        // Define quad vertices
+        this._v0.set(cx - halfSize, cy - halfSize, 0);
+        this._v1.set(cx + halfSize, cy - halfSize, 0);
+        this._v2.set(cx + halfSize, cy + halfSize, 0);
+        this._v3.set(cx - halfSize, cy + halfSize, 0);
+
+        // Draw as quad (two triangles internally)
+        this._geometryRenderer.addQuad(this._v0, this._v1, this._v2, this._v3, color, false, false, true);
+    }
+
+    /**
+     * @zh 获取 GeometryRenderer（供渲染管线调用）
+     * @en Get GeometryRenderer (for render pipeline)
+     */
+    getRenderer(): IGeometryRenderer | null {
+        return this._geometryRenderer;
     }
 }
 

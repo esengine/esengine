@@ -13,7 +13,10 @@ pub mod webview;
 pub mod widgets;
 
 use eframe::egui;
+use raw_window_handle::HasWindowHandle;
+use std::path::Path;
 
+use crate::commands::effect_compiler::EffectCompiler;
 use crate::theme_egui::build_egui_theme;
 use crate::theme_tokens::ThemeTokens;
 
@@ -32,6 +35,15 @@ pub use webview::{protocol, webview_viewport_area, WebViewViewport};
 /// @en Editor application
 pub struct EditorApp {
     pub state: EditorState,
+    /// @zh WebView2 视口（用于渲染 ccesengine）
+    /// @en WebView2 viewport (for rendering ccesengine)
+    pub webview_viewport: Option<WebViewViewport>,
+    /// @zh 是否使用 WebView 渲染视口
+    /// @en Whether to use WebView for viewport rendering
+    pub use_webview: bool,
+    /// @zh WebView 是否已初始化
+    /// @en Whether WebView has been initialized
+    webview_initialized: bool,
 }
 
 impl EditorApp {
@@ -40,18 +52,188 @@ impl EditorApp {
     pub fn new(tokens: ThemeTokens) -> Self {
         Self {
             state: EditorState::new(tokens),
+            webview_viewport: None,
+            use_webview: false,
+            webview_initialized: false,
+        }
+    }
+
+    /// @zh 创建启用 WebView 的编辑器应用
+    /// @en Create editor application with WebView enabled
+    pub fn with_webview(tokens: ThemeTokens, url: impl Into<String>) -> Self {
+        Self {
+            state: EditorState::new(tokens),
+            webview_viewport: Some(WebViewViewport::new(url)),
+            use_webview: true,
+            webview_initialized: false,
+        }
+    }
+
+    /// @zh 创建嵌入式 ccesengine 编辑器应用（使用默认路径）
+    /// @en Create embedded ccesengine editor application (using default path)
+    ///
+    /// @zh 使用嵌入的 HTML 和自定义协议从本地文件系统加载 ccesengine 模块。
+    /// @en Uses embedded HTML and custom protocol to load ccesengine modules from local filesystem.
+    pub fn with_ccesengine(tokens: ThemeTokens) -> Self {
+        let assets_path = crate::egui_editor::find_ccesengine_assets_path();
+        Self {
+            state: EditorState::new(tokens),
+            webview_viewport: Some(WebViewViewport::with_embedded_ccesengine(assets_path)),
+            use_webview: true,
+            webview_initialized: false,
+        }
+    }
+
+    /// @zh 创建连接 ccesengine 的编辑器应用（自定义服务器地址）
+    /// @en Create editor application connected to ccesengine (custom server address)
+    #[allow(dead_code)]
+    pub fn with_ccesengine_server(tokens: ThemeTokens, vite_server: impl Into<String>) -> Self {
+        Self {
+            state: EditorState::new(tokens),
+            webview_viewport: Some(WebViewViewport::new(vite_server)),
+            use_webview: true,
+            webview_initialized: false,
+        }
+    }
+
+    /// @zh 创建嵌入式 ccesengine 编辑器应用
+    /// @en Create embedded ccesengine editor application
+    ///
+    /// @zh 使用嵌入的 HTML 和自定义协议从本地文件系统加载 ccesengine 模块。
+    /// @zh 不需要外部 Vite 服务器。
+    /// @en Uses embedded HTML and custom protocol to load ccesengine modules from local filesystem.
+    /// @en No external Vite server required.
+    ///
+    /// # Arguments
+    /// * `assets_path` - ccesengine 资源目录路径（包含 ccesengine/ 子目录）
+    pub fn with_embedded_ccesengine(tokens: ThemeTokens, assets_path: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            state: EditorState::new(tokens),
+            webview_viewport: Some(WebViewViewport::with_embedded_ccesengine(assets_path)),
+            use_webview: true,
+            webview_initialized: false,
         }
     }
 
     /// @zh 获取主题颜色访问器
     /// @en Get theme colors accessor
-    pub fn colors(&self) -> ThemeColors {
+    pub fn colors(&self) -> ThemeColors<'_> {
         ThemeColors::new(&self.state.tokens)
+    }
+
+    /// @zh 初始化 WebView（需要窗口句柄和边界）
+    /// @en Initialize WebView (requires window handle and bounds)
+    #[cfg(target_os = "windows")]
+    fn initialize_webview(&mut self, frame: &eframe::Frame, bounds: egui::Rect) {
+        if self.webview_initialized || !self.use_webview {
+            return;
+        }
+
+        // Skip if bounds are invalid
+        if bounds.width() < 10.0 || bounds.height() < 10.0 {
+            return;
+        }
+
+        if let Some(ref mut viewport) = self.webview_viewport {
+            if let Ok(handle) = frame.window_handle() {
+                viewport.initialize(handle.as_raw(), bounds);
+                if viewport.is_ready() {
+                    self.webview_initialized = true;
+                    println!("[WebView] Initialized successfully at {:?}", bounds);
+
+                    // Compile and inject builtin effects for ccesengine
+                    self.inject_builtin_effects();
+                }
+            }
+        }
+    }
+
+    /// @zh 编译并注入内置 effects 到 WebView
+    /// @en Compile and inject builtin effects into WebView
+    fn inject_builtin_effects(&self) {
+        // Get engine path relative to the project root
+        // In development, the engine is at ../../engine relative to src-tauri
+        let engine_path = std::env::current_dir()
+            .map(|p| p.join("../../engine"))
+            .unwrap_or_else(|_| Path::new("../../engine").to_path_buf());
+
+        // Also try absolute path if relative doesn't work
+        let engine_path = if engine_path.exists() {
+            engine_path
+        } else {
+            // Try from workspace root
+            Path::new("E:/ecs-framework/engine").to_path_buf()
+        };
+
+        if !engine_path.exists() {
+            println!("[WebView] Warning: Engine path not found at {:?}", engine_path);
+            return;
+        }
+
+        println!("[WebView] Compiling builtin effects from {:?}", engine_path);
+
+        let mut compiler = EffectCompiler::new(&engine_path);
+
+        // List of builtin effects needed for editor
+        let builtin_effects = [
+            "editor/assets/effects/for2d/builtin-sprite.effect",
+            "editor/assets/effects/internal/builtin-graphics.effect",
+            "editor/assets/effects/internal/builtin-clear-stencil.effect",
+            "editor/assets/effects/internal/builtin-geometry-renderer.effect", // For GeometryRenderer (3D lines/gizmos)
+            "editor/assets/effects/builtin-unlit.effect",
+        ];
+
+        let mut compiled_effects = Vec::new();
+        for effect_rel_path in builtin_effects {
+            let effect_path = engine_path.join(effect_rel_path);
+            if effect_path.exists() {
+                match compiler.compile(&effect_path) {
+                    Ok(compiled) => {
+                        println!("[WebView] Compiled effect: {}", compiled.name);
+                        compiled_effects.push(compiled);
+                    }
+                    Err(e) => {
+                        println!("[WebView] Warning: Failed to compile {}: {}", effect_rel_path, e);
+                    }
+                }
+            } else {
+                println!("[WebView] Warning: Effect file not found: {:?}", effect_path);
+            }
+        }
+
+        if compiled_effects.is_empty() {
+            println!("[WebView] Warning: No effects were compiled");
+            return;
+        }
+
+        // Serialize to JSON and inject into WebView
+        match serde_json::to_string(&compiled_effects) {
+            Ok(effects_json) => {
+                if let Some(ref viewport) = self.webview_viewport {
+                    match viewport.inject_effects(&effects_json) {
+                        Ok(_) => {
+                            println!("[WebView] Injected {} builtin effects", compiled_effects.len());
+                        }
+                        Err(e) => {
+                            println!("[WebView] Warning: Failed to inject effects: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("[WebView] Warning: Failed to serialize effects: {}", e);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn initialize_webview(&mut self, _frame: &eframe::Frame, _bounds: egui::Rect) {
+        // WebView2 only supported on Windows
     }
 }
 
 impl eframe::App for EditorApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Apply style settings
         ctx.style_mut(|style| {
             style.spacing.item_spacing = egui::vec2(4.0, 2.0);
@@ -63,6 +245,17 @@ impl eframe::App for EditorApp {
             style.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(12.0));
             style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::proportional(16.0));
         });
+
+        // Blur WebView when any egui widget wants keyboard focus
+        // This fixes the issue where WebView2 captures all keyboard input
+        if self.use_webview {
+            let wants_input = ctx.wants_keyboard_input();
+            if wants_input {
+                if let Some(ref viewport) = self.webview_viewport {
+                    viewport.blur();
+                }
+            }
+        }
 
         // Handle keyboard shortcuts
         self.handle_keyboard_shortcuts(ctx);
@@ -78,7 +271,7 @@ impl eframe::App for EditorApp {
             self.output_drawer(ctx);
         }
 
-        self.main_content(ctx);
+        self.main_content(ctx, frame);
 
         // Render overlays (menus, etc.)
         if let Some(menu) = self.state.active_menu {
@@ -556,15 +749,19 @@ impl EditorApp {
 
                     // Console input
                     ui.label(egui::RichText::new(">").color(egui::Color32::from_rgb(0x6a, 0x6a, 0x6a)).size(11.0));
-                    let cmd_rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(200.0, 18.0));
-                    ui.painter().rect_filled(cmd_rect, 2.0, egui::Color32::from_rgb(0x1c, 0x1c, 0x1c));
-                    ui.painter().rect_stroke(cmd_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x38, 0x38, 0x38)));
-                    if self.state.command_input.is_empty() {
-                        ui.painter().text(egui::pos2(cmd_rect.left() + 8.0, cmd_rect.center().y), egui::Align2::LEFT_CENTER, "Type command...", egui::FontId::proportional(10.0), egui::Color32::from_rgb(0x55, 0x55, 0x55));
-                    } else {
-                        ui.painter().text(egui::pos2(cmd_rect.left() + 8.0, cmd_rect.center().y), egui::Align2::LEFT_CENTER, &self.state.command_input, egui::FontId::proportional(10.0), egui::Color32::from_rgb(0xcc, 0xcc, 0xcc));
+                    let text_edit = egui::TextEdit::singleline(&mut self.state.command_input)
+                        .desired_width(200.0)
+                        .font(egui::FontId::proportional(10.0))
+                        .hint_text(egui::RichText::new("Type command...").color(egui::Color32::from_rgb(0x55, 0x55, 0x55)))
+                        .text_color(egui::Color32::from_rgb(0xcc, 0xcc, 0xcc))
+                        .frame(true);
+                    let cmd_response = ui.add(text_edit);
+                    // Blur WebView when text input gains focus
+                    if cmd_response.gained_focus() || cmd_response.clicked() {
+                        if let Some(ref viewport) = self.webview_viewport {
+                            viewport.blur();
+                        }
                     }
-                    ui.allocate_rect(cmd_rect, egui::Sense::hover());
 
                     // Right side - version
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -577,7 +774,7 @@ impl EditorApp {
 
     /// @zh 主内容区域
     /// @en Main content area
-    fn main_content(&mut self, ctx: &egui::Context) {
+    fn main_content(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         // Left panel (Hierarchy)
         egui::SidePanel::left("hierarchy_panel")
             .default_width(240.0)
@@ -599,11 +796,87 @@ impl EditorApp {
             });
 
         // Central panel (Viewport)
-        egui::CentralPanel::default()
+        let central_response = egui::CentralPanel::default()
             .frame(egui::Frame::none().fill(egui::Color32::from_rgb(0x1a, 0x1a, 0x1a)))
             .show(ctx, |ui| {
-                self.state.viewport_panel(ui);
+                // Get the viewport bounds for WebView initialization
+                let viewport_bounds = ui.available_rect_before_wrap();
+
+                if self.use_webview {
+                    // Render WebView viewport
+                    self.webview_viewport_panel(ui);
+                } else {
+                    // Render egui placeholder viewport
+                    self.state.viewport_panel(ui);
+                }
+
+                viewport_bounds
             });
+
+        // Initialize WebView with correct bounds if not yet initialized
+        if self.use_webview && !self.webview_initialized {
+            let bounds = central_response.inner;
+            self.initialize_webview(frame, bounds);
+        }
+    }
+
+    /// @zh WebView 视口面板
+    /// @en WebView viewport panel
+    fn webview_viewport_panel(&mut self, ui: &mut egui::Ui) {
+        let panel_width = ui.available_width();
+
+        // Tab bar (Scene/Game)
+        let (tab_rect, _) = ui.allocate_exact_size(egui::vec2(panel_width, 24.0), egui::Sense::hover());
+        ui.painter().rect_filled(tab_rect, 0.0, egui::Color32::from_rgb(0x2d, 0x2d, 0x30));
+        ui.painter().line_segment(
+            [egui::pos2(tab_rect.left(), tab_rect.bottom()), egui::pos2(tab_rect.right(), tab_rect.bottom())],
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3c, 0x3c, 0x3c))
+        );
+
+        // Scene tab
+        let scene_rect = egui::Rect::from_min_size(egui::pos2(tab_rect.left() + 4.0, tab_rect.top() + 2.0), egui::vec2(60.0, 20.0));
+        ui.painter().rect_filled(scene_rect, 2.0, egui::Color32::from_rgb(0x3c, 0x3c, 0x3c));
+        ui.painter().text(scene_rect.center(), egui::Align2::CENTER_CENTER, "Scene", egui::FontId::proportional(11.0), egui::Color32::WHITE);
+
+        // Game tab
+        let game_rect = egui::Rect::from_min_size(egui::pos2(scene_rect.right() + 4.0, tab_rect.top() + 2.0), egui::vec2(60.0, 20.0));
+        ui.painter().text(game_rect.center(), egui::Align2::CENTER_CENTER, "Game", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x88, 0x88, 0x88));
+
+        // Status info
+        let status_text = if let Some(ref viewport) = self.webview_viewport {
+            if viewport.is_ready() {
+                "WebView Ready"
+            } else if let Some(err) = viewport.error() {
+                err
+            } else {
+                "Initializing..."
+            }
+        } else {
+            "WebView not configured"
+        };
+        ui.painter().text(
+            egui::pos2(tab_rect.right() - 8.0, tab_rect.center().y),
+            egui::Align2::RIGHT_CENTER,
+            status_text,
+            egui::FontId::proportional(10.0),
+            egui::Color32::from_rgb(0x66, 0x66, 0x66)
+        );
+
+        // WebView area
+        if let Some(ref mut viewport) = self.webview_viewport {
+            webview_viewport_area(ui, viewport);
+        } else {
+            // Fallback placeholder
+            let available = ui.available_rect_before_wrap();
+            ui.painter().rect_filled(available, 0.0, egui::Color32::from_rgb(0x1a, 0x1a, 0x1a));
+            ui.painter().text(
+                available.center(),
+                egui::Align2::CENTER_CENTER,
+                "WebView not initialized",
+                egui::FontId::proportional(14.0),
+                egui::Color32::from_rgb(0x66, 0x66, 0x66)
+            );
+        }
     }
 
     /// @zh 层级面板
@@ -622,13 +895,26 @@ impl EditorApp {
             ui.set_max_height(28.0);
             ui.add_space(6.0);
 
-            // Search box
-            let search_rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(panel_width - 50.0, 22.0));
-            ui.painter().rect_filled(search_rect, 3.0, egui::Color32::from_rgb(0x1c, 0x1c, 0x1c));
-            ui.painter().rect_stroke(search_rect, 3.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x38, 0x38, 0x38)));
-            Icons::draw(ui.painter(), egui::pos2(search_rect.left() + 12.0, search_rect.center().y), 12.0, "search", egui::Color32::from_rgb(0x60, 0x60, 0x60));
-            ui.painter().text(egui::pos2(search_rect.left() + 26.0, search_rect.center().y), egui::Align2::LEFT_CENTER, "Search...", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x55, 0x55, 0x55));
-            ui.allocate_rect(search_rect, egui::Sense::hover());
+            // Search box with icon
+            let search_clicked = ui.horizontal(|ui| {
+                let icon_rect = ui.allocate_exact_size(egui::vec2(20.0, 22.0), egui::Sense::hover()).0;
+                Icons::draw(ui.painter(), icon_rect.center(), 12.0, "search", egui::Color32::from_rgb(0x60, 0x60, 0x60));
+
+                let text_edit = egui::TextEdit::singleline(&mut self.state.hierarchy_search)
+                    .desired_width(panel_width - 76.0)
+                    .font(egui::FontId::proportional(11.0))
+                    .hint_text(egui::RichText::new("Search...").color(egui::Color32::from_rgb(0x55, 0x55, 0x55)))
+                    .text_color(egui::Color32::from_rgb(0xcc, 0xcc, 0xcc))
+                    .frame(true);
+                let response = ui.add(text_edit);
+                response.gained_focus() || response.clicked()
+            }).inner;
+            // Blur WebView when search gains focus
+            if search_clicked {
+                if let Some(ref viewport) = self.webview_viewport {
+                    viewport.blur();
+                }
+            }
 
             ui.add_space(4.0);
 
@@ -964,12 +1250,24 @@ impl EditorApp {
                 ui.painter().rect_filled(toolbar_rect, 0.0, egui::Color32::from_rgb(0x2d, 0x2d, 0x30));
                 ui.painter().line_segment([egui::pos2(toolbar_rect.left(), toolbar_rect.bottom()), egui::pos2(toolbar_rect.right(), toolbar_rect.bottom())], egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3c, 0x3c, 0x3c)));
 
-                // Search box
-                let search_rect = egui::Rect::from_min_size(egui::pos2(toolbar_rect.left() + 8.0, toolbar_rect.top() + 4.0), egui::vec2(160.0, 20.0));
-                ui.painter().rect_filled(search_rect, 3.0, egui::Color32::from_rgb(0x1c, 0x1c, 0x1c));
-                ui.painter().rect_stroke(search_rect, 3.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x38, 0x38, 0x38)));
-                Icons::draw(ui.painter(), egui::pos2(search_rect.left() + 14.0, search_rect.center().y), 14.0, "search", egui::Color32::from_rgb(0x60, 0x60, 0x60));
-                ui.painter().text(egui::pos2(search_rect.left() + 28.0, search_rect.center().y), egui::Align2::LEFT_CENTER, "Search...", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x55, 0x55, 0x55));
+                // Search box - icon
+                let icon_pos = egui::pos2(toolbar_rect.left() + 22.0, toolbar_rect.center().y);
+                Icons::draw(ui.painter(), icon_pos, 14.0, "search", egui::Color32::from_rgb(0x60, 0x60, 0x60));
+
+                // Search box - text input
+                let search_rect = egui::Rect::from_min_size(egui::pos2(toolbar_rect.left() + 36.0, toolbar_rect.top() + 4.0), egui::vec2(130.0, 20.0));
+                let text_edit = egui::TextEdit::singleline(&mut self.state.content_browser.search)
+                    .font(egui::FontId::proportional(11.0))
+                    .hint_text(egui::RichText::new("Search...").color(egui::Color32::from_rgb(0x55, 0x55, 0x55)))
+                    .text_color(egui::Color32::from_rgb(0xcc, 0xcc, 0xcc))
+                    .frame(true);
+                let search_response = ui.put(search_rect, text_edit);
+                // Blur WebView when search gains focus
+                if search_response.gained_focus() || search_response.clicked() {
+                    if let Some(ref viewport) = self.webview_viewport {
+                        viewport.blur();
+                    }
+                }
 
                 // Breadcrumb
                 ui.painter().text(egui::pos2(toolbar_rect.left() + 180.0, toolbar_rect.center().y), egui::Align2::LEFT_CENTER, "Assets / Textures", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x99, 0x99, 0x99));
@@ -1251,4 +1549,128 @@ pub fn run_editor() -> eframe::Result<()> {
             Box::new(EditorApp::new(tokens))
         }),
     )
+}
+
+/// @zh 运行编辑器（WebView 模式）
+/// @en Run editor with WebView mode
+///
+/// @zh 使用 WebView2 渲染 ccesengine 视口
+/// @en Uses WebView2 to render ccesengine viewport
+///
+/// @param url ccesengine 页面地址（例如 "http://localhost:5173"）
+/// @param url ccesengine page URL (e.g. "http://localhost:5173")
+pub fn run_editor_with_webview(url: impl Into<String>) -> eframe::Result<()> {
+    let tokens = ThemeTokens::from_default().expect("failed to load theme tokens");
+    let theme = build_egui_theme(&tokens);
+    let webview_url = url.into();
+
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("ESEngine Editor (WebView)")
+            .with_inner_size([1400.0, 900.0])
+            .with_decorations(false),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "ESEngine Editor",
+        native_options,
+        Box::new(move |cc| {
+            cc.egui_ctx.set_fonts(theme.fonts.clone());
+            cc.egui_ctx.set_style(theme.style.clone());
+            Box::new(EditorApp::with_webview(tokens, webview_url))
+        }),
+    )
+}
+
+/// @zh 运行编辑器（嵌入式 ccesengine 模式）
+/// @en Run editor with embedded ccesengine mode
+///
+/// @zh 使用嵌入的 HTML 和自定义协议从本地文件系统加载 ccesengine 模块。
+/// @zh 不需要外部 Vite 服务器。
+/// @en Uses embedded HTML and custom protocol to load ccesengine modules from local filesystem.
+/// @en No external Vite server required.
+pub fn run_editor_with_ccesengine() -> eframe::Result<()> {
+    let tokens = ThemeTokens::from_default().expect("failed to load theme tokens");
+    let theme = build_egui_theme(&tokens);
+
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("ESEngine Editor (ccesengine)")
+            .with_inner_size([1400.0, 900.0])
+            .with_decorations(false),
+        ..Default::default()
+    };
+
+    // Find assets path - try multiple locations
+    let assets_path = find_ccesengine_assets_path();
+    println!("[WebView] Starting editor with embedded ccesengine");
+    println!("[WebView] Assets path: {:?}", assets_path);
+
+    eframe::run_native(
+        "ESEngine Editor",
+        native_options,
+        Box::new(move |cc| {
+            cc.egui_ctx.set_fonts(theme.fonts.clone());
+            cc.egui_ctx.set_style(theme.style.clone());
+            Box::new(EditorApp::with_embedded_ccesengine(tokens, assets_path))
+        }),
+    )
+}
+
+/// @zh 查找 ccesengine 资源路径
+/// @en Find ccesengine assets path
+fn find_ccesengine_assets_path() -> std::path::PathBuf {
+    use std::path::Path;
+
+    // Try paths in order of preference
+    let candidates = [
+        // Development: relative to src-tauri
+        "../public",
+        "../../editor-app/public",
+        // Development: relative to workspace root
+        "packages/editor/editor-app/public",
+        // Absolute path fallback
+        "E:/ecs-framework/packages/editor/editor-app/public",
+    ];
+
+    // Get current exe directory
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+    // Get current working directory
+    let cwd = std::env::current_dir().ok();
+
+    for candidate in &candidates {
+        let path = Path::new(candidate);
+
+        // Try relative to exe directory
+        if let Some(ref exe) = exe_dir {
+            let full_path = exe.join(path);
+            if full_path.join("ccesengine").exists() {
+                println!("[WebView] Found assets at (exe-relative): {:?}", full_path);
+                return full_path;
+            }
+        }
+
+        // Try relative to cwd
+        if let Some(ref cwd) = cwd {
+            let full_path = cwd.join(path);
+            if full_path.join("ccesengine").exists() {
+                println!("[WebView] Found assets at (cwd-relative): {:?}", full_path);
+                return full_path;
+            }
+        }
+
+        // Try absolute path
+        if path.join("ccesengine").exists() {
+            println!("[WebView] Found assets at (absolute): {:?}", path);
+            return path.to_path_buf();
+        }
+    }
+
+    // Fallback to development path
+    println!("[WebView] Warning: Could not find ccesengine assets, using fallback path");
+    Path::new("E:/ecs-framework/packages/editor/editor-app/public").to_path_buf()
 }

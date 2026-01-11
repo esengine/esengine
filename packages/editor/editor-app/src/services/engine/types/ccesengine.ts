@@ -281,7 +281,9 @@ export type EngineModule =
     | 'primitive'
     | 'animation'
     | 'physics'
-    | 'audio';
+    | 'audio'
+    | 'graphics'
+    | 'geometry-renderer';
 
 /**
  * @zh cclegacy 全局对象

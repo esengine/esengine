@@ -7,6 +7,7 @@
  */
 
 import type { Vec3, Quat, TransformInfo } from './types';
+import { quaternionToEuler } from './types';
 import type { IEngineAdapter } from './EngineAdapter';
 import type { ISceneService } from './SceneService';
 import { getEngineAdapter } from './EngineAdapter';
@@ -203,12 +204,11 @@ class TransformServiceImpl implements ITransformService {
         if (!node) return null;
 
         const rotation = node.rotation;
-        const eulerAngles = this.quaternionToEuler(rotation);
 
         return {
             position: { ...node.position },
             rotation: { ...rotation },
-            eulerAngles,
+            eulerAngles: quaternionToEuler(rotation),
             scale: { ...node.scale },
         };
     }
@@ -274,24 +274,6 @@ class TransformServiceImpl implements ITransformService {
             node.rotation.z = quat.z;
             node.rotation.w = quat.w;
         }
-    }
-
-    private quaternionToEuler(q: Quat): Vec3 {
-        // Convert quaternion to euler angles (in degrees)
-        const sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-        const cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-        const x = Math.atan2(sinr_cosp, cosr_cosp) * (180 / Math.PI);
-
-        const sinp = 2 * (q.w * q.y - q.z * q.x);
-        const y = Math.abs(sinp) >= 1
-            ? Math.sign(sinp) * 90
-            : Math.asin(sinp) * (180 / Math.PI);
-
-        const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-        const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-        const z = Math.atan2(siny_cosp, cosy_cosp) * (180 / Math.PI);
-
-        return { x, y, z };
     }
 }
 
