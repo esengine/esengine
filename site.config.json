@@ -1,5 +1,9 @@
 {
   "siteUrl": "https://esengine.github.io/esengine/",
   "siteUrlAlias": "https://esengine.cn/",
+  "astro": {
+    "github": { "site": "https://esengine.github.io", "base": "/esengine" },
+    "custom": { "site": "https://esengine.cn", "base": "" }
+  },
   "description": "网站 URL 配置。siteUrl 是当前使用的地址，siteUrlAlias 是备用地址（如备案后可切换回来）"
 }
