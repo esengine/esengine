@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { IncrementalAStarPathfinder } from '../../src/core/IncrementalAStarPathfinder';
 import { AStarPathfinder } from '../../src/core/AStarPathfinder';
 import { JPSPathfinder } from '../../src/core/JPSPathfinder';
+import { HPAPathfinder } from '../../src/core/HPAPathfinder';
 import { GridMap } from '../../src/grid/GridMap';
 import { PathfindingState } from '../../src/core/IIncrementalPathfinding';
 
@@ -481,5 +482,167 @@ describe('Pathfinding Performance Benchmark', () => {
 
         // Second round should be much faster
         expect(time2).toBeLessThan(time1 / 2);
+    });
+
+    // =========================================================================
+    // HPA* 分层寻路性能测试
+    // =========================================================================
+
+    it('benchmark: HPA* repeated queries (best case scenario)', () => {
+        const size = 300;
+        const grid = new GridMap(size, size);
+
+        // Add 10% scattered obstacles
+        for (let i = 0; i < size * size * 0.1; i++) {
+            const x = Math.floor(Math.random() * size);
+            const y = Math.floor(Math.random() * size);
+            if (x > 30 && x < size - 30 && y > 30 && y < size - 30) {
+                grid.setWalkable(x, y, false);
+            }
+        }
+
+        const astar = new AStarPathfinder(grid);
+        const hpa = new HPAPathfinder(grid, { clusterSize: 30 });
+
+        // Preprocess HPA*
+        const preStart = performance.now();
+        hpa.preprocess();
+        const preTime = performance.now() - preStart;
+
+        // Define 5 fixed path requests (simulating repeated game queries)
+        const paths = [
+            { sx: 10, sy: 10, ex: 290, ey: 290 },
+            { sx: 10, sy: 290, ex: 290, ey: 10 },
+            { sx: 150, sy: 10, ex: 150, ey: 290 },
+            { sx: 10, sy: 150, ex: 290, ey: 150 },
+            { sx: 50, sy: 50, ex: 250, ey: 250 }
+        ];
+
+        const rounds = 10;
+
+        // A* benchmark (each path repeated)
+        const astarStart = performance.now();
+        for (let r = 0; r < rounds; r++) {
+            for (const p of paths) {
+                astar.findPath(p.sx, p.sy, p.ex, p.ey);
+            }
+        }
+        const astarTime = performance.now() - astarStart;
+
+        // HPA* benchmark (each path repeated - benefits from internal cache)
+        const hpaStart = performance.now();
+        for (let r = 0; r < rounds; r++) {
+            for (const p of paths) {
+                hpa.findPath(p.sx, p.sy, p.ex, p.ey);
+            }
+        }
+        const hpaTime = performance.now() - hpaStart;
+
+        const totalHpaTime = preTime + hpaTime;
+        const searchSpeedup = astarTime / hpaTime;
+        const totalSpeedup = astarTime / totalHpaTime;
+
+        console.log('\n=== HPA* Repeated Queries (300x300, 50 queries) ===');
+        console.log('A* time:         ' + astarTime.toFixed(2) + 'ms');
+        console.log('HPA* preprocess: ' + preTime.toFixed(2) + 'ms');
+        console.log('HPA* search:     ' + hpaTime.toFixed(2) + 'ms');
+        console.log('Speedup (search): ' + searchSpeedup.toFixed(2) + 'x');
+        console.log('Speedup (total):  ' + totalSpeedup.toFixed(2) + 'x');
+
+        expect(true).toBe(true);
+    });
+
+    it('benchmark: HPA* preprocess time by cluster size', () => {
+        const grid = new GridMap(200, 200);
+        const clusterSizes = [10, 20, 40];
+
+        console.log('\n=== HPA* Preprocess Time by Cluster Size (200x200) ===');
+        console.log('Cluster\t\tPreprocess\tClusters\tEntrances\tNodes');
+
+        for (const clusterSize of clusterSizes) {
+            const hpa = new HPAPathfinder(grid, { clusterSize });
+
+            const start = performance.now();
+            hpa.preprocess();
+            const preprocessTime = performance.now() - start;
+
+            const stats = hpa.getStats();
+
+            console.log(
+                clusterSize + 'x' + clusterSize + '\t\t' +
+                preprocessTime.toFixed(2) + 'ms\t\t' +
+                stats.clusters + '\t\t' +
+                stats.entrances + '\t\t' +
+                stats.abstractNodes
+            );
+        }
+
+        expect(true).toBe(true);
+    });
+
+    it('benchmark: HPA* repeated paths (amortized preprocess)', () => {
+        const grid = new GridMap(200, 200);
+
+        // Add scattered obstacles
+        for (let i = 0; i < 4000; i++) {
+            const x = Math.floor(Math.random() * 200);
+            const y = Math.floor(Math.random() * 200);
+            if (x > 20 && x < 180 && y > 20 && y < 180) {
+                grid.setWalkable(x, y, false);
+            }
+        }
+
+        const astar = new AStarPathfinder(grid);
+        const hpa = new HPAPathfinder(grid, { clusterSize: 20 });
+
+        // HPA* preprocess
+        const preStart = performance.now();
+        hpa.preprocess();
+        const preTime = performance.now() - preStart;
+
+        const iterations = 10;
+
+        // Generate random paths
+        const paths: Array<{ sx: number; sy: number; ex: number; ey: number }> = [];
+        for (let i = 0; i < iterations; i++) {
+            paths.push({
+                sx: 5 + Math.floor(Math.random() * 15),
+                sy: 5 + Math.floor(Math.random() * 15),
+                ex: 180 + Math.floor(Math.random() * 15),
+                ey: 180 + Math.floor(Math.random() * 15)
+            });
+        }
+
+        // A* benchmark
+        const astarStart = performance.now();
+        let astarFound = 0;
+        for (const p of paths) {
+            const result = astar.findPath(p.sx, p.sy, p.ex, p.ey);
+            if (result.found) astarFound++;
+        }
+        const astarTime = performance.now() - astarStart;
+
+        // HPA* benchmark
+        const hpaStart = performance.now();
+        let hpaFound = 0;
+        for (const p of paths) {
+            const result = hpa.findPath(p.sx, p.sy, p.ex, p.ey);
+            if (result.found) hpaFound++;
+        }
+        const hpaTime = performance.now() - hpaStart;
+
+        const totalHpaTime = preTime + hpaTime;
+        const hpaOnlySpeedup = astarTime / hpaTime;
+        const totalSpeedup = astarTime / totalHpaTime;
+
+        console.log('\n=== HPA* Repeated Paths (200x200 with obstacles, ' + iterations + ' paths) ===');
+        console.log('A* total:       ' + astarTime.toFixed(2) + 'ms (' + astarFound + ' found)');
+        console.log('HPA* preprocess: ' + preTime.toFixed(2) + 'ms');
+        console.log('HPA* search:    ' + hpaTime.toFixed(2) + 'ms (' + hpaFound + ' found)');
+        console.log('HPA* total:     ' + totalHpaTime.toFixed(2) + 'ms');
+        console.log('Speedup (search only): ' + hpaOnlySpeedup.toFixed(2) + 'x');
+        console.log('Speedup (incl. preprocess): ' + totalSpeedup.toFixed(2) + 'x');
+
+        expect(true).toBe(true);
     });
 });

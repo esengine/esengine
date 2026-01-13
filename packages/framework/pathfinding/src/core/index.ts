@@ -82,3 +82,12 @@ export {
 } from './PathCache';
 
 export type { IPathCacheConfig } from './PathCache';
+
+// HPA* 分层寻路 | HPA* Hierarchical Pathfinding
+export {
+    HPAPathfinder,
+    createHPAPathfinder,
+    DEFAULT_HPA_CONFIG
+} from './HPAPathfinder';
+
+export type { IHPAConfig } from './HPAPathfinder';
