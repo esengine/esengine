@@ -3,7 +3,7 @@
  * @en Incremental A* Pathfinding Algorithm Implementation
  */
 
-import { BinaryHeap } from './BinaryHeap';
+import { IndexedBinaryHeap, type IHeapIndexable } from './IndexedBinaryHeap';
 import type {
     IPathfindingMap,
     IPathNode,
@@ -29,7 +29,7 @@ import { PathCache, type IPathCacheConfig } from './PathCache';
  * @zh A* 节点（内部使用）
  * @en A* Node (internal use)
  */
-interface AStarNode {
+interface AStarNode extends IHeapIndexable {
     node: IPathNode;
     g: number;
     h: number;
@@ -37,6 +37,7 @@ interface AStarNode {
     parent: AStarNode | null;
     closed: boolean;
     opened: boolean;
+    heapIndex: number;
 }
 
 /**
@@ -48,7 +49,7 @@ interface PathfindingSession {
     state: PathfindingState;
     options: Required<IPathfindingOptions>;
 
-    openList: BinaryHeap<AStarNode>;
+    openList: IndexedBinaryHeap<AStarNode>;
     nodeCache: Map<string | number, AStarNode>;
 
     startNode: IPathNode;
@@ -189,7 +190,7 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
                     request,
                     state: cached.found ? PathfindingState.Completed : PathfindingState.Failed,
                     options: opts,
-                    openList: new BinaryHeap<AStarNode>((a, b) => a.f - b.f),
+                    openList: new IndexedBinaryHeap<AStarNode>((a, b) => a.f - b.f),
                     nodeCache: new Map(),
                     startNode: this.map.getNodeAt(startX, startY)!,
                     endNode: this.map.getNodeAt(endX, endY)!,
@@ -222,7 +223,7 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
                 request,
                 state: PathfindingState.Failed,
                 options: opts,
-                openList: new BinaryHeap<AStarNode>((a, b) => a.f - b.f),
+                openList: new IndexedBinaryHeap<AStarNode>((a, b) => a.f - b.f),
                 nodeCache: new Map(),
                 startNode: startNode!,
                 endNode: endNode!,
@@ -242,7 +243,7 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
                 request,
                 state: PathfindingState.Completed,
                 options: opts,
-                openList: new BinaryHeap<AStarNode>((a, b) => a.f - b.f),
+                openList: new IndexedBinaryHeap<AStarNode>((a, b) => a.f - b.f),
                 nodeCache: new Map(),
                 startNode,
                 endNode,
@@ -266,7 +267,7 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
         }
 
         const initialDistance = this.map.heuristic(startNode.position, endNode.position);
-        const openList = new BinaryHeap<AStarNode>((a, b) => a.f - b.f);
+        const openList = new IndexedBinaryHeap<AStarNode>((a, b) => a.f - b.f);
         const nodeCache = new Map<string | number, AStarNode>();
 
         const startAStarNode: AStarNode = {
@@ -276,7 +277,8 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
             f: initialDistance * opts.heuristicWeight,
             parent: null,
             closed: false,
-            opened: true
+            opened: true,
+            heapIndex: -1
         };
 
         nodeCache.set(startNode.id, startAStarNode);
@@ -559,7 +561,8 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
                     f: Infinity,
                     parent: null,
                     closed: false,
-                    opened: false
+                    opened: false,
+                    heapIndex: -1
                 };
                 session.nodeCache.set(neighborNode.id, neighbor);
             }
@@ -624,9 +627,11 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
         let current: AStarNode | null = endNode;
 
         while (current) {
-            path.unshift(current.node.position);
+            path.push(current.node.position);
             current = current.parent;
         }
+
+        path.reverse();
 
         return {
             requestId: session.request.id,

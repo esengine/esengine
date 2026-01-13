@@ -46,6 +46,7 @@ export {
 
 // 数据结构 | Data Structures
 export { BinaryHeap } from './BinaryHeap';
+export { IndexedBinaryHeap, type IHeapIndexable } from './IndexedBinaryHeap';
 
 // 同步 A* 寻路器 | Synchronous A* Pathfinder
 export { AStarPathfinder, createAStarPathfinder } from './AStarPathfinder';
