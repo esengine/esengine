@@ -1,6 +1,13 @@
 # ESEngine 编辑器
 
-基于 Tauri 2.x + React 18 构建的跨平台桌面可视化编辑器。
+基于 Tauri 2.x + egui（Rust 原生 UI）构建的跨平台桌面可视化编辑器。
+
+## 架构说明
+
+编辑器采用混合架构：
+- **UI 界面**：egui（Rust 原生即时模式 GUI）
+- **视口渲染**：WebView + ccesengine（Cocos Creator 引擎分支）
+- **系统集成**：Tauri 2.x
 
 ## 环境要求
 
@@ -35,79 +42,98 @@ cd esengine
 pnpm install
 ```
 
-### 2. 构建 Rapier2D WASM
+### 2. 构建 ccesengine
 
-编辑器依赖 Rapier2D 物理引擎的 WASM 产物。首次构建只需执行一条命令：
+编辑器使用 ccesengine 进行视口渲染。同步引擎资源：
 
 ```bash
-pnpm build:rapier2d
+cd packages/editor/editor-app
+pnpm sync:ccesengine
 ```
 
-该命令会自动完成以下步骤：
-1. 准备 Rust 项目
-2. 构建 WASM
-3. 复制产物到 `packages/physics/rapier2d/pkg`
-4. 生成 TypeScript 源码
-
-> **注意**：需要已安装 Rust 和 wasm-pack。
-
-### 3. 构建编辑器
-
-在项目根目录执行：
+或从源码构建：
 
 ```bash
-pnpm build:editor
+pnpm build:ccesengine
+```
+
+### 3. 构建视口
+
+视口是运行在 WebView 中的 TypeScript 项目：
+
+```bash
+pnpm build:viewport
 ```
 
 ### 4. 启动编辑器
 
 ```bash
-cd packages/editor/editor-app
 pnpm tauri:dev
+```
+
+或使用组合命令：
+
+```bash
+pnpm dev
 ```
 
 ## 可用脚本
 
 | 脚本 | 说明 |
 |------|------|
-| `pnpm build:rapier2d` | 构建 Rapier2D WASM（首次构建必须执行）|
-| `pnpm build:editor` | 构建编辑器及所有依赖 |
-| `pnpm tauri:dev` | 开发模式运行编辑器（支持热重载）|
+| `pnpm dev` | 构建视口并以开发模式运行编辑器 |
+| `pnpm build` | 构建视口并创建生产版本应用 |
+| `pnpm tauri:dev` | 开发模式运行编辑器 |
 | `pnpm tauri:build` | 构建生产版本应用 |
-| `pnpm build:sdk` | 构建 editor-runtime SDK |
+| `pnpm sync:ccesengine` | 从 engine 子模块同步 ccesengine |
+| `pnpm build:ccesengine` | 构建并同步 ccesengine |
+| `pnpm build:viewport` | 构建视口 TypeScript 代码 |
 
 ## 项目结构
 
 ```
 editor-app/
-├── src/                    # React 应用源码
-│   ├── components/         # UI 组件
-│   ├── panels/             # 编辑器面板
-│   └── services/           # 核心服务
-├── src-tauri/              # Tauri (Rust) 后端
+├── @types/                 # 类型定义 (cc.d.ts)
 ├── public/                 # 静态资源
-└── scripts/                # 构建脚本
+│   ├── ccesengine/         # 引擎 ESM 模块（同步自 engine）
+│   ├── engine-assets/      # 着色器块、特效、材质
+│   └── esbuild.wasm        # 脚本编译 WASM
+├── scripts/                # 构建脚本
+│   ├── sync-ccesengine.mjs # 同步引擎
+│   └── bundle-runtime.mjs  # 打包 ESEngine 运行时
+├── src-tauri/              # Tauri/Rust 应用
+│   ├── assets/             # 运行时资源 (viewport.js, cocos-cli)
+│   ├── src/
+│   │   ├── bin/            # 二进制入口
+│   │   ├── commands/       # Tauri IPC 命令
+│   │   └── egui_editor/    # egui UI 实现
+│   └── Cargo.toml
+└── viewport/               # WebView 视口 (TypeScript)
+    ├── src/                # 视口源码
+    └── vite.config.ts      # 构建到 src-tauri/assets/
 ```
 
-## 常见问题
+## 故障排除
 
-### Rapier2D WASM 构建失败
+### 引擎资源缺失
 
-**错误**: `Could not resolve "../pkg/rapier_wasm2d"`
+**错误**：缺少 ccesengine 文件
 
-**原因**: 缺少 Rapier2D 的 WASM 产物。
+**解决方案**：
+```bash
+# 初始化 engine 子模块
+git submodule update --init engine
 
-**解决方案**:
-1. 确保已安装 `wasm-pack`：`cargo install wasm-pack`
-2. 执行 `pnpm build:rapier2d`
-3. 确认 `packages/physics/rapier2d/pkg/` 目录存在且包含 `rapier_wasm2d_bg.wasm` 文件
+# 同步引擎资源
+pnpm sync:ccesengine
+```
 
 ### 构建错误
 
 ```bash
 pnpm clean
 pnpm install
-pnpm build:editor
+pnpm build
 ```
 
 ### Rust/Tauri 错误
@@ -116,16 +142,11 @@ pnpm build:editor
 rustup update
 ```
 
-### Windows 用户构建 WASM
-
-`pnpm build:rapier2d` 脚本在 Windows 上可以直接运行。如果遇到问题：
-1. 使用 Git Bash 或 WSL
-2. 或从 [Releases](https://github.com/esengine/esengine/releases) 下载预编译的 WASM 产物
-
 ## 文档
 
 - [ESEngine 文档](https://esengine.cn/)
 - [Tauri 文档](https://tauri.app/)
+- [egui 文档](https://docs.rs/egui/)
 
 ## 许可证
 

@@ -1,4 +1,30 @@
+# Node.js
+node_modules/
+dist/
+
+# Rust/Cargo build output (handled by root .gitignore pattern)
+# src-tauri/target/
+
 # Generated runtime files
 src-tauri/runtime/
 src-tauri/engine/
 src-tauri/bin/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temp files
+tmpclaude-*
+
+# WebView cache (runtime generated)
+*.exe.WebView2/
+
+# Logs
+*.log

@@ -53,10 +53,6 @@ raw-window-handle = "0.6"
 name = "egui-editor"
 path = "src/bin/egui_editor.rs"
 
-[[bin]]
-name = "egui-webview"
-path = "src/bin/egui_webview.rs"
-
 [profile.dev]
 incremental = true
 

@@ -1,6 +1,13 @@
 # ESEngine Editor
 
-A cross-platform desktop visual editor built with Tauri 2.x + React 18.
+A cross-platform desktop visual editor built with Tauri 2.x + egui (Rust native UI).
+
+## Architecture
+
+The editor uses a hybrid architecture:
+- **UI**: egui (Rust native immediate mode GUI)
+- **Viewport**: WebView with ccesengine (Cocos Creator engine fork)
+- **Backend**: Tauri 2.x for system integration
 
 ## Prerequisites
 
@@ -35,79 +42,98 @@ cd esengine
 pnpm install
 ```
 
-### 2. Build Rapier2D WASM
+### 2. Build ccesengine
 
-The editor depends on Rapier2D physics engine WASM artifacts. First-time setup only requires one command:
+The editor uses ccesengine for viewport rendering. Sync engine assets:
 
 ```bash
-pnpm build:rapier2d
+cd packages/editor/editor-app
+pnpm sync:ccesengine
 ```
 
-This command automatically:
-1. Prepares the Rust project
-2. Builds WASM
-3. Copies artifacts to `packages/physics/rapier2d/pkg`
-4. Generates TypeScript source code
-
-> **Note**: Requires Rust and wasm-pack to be installed.
-
-### 3. Build Editor
-
-From the project root:
+Or build from source:
 
 ```bash
-pnpm build:editor
+pnpm build:ccesengine
+```
+
+### 3. Build Viewport
+
+The viewport is a TypeScript project that runs in WebView:
+
+```bash
+pnpm build:viewport
 ```
 
 ### 4. Run Editor
 
 ```bash
-cd packages/editor/editor-app
 pnpm tauri:dev
+```
+
+Or use the combined command:
+
+```bash
+pnpm dev
 ```
 
 ## Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `pnpm build:rapier2d` | Build Rapier2D WASM (required for first-time setup) |
-| `pnpm build:editor` | Build editor and all dependencies |
-| `pnpm tauri:dev` | Run editor in development mode with hot-reload |
+| `pnpm dev` | Build viewport and run editor in dev mode |
+| `pnpm build` | Build viewport and create production app |
+| `pnpm tauri:dev` | Run editor in development mode |
 | `pnpm tauri:build` | Build production application |
-| `pnpm build:sdk` | Build editor-runtime SDK |
+| `pnpm sync:ccesengine` | Sync ccesengine from engine submodule |
+| `pnpm build:ccesengine` | Build and sync ccesengine |
+| `pnpm build:viewport` | Build viewport TypeScript code |
 
 ## Project Structure
 
 ```
 editor-app/
-├── src/                    # React application source
-│   ├── components/         # UI components
-│   ├── panels/             # Editor panels
-│   └── services/           # Core services
-├── src-tauri/              # Tauri (Rust) backend
+├── @types/                 # Type definitions (cc.d.ts)
 ├── public/                 # Static assets
-└── scripts/                # Build scripts
+│   ├── ccesengine/         # Engine ESM modules (synced)
+│   ├── engine-assets/      # Shader chunks, effects, materials
+│   └── esbuild.wasm        # Script compilation WASM
+├── scripts/                # Build scripts
+│   ├── sync-ccesengine.mjs # Sync engine from submodule
+│   └── bundle-runtime.mjs  # Bundle ESEngine runtime
+├── src-tauri/              # Tauri/Rust application
+│   ├── assets/             # Runtime assets (viewport.js, cocos-cli)
+│   ├── src/
+│   │   ├── bin/            # Binary entry points
+│   │   ├── commands/       # Tauri IPC commands
+│   │   └── egui_editor/    # egui UI implementation
+│   └── Cargo.toml
+└── viewport/               # WebView viewport (TypeScript)
+    ├── src/                # Viewport source code
+    └── vite.config.ts      # Builds to src-tauri/assets/
 ```
 
 ## Troubleshooting
 
-### Rapier2D WASM Build Failed
+### Engine Assets Missing
 
-**Error**: `Could not resolve "../pkg/rapier_wasm2d"`
-
-**Cause**: Missing Rapier2D WASM artifacts.
+**Error**: Missing ccesengine files
 
 **Solution**:
-1. Ensure `wasm-pack` is installed: `cargo install wasm-pack`
-2. Run `pnpm build:rapier2d`
-3. Verify `packages/physics/rapier2d/pkg/` directory exists and contains `rapier_wasm2d_bg.wasm` file
+```bash
+# Initialize engine submodule
+git submodule update --init engine
+
+# Sync engine assets
+pnpm sync:ccesengine
+```
 
 ### Build Errors
 
 ```bash
 pnpm clean
 pnpm install
-pnpm build:editor
+pnpm build
 ```
 
 ### Rust/Tauri Errors
@@ -116,16 +142,11 @@ pnpm build:editor
 rustup update
 ```
 
-### Windows Users Building WASM
-
-The `pnpm build:rapier2d` script works directly on Windows. If you encounter issues:
-1. Use Git Bash or WSL
-2. Or download pre-built WASM artifacts from [Releases](https://github.com/esengine/esengine/releases)
-
 ## Documentation
 
 - [ESEngine Documentation](https://esengine.cn/)
 - [Tauri Documentation](https://tauri.app/)
+- [egui Documentation](https://docs.rs/egui/)
 
 ## License
 
