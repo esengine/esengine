@@ -21,8 +21,8 @@
 </p>
 
 <p align="center">
-  <a href="https://esengine.cn/">Documentation</a> ·
-  <a href="https://esengine.cn/api/README">API Reference</a> ·
+  <a href="https://esengine.github.io/esengine/">Documentation</a> ·
+  <a href="https://esengine.github.io/esengine/api/README">API Reference</a> ·
   <a href="./examples/">Examples</a>
 </p>
 
@@ -283,7 +283,7 @@ pnpm test
 - [ECS Framework Guide](./packages/framework/core/README.md)
 - [Behavior Tree Guide](./packages/framework/behavior-tree/README.md)
 - [Editor Setup Guide](./packages/editor/editor-app/README.md) ([中文](./packages/editor/editor-app/README_CN.md))
-- [API Reference](https://esengine.cn/api/README)
+- [API Reference](https://esengine.github.io/esengine/api/README)
 
 ## Community
 
