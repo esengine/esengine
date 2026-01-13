@@ -6,11 +6,11 @@
  * @zh 用法: node scripts/update-site-url.mjs [--to-alias]
  * @en Usage: node scripts/update-site-url.mjs [--to-alias]
  *
- * @zh 默认使用 siteUrl，加 --to-alias 参数则使用 siteUrlAlias
- * @en Uses siteUrl by default, use --to-alias flag to switch to siteUrlAlias
+ * @zh 默认使用 siteUrl (GitHub Pages)，加 --to-alias 参数则使用 siteUrlAlias (自定义域名)
+ * @en Uses siteUrl (GitHub Pages) by default, use --to-alias flag to switch to siteUrlAlias (custom domain)
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { glob } from 'glob';
@@ -30,6 +30,7 @@ const useAlias = process.argv.includes('--to-alias');
 
 const fromUrl = useAlias ? config.siteUrl : config.siteUrlAlias;
 const toUrl = useAlias ? config.siteUrlAlias : config.siteUrl;
+const astroConfig = useAlias ? config.astro.custom : config.astro.github;
 
 console.log(`Updating URLs: ${fromUrl} -> ${toUrl}`);
 
@@ -40,7 +41,6 @@ const patterns = [
     'packages/**/README.md',
     'packages/**/README_CN.md',
     'docs/src/content/**/*.md',
-    'docs/public/CNAME',
 ];
 
 // CNAME file handling
@@ -53,18 +53,51 @@ if (useAlias) {
 } else {
     // Switching to GitHub Pages - remove CNAME
     if (existsSync(cnameFile)) {
-        const { unlinkSync } = await import('fs');
         unlinkSync(cnameFile);
         console.log('Removed CNAME file');
     }
+}
+
+// Update astro.config.mjs
+const astroConfigPath = join(rootDir, 'docs/astro.config.mjs');
+if (existsSync(astroConfigPath)) {
+    let astroContent = readFileSync(astroConfigPath, 'utf-8');
+
+    // Update or add site config
+    if (astroContent.includes("site: '")) {
+        astroContent = astroContent.replace(
+            /site: '[^']*'/,
+            `site: '${astroConfig.site}'`
+        );
+    }
+
+    // Update or add base config
+    if (astroConfig.base) {
+        if (astroContent.includes("base: '")) {
+            astroContent = astroContent.replace(
+                /base: '[^']*'/,
+                `base: '${astroConfig.base}'`
+            );
+        } else if (astroContent.includes("site: '")) {
+            // Add base after site
+            astroContent = astroContent.replace(
+                /(site: '[^']*')/,
+                `$1,\n  base: '${astroConfig.base}'`
+            );
+        }
+    } else {
+        // Remove base config for custom domain (root path)
+        astroContent = astroContent.replace(/\n\s*base: '[^']*',?/, '');
+    }
+
+    writeFileSync(astroConfigPath, astroContent);
+    console.log('Updated: docs/astro.config.mjs');
 }
 
 // Update markdown files
 let updatedCount = 0;
 
 for (const pattern of patterns) {
-    if (pattern.includes('CNAME')) continue;
-
     const files = await glob(pattern, {
         cwd: rootDir,
         absolute: true,
@@ -86,5 +119,6 @@ for (const pattern of patterns) {
     }
 }
 
-console.log(`\nDone! Updated ${updatedCount} files.`);
+console.log(`\nDone! Updated ${updatedCount} markdown files + astro.config.mjs`);
 console.log(`Current site URL: ${toUrl}`);
+console.log(`Astro config: site='${astroConfig.site}', base='${astroConfig.base || '/'}'`);

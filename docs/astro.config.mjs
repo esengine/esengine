@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite';
 import rehypeRaw from 'rehype-raw';
 
 export default defineConfig({
+  site: 'https://esengine.github.io',
+  base: '/esengine',
   markdown: {
     rehypePlugins: [rehypeRaw],
   },
