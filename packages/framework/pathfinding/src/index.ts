@@ -4,8 +4,8 @@
  * @zh 寻路系统
  * @en Pathfinding System
  *
- * @zh 提供 A* 寻路、网格地图、导航网格和路径平滑
- * @en Provides A* pathfinding, grid map, NavMesh and path smoothing
+ * @zh 提供 A* 寻路、增量寻路、网格地图、导航网格和路径平滑
+ * @en Provides A* pathfinding, incremental pathfinding, grid map, NavMesh and path smoothing
  */
 
 // =============================================================================
@@ -35,6 +35,35 @@ export {
     BinaryHeap,
     AStarPathfinder,
     createAStarPathfinder
+} from './core';
+
+// =============================================================================
+// Incremental Pathfinding | 增量寻路
+// =============================================================================
+
+export type {
+    IPathRequest,
+    IPathProgress,
+    IIncrementalPathResult,
+    IIncrementalPathfinder,
+    IIncrementalPathfindingOptions,
+    IPathValidator,
+    IPathValidationResult,
+    IReplanningConfig,
+    IObstacleChange,
+    IChangeRegion
+} from './core';
+
+export {
+    PathfindingState,
+    DEFAULT_REPLANNING_CONFIG,
+    EMPTY_PROGRESS,
+    IncrementalAStarPathfinder,
+    createIncrementalAStarPathfinder,
+    PathValidator,
+    ObstacleChangeManager,
+    createPathValidator,
+    createObstacleChangeManager
 } from './core';
 
 // =============================================================================
@@ -76,11 +105,23 @@ export {
 } from './smoothing';
 
 // =============================================================================
+// ECS Components & Systems | ECS 组件和系统
+// =============================================================================
+
+export {
+    PathfindingAgentComponent,
+    PathfindingMapComponent,
+    PathfindingSystem
+} from './ecs';
+
+export type { PathfindingMapType } from './ecs';
+
+// =============================================================================
 // Blueprint Nodes | 蓝图节点
 // =============================================================================
 
 export {
-    // Templates
+    // Basic Templates
     FindPathTemplate,
     FindPathSmoothTemplate,
     IsWalkableTemplate,
@@ -89,7 +130,7 @@ export {
     GetPathPointTemplate,
     MoveAlongPathTemplate,
     HasLineOfSightTemplate,
-    // Executors
+    // Basic Executors
     FindPathExecutor,
     FindPathSmoothExecutor,
     IsWalkableExecutor,
@@ -98,6 +139,24 @@ export {
     GetPathPointExecutor,
     MoveAlongPathExecutor,
     HasLineOfSightExecutor,
-    // Collection
-    PathfindingNodeDefinitions
+    // Basic Collection
+    PathfindingNodeDefinitions,
+    // Incremental Templates
+    RequestPathAsyncTemplate,
+    StepPathTemplate,
+    GetPathProgressTemplate,
+    GetPathResultTemplate,
+    CancelPathTemplate,
+    SetObstacleTemplate,
+    IsPathCompleteTemplate,
+    // Incremental Executors
+    RequestPathAsyncExecutor,
+    StepPathExecutor,
+    GetPathProgressExecutor,
+    GetPathResultExecutor,
+    CancelPathExecutor,
+    SetObstacleExecutor,
+    IsPathCompleteExecutor,
+    // Incremental Collection
+    IncrementalPathfindingNodeDefinitions
 } from './nodes';
