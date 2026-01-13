@@ -1,0 +1,44 @@
+import { assetManager } from '../../assets';
+import scriptManager from '../../scripting';
+import { sceneConfigInstance } from '../scene-configs';
+export interface IMainModule {
+    'assetManager': typeof assetManager;
+    'programming': typeof scriptManager;
+    'sceneConfigInstance': typeof sceneConfigInstance;
+}
+export declare const Scene: {
+    worker: import("./scene-worker").SceneWorker;
+    createPrefabFromNode: (params: import("..").ICreatePrefabFromNodeParams) => Promise<import("..").INode>;
+    applyPrefabChanges: (params: import("..").IApplyPrefabChangesParams) => Promise<boolean>;
+    revertToPrefab: (params: import("..").IRevertToPrefabParams) => Promise<boolean>;
+    unpackPrefabInstance: (params: import("..").IUnpackPrefabInstanceParams) => Promise<import("..").INode>;
+    isPrefabInstance: (params: import("..").IIsPrefabInstanceParams) => Promise<boolean>;
+    getPrefabInfo: (params: import("..").IGetPrefabInfoParams) => Promise<import("..").IPrefabInfo | null>;
+    init: () => Promise<void>;
+    repaintInEditMode: () => Promise<void>;
+    assetChanged: (uuid: string) => Promise<void>;
+    assetDeleted: (uuid: string) => Promise<void>;
+    addComponent: (params: import("..").IAddComponentOptions) => Promise<import("..").IComponent>;
+    removeComponent: (params: import("..").IRemoveComponentOptions) => Promise<boolean>;
+    setProperty: (params: import("..").ISetPropertyOptions) => Promise<boolean>;
+    queryComponent: (params: import("..").IQueryComponentOptions) => Promise<import("..").IComponent | null>;
+    queryAllComponent: () => Promise<string[]>;
+    createNodeByType: (params: import("..").ICreateByNodeTypeParams) => Promise<import("..").INode | null>;
+    createNodeByAsset: (params: import("..").ICreateByAssetParams) => Promise<import("..").INode | null>;
+    deleteNode: (params: import("..").IDeleteNodeParams) => Promise<import("..").IDeleteNodeResult | null>;
+    updateNode: (params: import("..").IUpdateNodeParams) => Promise<import("..").IUpdateNodeResult>;
+    queryNode: (params: import("..").IQueryNodeParams) => Promise<import("..").INode | null>;
+    investigatePackerDriver: () => Promise<void>;
+    loadScript: () => Promise<void>;
+    removeScript: () => Promise<void>;
+    scriptChange: () => Promise<void>;
+    queryScriptCid: (uuid: string) => Promise<string | null>;
+    queryScriptName: (uuid: string) => Promise<string | null>;
+    close: (params: import("..").ICloseOptions) => Promise<boolean>;
+    open: (params: import("..").IOpenOptions) => Promise<import("..").TEditorEntity>;
+    create: (params: import("..").ICreateOptions) => Promise<import("..").IBaseIdentifier>;
+    save: (params: import("..").ISaveOptions) => Promise<import("../../assets/@types/public").IAssetInfo>;
+    reload: (params: import("..").IReloadOptions) => Promise<boolean>;
+    hasOpen: () => Promise<boolean>;
+    queryCurrent: () => Promise<import("..").TEditorEntity | null>;
+};

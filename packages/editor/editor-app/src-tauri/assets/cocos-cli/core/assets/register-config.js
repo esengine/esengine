@@ -1,0 +1,7 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const configuration_1 = require("../configuration");
+configuration_1.configurationRegistry.register('import', {
+    globList: [],
+});
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicmVnaXN0ZXItY29uZmlnLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2NvcmUvYXNzZXRzL3JlZ2lzdGVyLWNvbmZpZy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOztBQUFBLG9EQUF5RDtBQUV6RCxxQ0FBcUIsQ0FBQyxRQUFRLENBQUMsUUFBUSxFQUFFO0lBQ3JDLFFBQVEsRUFBRSxFQUFFO0NBQ2YsQ0FBQyxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgY29uZmlndXJhdGlvblJlZ2lzdHJ5IH0gZnJvbSAnLi4vY29uZmlndXJhdGlvbic7XHJcblxyXG5jb25maWd1cmF0aW9uUmVnaXN0cnkucmVnaXN0ZXIoJ2ltcG9ydCcsIHtcclxuICAgIGdsb2JMaXN0OiBbXSxcclxufSk7Il19

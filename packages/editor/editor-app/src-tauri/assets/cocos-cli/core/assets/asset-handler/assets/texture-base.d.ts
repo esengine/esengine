@@ -1,0 +1,15 @@
+import { Asset } from '@cocos/asset-db';
+import { Filter, SpriteFrameBaseAssetUserData, TextureBaseAssetUserData, WrapMode } from '../../@types/userDatas';
+export declare const defaultMinFilter: Filter;
+export declare const defaultMagFilter: Filter;
+export declare const defaultMipFilter: Filter;
+export declare const defaultWrapModeS: WrapMode;
+export declare const defaultWrapModeT: WrapMode;
+export declare function makeDefaultTextureBaseAssetUserData(): TextureBaseAssetUserData;
+export declare function makeDefaultSpriteFrameBaseAssetUserData(): SpriteFrameBaseAssetUserData;
+export declare function getWrapMode(wrapMode: WrapMode): any;
+export declare function getWrapModeString(num: number): "repeat" | "clamp-to-edge" | "mirrored-repeat" | undefined;
+export declare function getFilter(filter: Filter): any;
+export declare function getFilterString(num: number): "none" | "nearest" | "linear" | undefined;
+export declare function applyTextureBaseAssetUserData(userData: TextureBaseAssetUserData, texture: cc.Texture2D): void;
+export declare function migrateAnisotropy(asset: Asset): Promise<void>;

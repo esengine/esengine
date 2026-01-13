@@ -1,0 +1,47 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const cocosConfig = {
+    default: {
+        projectName: 'MyGame',
+    },
+    cmake: {
+        windows: {
+            generators: [
+                {
+                    G: 'Visual Studio 17 2022',
+                    V: '2022',
+                },
+                {
+                    G: 'Visual Studio 16 2019',
+                    V: '2019',
+                },
+                {
+                    G: 'Visual Studio 15 2017',
+                    V: '2017',
+                },
+                {
+                    G: 'Visual Studio 14 2015',
+                    V: '2015',
+                },
+                {
+                    G: 'Visual Studio 12 2013',
+                    V: '2013',
+                },
+                {
+                    G: 'Visual Studio 11 2012',
+                    V: '2012',
+                },
+                {
+                    G: 'Visual Studio 10 2010',
+                    V: '2010',
+                },
+                {
+                    G: 'Visual Studio 9 2008',
+                    V: '2008',
+                },
+            ],
+        },
+    },
+};
+exports.default = cocosConfig;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29jb3NDb25maWcuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi8uLi9zcmMvY29yZS9idWlsZGVyL3BsYXRmb3Jtcy9uYXRpdmUtY29tbW9uL3BhY2stdG9vbC9jb2Nvc0NvbmZpZy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOztBQUFDLE1BQU0sV0FBVyxHQUFHO0lBQ2pCLE9BQU8sRUFBRTtRQUNMLFdBQVcsRUFBRSxRQUFRO0tBQ3hCO0lBQ0QsS0FBSyxFQUFFO1FBQ0gsT0FBTyxFQUFFO1lBQ0wsVUFBVSxFQUFFO2dCQUNSO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSx1QkFBdUI7b0JBQzFCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2dCQUNEO29CQUNJLENBQUMsRUFBRSxzQkFBc0I7b0JBQ3pCLENBQUMsRUFBRSxNQUFNO2lCQUNaO2FBQ0o7U0FDSjtLQUNKO0NBQ0osQ0FBQztBQUNGLGtCQUFlLFdBQVcsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIiBjb25zdCBjb2Nvc0NvbmZpZyA9IHtcclxuICAgIGRlZmF1bHQ6IHtcclxuICAgICAgICBwcm9qZWN0TmFtZTogJ015R2FtZScsXHJcbiAgICB9LFxyXG4gICAgY21ha2U6IHtcclxuICAgICAgICB3aW5kb3dzOiB7XHJcbiAgICAgICAgICAgIGdlbmVyYXRvcnM6IFtcclxuICAgICAgICAgICAgICAgIHtcclxuICAgICAgICAgICAgICAgICAgICBHOiAnVmlzdWFsIFN0dWRpbyAxNyAyMDIyJyxcclxuICAgICAgICAgICAgICAgICAgICBWOiAnMjAyMicsXHJcbiAgICAgICAgICAgICAgICB9LFxyXG4gICAgICAgICAgICAgICAge1xyXG4gICAgICAgICAgICAgICAgICAgIEc6ICdWaXN1YWwgU3R1ZGlvIDE2IDIwMTknLFxyXG4gICAgICAgICAgICAgICAgICAgIFY6ICcyMDE5JyxcclxuICAgICAgICAgICAgICAgIH0sXHJcbiAgICAgICAgICAgICAgICB7XHJcbiAgICAgICAgICAgICAgICAgICAgRzogJ1Zpc3VhbCBTdHVkaW8gMTUgMjAxNycsXHJcbiAgICAgICAgICAgICAgICAgICAgVjogJzIwMTcnLFxyXG4gICAgICAgICAgICAgICAgfSxcclxuICAgICAgICAgICAgICAgIHtcclxuICAgICAgICAgICAgICAgICAgICBHOiAnVmlzdWFsIFN0dWRpbyAxNCAyMDE1JyxcclxuICAgICAgICAgICAgICAgICAgICBWOiAnMjAxNScsXHJcbiAgICAgICAgICAgICAgICB9LFxyXG4gICAgICAgICAgICAgICAge1xyXG4gICAgICAgICAgICAgICAgICAgIEc6ICdWaXN1YWwgU3R1ZGlvIDEyIDIwMTMnLFxyXG4gICAgICAgICAgICAgICAgICAgIFY6ICcyMDEzJyxcclxuICAgICAgICAgICAgICAgIH0sXHJcbiAgICAgICAgICAgICAgICB7XHJcbiAgICAgICAgICAgICAgICAgICAgRzogJ1Zpc3VhbCBTdHVkaW8gMTEgMjAxMicsXHJcbiAgICAgICAgICAgICAgICAgICAgVjogJzIwMTInLFxyXG4gICAgICAgICAgICAgICAgfSxcclxuICAgICAgICAgICAgICAgIHtcclxuICAgICAgICAgICAgICAgICAgICBHOiAnVmlzdWFsIFN0dWRpbyAxMCAyMDEwJyxcclxuICAgICAgICAgICAgICAgICAgICBWOiAnMjAxMCcsXHJcbiAgICAgICAgICAgICAgICB9LFxyXG4gICAgICAgICAgICAgICAge1xyXG4gICAgICAgICAgICAgICAgICAgIEc6ICdWaXN1YWwgU3R1ZGlvIDkgMjAwOCcsXHJcbiAgICAgICAgICAgICAgICAgICAgVjogJzIwMDgnLFxyXG4gICAgICAgICAgICAgICAgfSxcclxuICAgICAgICAgICAgXSxcclxuICAgICAgICB9LFxyXG4gICAgfSxcclxufTtcclxuZXhwb3J0IGRlZmF1bHQgY29jb3NDb25maWc7Il19

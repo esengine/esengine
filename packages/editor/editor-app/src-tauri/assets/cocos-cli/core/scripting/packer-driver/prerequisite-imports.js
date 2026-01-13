@@ -1,0 +1,54 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.prerequisiteImportsModURL = void 0;
+exports.makePrerequisiteImportsMod = makePrerequisiteImportsMod;
+exports.makeTentativePrerequisiteImports = makeTentativePrerequisiteImports;
+/**
+ * 模块 `'cce:/internal/x/prerequisite-imports'` 的 URL。
+ */
+exports.prerequisiteImportsModURL = 'cce:/internal/x/prerequisite-imports';
+/**
+ * 生成模块 `'cce:/internal/x/prerequisite-imports'`。
+ * 这个模块用于导入所有需要加载的项目模块。
+ * @param prerequisiteImports 需要导入的项目模块。必须是 URL。
+ */
+function makePrerequisiteImportsMod(prerequisiteImports) {
+    return `
+// Auto generated represents the prerequisite imports of project modules.
+
+${prerequisiteImports.map((specifier) => `import ${createStringLiteralCode(specifier)};`).join('\n')}
+
+export { }; // To make sure this module can by recognized as ES2015 module even no imports.
+    `;
+}
+/**
+ * 生成模块 `'cce:/internal/x/prerequisite-imports'`。
+ * 这个模块用于导入所有需要加载的项目模块。
+ * 与 `makePrerequisiteImportsMod` 不同，这样生成的模块会尝试导入每个项目模块，即使它们其中的一个或多个发生了异常。
+ * @param prerequisiteImports 需要导入的项目模块。必须是 URL。
+ */
+function makeTentativePrerequisiteImports(prerequisiteImports) {
+    return `
+// Auto generated represents the prerequisite imports of project modules.
+
+await (async () => {
+    const requests = [${prerequisiteImports.map(specifier => `() => import(${createStringLiteralCode(specifier)})`).join(', ')}];
+    for (const request of requests) {
+        try {
+            await request();
+        } catch (_err) {
+            // The error should have been caught by executor.
+        }
+    }
+})();
+    `;
+}
+/**
+ * 创建一个合法的 JavaScript 字符串。它能正确地处理引号，比如：
+ * - double"quote -> "double\"quote"
+ */
+function createStringLiteralCode(value) {
+    // 巧妙地利用 `JSON.stringify`，因为它会自动处理引号！
+    return JSON.stringify(value);
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicHJlcmVxdWlzaXRlLWltcG9ydHMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvY29yZS9zY3JpcHRpbmcvcGFja2VyLWRyaXZlci9wcmVyZXF1aXNpdGUtaW1wb3J0cy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7QUFZQSxnRUFRQztBQVFELDRFQWVDO0FBekNEOztHQUVHO0FBQ1UsUUFBQSx5QkFBeUIsR0FBRyxzQ0FBc0MsQ0FBQztBQUVoRjs7OztHQUlHO0FBQ0gsU0FBZ0IsMEJBQTBCLENBQUMsbUJBQTZCO0lBQ3BFLE9BQU87OztFQUdULG1CQUFtQixDQUFDLEdBQUcsQ0FBQyxDQUFDLFNBQVMsRUFBRSxFQUFFLENBQUMsVUFBVSx1QkFBdUIsQ0FBQyxTQUFTLENBQUMsR0FBRyxDQUFDLENBQUMsSUFBSSxDQUFDLElBQUksQ0FBQzs7O0tBRy9GLENBQUM7QUFDTixDQUFDO0FBRUQ7Ozs7O0dBS0c7QUFDSCxTQUFnQixnQ0FBZ0MsQ0FBQyxtQkFBNkI7SUFDMUUsT0FBTzs7Ozt3QkFJYSxtQkFBbUIsQ0FBQyxHQUFHLENBQUMsU0FBUyxDQUFDLEVBQUUsQ0FBQyxnQkFBZ0IsdUJBQXVCLENBQUMsU0FBUyxDQUFDLEdBQUcsQ0FBQyxDQUFDLElBQUksQ0FBQyxJQUFJLENBQUM7Ozs7Ozs7OztLQVN6SCxDQUFDO0FBQ04sQ0FBQztBQUVEOzs7R0FHRztBQUNILFNBQVMsdUJBQXVCLENBQUMsS0FBYTtJQUMxQyxxQ0FBcUM7SUFDckMsT0FBTyxJQUFJLENBQUMsU0FBUyxDQUFDLEtBQUssQ0FBQyxDQUFDO0FBQ2pDLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBVUkwgfSBmcm9tICd1cmwnO1xyXG5cclxuLyoqXHJcbiAqIOaooeWdlyBgJ2NjZTovaW50ZXJuYWwveC9wcmVyZXF1aXNpdGUtaW1wb3J0cydgIOeahCBVUkzjgIJcclxuICovXHJcbmV4cG9ydCBjb25zdCBwcmVyZXF1aXNpdGVJbXBvcnRzTW9kVVJMID0gJ2NjZTovaW50ZXJuYWwveC9wcmVyZXF1aXNpdGUtaW1wb3J0cyc7XHJcblxyXG4vKipcclxuICog55Sf5oiQ5qih5Z2XIGAnY2NlOi9pbnRlcm5hbC94L3ByZXJlcXVpc2l0ZS1pbXBvcnRzJ2DjgIJcclxuICog6L+Z5Liq5qih5Z2X55So5LqO5a+85YWl5omA5pyJ6ZyA6KaB5Yqg6L2955qE6aG555uu5qih5Z2X44CCXHJcbiAqIEBwYXJhbSBwcmVyZXF1aXNpdGVJbXBvcnRzIOmcgOimgeWvvOWFpeeahOmhueebruaooeWdl+OAguW/hemhu+aYryBVUkzjgIJcclxuICovXHJcbmV4cG9ydCBmdW5jdGlvbiBtYWtlUHJlcmVxdWlzaXRlSW1wb3J0c01vZChwcmVyZXF1aXNpdGVJbXBvcnRzOiBzdHJpbmdbXSkge1xyXG4gICAgcmV0dXJuIGBcclxuLy8gQXV0byBnZW5lcmF0ZWQgcmVwcmVzZW50cyB0aGUgcHJlcmVxdWlzaXRlIGltcG9ydHMgb2YgcHJvamVjdCBtb2R1bGVzLlxyXG5cclxuJHtwcmVyZXF1aXNpdGVJbXBvcnRzLm1hcCgoc3BlY2lmaWVyKSA9PiBgaW1wb3J0ICR7Y3JlYXRlU3RyaW5nTGl0ZXJhbENvZGUoc3BlY2lmaWVyKX07YCkuam9pbignXFxuJyl9XHJcblxyXG5leHBvcnQgeyB9OyAvLyBUbyBtYWtlIHN1cmUgdGhpcyBtb2R1bGUgY2FuIGJ5IHJlY29nbml6ZWQgYXMgRVMyMDE1IG1vZHVsZSBldmVuIG5vIGltcG9ydHMuXHJcbiAgICBgO1xyXG59XHJcblxyXG4vKipcclxuICog55Sf5oiQ5qih5Z2XIGAnY2NlOi9pbnRlcm5hbC94L3ByZXJlcXVpc2l0ZS1pbXBvcnRzJ2DjgIJcclxuICog6L+Z5Liq5qih5Z2X55So5LqO5a+85YWl5omA5pyJ6ZyA6KaB5Yqg6L2955qE6aG555uu5qih5Z2X44CCXHJcbiAqIOS4jiBgbWFrZVByZXJlcXVpc2l0ZUltcG9ydHNNb2RgIOS4jeWQjO+8jOi/meagt+eUn+aIkOeahOaooeWdl+S8muWwneivleWvvOWFpeavj+S4qumhueebruaooeWdl++8jOWNs+S9v+Wug+S7rOWFtuS4reeahOS4gOS4quaIluWkmuS4quWPkeeUn+S6huW8guW4uOOAglxyXG4gKiBAcGFyYW0gcHJlcmVxdWlzaXRlSW1wb3J0cyDpnIDopoHlr7zlhaXnmoTpobnnm67mqKHlnZfjgILlv4XpobvmmK8gVVJM44CCXHJcbiAqL1xyXG5leHBvcnQgZnVuY3Rpb24gbWFrZVRlbnRhdGl2ZVByZXJlcXVpc2l0ZUltcG9ydHMocHJlcmVxdWlzaXRlSW1wb3J0czogc3RyaW5nW10pIHtcclxuICAgIHJldHVybiBgXHJcbi8vIEF1dG8gZ2VuZXJhdGVkIHJlcHJlc2VudHMgdGhlIHByZXJlcXVpc2l0ZSBpbXBvcnRzIG9mIHByb2plY3QgbW9kdWxlcy5cclxuXHJcbmF3YWl0IChhc3luYyAoKSA9PiB7XHJcbiAgICBjb25zdCByZXF1ZXN0cyA9IFske3ByZXJlcXVpc2l0ZUltcG9ydHMubWFwKHNwZWNpZmllciA9PiBgKCkgPT4gaW1wb3J0KCR7Y3JlYXRlU3RyaW5nTGl0ZXJhbENvZGUoc3BlY2lmaWVyKX0pYCkuam9pbignLCAnKX1dO1xyXG4gICAgZm9yIChjb25zdCByZXF1ZXN0IG9mIHJlcXVlc3RzKSB7XHJcbiAgICAgICAgdHJ5IHtcclxuICAgICAgICAgICAgYXdhaXQgcmVxdWVzdCgpO1xyXG4gICAgICAgIH0gY2F0Y2ggKF9lcnIpIHtcclxuICAgICAgICAgICAgLy8gVGhlIGVycm9yIHNob3VsZCBoYXZlIGJlZW4gY2F1Z2h0IGJ5IGV4ZWN1dG9yLlxyXG4gICAgICAgIH1cclxuICAgIH1cclxufSkoKTtcclxuICAgIGA7XHJcbn1cclxuXHJcbi8qKlxyXG4gKiDliJvlu7rkuIDkuKrlkIjms5XnmoQgSmF2YVNjcmlwdCDlrZfnrKbkuLLjgILlroPog73mraPnoa7lnLDlpITnkIblvJXlj7fvvIzmr5TlpoLvvJpcclxuICogLSBkb3VibGVcInF1b3RlIC0+IFwiZG91YmxlXFxcInF1b3RlXCJcclxuICovXHJcbmZ1bmN0aW9uIGNyZWF0ZVN0cmluZ0xpdGVyYWxDb2RlKHZhbHVlOiBzdHJpbmcpIHtcclxuICAgIC8vIOW3p+WmmeWcsOWIqeeUqCBgSlNPTi5zdHJpbmdpZnlg77yM5Zug5Li65a6D5Lya6Ieq5Yqo5aSE55CG5byV5Y+377yBXHJcbiAgICByZXR1cm4gSlNPTi5zdHJpbmdpZnkodmFsdWUpO1xyXG59XHJcbiJdfQ==

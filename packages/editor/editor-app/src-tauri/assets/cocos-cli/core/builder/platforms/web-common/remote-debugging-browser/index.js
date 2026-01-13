@@ -1,0 +1,93 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BrowserType = exports.SUPPORTED_BROWSERS = void 0;
+exports.getRemoteDebuggingBrowser = getRemoteDebuggingBrowser;
+exports.getInstalledBrowser = getInstalledBrowser;
+exports.launchRemoteDebuggingBrowser = launchRemoteDebuggingBrowser;
+const os_1 = require("os");
+const interface_1 = require("./interface");
+Object.defineProperty(exports, "BrowserType", { enumerable: true, get: function () { return interface_1.BrowserType; } });
+const win32_1 = require("./win32");
+const darwin_1 = require("./darwin");
+const linux_1 = require("./linux");
+/**
+ * 支持浏览器数组
+ */
+exports.SUPPORTED_BROWSERS = [interface_1.BrowserType.Chrome, interface_1.BrowserType.Edge];
+/**
+ * 获取当前平台的远程调试浏览器实例
+ */
+function getRemoteDebuggingBrowser() {
+    const currentPlatform = (0, os_1.platform)();
+    if (currentPlatform === 'win32') {
+        return new win32_1.RemoteDebuggingBrowserWin32();
+    }
+    else if (currentPlatform === 'darwin') {
+        return new darwin_1.RemoteDebuggingBrowserDarwin();
+    }
+    else if (currentPlatform === 'linux') {
+        return new linux_1.RemoteDebuggingBrowserLinux();
+    }
+    throw new Error(`Unsupported platform: ${currentPlatform}`);
+}
+/**
+ * 获取已安装的浏览器类型（按照流程图逻辑）
+ * @returns 已安装的浏览器类型，如果没有找到返回 undefined
+ */
+function getInstalledBrowser() {
+    const browserImpl = getRemoteDebuggingBrowser();
+    // 1. 获取系统默认浏览器
+    const defaultBrowser = browserImpl.getDefaultBrowserType();
+    // 2. 检查默认浏览器是否存在且在支持数组中
+    if (defaultBrowser && exports.SUPPORTED_BROWSERS.includes(defaultBrowser)) {
+        // 验证是否真的已安装
+        if (browserImpl.isBrowserInstalled(defaultBrowser)) {
+            return defaultBrowser;
+        }
+    }
+    // 3. 按数组顺序依次检查是否已安装
+    for (const browserType of exports.SUPPORTED_BROWSERS) {
+        if (browserImpl.isBrowserInstalled(browserType)) {
+            return browserType;
+        }
+    }
+    // 4. 没有找到已安装的浏览器
+    return undefined;
+}
+/**
+ * 启动远程调试浏览器
+ * @param url 要打开的 URL
+ * @param port 远程调试端口，默认 9222
+ * @param browserType 可选的浏览器类型，如果不提供则自动检测
+ * @param userDataDir 用户数据目录
+ * @param completedCallback 浏览器启动完成后的回调函数
+ */
+function launchRemoteDebuggingBrowser(url, port, browserType, userDataDir, completedCallback) {
+    const browserImpl = getRemoteDebuggingBrowser();
+    let targetBrowserType = browserType;
+    // 如果用户没有指定 browserType，调用获取已安装浏览器
+    if (!targetBrowserType) {
+        targetBrowserType = getInstalledBrowser();
+    }
+    // 检查 browserType 是否存在
+    if (!targetBrowserType) {
+        // 提示用户下载并安装支持数组第一项
+        const firstSupportedBrowser = exports.SUPPORTED_BROWSERS[0];
+        console.error(`❌ No supported browser found. Please download and install ${firstSupportedBrowser}.`);
+        if (completedCallback) {
+            completedCallback();
+        }
+        return;
+    }
+    // 验证浏览器是否真的已安装（防止用户指定了不存在的浏览器类型）
+    if (!browserImpl.isBrowserInstalled(targetBrowserType)) {
+        console.error(`❌ Browser ${targetBrowserType} is not installed. Please install it first.`);
+        if (completedCallback) {
+            completedCallback();
+        }
+        return;
+    }
+    // 启动浏览器
+    browserImpl.launchBrowser(targetBrowserType, url, port, userDataDir, completedCallback);
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi8uLi9zcmMvY29yZS9idWlsZGVyL3BsYXRmb3Jtcy93ZWItY29tbW9uL3JlbW90ZS1kZWJ1Z2dpbmctYnJvd3Nlci9pbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7QUFjQSw4REFZQztBQU1ELGtEQXVCQztBQVVELG9FQXNDQztBQXZHRCwyQkFBOEI7QUFDOUIsMkNBQW1FO0FBeUcxRCw0RkF6R0EsdUJBQVcsT0F5R0E7QUF4R3BCLG1DQUFzRDtBQUN0RCxxQ0FBd0Q7QUFDeEQsbUNBQXNEO0FBRXREOztHQUVHO0FBQ1UsUUFBQSxrQkFBa0IsR0FBa0IsQ0FBQyx1QkFBVyxDQUFDLE1BQU0sRUFBRSx1QkFBVyxDQUFDLElBQUksQ0FBQyxDQUFDO0FBRXhGOztHQUVHO0FBQ0gsU0FBZ0IseUJBQXlCO0lBQ3JDLE1BQU0sZUFBZSxHQUFHLElBQUEsYUFBUSxHQUFFLENBQUM7SUFFbkMsSUFBSSxlQUFlLEtBQUssT0FBTyxFQUFFLENBQUM7UUFDOUIsT0FBTyxJQUFJLG1DQUEyQixFQUFFLENBQUM7SUFDN0MsQ0FBQztTQUFNLElBQUksZUFBZSxLQUFLLFFBQVEsRUFBRSxDQUFDO1FBQ3RDLE9BQU8sSUFBSSxxQ0FBNEIsRUFBRSxDQUFDO0lBQzlDLENBQUM7U0FBTSxJQUFJLGVBQWUsS0FBSyxPQUFPLEVBQUUsQ0FBQztRQUNyQyxPQUFPLElBQUksbUNBQTJCLEVBQUUsQ0FBQztJQUM3QyxDQUFDO0lBRUQsTUFBTSxJQUFJLEtBQUssQ0FBQyx5QkFBeUIsZUFBZSxFQUFFLENBQUMsQ0FBQztBQUNoRSxDQUFDO0FBRUQ7OztHQUdHO0FBQ0gsU0FBZ0IsbUJBQW1CO0lBQy9CLE1BQU0sV0FBVyxHQUFHLHlCQUF5QixFQUFFLENBQUM7SUFFaEQsZUFBZTtJQUNmLE1BQU0sY0FBYyxHQUFHLFdBQVcsQ0FBQyxxQkFBcUIsRUFBRSxDQUFDO0lBRTNELHdCQUF3QjtJQUN4QixJQUFJLGNBQWMsSUFBSSwwQkFBa0IsQ0FBQyxRQUFRLENBQUMsY0FBYyxDQUFDLEVBQUUsQ0FBQztRQUNoRSxZQUFZO1FBQ1osSUFBSSxXQUFXLENBQUMsa0JBQWtCLENBQUMsY0FBYyxDQUFDLEVBQUUsQ0FBQztZQUNqRCxPQUFPLGNBQWMsQ0FBQztRQUMxQixDQUFDO0lBQ0wsQ0FBQztJQUVELG9CQUFvQjtJQUNwQixLQUFLLE1BQU0sV0FBVyxJQUFJLDBCQUFrQixFQUFFLENBQUM7UUFDM0MsSUFBSSxXQUFXLENBQUMsa0JBQWtCLENBQUMsV0FBVyxDQUFDLEVBQUUsQ0FBQztZQUM5QyxPQUFPLFdBQVcsQ0FBQztRQUN2QixDQUFDO0lBQ0wsQ0FBQztJQUVELGlCQUFpQjtJQUNqQixPQUFPLFNBQVMsQ0FBQztBQUNyQixDQUFDO0FBRUQ7Ozs7Ozs7R0FPRztBQUNILFNBQWdCLDRCQUE0QixDQUN4QyxHQUFXLEVBQ1gsSUFBWSxFQUNaLFdBQW9DLEVBQ3BDLFdBQW1CLEVBQ25CLGlCQUE4QjtJQUU5QixNQUFNLFdBQVcsR0FBRyx5QkFBeUIsRUFBRSxDQUFDO0lBRWhELElBQUksaUJBQWlCLEdBQTRCLFdBQVcsQ0FBQztJQUU3RCxrQ0FBa0M7SUFDbEMsSUFBSSxDQUFDLGlCQUFpQixFQUFFLENBQUM7UUFDckIsaUJBQWlCLEdBQUcsbUJBQW1CLEVBQUUsQ0FBQztJQUM5QyxDQUFDO0lBRUQsc0JBQXNCO0lBQ3RCLElBQUksQ0FBQyxpQkFBaUIsRUFBRSxDQUFDO1FBQ3JCLG1CQUFtQjtRQUNuQixNQUFNLHFCQUFxQixHQUFHLDBCQUFrQixDQUFDLENBQUMsQ0FBQyxDQUFDO1FBQ3BELE9BQU8sQ0FBQyxLQUFLLENBQUMsNkRBQTZELHFCQUFxQixHQUFHLENBQUMsQ0FBQztRQUNyRyxJQUFJLGlCQUFpQixFQUFFLENBQUM7WUFDcEIsaUJBQWlCLEVBQUUsQ0FBQztRQUN4QixDQUFDO1FBQ0QsT0FBTztJQUNYLENBQUM7SUFFRCxpQ0FBaUM7SUFDakMsSUFBSSxDQUFDLFdBQVcsQ0FBQyxrQkFBa0IsQ0FBQyxpQkFBaUIsQ0FBQyxFQUFFLENBQUM7UUFDckQsT0FBTyxDQUFDLEtBQUssQ0FBQyxhQUFhLGlCQUFpQiw2Q0FBNkMsQ0FBQyxDQUFDO1FBQzNGLElBQUksaUJBQWlCLEVBQUUsQ0FBQztZQUNwQixpQkFBaUIsRUFBRSxDQUFDO1FBQ3hCLENBQUM7UUFDRCxPQUFPO0lBQ1gsQ0FBQztJQUVELFFBQVE7SUFDUixXQUFXLENBQUMsYUFBYSxDQUFDLGlCQUFpQixFQUFFLEdBQUcsRUFBRSxJQUFJLEVBQUUsV0FBVyxFQUFFLGlCQUFpQixDQUFDLENBQUM7QUFDNUYsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IHBsYXRmb3JtIH0gZnJvbSBcIm9zXCI7XHJcbmltcG9ydCB7IEJyb3dzZXJUeXBlLCBJUmVtb3RlRGVidWdnaW5nQnJvd3NlciB9IGZyb20gXCIuL2ludGVyZmFjZVwiO1xyXG5pbXBvcnQgeyBSZW1vdGVEZWJ1Z2dpbmdCcm93c2VyV2luMzIgfSBmcm9tIFwiLi93aW4zMlwiO1xyXG5pbXBvcnQgeyBSZW1vdGVEZWJ1Z2dpbmdCcm93c2VyRGFyd2luIH0gZnJvbSBcIi4vZGFyd2luXCI7XHJcbmltcG9ydCB7IFJlbW90ZURlYnVnZ2luZ0Jyb3dzZXJMaW51eCB9IGZyb20gXCIuL2xpbnV4XCI7XHJcblxyXG4vKipcclxuICog5pSv5oyB5rWP6KeI5Zmo5pWw57uEXHJcbiAqL1xyXG5leHBvcnQgY29uc3QgU1VQUE9SVEVEX0JST1dTRVJTOiBCcm93c2VyVHlwZVtdID0gW0Jyb3dzZXJUeXBlLkNocm9tZSwgQnJvd3NlclR5cGUuRWRnZV07XHJcblxyXG4vKipcclxuICog6I635Y+W5b2T5YmN5bmz5Y+w55qE6L+c56iL6LCD6K+V5rWP6KeI5Zmo5a6e5L6LXHJcbiAqL1xyXG5leHBvcnQgZnVuY3Rpb24gZ2V0UmVtb3RlRGVidWdnaW5nQnJvd3NlcigpOiBJUmVtb3RlRGVidWdnaW5nQnJvd3NlciB7XHJcbiAgICBjb25zdCBjdXJyZW50UGxhdGZvcm0gPSBwbGF0Zm9ybSgpO1xyXG4gICAgXHJcbiAgICBpZiAoY3VycmVudFBsYXRmb3JtID09PSAnd2luMzInKSB7XHJcbiAgICAgICAgcmV0dXJuIG5ldyBSZW1vdGVEZWJ1Z2dpbmdCcm93c2VyV2luMzIoKTtcclxuICAgIH0gZWxzZSBpZiAoY3VycmVudFBsYXRmb3JtID09PSAnZGFyd2luJykge1xyXG4gICAgICAgIHJldHVybiBuZXcgUmVtb3RlRGVidWdnaW5nQnJvd3NlckRhcndpbigpO1xyXG4gICAgfSBlbHNlIGlmIChjdXJyZW50UGxhdGZvcm0gPT09ICdsaW51eCcpIHtcclxuICAgICAgICByZXR1cm4gbmV3IFJlbW90ZURlYnVnZ2luZ0Jyb3dzZXJMaW51eCgpO1xyXG4gICAgfVxyXG4gICAgXHJcbiAgICB0aHJvdyBuZXcgRXJyb3IoYFVuc3VwcG9ydGVkIHBsYXRmb3JtOiAke2N1cnJlbnRQbGF0Zm9ybX1gKTtcclxufVxyXG5cclxuLyoqXHJcbiAqIOiOt+WPluW3suWuieijheeahOa1j+iniOWZqOexu+Wei++8iOaMieeFp+a1geeoi+WbvumAu+i+ke+8iVxyXG4gKiBAcmV0dXJucyDlt7Llronoo4XnmoTmtY/op4jlmajnsbvlnovvvIzlpoLmnpzmsqHmnInmib7liLDov5Tlm54gdW5kZWZpbmVkXHJcbiAqL1xyXG5leHBvcnQgZnVuY3Rpb24gZ2V0SW5zdGFsbGVkQnJvd3NlcigpOiBCcm93c2VyVHlwZSB8IHVuZGVmaW5lZCB7XHJcbiAgICBjb25zdCBicm93c2VySW1wbCA9IGdldFJlbW90ZURlYnVnZ2luZ0Jyb3dzZXIoKTtcclxuICAgIFxyXG4gICAgLy8gMS4g6I635Y+W57O757uf6buY6K6k5rWP6KeI5ZmoXHJcbiAgICBjb25zdCBkZWZhdWx0QnJvd3NlciA9IGJyb3dzZXJJbXBsLmdldERlZmF1bHRCcm93c2VyVHlwZSgpO1xyXG4gICAgXHJcbiAgICAvLyAyLiDmo4Dmn6Xpu5jorqTmtY/op4jlmajmmK/lkKblrZjlnKjkuJTlnKjmlK/mjIHmlbDnu4TkuK1cclxuICAgIGlmIChkZWZhdWx0QnJvd3NlciAmJiBTVVBQT1JURURfQlJPV1NFUlMuaW5jbHVkZXMoZGVmYXVsdEJyb3dzZXIpKSB7XHJcbiAgICAgICAgLy8g6aqM6K+B5piv5ZCm55yf55qE5bey5a6J6KOFXHJcbiAgICAgICAgaWYgKGJyb3dzZXJJbXBsLmlzQnJvd3Nlckluc3RhbGxlZChkZWZhdWx0QnJvd3NlcikpIHtcclxuICAgICAgICAgICAgcmV0dXJuIGRlZmF1bHRCcm93c2VyO1xyXG4gICAgICAgIH1cclxuICAgIH1cclxuICAgIFxyXG4gICAgLy8gMy4g5oyJ5pWw57uE6aG65bqP5L6d5qyh5qOA5p+l5piv5ZCm5bey5a6J6KOFXHJcbiAgICBmb3IgKGNvbnN0IGJyb3dzZXJUeXBlIG9mIFNVUFBPUlRFRF9CUk9XU0VSUykge1xyXG4gICAgICAgIGlmIChicm93c2VySW1wbC5pc0Jyb3dzZXJJbnN0YWxsZWQoYnJvd3NlclR5cGUpKSB7XHJcbiAgICAgICAgICAgIHJldHVybiBicm93c2VyVHlwZTtcclxuICAgICAgICB9XHJcbiAgICB9XHJcbiAgICBcclxuICAgIC8vIDQuIOayoeacieaJvuWIsOW3suWuieijheeahOa1j+iniOWZqFxyXG4gICAgcmV0dXJuIHVuZGVmaW5lZDtcclxufVxyXG5cclxuLyoqXHJcbiAqIOWQr+WKqOi/nOeoi+iwg+ivlea1j+iniOWZqFxyXG4gKiBAcGFyYW0gdXJsIOimgeaJk+W8gOeahCBVUkxcclxuICogQHBhcmFtIHBvcnQg6L+c56iL6LCD6K+V56uv5Y+j77yM6buY6K6kIDkyMjJcclxuICogQHBhcmFtIGJyb3dzZXJUeXBlIOWPr+mAieeahOa1j+iniOWZqOexu+Wei++8jOWmguaenOS4jeaPkOS+m+WImeiHquWKqOajgOa1i1xyXG4gKiBAcGFyYW0gdXNlckRhdGFEaXIg55So5oi35pWw5o2u55uu5b2VXHJcbiAqIEBwYXJhbSBjb21wbGV0ZWRDYWxsYmFjayDmtY/op4jlmajlkK/liqjlrozmiJDlkI7nmoTlm57osIPlh73mlbBcclxuICovXHJcbmV4cG9ydCBmdW5jdGlvbiBsYXVuY2hSZW1vdGVEZWJ1Z2dpbmdCcm93c2VyKFxyXG4gICAgdXJsOiBzdHJpbmcsXHJcbiAgICBwb3J0OiBudW1iZXIsXHJcbiAgICBicm93c2VyVHlwZTogQnJvd3NlclR5cGUgfCB1bmRlZmluZWQsXHJcbiAgICB1c2VyRGF0YURpcjogc3RyaW5nLFxyXG4gICAgY29tcGxldGVkQ2FsbGJhY2s/OiAoKSA9PiB2b2lkXHJcbik6IHZvaWQge1xyXG4gICAgY29uc3QgYnJvd3NlckltcGwgPSBnZXRSZW1vdGVEZWJ1Z2dpbmdCcm93c2VyKCk7XHJcbiAgICBcclxuICAgIGxldCB0YXJnZXRCcm93c2VyVHlwZTogQnJvd3NlclR5cGUgfCB1bmRlZmluZWQgPSBicm93c2VyVHlwZTtcclxuXHJcbiAgICAvLyDlpoLmnpznlKjmiLfmsqHmnInmjIflrpogYnJvd3NlclR5cGXvvIzosIPnlKjojrflj5blt7Llronoo4XmtY/op4jlmahcclxuICAgIGlmICghdGFyZ2V0QnJvd3NlclR5cGUpIHtcclxuICAgICAgICB0YXJnZXRCcm93c2VyVHlwZSA9IGdldEluc3RhbGxlZEJyb3dzZXIoKTtcclxuICAgIH1cclxuXHJcbiAgICAvLyDmo4Dmn6UgYnJvd3NlclR5cGUg5piv5ZCm5a2Y5ZyoXHJcbiAgICBpZiAoIXRhcmdldEJyb3dzZXJUeXBlKSB7XHJcbiAgICAgICAgLy8g5o+Q56S655So5oi35LiL6L295bm25a6J6KOF5pSv5oyB5pWw57uE56ys5LiA6aG5XHJcbiAgICAgICAgY29uc3QgZmlyc3RTdXBwb3J0ZWRCcm93c2VyID0gU1VQUE9SVEVEX0JST1dTRVJTWzBdO1xyXG4gICAgICAgIGNvbnNvbGUuZXJyb3IoYOKdjCBObyBzdXBwb3J0ZWQgYnJvd3NlciBmb3VuZC4gUGxlYXNlIGRvd25sb2FkIGFuZCBpbnN0YWxsICR7Zmlyc3RTdXBwb3J0ZWRCcm93c2VyfS5gKTtcclxuICAgICAgICBpZiAoY29tcGxldGVkQ2FsbGJhY2spIHtcclxuICAgICAgICAgICAgY29tcGxldGVkQ2FsbGJhY2soKTtcclxuICAgICAgICB9XHJcbiAgICAgICAgcmV0dXJuO1xyXG4gICAgfVxyXG5cclxuICAgIC8vIOmqjOivgea1j+iniOWZqOaYr+WQpuecn+eahOW3suWuieijhe+8iOmYsuatoueUqOaIt+aMh+WumuS6huS4jeWtmOWcqOeahOa1j+iniOWZqOexu+Wei++8iVxyXG4gICAgaWYgKCFicm93c2VySW1wbC5pc0Jyb3dzZXJJbnN0YWxsZWQodGFyZ2V0QnJvd3NlclR5cGUpKSB7XHJcbiAgICAgICAgY29uc29sZS5lcnJvcihg4p2MIEJyb3dzZXIgJHt0YXJnZXRCcm93c2VyVHlwZX0gaXMgbm90IGluc3RhbGxlZC4gUGxlYXNlIGluc3RhbGwgaXQgZmlyc3QuYCk7XHJcbiAgICAgICAgaWYgKGNvbXBsZXRlZENhbGxiYWNrKSB7XHJcbiAgICAgICAgICAgIGNvbXBsZXRlZENhbGxiYWNrKCk7XHJcbiAgICAgICAgfVxyXG4gICAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICAvLyDlkK/liqjmtY/op4jlmahcclxuICAgIGJyb3dzZXJJbXBsLmxhdW5jaEJyb3dzZXIodGFyZ2V0QnJvd3NlclR5cGUsIHVybCwgcG9ydCwgdXNlckRhdGFEaXIsIGNvbXBsZXRlZENhbGxiYWNrKTtcclxufVxyXG5cclxuLy8g5a+85Ye657G75Z6L5ZKM5p6a5Li+XHJcbmV4cG9ydCB7IEJyb3dzZXJUeXBlLCBJUmVtb3RlRGVidWdnaW5nQnJvd3NlciB9O1xyXG5cclxuIl19

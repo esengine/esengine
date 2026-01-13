@@ -1,0 +1,6 @@
+"use strict";
+/**
+ * 进程管理器
+ * 提供快速打开进程、进程消息传递等功能
+ */
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvY29yZS9iYXNlL3Byb2Nlc3MvaW5kZXgudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IjtBQUFBOzs7R0FHRyIsInNvdXJjZXNDb250ZW50IjpbIi8qKlxyXG4gKiDov5vnqIvnrqHnkIblmahcclxuICog5o+Q5L6b5b+r6YCf5omT5byA6L+b56iL44CB6L+b56iL5raI5oGv5Lyg6YCS562J5Yqf6IO9XHJcbiAqL1xyXG4iXX0=

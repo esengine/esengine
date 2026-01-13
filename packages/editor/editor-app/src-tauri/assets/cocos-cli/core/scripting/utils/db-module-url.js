@@ -1,0 +1,7 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getDatabaseModuleRootURL = getDatabaseModuleRootURL;
+function getDatabaseModuleRootURL(dbID) {
+    return `db://${dbID}/`;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZGItbW9kdWxlLXVybC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9jb3JlL3NjcmlwdGluZy91dGlscy9kYi1tb2R1bGUtdXJsLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7O0FBQ0EsNERBRUM7QUFGRCxTQUFnQix3QkFBd0IsQ0FBQyxJQUFZO0lBQ2pELE9BQU8sUUFBUSxJQUFJLEdBQUcsQ0FBQztBQUMzQixDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiXHJcbmV4cG9ydCBmdW5jdGlvbiBnZXREYXRhYmFzZU1vZHVsZVJvb3RVUkwoZGJJRDogc3RyaW5nKSB7XHJcbiAgICByZXR1cm4gYGRiOi8vJHtkYklEfS9gO1xyXG59XHJcbiJdfQ==

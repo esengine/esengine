@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SceneProcessEventTag = exports.SceneReadyChannel = void 0;
+/**
+ * 场景进程初始化完成后的标记
+ */
+exports.SceneReadyChannel = 'scene-worker:ready';
+/**
+ * 场景进程标记
+ */
+exports.SceneProcessEventTag = 'scene-worker-event';
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29uc3QuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvY29yZS9zY2VuZS9jb21tb24vY29uc3QudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7O0FBQUE7O0dBRUc7QUFDVSxRQUFBLGlCQUFpQixHQUFHLG9CQUFvQixDQUFDO0FBRXREOztHQUVHO0FBQ1UsUUFBQSxvQkFBb0IsR0FBRyxvQkFBb0IsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIi8qKlxyXG4gKiDlnLrmma/ov5vnqIvliJ3lp4vljJblrozmiJDlkI7nmoTmoIforrBcclxuICovXHJcbmV4cG9ydCBjb25zdCBTY2VuZVJlYWR5Q2hhbm5lbCA9ICdzY2VuZS13b3JrZXI6cmVhZHknO1xyXG5cclxuLyoqXHJcbiAqIOWcuuaZr+i/m+eoi+agh+iusFxyXG4gKi9cclxuZXhwb3J0IGNvbnN0IFNjZW5lUHJvY2Vzc0V2ZW50VGFnID0gJ3NjZW5lLXdvcmtlci1ldmVudCc7XHJcbiJdfQ==

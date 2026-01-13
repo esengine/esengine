@@ -17,6 +17,7 @@ dist/
 *.temp
 .cache/
 .build-cache/
+tmpclaude-*
 
 # Turborepo
 .turbo/

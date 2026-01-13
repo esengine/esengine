@@ -1,0 +1,16 @@
+"use strict";
+/**
+ * 一些全局路径配置记录
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GlobalConfig = exports.GlobalPaths = void 0;
+const path_1 = require("path");
+exports.GlobalPaths = {
+    staticDir: (0, path_1.join)(__dirname, '../static'),
+    workspace: (0, path_1.join)(__dirname, '..'),
+    enginePath: (0, path_1.join)(__dirname, '..', 'packages', 'engine'),
+};
+exports.GlobalConfig = {
+    mode: 'hold',
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZ2xvYmFsLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vc3JjL2dsb2JhbC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiO0FBQUE7O0dBRUc7OztBQUVILCtCQUE0QjtBQUVmLFFBQUEsV0FBVyxHQUFHO0lBQ3ZCLFNBQVMsRUFBRSxJQUFBLFdBQUksRUFBQyxTQUFTLEVBQUUsV0FBVyxDQUFDO0lBQ3ZDLFNBQVMsRUFBRSxJQUFBLFdBQUksRUFBQyxTQUFTLEVBQUUsSUFBSSxDQUFDO0lBQ2hDLFVBQVUsRUFBRSxJQUFBLFdBQUksRUFBQyxTQUFTLEVBQUUsSUFBSSxFQUFFLFVBQVUsRUFBRSxRQUFRLENBQUM7Q0FDMUQsQ0FBQztBQVdXLFFBQUEsWUFBWSxHQUFrQjtJQUN2QyxJQUFJLEVBQUUsTUFBTTtDQUNmLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvKipcclxuICog5LiA5Lqb5YWo5bGA6Lev5b6E6YWN572u6K6w5b2VXHJcbiAqL1xyXG5cclxuaW1wb3J0IHsgam9pbiB9IGZyb20gJ3BhdGgnO1xyXG5cclxuZXhwb3J0IGNvbnN0IEdsb2JhbFBhdGhzID0ge1xyXG4gICAgc3RhdGljRGlyOiBqb2luKF9fZGlybmFtZSwgJy4uL3N0YXRpYycpLFxyXG4gICAgd29ya3NwYWNlOiBqb2luKF9fZGlybmFtZSwgJy4uJyksXHJcbiAgICBlbmdpbmVQYXRoOiBqb2luKF9fZGlybmFtZSwgJy4uJywgJ3BhY2thZ2VzJywgJ2VuZ2luZScpLFxyXG59O1xyXG5cclxuLyoqXHJcbiAqIENMSSDnmoTku7vliqHmqKHlvI9cclxuICovXHJcbnR5cGUgQ0xJVGFza01vZGUgPSAnaG9sZCcgfCAnc2ltcGxlJztcclxuXHJcbmludGVyZmFjZSBJR2xvYmFsQ29uZmlnIHtcclxuICAgIG1vZGU6IENMSVRhc2tNb2RlO1xyXG59XHJcblxyXG5leHBvcnQgY29uc3QgR2xvYmFsQ29uZmlnOiBJR2xvYmFsQ29uZmlnID0ge1xyXG4gICAgbW9kZTogJ2hvbGQnLFxyXG59OyJdfQ==

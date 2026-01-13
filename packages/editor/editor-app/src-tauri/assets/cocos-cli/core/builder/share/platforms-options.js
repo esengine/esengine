@@ -1,0 +1,27 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.overwriteCommonOptions = exports.PLATFORMS = exports.NATIVE_PLATFORM = void 0;
+exports.NATIVE_PLATFORM = [
+    'android',
+    'ios',
+    'windows',
+    'mac',
+];
+// 支持的平台数组，顺序将会影响界面的平台排序
+exports.PLATFORMS = [
+    ...exports.NATIVE_PLATFORM,
+    'web-desktop',
+    'web-mobile',
+];
+exports.overwriteCommonOptions = [
+    'buildPath',
+    'server',
+    'sourceMaps',
+    'server',
+    'polyfills',
+    'name',
+    'mainBundleIsRemote',
+    'experimentalEraseModules',
+    'buildStageGroup',
+];
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicGxhdGZvcm1zLW9wdGlvbnMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvY29yZS9idWlsZGVyL3NoYXJlL3BsYXRmb3Jtcy1vcHRpb25zLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUdhLFFBQUEsZUFBZSxHQUFlO0lBQ3ZDLFNBQVM7SUFDVCxLQUFLO0lBQ0wsU0FBUztJQUNULEtBQUs7Q0FDUixDQUFDO0FBRUYsd0JBQXdCO0FBQ1gsUUFBQSxTQUFTLEdBQWE7SUFDL0IsR0FBRyx1QkFBZTtJQUVsQixhQUFhO0lBQ2IsWUFBWTtDQUNmLENBQUM7QUFFVyxRQUFBLHNCQUFzQixHQUE0QjtJQUMzRCxXQUFXO0lBQ1gsUUFBUTtJQUNSLFlBQVk7SUFDWixRQUFRO0lBQ1IsV0FBVztJQUNYLE1BQU07SUFDTixvQkFBb0I7SUFDcEIsMEJBQTBCO0lBQzFCLGlCQUFpQjtDQUNwQixDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgUGxhdGZvcm0gfSBmcm9tICcuLi9AdHlwZXMnO1xyXG5pbXBvcnQgeyBPdmVyd3JpdGVDb21tb25PcHRpb24gfSBmcm9tICcuLi9AdHlwZXMvcHJvdGVjdGVkJztcclxuXHJcbmV4cG9ydCBjb25zdCBOQVRJVkVfUExBVEZPUk06IFBsYXRmb3JtW10gPSBbXHJcbiAgICAnYW5kcm9pZCcsXHJcbiAgICAnaW9zJyxcclxuICAgICd3aW5kb3dzJyxcclxuICAgICdtYWMnLFxyXG5dO1xyXG5cclxuLy8g5pSv5oyB55qE5bmz5Y+w5pWw57uE77yM6aG65bqP5bCG5Lya5b2x5ZON55WM6Z2i55qE5bmz5Y+w5o6S5bqPXHJcbmV4cG9ydCBjb25zdCBQTEFURk9STVM6IHN0cmluZ1tdID0gW1xyXG4gICAgLi4uTkFUSVZFX1BMQVRGT1JNLFxyXG5cclxuICAgICd3ZWItZGVza3RvcCcsXHJcbiAgICAnd2ViLW1vYmlsZScsXHJcbl07XHJcblxyXG5leHBvcnQgY29uc3Qgb3ZlcndyaXRlQ29tbW9uT3B0aW9uczogT3ZlcndyaXRlQ29tbW9uT3B0aW9uW10gPSBbXHJcbiAgICAnYnVpbGRQYXRoJyxcclxuICAgICdzZXJ2ZXInLFxyXG4gICAgJ3NvdXJjZU1hcHMnLFxyXG4gICAgJ3NlcnZlcicsXHJcbiAgICAncG9seWZpbGxzJyxcclxuICAgICduYW1lJyxcclxuICAgICdtYWluQnVuZGxlSXNSZW1vdGUnLFxyXG4gICAgJ2V4cGVyaW1lbnRhbEVyYXNlTW9kdWxlcycsXHJcbiAgICAnYnVpbGRTdGFnZUdyb3VwJyxcclxuXTtcclxuIl19

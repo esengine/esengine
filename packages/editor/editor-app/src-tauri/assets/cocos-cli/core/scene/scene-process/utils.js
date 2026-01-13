@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseCommandLineArgs = parseCommandLineArgs;
+/**
+ * 将命令行参数解析为键值对对象
+ * 支持形式：
+ *   --key=value
+ *   --flag （没有等号的参数会被解析为 undefined）
+ *
+ * @param argv - 命令行参数数组，通常为 process.argv
+ * @returns 解析后的参数对象，键为参数名，值为对应值
+ */
+function parseCommandLineArgs(argv) {
+    return argv.slice(2).reduce((acc, cur) => {
+        const [key, value] = cur.replace(/^--/, '').split('=');
+        acc[key] = value;
+        return acc;
+    }, {});
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidXRpbHMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvY29yZS9zY2VuZS9zY2VuZS1wcm9jZXNzL3V0aWxzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7O0FBU0Esb0RBTUM7QUFmRDs7Ozs7Ozs7R0FRRztBQUNILFNBQWdCLG9CQUFvQixDQUFDLElBQWM7SUFDL0MsT0FBTyxJQUFJLENBQUMsS0FBSyxDQUFDLENBQUMsQ0FBQyxDQUFDLE1BQU0sQ0FBQyxDQUFDLEdBQUcsRUFBRSxHQUFHLEVBQUUsRUFBRTtRQUNyQyxNQUFNLENBQUMsR0FBRyxFQUFFLEtBQUssQ0FBQyxHQUFHLEdBQUcsQ0FBQyxPQUFPLENBQUMsS0FBSyxFQUFFLEVBQUUsQ0FBQyxDQUFDLEtBQUssQ0FBQyxHQUFHLENBQUMsQ0FBQztRQUN2RCxHQUFHLENBQUMsR0FBRyxDQUFDLEdBQUcsS0FBSyxDQUFDO1FBQ2pCLE9BQU8sR0FBRyxDQUFDO0lBQ2YsQ0FBQyxFQUFFLEVBQXdDLENBQUMsQ0FBQztBQUNqRCxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLyoqXHJcbiAqIOWwhuWRveS7pOihjOWPguaVsOino+aekOS4uumUruWAvOWvueWvueixoVxyXG4gKiDmlK/mjIHlvaLlvI/vvJpcclxuICogICAtLWtleT12YWx1ZVxyXG4gKiAgIC0tZmxhZyDvvIjmsqHmnInnrYnlj7fnmoTlj4LmlbDkvJrooqvop6PmnpDkuLogdW5kZWZpbmVk77yJXHJcbiAqXHJcbiAqIEBwYXJhbSBhcmd2IC0g5ZG95Luk6KGM5Y+C5pWw5pWw57uE77yM6YCa5bi45Li6IHByb2Nlc3MuYXJndlxyXG4gKiBAcmV0dXJucyDop6PmnpDlkI7nmoTlj4LmlbDlr7nosaHvvIzplK7kuLrlj4LmlbDlkI3vvIzlgLzkuLrlr7nlupTlgLxcclxuICovXHJcbmV4cG9ydCBmdW5jdGlvbiBwYXJzZUNvbW1hbmRMaW5lQXJncyhhcmd2OiBzdHJpbmdbXSk6IFJlY29yZDxzdHJpbmcsIHN0cmluZyB8IHVuZGVmaW5lZD4ge1xyXG4gICAgcmV0dXJuIGFyZ3Yuc2xpY2UoMikucmVkdWNlKChhY2MsIGN1cikgPT4ge1xyXG4gICAgICAgIGNvbnN0IFtrZXksIHZhbHVlXSA9IGN1ci5yZXBsYWNlKC9eLS0vLCAnJykuc3BsaXQoJz0nKTtcclxuICAgICAgICBhY2Nba2V5XSA9IHZhbHVlO1xyXG4gICAgICAgIHJldHVybiBhY2M7XHJcbiAgICB9LCB7fSBhcyBSZWNvcmQ8c3RyaW5nLCBzdHJpbmcgfCB1bmRlZmluZWQ+KTtcclxufVxyXG4iXX0=

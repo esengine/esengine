@@ -1,0 +1,16 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.versionDev = exports.buildTempDir = exports.previewTempDir = exports.texturePackerTempDir = exports.version = void 0;
+const path_1 = require("path");
+const builder_config_1 = __importDefault(require("../../../../share/builder-config"));
+// 记录整个自动图集的版本号，涉及到自动图集的算法策略等等
+exports.version = '1.0.1';
+exports.texturePackerTempDir = (0, path_1.join)(builder_config_1.default.projectRoot, `temp/builder/TexturePacker${exports.version}`);
+exports.previewTempDir = (0, path_1.join)(exports.texturePackerTempDir, 'preview');
+exports.buildTempDir = (0, path_1.join)(exports.texturePackerTempDir, 'build');
+// 一些内部调整而需要重新生成自动图集的版本号记录
+exports.versionDev = '1.0.2';
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29uZmlnLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vLi4vLi4vLi4vc3JjL2NvcmUvYnVpbGRlci93b3JrZXIvYnVpbGRlci9hc3NldC1oYW5kbGVyL3RleHR1cmUtcGFja2VyL2NvbmZpZy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7QUFBQSwrQkFBNEI7QUFDNUIsc0ZBQTZEO0FBQzdELDhCQUE4QjtBQUNqQixRQUFBLE9BQU8sR0FBRyxPQUFPLENBQUM7QUFDbEIsUUFBQSxvQkFBb0IsR0FBRyxJQUFBLFdBQUksRUFBQyx3QkFBYSxDQUFDLFdBQVcsRUFBRSw2QkFBNkIsZUFBTyxFQUFFLENBQUMsQ0FBQztBQUMvRixRQUFBLGNBQWMsR0FBRyxJQUFBLFdBQUksRUFBQyw0QkFBb0IsRUFBRSxTQUFTLENBQUMsQ0FBQztBQUN2RCxRQUFBLFlBQVksR0FBRyxJQUFBLFdBQUksRUFBQyw0QkFBb0IsRUFBRSxPQUFPLENBQUMsQ0FBQztBQUNoRSwwQkFBMEI7QUFDYixRQUFBLFVBQVUsR0FBRyxPQUFPLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBqb2luIH0gZnJvbSAncGF0aCc7XHJcbmltcG9ydCBidWlsZGVyQ29uZmlnIGZyb20gJy4uLy4uLy4uLy4uL3NoYXJlL2J1aWxkZXItY29uZmlnJztcclxuLy8g6K6w5b2V5pW05Liq6Ieq5Yqo5Zu+6ZuG55qE54mI5pys5Y+377yM5raJ5Y+K5Yiw6Ieq5Yqo5Zu+6ZuG55qE566X5rOV562W55Wl562J562JXHJcbmV4cG9ydCBjb25zdCB2ZXJzaW9uID0gJzEuMC4xJztcclxuZXhwb3J0IGNvbnN0IHRleHR1cmVQYWNrZXJUZW1wRGlyID0gam9pbihidWlsZGVyQ29uZmlnLnByb2plY3RSb290LCBgdGVtcC9idWlsZGVyL1RleHR1cmVQYWNrZXIke3ZlcnNpb259YCk7XHJcbmV4cG9ydCBjb25zdCBwcmV2aWV3VGVtcERpciA9IGpvaW4odGV4dHVyZVBhY2tlclRlbXBEaXIsICdwcmV2aWV3Jyk7XHJcbmV4cG9ydCBjb25zdCBidWlsZFRlbXBEaXIgPSBqb2luKHRleHR1cmVQYWNrZXJUZW1wRGlyLCAnYnVpbGQnKTtcclxuLy8g5LiA5Lqb5YaF6YOo6LCD5pW06ICM6ZyA6KaB6YeN5paw55Sf5oiQ6Ieq5Yqo5Zu+6ZuG55qE54mI5pys5Y+36K6w5b2VXHJcbmV4cG9ydCBjb25zdCB2ZXJzaW9uRGV2ID0gJzEuMC4yJztcclxuIl19
