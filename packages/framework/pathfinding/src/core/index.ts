@@ -71,3 +71,12 @@ export type {
 
 // JPS 寻路器 | JPS Pathfinder
 export { JPSPathfinder, createJPSPathfinder } from './JPSPathfinder';
+
+// 路径缓存 | Path Cache
+export {
+    PathCache,
+    createPathCache,
+    DEFAULT_PATH_CACHE_CONFIG
+} from './PathCache';
+
+export type { IPathCacheConfig } from './PathCache';
