@@ -68,3 +68,6 @@ export type {
     IObstacleChange,
     IChangeRegion
 } from './PathValidator';
+
+// JPS 寻路器 | JPS Pathfinder
+export { JPSPathfinder, createJPSPathfinder } from './JPSPathfinder';

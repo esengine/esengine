@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { IncrementalAStarPathfinder } from '../../src/core/IncrementalAStarPathfinder';
 import { AStarPathfinder } from '../../src/core/AStarPathfinder';
+import { JPSPathfinder } from '../../src/core/JPSPathfinder';
 import { GridMap } from '../../src/grid/GridMap';
 import { PathfindingState } from '../../src/core/IIncrementalPathfinding';
 
@@ -229,5 +230,140 @@ describe('Pathfinding Performance Benchmark', () => {
 
         // 应该在合理帧数内完成
         expect(frames).toBeLessThan(2000);
+    });
+
+    // =========================================================================
+    // JPS vs A* 性能对比
+    // =========================================================================
+
+    it('benchmark: JPS vs A* on open terrain', () => {
+        const grid = new GridMap(300, 300);
+        const astar = new AStarPathfinder(grid);
+        const jps = new JPSPathfinder(grid);
+
+        // Warmup
+        astar.findPath(0, 0, 50, 50);
+        jps.findPath(0, 0, 50, 50);
+
+        const iterations = 50;
+
+        // A* benchmark
+        const astarStart = performance.now();
+        let astarNodes = 0;
+        for (let i = 0; i < iterations; i++) {
+            const result = astar.findPath(0, 0, 299, 299);
+            astarNodes += result.nodesSearched;
+        }
+        const astarTime = performance.now() - astarStart;
+
+        // JPS benchmark
+        const jpsStart = performance.now();
+        let jpsNodes = 0;
+        for (let i = 0; i < iterations; i++) {
+            const result = jps.findPath(0, 0, 299, 299);
+            jpsNodes += result.nodesSearched;
+        }
+        const jpsTime = performance.now() - jpsStart;
+
+        const speedup = astarTime / jpsTime;
+        const nodeReduction = astarNodes / jpsNodes;
+
+        console.log('\n=== JPS vs A* on 300x300 Open Grid (' + iterations + ' iterations) ===');
+        console.log('A*:    ' + astarTime.toFixed(2) + 'ms (' + (astarNodes / iterations).toFixed(0) + ' nodes/path)');
+        console.log('JPS:   ' + jpsTime.toFixed(2) + 'ms (' + (jpsNodes / iterations).toFixed(0) + ' nodes/path)');
+        console.log('Speedup:        ' + speedup.toFixed(2) + 'x');
+        console.log('Node reduction: ' + nodeReduction.toFixed(2) + 'x');
+
+        // JPS should search far fewer nodes
+        expect(nodeReduction).toBeGreaterThan(10);
+    });
+
+    it('benchmark: JPS vs A* with obstacles', () => {
+        const grid = new GridMap(200, 200);
+
+        // Create scattered obstacles (10% density - lower to ensure paths exist)
+        for (let i = 0; i < 4000; i++) {
+            const x = Math.floor(Math.random() * 200);
+            const y = Math.floor(Math.random() * 200);
+            // Keep corners clear
+            if (x > 20 && x < 180 && y > 20 && y < 180) {
+                grid.setWalkable(x, y, false);
+            }
+        }
+
+        const astar = new AStarPathfinder(grid);
+        const jps = new JPSPathfinder(grid);
+
+        const iterations = 20;
+        let astarNodes = 0;
+        let jpsNodes = 0;
+
+        // A* benchmark
+        const astarStart = performance.now();
+        for (let i = 0; i < iterations; i++) {
+            const result = astar.findPath(5, 5, 195, 195);
+            astarNodes += result.nodesSearched;
+        }
+        const astarTime = performance.now() - astarStart;
+
+        // JPS benchmark
+        const jpsStart = performance.now();
+        for (let i = 0; i < iterations; i++) {
+            const result = jps.findPath(5, 5, 195, 195);
+            jpsNodes += result.nodesSearched;
+        }
+        const jpsTime = performance.now() - jpsStart;
+
+        console.log('\n=== JPS vs A* on 200x200 with Obstacles (' + iterations + ' iterations) ===');
+        console.log('A*:    ' + astarTime.toFixed(2) + 'ms (' + (astarNodes / iterations).toFixed(0) + ' nodes/path)');
+        console.log('JPS:   ' + jpsTime.toFixed(2) + 'ms (' + (jpsNodes / iterations).toFixed(0) + ' nodes/path)');
+
+        if (astarNodes > 0 && jpsNodes > 0) {
+            const nodeReduction = astarNodes / jpsNodes;
+            console.log('Node reduction: ' + nodeReduction.toFixed(2) + 'x');
+            // With obstacles, JPS should still search fewer nodes
+            expect(jpsNodes).toBeLessThan(astarNodes);
+        }
+
+        expect(true).toBe(true);
+    });
+
+    it('benchmark: JPS scaling test', () => {
+        const sizes = [100, 200, 300, 400];
+        console.log('\n=== JPS Scaling Test (Open Terrain) ===');
+        console.log('Size\t\tA* Time\t\tJPS Time\tSpeedup\t\tNode Ratio');
+
+        for (const size of sizes) {
+            const grid = new GridMap(size, size);
+            const astar = new AStarPathfinder(grid);
+            const jps = new JPSPathfinder(grid);
+
+            // Warmup
+            astar.findPath(0, 0, 10, 10);
+            jps.findPath(0, 0, 10, 10);
+
+            const astarStart = performance.now();
+            const astarResult = astar.findPath(0, 0, size - 1, size - 1);
+            const astarTime = performance.now() - astarStart;
+
+            const jpsStart = performance.now();
+            const jpsResult = jps.findPath(0, 0, size - 1, size - 1);
+            const jpsTime = performance.now() - jpsStart;
+
+            const speedup = astarTime / jpsTime;
+            const nodeRatio = astarResult.nodesSearched / jpsResult.nodesSearched;
+
+            console.log(
+                size + 'x' + size + '\t\t' +
+                astarTime.toFixed(2) + 'ms\t\t' +
+                jpsTime.toFixed(2) + 'ms\t\t' +
+                speedup.toFixed(2) + 'x\t\t' +
+                nodeRatio.toFixed(1) + 'x'
+            );
+
+            expect(jpsResult.found).toBe(astarResult.found);
+        }
+
+        expect(true).toBe(true);
     });
 });
