@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { IncrementalAStarPathfinder } from '../../src/core/IncrementalAStarPathfinder';
 import { AStarPathfinder } from '../../src/core/AStarPathfinder';
-import { FastAStarPathfinder } from '../../src/core/FastAStarPathfinder';
+import { GridPathfinder } from '../../src/core/GridPathfinder';
 import { JPSPathfinder } from '../../src/core/JPSPathfinder';
 import { HPAPathfinder } from '../../src/core/HPAPathfinder';
 import { GridMap } from '../../src/grid/GridMap';
@@ -52,10 +52,10 @@ describe('Pathfinding Performance Benchmark', () => {
         expect(true).toBe(true);
     });
 
-    it('benchmark: A* vs FastA* performance', () => {
+    it('benchmark: A* vs GridPathfinder(fast) performance', () => {
         const grid = new GridMap(200, 200);
         const astar = new AStarPathfinder(grid);
-        const fastAstar = new FastAStarPathfinder(grid);
+        const fastAstar = new GridPathfinder(grid, { mode: 'fast' });
 
         for (let i = 40; i < 160; i++) {
             grid.setWalkable(100, i, false);
@@ -70,7 +70,7 @@ describe('Pathfinding Performance Benchmark', () => {
         }
         const astarTime = performance.now() - astarStart;
 
-        // Fast A*
+        // GridPathfinder (fast mode)
         const fastStart = performance.now();
         for (let i = 0; i < iterations; i++) {
             fastAstar.findPath(0, 0, 199, 199);
@@ -79,23 +79,23 @@ describe('Pathfinding Performance Benchmark', () => {
 
         const speedup = astarTime / fastTime;
 
-        console.log('\n=== A* vs FastA* (200x200, ' + iterations + ' paths) ===');
-        console.log('A*:      ' + astarTime.toFixed(2) + 'ms (' + (astarTime / iterations).toFixed(3) + 'ms/path)');
-        console.log('FastA*:  ' + fastTime.toFixed(2) + 'ms (' + (fastTime / iterations).toFixed(3) + 'ms/path)');
+        console.log('\n=== A* vs GridPathfinder(fast) (200x200, ' + iterations + ' paths) ===');
+        console.log('A*:               ' + astarTime.toFixed(2) + 'ms (' + (astarTime / iterations).toFixed(3) + 'ms/path)');
+        console.log('GridPathfinder:   ' + fastTime.toFixed(2) + 'ms (' + (fastTime / iterations).toFixed(3) + 'ms/path)');
         console.log('Speedup: ' + speedup.toFixed(2) + 'x');
 
         expect(speedup).toBeGreaterThan(1);
     });
 
-    it('benchmark: FastA* on large maps', () => {
+    it('benchmark: GridPathfinder(fast) on large maps', () => {
         const sizes = [500, 1000];
 
-        console.log('\n=== FastA* Large Map Performance ===');
+        console.log('\n=== GridPathfinder(fast) Large Map Performance ===');
         console.log('Size\t\tTime\t\tNodes\t\tPath Length');
 
         for (const size of sizes) {
             const grid = new GridMap(size, size);
-            const fastAstar = new FastAStarPathfinder(grid);
+            const fastAstar = new GridPathfinder(grid, { mode: 'fast' });
 
             const start = performance.now();
             const result = fastAstar.findPath(0, 0, size - 1, size - 1);
@@ -103,6 +103,76 @@ describe('Pathfinding Performance Benchmark', () => {
 
             console.log(size + 'x' + size + '\t\t' + time.toFixed(2) + 'ms\t\t' + result.nodesSearched + '\t\t' + result.path.length);
             expect(result.found).toBe(true);
+        }
+    });
+
+    it('benchmark: GridPathfinder mode comparison (fast vs bidirectional)', () => {
+        const grid = new GridMap(300, 300);
+        const fastAstar = new GridPathfinder(grid, { mode: 'fast' });
+        const biAstar = new GridPathfinder(grid, { mode: 'bidirectional' });
+
+        for (let i = 50; i < 250; i++) {
+            grid.setWalkable(150, i, false);
+        }
+
+        const iterations = 50;
+
+        // fast mode
+        const fastStart = performance.now();
+        let fastNodes = 0;
+        for (let i = 0; i < iterations; i++) {
+            const result = fastAstar.findPath(0, 0, 299, 299);
+            fastNodes = result.nodesSearched;
+        }
+        const fastTime = performance.now() - fastStart;
+
+        // bidirectional mode
+        const biStart = performance.now();
+        let biNodes = 0;
+        for (let i = 0; i < iterations; i++) {
+            const result = biAstar.findPath(0, 0, 299, 299);
+            biNodes = result.nodesSearched;
+        }
+        const biTime = performance.now() - biStart;
+
+        const speedup = fastTime / biTime;
+        const nodeReduction = fastNodes / biNodes;
+
+        console.log('\n=== GridPathfinder: fast vs bidirectional (300x300, ' + iterations + ' paths) ===');
+        console.log('fast:          ' + fastTime.toFixed(2) + 'ms (' + fastNodes + ' nodes)');
+        console.log('bidirectional: ' + biTime.toFixed(2) + 'ms (' + biNodes + ' nodes)');
+        console.log('Speedup:       ' + speedup.toFixed(2) + 'x');
+        console.log('Node reduction: ' + nodeReduction.toFixed(2) + 'x');
+
+        expect(speedup).toBeGreaterThan(0.5);
+    });
+
+    it('benchmark: GridPathfinder modes on large open maps', () => {
+        const sizes = [500, 1000];
+
+        console.log('\n=== GridPathfinder Large Map Performance ===');
+        console.log('Size\t\tfast\t\tbidir\t\tSpeedup\t\tNode Ratio');
+
+        for (const size of sizes) {
+            const grid = new GridMap(size, size);
+            const fastAstar = new GridPathfinder(grid, { mode: 'fast' });
+            const biAstar = new GridPathfinder(grid, { mode: 'bidirectional' });
+
+            const fastStart = performance.now();
+            const fastResult = fastAstar.findPath(0, 0, size - 1, size - 1);
+            const fastTime = performance.now() - fastStart;
+
+            const biStart = performance.now();
+            const biResult = biAstar.findPath(0, 0, size - 1, size - 1);
+            const biTime = performance.now() - biStart;
+
+            const speedup = fastTime / biTime;
+            const nodeRatio = fastResult.nodesSearched / biResult.nodesSearched;
+
+            console.log(size + 'x' + size + '\t\t' + fastTime.toFixed(2) + 'ms\t\t' + biTime.toFixed(2) + 'ms\t\t' + speedup.toFixed(2) + 'x\t\t' + nodeRatio.toFixed(2) + 'x');
+
+            expect(biResult.found).toBe(true);
+            expect(biResult.path.length).toBe(fastResult.path.length);
         }
     });
 
