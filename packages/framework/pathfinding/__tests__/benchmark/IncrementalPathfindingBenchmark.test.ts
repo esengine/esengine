@@ -366,4 +366,120 @@ describe('Pathfinding Performance Benchmark', () => {
 
         expect(true).toBe(true);
     });
+
+    // =========================================================================
+    // 缓存性能测试
+    // =========================================================================
+
+    it('benchmark: cache vs no-cache performance', () => {
+        const grid = new GridMap(100, 100);
+
+        // Add some obstacles
+        for (let i = 20; i < 80; i++) {
+            grid.setWalkable(50, i, false);
+        }
+
+        // Without cache
+        const noCachePF = new IncrementalAStarPathfinder(grid);
+
+        // With cache
+        const cachedPF = new IncrementalAStarPathfinder(grid, {
+            enableCache: true,
+            cacheConfig: { maxEntries: 500, ttlMs: 0 }
+        });
+
+        const iterations = 100;
+        const uniquePaths = 10;
+
+        // Generate unique path endpoints
+        const endpoints: Array<{ sx: number; sy: number; ex: number; ey: number }> = [];
+        for (let i = 0; i < uniquePaths; i++) {
+            endpoints.push({
+                sx: i * 3,
+                sy: i * 5,
+                ex: 99 - i * 2,
+                ey: 99 - i * 3
+            });
+        }
+
+        // Test without cache
+        const noCacheStart = performance.now();
+        for (let i = 0; i < iterations; i++) {
+            const ep = endpoints[i % uniquePaths];
+            const req = noCachePF.requestPath(ep.sx, ep.sy, ep.ex, ep.ey);
+            noCachePF.step(req.id, 10000);
+            noCachePF.cleanup(req.id);
+        }
+        const noCacheTime = performance.now() - noCacheStart;
+
+        // Test with cache
+        const cacheStart = performance.now();
+        for (let i = 0; i < iterations; i++) {
+            const ep = endpoints[i % uniquePaths];
+            const req = cachedPF.requestPath(ep.sx, ep.sy, ep.ex, ep.ey);
+            cachedPF.step(req.id, 10000);
+            cachedPF.cleanup(req.id);
+        }
+        const cacheTime = performance.now() - cacheStart;
+
+        const stats = cachedPF.getCacheStats();
+        const speedup = noCacheTime / cacheTime;
+
+        console.log('\n=== Cache Performance (' + iterations + ' requests, ' + uniquePaths + ' unique paths) ===');
+        console.log('No cache:    ' + noCacheTime.toFixed(2) + 'ms');
+        console.log('With cache:  ' + cacheTime.toFixed(2) + 'ms');
+        console.log('Speedup:     ' + speedup.toFixed(2) + 'x');
+        console.log('Cache hits:  ' + stats.hits + ' (' + (stats.hitRate * 100).toFixed(1) + '%)');
+        console.log('Cache misses: ' + stats.misses);
+
+        // With repeated paths, cache should provide significant speedup
+        expect(speedup).toBeGreaterThan(1.5);
+        expect(stats.hitRate).toBeGreaterThan(0.8);
+    });
+
+    it('benchmark: cache with many agents requesting same destination', () => {
+        const grid = new GridMap(100, 100);
+        const cachedPF = new IncrementalAStarPathfinder(grid, {
+            enableCache: true,
+            cacheConfig: { maxEntries: 1000, ttlMs: 0 }
+        });
+
+        const agentCount = 50;
+        const targetX = 99;
+        const targetY = 99;
+
+        // All agents go to the same destination from different starting points
+        const start = performance.now();
+        for (let i = 0; i < agentCount; i++) {
+            const startX = i % 10;
+            const startY = Math.floor(i / 10) * 5;
+            const req = cachedPF.requestPath(startX, startY, targetX, targetY);
+            cachedPF.step(req.id, 10000);
+            cachedPF.cleanup(req.id);
+        }
+        const time1 = performance.now() - start;
+
+        // Request same paths again (should hit cache)
+        const start2 = performance.now();
+        for (let i = 0; i < agentCount; i++) {
+            const startX = i % 10;
+            const startY = Math.floor(i / 10) * 5;
+            const req = cachedPF.requestPath(startX, startY, targetX, targetY);
+            cachedPF.step(req.id, 10000);
+            cachedPF.cleanup(req.id);
+        }
+        const time2 = performance.now() - start2;
+
+        const stats = cachedPF.getCacheStats();
+        const speedup = time1 / time2;
+
+        console.log('\n=== Many Agents Same Destination (' + agentCount + ' agents x 2 rounds) ===');
+        console.log('First round (cold cache):  ' + time1.toFixed(2) + 'ms');
+        console.log('Second round (warm cache): ' + time2.toFixed(2) + 'ms');
+        console.log('Speedup:                   ' + speedup.toFixed(2) + 'x');
+        console.log('Cache stats:               ' + stats.hits + ' hits, ' + stats.misses + ' misses');
+
+        // Second round should be much faster
+        expect(time2).toBeLessThan(time1 / 2);
+    });
 });

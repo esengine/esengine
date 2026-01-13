@@ -161,7 +161,14 @@ export class PathfindingSystem extends EntitySystem {
 
         if (!this.mapComponent.pathfinder && this.mapComponent.map) {
             this.mapComponent.pathfinder = new IncrementalAStarPathfinder(
-                this.mapComponent.map
+                this.mapComponent.map,
+                {
+                    enableCache: this.mapComponent.enableCache,
+                    cacheConfig: {
+                        maxEntries: this.mapComponent.cacheMaxEntries,
+                        ttlMs: this.mapComponent.cacheTtlMs
+                    }
+                }
             );
         }
 

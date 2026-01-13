@@ -19,6 +19,7 @@ import type {
     IIncrementalPathfindingOptions
 } from './IIncrementalPathfinding';
 import { PathfindingState, EMPTY_PROGRESS } from './IIncrementalPathfinding';
+import { PathCache, type IPathCacheConfig } from './PathCache';
 
 // =============================================================================
 // 内部类型 | Internal Types
@@ -75,6 +76,24 @@ interface ChangeRegion {
     timestamp: number;
 }
 
+/**
+ * @zh 增量寻路器配置
+ * @en Incremental pathfinder configuration
+ */
+export interface IIncrementalPathfinderConfig {
+    /**
+     * @zh 是否启用路径缓存
+     * @en Whether to enable path caching
+     */
+    enableCache?: boolean;
+
+    /**
+     * @zh 缓存配置
+     * @en Cache configuration
+     */
+    cacheConfig?: Partial<IPathCacheConfig>;
+}
+
 // =============================================================================
 // 增量 A* 寻路器 | Incremental A* Pathfinder
 // =============================================================================
@@ -116,14 +135,24 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
     private readonly affectedRegions: ChangeRegion[] = [];
     private readonly maxRegionAge: number = 5000;
 
+    private readonly cache: PathCache | null;
+    private readonly enableCache: boolean;
+    private mapVersion: number = 0;
+
+    private cacheHits: number = 0;
+    private cacheMisses: number = 0;
+
     /**
      * @zh 创建增量 A* 寻路器
      * @en Create incremental A* pathfinder
      *
      * @param map - @zh 寻路地图实例 @en Pathfinding map instance
+     * @param config - @zh 配置选项 @en Configuration options
      */
-    constructor(map: IPathfindingMap) {
+    constructor(map: IPathfindingMap, config?: IIncrementalPathfinderConfig) {
         this.map = map;
+        this.enableCache = config?.enableCache ?? false;
+        this.cache = this.enableCache ? new PathCache(config?.cacheConfig) : null;
     }
 
     /**
@@ -151,6 +180,39 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
             priority,
             createdAt: Date.now()
         };
+
+        if (this.cache) {
+            const cached = this.cache.get(startX, startY, endX, endY, this.mapVersion);
+            if (cached) {
+                this.cacheHits++;
+                const session: PathfindingSession = {
+                    request,
+                    state: cached.found ? PathfindingState.Completed : PathfindingState.Failed,
+                    options: opts,
+                    openList: new BinaryHeap<AStarNode>((a, b) => a.f - b.f),
+                    nodeCache: new Map(),
+                    startNode: this.map.getNodeAt(startX, startY)!,
+                    endNode: this.map.getNodeAt(endX, endY)!,
+                    endPosition: { x: endX, y: endY },
+                    nodesSearched: cached.nodesSearched,
+                    framesUsed: 0,
+                    initialDistance: 0,
+                    result: {
+                        requestId: id,
+                        found: cached.found,
+                        path: [...cached.path],
+                        cost: cached.cost,
+                        nodesSearched: cached.nodesSearched,
+                        framesUsed: 0,
+                        isPartial: false
+                    },
+                    affectedByChange: false
+                };
+                this.sessions.set(id, session);
+                return request;
+            }
+            this.cacheMisses++;
+        }
 
         const startNode = this.map.getNodeAt(startX, startY);
         const endNode = this.map.getNodeAt(endX, endY);
@@ -266,6 +328,22 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
             if (current.node.id === session.endNode.id) {
                 session.state = PathfindingState.Completed;
                 session.result = this.buildResult(session, current);
+
+                if (this.cache && session.result.found) {
+                    const req = session.request;
+                    this.cache.set(
+                        req.startX, req.startY,
+                        req.endX, req.endY,
+                        {
+                            found: true,
+                            path: session.result.path,
+                            cost: session.result.cost,
+                            nodesSearched: session.result.nodesSearched
+                        },
+                        this.mapVersion
+                    );
+                }
+
                 return this.createProgress(session);
             }
 
@@ -362,6 +440,12 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
         maxX: number,
         maxY: number
     ): void {
+        this.mapVersion++;
+
+        if (this.cache) {
+            this.cache.invalidateRegion(minX, minY, maxX, maxY);
+        }
+
         const region: ChangeRegion = {
             minX,
             minY,
@@ -394,6 +478,39 @@ export class IncrementalAStarPathfinder implements IIncrementalPathfinder {
         }
         this.sessions.clear();
         this.affectedRegions.length = 0;
+    }
+
+    /**
+     * @zh 清空路径缓存
+     * @en Clear path cache
+     */
+    clearCache(): void {
+        if (this.cache) {
+            this.cache.invalidateAll();
+            this.cacheHits = 0;
+            this.cacheMisses = 0;
+        }
+    }
+
+    /**
+     * @zh 获取缓存统计信息
+     * @en Get cache statistics
+     */
+    getCacheStats(): { enabled: boolean; hits: number; misses: number; hitRate: number; size: number } {
+        if (!this.cache) {
+            return { enabled: false, hits: 0, misses: 0, hitRate: 0, size: 0 };
+        }
+
+        const total = this.cacheHits + this.cacheMisses;
+        const hitRate = total > 0 ? this.cacheHits / total : 0;
+
+        return {
+            enabled: true,
+            hits: this.cacheHits,
+            misses: this.cacheMisses,
+            hitRate,
+            size: this.cache.getStats().size
+        };
     }
 
     /**

@@ -146,6 +146,34 @@ export class PathfindingMapComponent extends Component {
     smoothingType: 'los' | 'catmullrom' | 'combined' = 'los';
 
     // =========================================================================
+    // 缓存配置 | Cache Configuration
+    // =========================================================================
+
+    /**
+     * @zh 是否启用路径缓存
+     * @en Whether path caching is enabled
+     */
+    @Serialize()
+    @Property({ type: 'boolean', label: 'Enable Cache' })
+    enableCache: boolean = true;
+
+    /**
+     * @zh 缓存最大条目数
+     * @en Maximum cache entries
+     */
+    @Serialize()
+    @Property({ type: 'number', label: 'Cache Size', min: 100, max: 10000 })
+    cacheMaxEntries: number = 1000;
+
+    /**
+     * @zh 缓存过期时间（毫秒），0 表示不过期
+     * @en Cache TTL in milliseconds, 0 means no expiration
+     */
+    @Serialize()
+    @Property({ type: 'number', label: 'Cache TTL (ms)', min: 0, max: 60000 })
+    cacheTtlMs: number = 5000;
+
+    // =========================================================================
     // 调试配置 | Debug Configuration
     // =========================================================================
 
@@ -222,6 +250,18 @@ export class PathfindingMapComponent extends Component {
      * @en Agents processed this frame
      */
     agentsProcessedThisFrame: number = 0;
+
+    /**
+     * @zh 缓存命中次数
+     * @en Cache hit count
+     */
+    cacheHits: number = 0;
+
+    /**
+     * @zh 缓存未命中次数
+     * @en Cache miss count
+     */
+    cacheMisses: number = 0;
 
     // =========================================================================
     // 公共方法 | Public Methods
@@ -307,6 +347,35 @@ export class PathfindingMapComponent extends Component {
      */
     getRemainingBudget(): number {
         return Math.max(0, this.iterationsBudget - this.iterationsUsedThisFrame);
+    }
+
+    /**
+     * @zh 获取缓存统计信息
+     * @en Get cache statistics
+     *
+     * @returns @zh 缓存统计 @en Cache statistics
+     */
+    getCacheStats(): { enabled: boolean; hits: number; misses: number; hitRate: number } {
+        const pathfinderWithCache = this.pathfinder as { getCacheStats?: () => { hits: number; misses: number; hitRate: number } };
+        if (pathfinderWithCache?.getCacheStats) {
+            const stats = pathfinderWithCache.getCacheStats();
+            this.cacheHits = stats.hits;
+            this.cacheMisses = stats.misses;
+            return {
+                enabled: this.enableCache,
+                hits: stats.hits,
+                misses: stats.misses,
+                hitRate: stats.hitRate
+            };
+        }
+        return {
+            enabled: this.enableCache,
+            hits: this.cacheHits,
+            misses: this.cacheMisses,
+            hitRate: this.cacheHits + this.cacheMisses > 0
+                ? this.cacheHits / (this.cacheHits + this.cacheMisses)
+                : 0
+        };
     }
 
     /**

@@ -56,6 +56,8 @@ export {
     createIncrementalAStarPathfinder
 } from './IncrementalAStarPathfinder';
 
+export type { IIncrementalPathfinderConfig } from './IncrementalAStarPathfinder';
+
 // 路径验证器 | Path Validator
 export {
     PathValidator,
