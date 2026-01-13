@@ -1,8 +1,16 @@
 ---
 title: "Pathfinding System"
+description: "Complete 2D pathfinding solution with incremental execution and advanced algorithms"
 ---
 
-`@esengine/pathfinding` provides a complete 2D pathfinding solution including A* algorithm, grid maps, navigation meshes, and path smoothing.
+`@esengine/pathfinding` provides a complete 2D pathfinding solution with multiple algorithms:
+
+- **A\* Algorithm** - General-purpose pathfinding
+- **GridPathfinder** - High-performance grid pathfinder with multiple modes
+- **JPS (Jump Point Search)** - Acceleration for open maps
+- **HPA\* (Hierarchical Pathfinding)** - Optimization for large maps
+- **Incremental Pathfinding** - Time-sliced execution, non-blocking
+- **Path Caching** - Speed up repeated queries
 
 ## Installation
 
@@ -303,6 +311,8 @@ for (let y = 30; y < 35; y++) {
 ## Documentation
 
 - [Grid Map API](./grid-map) - Grid operations and A* pathfinder
+- [Advanced Algorithms](./advanced-algorithms) - GridPathfinder, JPS, HPA* explained
+- [Incremental Pathfinding](./incremental) - Time-sliced execution and dynamic replanning
 - [Navigation Mesh API](./navmesh) - NavMesh building and querying
 - [Path Smoothing](./smoothing) - Line of sight and curve smoothing
 - [Examples](./examples) - Game movement, dynamic obstacles, hierarchical pathfinding

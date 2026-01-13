@@ -1,9 +1,16 @@
 ---
 title: "寻路系统 (Pathfinding)"
-description: "完整的 2D 寻路解决方案"
+description: "完整的 2D 寻路解决方案，支持增量寻路和多种高级算法"
 ---
 
-`@esengine/pathfinding` 提供了完整的 2D 寻路解决方案，包括 A* 算法、网格地图、导航网格和路径平滑。
+`@esengine/pathfinding` 提供了完整的 2D 寻路解决方案，支持多种算法和场景：
+
+- **基础 A\* 算法** - 通用寻路算法
+- **GridPathfinder** - 高性能网格寻路器，支持多种模式
+- **JPS (Jump Point Search)** - 开放地图加速
+- **HPA\* (分层寻路)** - 超大地图优化
+- **增量寻路** - 时间切片执行，不阻塞主线程
+- **路径缓存** - 重复查询加速
 
 ## 安装
 
@@ -112,6 +119,8 @@ interface IPathfindingOptions {
 ## 文档导航
 
 - [网格地图 API](./grid-map) - 网格操作和 A* 寻路
+- [高级寻路算法](./advanced-algorithms) - GridPathfinder、JPS、HPA* 详解
+- [增量寻路](./incremental) - 时间切片和动态重规划
 - [导航网格 API](./navmesh) - NavMesh 构建和查询
 - [路径平滑](./smoothing) - 视线简化和曲线平滑
 - [实际示例](./examples) - 游戏移动、动态障碍物、分层寻路
