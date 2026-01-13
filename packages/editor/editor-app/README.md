@@ -124,7 +124,7 @@ The `pnpm build:rapier2d` script works directly on Windows. If you encounter iss
 
 ## Documentation
 
-- [ESEngine Documentation](https://esengine.cn/)
+- [ESEngine Documentation](https://esengine.github.io/esengine/)
 - [Tauri Documentation](https://tauri.app/)
 
 ## License
