@@ -19,3 +19,6 @@
 [submodule "engine"]
 	path = engine
 	url = https://github.com/esengine/ccesengine.git
+[submodule "cces-cli"]
+	path = cces-cli
+	url = https://github.com/esengine/cces-cli.git
