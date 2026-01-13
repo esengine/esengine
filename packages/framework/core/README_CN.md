@@ -173,9 +173,9 @@ export class Main {
 
 ## 文档
 
-- [API 参考](https://esengine.cn/api/README)
-- [架构指南](https://esengine.cn/guide/)
-- [完整 ESEngine 文档](https://esengine.cn/)
+- [API 参考](https://esengine.github.io/esengine/api/README)
+- [架构指南](https://esengine.github.io/esengine/guide/)
+- [完整 ESEngine 文档](https://esengine.github.io/esengine/)
 
 ## 许可证
 

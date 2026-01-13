@@ -124,7 +124,7 @@ rustup update
 
 ## 文档
 
-- [ESEngine 文档](https://esengine.cn/)
+- [ESEngine 文档](https://esengine.github.io/esengine/)
 - [Tauri 文档](https://tauri.app/)
 
 ## 许可证
