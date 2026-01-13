@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { IncrementalAStarPathfinder } from '../../src/core/IncrementalAStarPathfinder';
 import { AStarPathfinder } from '../../src/core/AStarPathfinder';
+import { FastAStarPathfinder } from '../../src/core/FastAStarPathfinder';
 import { JPSPathfinder } from '../../src/core/JPSPathfinder';
 import { HPAPathfinder } from '../../src/core/HPAPathfinder';
 import { GridMap } from '../../src/grid/GridMap';
@@ -49,6 +50,60 @@ describe('Pathfinding Performance Benchmark', () => {
         console.log('Overhead:       ' + overhead.toFixed(1) + '%');
 
         expect(true).toBe(true);
+    });
+
+    it('benchmark: A* vs FastA* performance', () => {
+        const grid = new GridMap(200, 200);
+        const astar = new AStarPathfinder(grid);
+        const fastAstar = new FastAStarPathfinder(grid);
+
+        for (let i = 40; i < 160; i++) {
+            grid.setWalkable(100, i, false);
+        }
+
+        const iterations = 100;
+
+        // Regular A*
+        const astarStart = performance.now();
+        for (let i = 0; i < iterations; i++) {
+            astar.findPath(0, 0, 199, 199);
+        }
+        const astarTime = performance.now() - astarStart;
+
+        // Fast A*
+        const fastStart = performance.now();
+        for (let i = 0; i < iterations; i++) {
+            fastAstar.findPath(0, 0, 199, 199);
+        }
+        const fastTime = performance.now() - fastStart;
+
+        const speedup = astarTime / fastTime;
+
+        console.log('\n=== A* vs FastA* (200x200, ' + iterations + ' paths) ===');
+        console.log('A*:      ' + astarTime.toFixed(2) + 'ms (' + (astarTime / iterations).toFixed(3) + 'ms/path)');
+        console.log('FastA*:  ' + fastTime.toFixed(2) + 'ms (' + (fastTime / iterations).toFixed(3) + 'ms/path)');
+        console.log('Speedup: ' + speedup.toFixed(2) + 'x');
+
+        expect(speedup).toBeGreaterThan(1);
+    });
+
+    it('benchmark: FastA* on large maps', () => {
+        const sizes = [500, 1000];
+
+        console.log('\n=== FastA* Large Map Performance ===');
+        console.log('Size\t\tTime\t\tNodes\t\tPath Length');
+
+        for (const size of sizes) {
+            const grid = new GridMap(size, size);
+            const fastAstar = new FastAStarPathfinder(grid);
+
+            const start = performance.now();
+            const result = fastAstar.findPath(0, 0, size - 1, size - 1);
+            const time = performance.now() - start;
+
+            console.log(size + 'x' + size + '\t\t' + time.toFixed(2) + 'ms\t\t' + result.nodesSearched + '\t\t' + result.path.length);
+            expect(result.found).toBe(true);
+        }
     });
 
     it('benchmark: large map 500x500 (open)', () => {

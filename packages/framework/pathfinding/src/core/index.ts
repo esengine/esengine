@@ -51,6 +51,15 @@ export { IndexedBinaryHeap, type IHeapIndexable } from './IndexedBinaryHeap';
 // 同步 A* 寻路器 | Synchronous A* Pathfinder
 export { AStarPathfinder, createAStarPathfinder } from './AStarPathfinder';
 
+// 高性能 A* 寻路器 | High-performance A* Pathfinder
+export { FastAStarPathfinder, createFastAStarPathfinder } from './FastAStarPathfinder';
+export {
+    FastGridState,
+    FastIndexedHeap,
+    AStarNodePool,
+    type IPooledAStarNode
+} from './FastPathfindingState';
+
 // 增量 A* 寻路器 | Incremental A* Pathfinder
 export {
     IncrementalAStarPathfinder,

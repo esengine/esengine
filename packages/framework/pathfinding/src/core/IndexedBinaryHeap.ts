@@ -1,9 +1,6 @@
 /**
  * @zh 带索引追踪的二叉堆（优先队列）
  * @en Indexed Binary Heap (Priority Queue) with index tracking
- *
- * @zh 通过维护元素在堆中的索引位置，实现 O(1) 的 update 操作定位
- * @en By maintaining element indices in the heap, achieves O(1) update operation lookup
  */
 
 /**
@@ -18,25 +15,6 @@ export interface IHeapIndexable {
 /**
  * @zh 带索引追踪的二叉堆
  * @en Binary Heap with index tracking
- *
- * @zh 相比普通 BinaryHeap，update 操作从 O(n) 优化到 O(log n)
- * @en Compared to regular BinaryHeap, update operation is optimized from O(n) to O(log n)
- *
- * @example
- * ```typescript
- * interface Node extends IHeapIndexable {
- *     value: number;
- *     heapIndex: number;
- * }
- *
- * const heap = new IndexedBinaryHeap<Node>((a, b) => a.value - b.value);
- * const node: Node = { value: 10, heapIndex: -1 };
- * heap.push(node);
- *
- * // O(log n) update instead of O(n)
- * node.value = 5;
- * heap.update(node);
- * ```
  */
 export class IndexedBinaryHeap<T extends IHeapIndexable> {
     private heap: T[] = [];
@@ -110,11 +88,8 @@ export class IndexedBinaryHeap<T extends IHeapIndexable> {
     }
 
     /**
-     * @zh 更新元素（重新排序）- O(log n)
-     * @en Update element (re-sort) - O(log n)
-     *
-     * @zh 直接通过 heapIndex 定位，无需遍历查找
-     * @en Directly locates via heapIndex, no traversal needed
+     * @zh 更新元素
+     * @en Update element
      */
     update(item: T): void {
         const index = item.heapIndex;
@@ -125,8 +100,8 @@ export class IndexedBinaryHeap<T extends IHeapIndexable> {
     }
 
     /**
-     * @zh 检查是否包含元素 - O(1)
-     * @en Check if contains element - O(1)
+     * @zh 检查是否包含元素
+     * @en Check if contains element
      */
     contains(item: T): boolean {
         const index = item.heapIndex;
@@ -134,8 +109,8 @@ export class IndexedBinaryHeap<T extends IHeapIndexable> {
     }
 
     /**
-     * @zh 从堆中移除指定元素 - O(log n)
-     * @en Remove specific element from heap - O(log n)
+     * @zh 从堆中移除指定元素
+     * @en Remove specific element from heap
      */
     remove(item: T): boolean {
         const index = item.heapIndex;
