@@ -1,5 +1,12 @@
 # @esengine/spatial
 
+## 12.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`3364107`](https://github.com/esengine/esengine/commit/33641075d1a96523d27bed59abf28c026ba34a90)]:
+    - @esengine/ecs-framework-math@2.10.2
+
 ## 12.0.0
 
 ### Patch Changes
