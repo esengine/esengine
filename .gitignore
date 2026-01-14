@@ -93,5 +93,7 @@ docs/.vitepress/dist/
 **/src-tauri/target/debug/bundle/
 
 # Rust 构建产物
+target/
+**/target/
 **/engine-shared/target/
 external/

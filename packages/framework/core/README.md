@@ -173,9 +173,9 @@ export class Main {
 
 ## Documentation
 
-- [API Reference](https://esengine.cn/api/README)
-- [Architecture Guide](https://esengine.cn/guide/)
-- [Full ESEngine Documentation](https://esengine.cn/)
+- [API Reference](https://esengine.github.io/esengine/api/README)
+- [Architecture Guide](https://esengine.github.io/esengine/guide/)
+- [Full ESEngine Documentation](https://esengine.github.io/esengine/)
 
 ## License
 

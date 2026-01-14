@@ -20,6 +20,8 @@ This document provides a complete reference for all built-in blueprint nodes wit
 
 ## Event Nodes
 
+### Lifecycle Events
+
 Lifecycle events as blueprint entry points:
 
 | Node | Description | Outputs |
@@ -27,6 +29,85 @@ Lifecycle events as blueprint entry points:
 | `EventBeginPlay` | Triggered when blueprint starts | Exec, Self (Entity) |
 | `EventTick` | Triggered each frame | Exec, Delta Time |
 | `EventEndPlay` | Triggered when blueprint stops | Exec |
+
+### Custom Events
+
+Custom event nodes allow you to define your own events and trigger blueprint logic from code.
+
+| Node | Description | Outputs |
+|------|-------------|---------|
+| `EventCustom` | Custom event triggered from code | Exec, Custom parameters |
+
+**Creating Custom Events:**
+
+When creating a custom event node in the blueprint editor, you need to set:
+- **Event Name** (`eventName`): Used to trigger the event from code
+- **Output Parameters**: Data passed by the event, such as `damage`, `amount`, etc.
+
+**Triggering Custom Events from Code:**
+
+```typescript
+// Get the blueprint component from entity
+const blueprint = entity.getComponent(BlueprintComponent);
+
+// Trigger custom event with parameters
+blueprint.vm?.triggerCustomEvent('OnDamage', {
+    damage: 50,
+    source: attackerEntity
+});
+
+// Trigger event without parameters
+blueprint.vm?.triggerCustomEvent('OnPickup');
+```
+
+**Receiving Event Data in Blueprint:**
+
+Custom event nodes expose passed parameters as output pins:
+
+<div class="bp-graph" style="" data-connections='[{"from":"en-custom-exec","to":"en-custprint-exec","type":"exec"},{"from":"en-custom-damage","to":"en-custprint-msg","type":"float"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 160px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event OnDamage</span>
+      <span class="bp-header-exec" data-pin="en-custom-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Self</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="en-custom-damage"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Damage</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 280px; top: 20px; width: 120px;">
+    <div class="bp-node-header debug">Print</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="en-custprint-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="en-custprint-msg"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Msg</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+**Common Custom Event Examples:**
+
+| Event Name | Purpose | Parameter Examples |
+|------------|---------|-------------------|
+| `OnDamage` | Taking damage | `{ damage: number, source: Entity }` |
+| `OnHeal` | Healing | `{ amount: number }` |
+| `OnCollision` | Collision detection | `{ other: Entity, point: Vector2 }` |
+| `OnPickup` | Picking up items | `{ item: Entity }` |
+| `OnInteract` | Interaction | `{ player: Entity }` |
+| `OnDeath` | Death | `{ killer: Entity }` |
 
 ### Example: Game Initialization
 

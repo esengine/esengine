@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "packages/editor",
+]
+
+# Exclude thirdparty projects that have their own workspace
+exclude = [
+    "thirdparty/rapier.js",
+]

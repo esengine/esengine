@@ -11,7 +11,7 @@ Blueprint Editor Plugin for Cocos Creator (Free):
 
 **[Download Cocos Node Editor v1.2.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.0)**
 
-> QQ Group: **481923584** | Website: [esengine.cn](https://esengine.cn/)
+> QQ Group: **481923584** | Website: [esengine.cn](https://esengine.github.io/esengine/)
 
 For detailed usage instructions, see [Editor User Guide](./editor-guide).
 
@@ -53,7 +53,7 @@ const player = scene.createEntity('Player');
 
 // Add blueprint component
 const blueprint = new BlueprintComponent();
-blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
 blueprint.autoStart = true;
 player.addComponent(blueprint);
 ```
@@ -136,7 +136,7 @@ After marking, the following nodes will appear in the blueprint editor:
 
 ## Blueprint Asset Structure
 
-Blueprints are saved as `.bp` files:
+Blueprints are saved as `.blueprint.json` files:
 
 ```typescript
 interface BlueprintAsset {

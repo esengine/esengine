@@ -20,17 +20,17 @@ import { createPoint, octileDistance } from '../core/IPathfinding';
  * @en Grid node
  */
 export class GridNode implements IPathNode {
-    readonly id: string;
+    readonly id: number;
     readonly position: IPoint;
     readonly x: number;
     readonly y: number;
     cost: number;
     walkable: boolean;
 
-    constructor(x: number, y: number, walkable: boolean = true, cost: number = 1) {
+    constructor(x: number, y: number, width: number, walkable: boolean = true, cost: number = 1) {
         this.x = x;
         this.y = y;
-        this.id = `${x},${y}`;
+        this.id = y * width + x;
         this.position = createPoint(x, y);
         this.walkable = walkable;
         this.cost = cost;
@@ -145,7 +145,7 @@ export class GridMap implements IPathfindingMap {
         for (let y = 0; y < this.height; y++) {
             nodes[y] = [];
             for (let x = 0; x < this.width; x++) {
-                nodes[y][x] = new GridNode(x, y, true, 1);
+                nodes[y][x] = new GridNode(x, y, this.width, true, 1);
             }
         }
 
@@ -216,7 +216,7 @@ export class GridMap implements IPathfindingMap {
             const nx = x + dir.dx;
             const ny = y + dir.dy;
 
-            if (!this.isInBounds(nx, ny)) {
+            if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
                 continue;
             }
 
@@ -226,12 +226,11 @@ export class GridMap implements IPathfindingMap {
                 continue;
             }
 
-            // Check corner cutting for diagonal movement
             if (this.options.avoidCorners && dir.dx !== 0 && dir.dy !== 0) {
-                const horizontal = this.getNodeAt(x + dir.dx, y);
-                const vertical = this.getNodeAt(x, y + dir.dy);
+                const hNode = this.nodes[y][x + dir.dx];
+                const vNode = this.nodes[y + dir.dy][x];
 
-                if (!horizontal?.walkable || !vertical?.walkable) {
+                if (!hNode.walkable || !vNode.walkable) {
                     continue;
                 }
             }
@@ -240,6 +239,44 @@ export class GridMap implements IPathfindingMap {
         }
 
         return neighbors;
+    }
+
+    /**
+     * @zh 遍历节点的邻居（零分配）
+     * @en Iterate over neighbors (zero allocation)
+     */
+    forEachNeighbor(node: IPathNode, callback: (neighbor: GridNode) => boolean | void): void {
+        const { x, y } = node.position;
+        const directions = this.options.allowDiagonal ? DIRECTIONS_8 : DIRECTIONS_4;
+
+        for (let i = 0; i < directions.length; i++) {
+            const dir = directions[i];
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+
+            if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
+                continue;
+            }
+
+            const neighbor = this.nodes[ny][nx];
+
+            if (!neighbor.walkable) {
+                continue;
+            }
+
+            if (this.options.avoidCorners && dir.dx !== 0 && dir.dy !== 0) {
+                const hNode = this.nodes[y][x + dir.dx];
+                const vNode = this.nodes[y + dir.dy][x];
+
+                if (!hNode.walkable || !vNode.walkable) {
+                    continue;
+                }
+            }
+
+            if (callback(neighbor) === false) {
+                return;
+            }
+        }
     }
 
     /**

@@ -4,8 +4,8 @@
  * @zh 寻路系统
  * @en Pathfinding System
  *
- * @zh 提供 A* 寻路、网格地图、导航网格和路径平滑
- * @en Provides A* pathfinding, grid map, NavMesh and path smoothing
+ * @zh 提供 A* 寻路、增量寻路、网格地图、导航网格和路径平滑
+ * @en Provides A* pathfinding, incremental pathfinding, grid map, NavMesh and path smoothing
  */
 
 // =============================================================================
@@ -33,8 +33,57 @@ export {
     chebyshevDistance,
     octileDistance,
     BinaryHeap,
+    IndexedBinaryHeap,
     AStarPathfinder,
-    createAStarPathfinder
+    createAStarPathfinder,
+    GridPathfinder,
+    createGridPathfinder,
+    JPSPathfinder,
+    createJPSPathfinder,
+    HPAPathfinder,
+    createHPAPathfinder,
+    DEFAULT_HPA_CONFIG,
+    PathCache,
+    createPathCache,
+    DEFAULT_PATH_CACHE_CONFIG
+} from './core';
+
+export type {
+    IHeapIndexable,
+    GridPathfinderMode,
+    IGridPathfinderConfig,
+    IPathCacheConfig,
+    IHPAConfig
+} from './core';
+
+// =============================================================================
+// Incremental Pathfinding | 增量寻路
+// =============================================================================
+
+export type {
+    IPathRequest,
+    IPathProgress,
+    IIncrementalPathResult,
+    IIncrementalPathfinder,
+    IIncrementalPathfindingOptions,
+    IIncrementalPathfinderConfig,
+    IPathValidator,
+    IPathValidationResult,
+    IReplanningConfig,
+    IObstacleChange,
+    IChangeRegion
+} from './core';
+
+export {
+    PathfindingState,
+    DEFAULT_REPLANNING_CONFIG,
+    EMPTY_PROGRESS,
+    IncrementalAStarPathfinder,
+    createIncrementalAStarPathfinder,
+    PathValidator,
+    ObstacleChangeManager,
+    createPathValidator,
+    createObstacleChangeManager
 } from './core';
 
 // =============================================================================
@@ -76,28 +125,7 @@ export {
 } from './smoothing';
 
 // =============================================================================
-// Blueprint Nodes | 蓝图节点
+// Sub-path Exports | 子路径导出
 // =============================================================================
-
-export {
-    // Templates
-    FindPathTemplate,
-    FindPathSmoothTemplate,
-    IsWalkableTemplate,
-    GetPathLengthTemplate,
-    GetPathDistanceTemplate,
-    GetPathPointTemplate,
-    MoveAlongPathTemplate,
-    HasLineOfSightTemplate,
-    // Executors
-    FindPathExecutor,
-    FindPathSmoothExecutor,
-    IsWalkableExecutor,
-    GetPathLengthExecutor,
-    GetPathDistanceExecutor,
-    GetPathPointExecutor,
-    MoveAlongPathExecutor,
-    HasLineOfSightExecutor,
-    // Collection
-    PathfindingNodeDefinitions
-} from './nodes';
+// ECS Components & Systems: import from '@esengine/pathfinding/ecs'
+// Blueprint Nodes: import from '@esengine/pathfinding/nodes'

@@ -55,7 +55,7 @@ describe('GridMap', () => {
 
         it('should return node with correct id', () => {
             const node = grid.getNodeAt(3, 4);
-            expect(node?.id).toBe('3,4');
+            expect(node?.id).toBe(4 * 10 + 3);
         });
     });
 
@@ -318,18 +318,18 @@ describe('GridMap', () => {
 
 describe('GridNode', () => {
     it('should create node with correct properties', () => {
-        const node = new GridNode(3, 4, true, 2);
+        const node = new GridNode(3, 4, 10, true, 2);
         expect(node.x).toBe(3);
         expect(node.y).toBe(4);
         expect(node.walkable).toBe(true);
         expect(node.cost).toBe(2);
-        expect(node.id).toBe('3,4');
+        expect(node.id).toBe(4 * 10 + 3);
         expect(node.position.x).toBe(3);
         expect(node.position.y).toBe(4);
     });
 
     it('should default to walkable with cost 1', () => {
-        const node = new GridNode(0, 0);
+        const node = new GridNode(0, 0, 10);
         expect(node.walkable).toBe(true);
         expect(node.cost).toBe(1);
     });

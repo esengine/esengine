@@ -11,7 +11,7 @@ Cocos Creator 蓝图编辑器插件（免费）：
 
 **[下载 Cocos Node Editor v1.2.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.0)**
 
-> 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.cn/)
+> 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.github.io/esengine/)
 
 详细使用教程请参考 [编辑器使用指南](./editor-guide)。
 
@@ -53,7 +53,7 @@ const player = scene.createEntity('Player');
 
 // 添加蓝图组件
 const blueprint = new BlueprintComponent();
-blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
 blueprint.autoStart = true;
 player.addComponent(blueprint);
 ```
@@ -136,7 +136,7 @@ export class HealthComponent extends Component {
 
 ## 蓝图资产结构
 
-蓝图保存为 `.bp` 文件：
+蓝图保存为 `.blueprint.json` 文件：
 
 ```typescript
 interface BlueprintAsset {

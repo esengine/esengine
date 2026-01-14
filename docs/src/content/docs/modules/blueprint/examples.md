@@ -68,7 +68,7 @@ async function initGame() {
 
     // 添加蓝图控制
     const blueprint = new BlueprintComponent();
-    blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+    blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
     player.addComponent(blueprint);
 }
 ```

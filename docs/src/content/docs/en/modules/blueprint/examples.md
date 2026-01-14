@@ -68,7 +68,7 @@ async function initGame() {
 
     // Add blueprint control
     const blueprint = new BlueprintComponent();
-    blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+    blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
     player.addComponent(blueprint);
 }
 ```

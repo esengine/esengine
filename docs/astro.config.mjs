@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite';
 import rehypeRaw from 'rehype-raw';
 
 export default defineConfig({
+  site: 'https://esengine.github.io',
+  base: '/esengine',
   markdown: {
     rehypePlugins: [rehypeRaw],
   },
@@ -228,6 +230,8 @@ export default defineConfig({
               items: [
                 { label: '概述', slug: 'modules/pathfinding', translations: { en: 'Overview' } },
                 { label: '网格地图 API', slug: 'modules/pathfinding/grid-map', translations: { en: 'Grid Map API' } },
+                { label: '高级寻路算法', slug: 'modules/pathfinding/advanced-algorithms', translations: { en: 'Advanced Algorithms' } },
+                { label: '增量寻路', slug: 'modules/pathfinding/incremental', translations: { en: 'Incremental Pathfinding' } },
                 { label: '导航网格 API', slug: 'modules/pathfinding/navmesh', translations: { en: 'NavMesh API' } },
                 { label: '路径平滑', slug: 'modules/pathfinding/smoothing', translations: { en: 'Path Smoothing' } },
                 { label: '实际示例', slug: 'modules/pathfinding/examples', translations: { en: 'Examples' } },

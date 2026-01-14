@@ -3,6 +3,7 @@
  * @en Pathfinding Core Module
  */
 
+// 基础接口和类型 | Basic Interfaces and Types
 export type {
     IPoint,
     IPathNode,
@@ -25,6 +26,77 @@ export {
     octileDistance
 } from './IPathfinding';
 
-export { BinaryHeap } from './BinaryHeap';
+// 增量寻路接口和类型 | Incremental Pathfinding Interfaces and Types
+export type {
+    IPathRequest,
+    IPathProgress,
+    IIncrementalPathResult,
+    IIncrementalPathfinder,
+    IIncrementalPathfindingOptions,
+    IPathValidator,
+    IPathValidationResult,
+    IReplanningConfig
+} from './IIncrementalPathfinding';
 
+export {
+    PathfindingState,
+    DEFAULT_REPLANNING_CONFIG,
+    EMPTY_PROGRESS
+} from './IIncrementalPathfinding';
+
+// 数据结构 | Data Structures
+export { BinaryHeap } from './BinaryHeap';
+export { IndexedBinaryHeap, type IHeapIndexable } from './IndexedBinaryHeap';
+
+// 同步 A* 寻路器 | Synchronous A* Pathfinder
 export { AStarPathfinder, createAStarPathfinder } from './AStarPathfinder';
+
+// 网格寻路器 | Grid Pathfinder
+export {
+    GridPathfinder,
+    createGridPathfinder,
+    type GridPathfinderMode,
+    type IGridPathfinderConfig
+} from './GridPathfinder';
+
+// 增量 A* 寻路器 | Incremental A* Pathfinder
+export {
+    IncrementalAStarPathfinder,
+    createIncrementalAStarPathfinder
+} from './IncrementalAStarPathfinder';
+
+export type { IIncrementalPathfinderConfig } from './IncrementalAStarPathfinder';
+
+// 路径验证器 | Path Validator
+export {
+    PathValidator,
+    ObstacleChangeManager,
+    createPathValidator,
+    createObstacleChangeManager
+} from './PathValidator';
+
+export type {
+    IObstacleChange,
+    IChangeRegion
+} from './PathValidator';
+
+// JPS 寻路器 | JPS Pathfinder
+export { JPSPathfinder, createJPSPathfinder } from './JPSPathfinder';
+
+// 路径缓存 | Path Cache
+export {
+    PathCache,
+    createPathCache,
+    DEFAULT_PATH_CACHE_CONFIG
+} from './PathCache';
+
+export type { IPathCacheConfig } from './PathCache';
+
+// HPA* 分层寻路 | HPA* Hierarchical Pathfinding
+export {
+    HPAPathfinder,
+    createHPAPathfinder,
+    DEFAULT_HPA_CONFIG
+} from './HPAPathfinder';
+
+export type { IHPAConfig } from './HPAPathfinder';

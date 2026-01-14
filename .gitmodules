@@ -16,9 +16,9 @@
 [submodule "examples/lawn-mower-demo"]
 	path = examples/lawn-mower-demo
 	url = https://github.com/esengine/lawn-mower-demo.git
-[submodule "engine"]
-	path = engine
+[submodule "packages/engine"]
+	path = packages/engine
 	url = https://github.com/esengine/ccesengine.git
-[submodule "cces-cli"]
-	path = cces-cli
+[submodule "packages/cces-cli"]
+	path = packages/cces-cli
 	url = https://github.com/esengine/cces-cli.git
