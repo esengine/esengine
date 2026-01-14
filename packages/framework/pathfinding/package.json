@@ -8,8 +8,16 @@
     "types": "./dist/index.d.ts",
     "exports": {
         ".": {
-            "import": "./dist/index.js",
-            "types": "./dist/index.d.ts"
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./ecs": {
+            "types": "./dist/ecs.d.ts",
+            "import": "./dist/ecs.js"
+        },
+        "./nodes": {
+            "types": "./dist/nodes.d.ts",
+            "import": "./dist/nodes.js"
         }
     },
     "files": [
@@ -33,9 +41,17 @@
         "vitest": "^2.1.9"
     },
     "peerDependencies": {
-        "@esengine/ecs-framework": "workspace:*",
         "@esengine/ecs-framework-math": "workspace:*",
+        "@esengine/ecs-framework": "workspace:*",
         "@esengine/blueprint": "workspace:*"
+    },
+    "peerDependenciesMeta": {
+        "@esengine/ecs-framework": {
+            "optional": true
+        },
+        "@esengine/blueprint": {
+            "optional": true
+        }
     },
     "publishConfig": {
         "access": "public",

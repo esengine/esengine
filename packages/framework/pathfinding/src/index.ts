@@ -33,8 +33,27 @@ export {
     chebyshevDistance,
     octileDistance,
     BinaryHeap,
+    IndexedBinaryHeap,
     AStarPathfinder,
-    createAStarPathfinder
+    createAStarPathfinder,
+    GridPathfinder,
+    createGridPathfinder,
+    JPSPathfinder,
+    createJPSPathfinder,
+    HPAPathfinder,
+    createHPAPathfinder,
+    DEFAULT_HPA_CONFIG,
+    PathCache,
+    createPathCache,
+    DEFAULT_PATH_CACHE_CONFIG
+} from './core';
+
+export type {
+    IHeapIndexable,
+    GridPathfinderMode,
+    IGridPathfinderConfig,
+    IPathCacheConfig,
+    IHPAConfig
 } from './core';
 
 // =============================================================================
@@ -47,6 +66,7 @@ export type {
     IIncrementalPathResult,
     IIncrementalPathfinder,
     IIncrementalPathfindingOptions,
+    IIncrementalPathfinderConfig,
     IPathValidator,
     IPathValidationResult,
     IReplanningConfig,
@@ -105,58 +125,7 @@ export {
 } from './smoothing';
 
 // =============================================================================
-// ECS Components & Systems | ECS 组件和系统
+// Sub-path Exports | 子路径导出
 // =============================================================================
-
-export {
-    PathfindingAgentComponent,
-    PathfindingMapComponent,
-    PathfindingSystem
-} from './ecs';
-
-export type { PathfindingMapType } from './ecs';
-
-// =============================================================================
-// Blueprint Nodes | 蓝图节点
-// =============================================================================
-
-export {
-    // Basic Templates
-    FindPathTemplate,
-    FindPathSmoothTemplate,
-    IsWalkableTemplate,
-    GetPathLengthTemplate,
-    GetPathDistanceTemplate,
-    GetPathPointTemplate,
-    MoveAlongPathTemplate,
-    HasLineOfSightTemplate,
-    // Basic Executors
-    FindPathExecutor,
-    FindPathSmoothExecutor,
-    IsWalkableExecutor,
-    GetPathLengthExecutor,
-    GetPathDistanceExecutor,
-    GetPathPointExecutor,
-    MoveAlongPathExecutor,
-    HasLineOfSightExecutor,
-    // Basic Collection
-    PathfindingNodeDefinitions,
-    // Incremental Templates
-    RequestPathAsyncTemplate,
-    StepPathTemplate,
-    GetPathProgressTemplate,
-    GetPathResultTemplate,
-    CancelPathTemplate,
-    SetObstacleTemplate,
-    IsPathCompleteTemplate,
-    // Incremental Executors
-    RequestPathAsyncExecutor,
-    StepPathExecutor,
-    GetPathProgressExecutor,
-    GetPathResultExecutor,
-    CancelPathExecutor,
-    SetObstacleExecutor,
-    IsPathCompleteExecutor,
-    // Incremental Collection
-    IncrementalPathfindingNodeDefinitions
-} from './nodes';
+// ECS Components & Systems: import from '@esengine/pathfinding/ecs'
+// Blueprint Nodes: import from '@esengine/pathfinding/nodes'
