@@ -53,7 +53,7 @@ const player = scene.createEntity('Player');
 
 // Add blueprint component
 const blueprint = new BlueprintComponent();
-blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
 blueprint.autoStart = true;
 player.addComponent(blueprint);
 ```
@@ -136,7 +136,7 @@ After marking, the following nodes will appear in the blueprint editor:
 
 ## Blueprint Asset Structure
 
-Blueprints are saved as `.bp` files:
+Blueprints are saved as `.blueprint.json` files:
 
 ```typescript
 interface BlueprintAsset {

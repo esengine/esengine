@@ -53,7 +53,7 @@ const player = scene.createEntity('Player');
 
 // 添加蓝图组件
 const blueprint = new BlueprintComponent();
-blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
 blueprint.autoStart = true;
 player.addComponent(blueprint);
 ```
@@ -136,7 +136,7 @@ export class HealthComponent extends Component {
 
 ## 蓝图资产结构
 
-蓝图保存为 `.bp` 文件：
+蓝图保存为 `.blueprint.json` 文件：
 
 ```typescript
 interface BlueprintAsset {

@@ -84,7 +84,7 @@ Core.setScene(scene);
 // 为实体添加蓝图
 const entity = scene.createEntity('Player');
 const blueprint = new BlueprintComponent();
-blueprint.blueprintAsset = await loadBlueprintAsset('player.bp');
+blueprint.blueprintAsset = await loadBlueprintAsset('player.blueprint.json');
 entity.addComponent(blueprint);
 ```
 
