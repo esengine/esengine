@@ -144,7 +144,7 @@ class PathfindingSystem extends EntitySystem {
     }
 
     protected getMatcher() {
-        return Matcher.allOf(PathfindingAgent, Transform);
+        return Matcher.all(PathfindingAgentComponent, Transform);
     }
 
     protected process(entities: readonly Entity[]) {
@@ -152,7 +152,7 @@ class PathfindingSystem extends EntitySystem {
         const iterPerEntity = Math.floor(budget / entities.length);
 
         for (const entity of entities) {
-            const agent = entity.get(PathfindingAgent);
+            const agent = entity.get(PathfindingAgentComponent);
             if (!agent.requestId) continue;
 
             const progress = this.pathfinder.step(agent.requestId, iterPerEntity);
