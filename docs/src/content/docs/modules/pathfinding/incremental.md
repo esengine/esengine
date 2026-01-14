@@ -126,20 +126,188 @@ class PathfindingManager {
 }
 ```
 
-### ECS 集成示例
+## ECS 集成
 
-> **注意**: ECS 组件和系统需要从 `@esengine/pathfinding/ecs` 导入。
->
-> ```typescript
-> import { PathfindingAgentComponent, PathfindingSystem } from '@esengine/pathfinding/ecs';
-> ```
+包提供了完整的 ECS 组件和系统，可以直接在 ECS 框架中使用。
 
 ```typescript
-class PathfindingSystem extends EntitySystem {
+import {
+    PathfindingAgentComponent,
+    PathfindingMapComponent,
+    PathfindingSystem
+} from '@esengine/pathfinding/ecs';
+```
+
+### PathfindingMapComponent
+
+地图组件，挂载在场景实体上，管理地图和寻路器实例。
+
+```typescript
+// 创建地图实体
+const mapEntity = scene.createEntity('PathfindingMap');
+const mapComp = mapEntity.addComponent(new PathfindingMapComponent());
+
+// 配置地图
+mapComp.width = 100;               // 地图宽度
+mapComp.height = 100;              // 地图高度
+mapComp.allowDiagonal = true;      // 允许对角移动
+mapComp.avoidCorners = true;       // 避免穿角
+
+// 配置系统参数
+mapComp.maxAgentsPerFrame = 10;    // 每帧最多处理 10 个代理
+mapComp.iterationsBudget = 2000;   // 每帧总迭代预算
+
+// 配置缓存
+mapComp.enableCache = true;        // 启用路径缓存
+mapComp.cacheMaxEntries = 1000;    // 缓存最大条目数
+mapComp.cacheTtlMs = 5000;         // 缓存过期时间（毫秒）
+
+// 配置路径平滑
+mapComp.enableSmoothing = true;    // 启用路径平滑
+mapComp.smoothingType = 'los';     // 'los' | 'catmullrom' | 'combined'
+
+// 动态修改障碍物
+mapComp.setWalkable(10, 10, false);  // 设置单个格子不可通行
+mapComp.setRectWalkable(20, 20, 5, 5, false);  // 设置矩形区域
+```
+
+### PathfindingAgentComponent
+
+代理组件，附加到需要寻路的实体上。
+
+```typescript
+// 创建代理实体
+const agentEntity = scene.createEntity('Agent');
+const agent = agentEntity.addComponent(new PathfindingAgentComponent());
+
+// 设置当前位置
+agent.x = 10;
+agent.y = 10;
+
+// 配置参数
+agent.priority = 50;                 // 优先级（越小越优先）
+agent.maxIterationsPerFrame = 100;   // 每帧最大迭代次数
+agent.enableDynamicReplan = true;    // 启用动态重规划
+agent.lookaheadDistance = 5;         // 向前探测距离
+agent.validationInterval = 10;       // 路径验证间隔（帧数）
+
+// 请求寻路
+agent.requestPathTo(50, 50);
+
+// 监听寻路完成
+agent.onPathComplete = (found, path) => {
+    if (found) {
+        console.log('找到路径，长度:', path.length);
+    } else {
+        console.log('未找到路径');
+    }
+};
+
+// 监听寻路进度
+agent.onPathProgress = (progress) => {
+    console.log('进度:', (progress * 100).toFixed(1) + '%');
+};
+```
+
+**代理常用方法：**
+
+```typescript
+// 获取下一个路径点
+const waypoint = agent.getNextWaypoint();
+if (waypoint) {
+    // 移动到 waypoint.x, waypoint.y
+}
+
+// 到达路径点后前进
+agent.advanceWaypoint();
+
+// 检查状态
+agent.isSearching();      // 是否正在寻路
+agent.hasValidPath();     // 是否有有效路径
+agent.isPathComplete();   // 是否到达终点
+
+// 取消寻路
+agent.cancelPath();
+
+// 获取信息
+agent.getRemainingWaypointCount();  // 剩余路径点数
+agent.getPathLength();              // 路径总长度
+agent.state;                        // 当前状态
+agent.progress;                     // 寻路进度 (0-1)
+```
+
+### PathfindingSystem
+
+寻路系统，自动处理所有代理的寻路请求。
+
+```typescript
+// 添加系统到场景
+scene.addSystem(new PathfindingSystem());
+```
+
+系统会自动：
+- 按优先级处理代理请求
+- 在帧预算内执行时间切片
+- 验证路径有效性并自动重规划
+- 应用路径平滑
+
+### 完整示例
+
+```typescript
+import { Scene, Entity } from '@esengine/ecs-framework';
+import {
+    PathfindingAgentComponent,
+    PathfindingMapComponent,
+    PathfindingSystem
+} from '@esengine/pathfinding/ecs';
+
+// 初始化场景
+const scene = new Scene();
+scene.addSystem(new PathfindingSystem());
+
+// 创建地图
+const mapEntity = scene.createEntity('Map');
+const mapComp = mapEntity.addComponent(new PathfindingMapComponent());
+mapComp.width = 100;
+mapComp.height = 100;
+mapComp.iterationsBudget = 2000;
+
+// 添加一些障碍物
+mapComp.setRectWalkable(40, 40, 20, 20, false);
+
+// 创建多个代理
+for (let i = 0; i < 10; i++) {
+    const agent = scene.createEntity(`Agent${i}`);
+    const pathAgent = agent.addComponent(new PathfindingAgentComponent());
+
+    // 随机起点
+    pathAgent.x = Math.floor(Math.random() * 30);
+    pathAgent.y = Math.floor(Math.random() * 30);
+
+    // 请求寻路到随机终点
+    pathAgent.requestPathTo(
+        70 + Math.floor(Math.random() * 20),
+        70 + Math.floor(Math.random() * 20)
+    );
+
+    pathAgent.onPathComplete = (found) => {
+        console.log(`Agent${i} 寻路${found ? '成功' : '失败'}`);
+    };
+}
+
+// 游戏循环中，场景会自动调用 PathfindingSystem 处理所有代理
+```
+
+### 自定义系统示例
+
+如果需要更多控制，可以自定义系统：
+
+```typescript
+class CustomPathfindingSystem extends EntitySystem {
     private pathfinder: IncrementalAStarPathfinder;
 
     constructor(grid: GridMap) {
-        super(Matcher.all(PathfindingAgentComponent, Transform));
+        super(Matcher.all(PathfindingAgentComponent));
         this.pathfinder = createIncrementalAStarPathfinder(grid);
     }
 
@@ -148,15 +316,15 @@ class PathfindingSystem extends EntitySystem {
         const iterPerEntity = Math.floor(budget / entities.length);
 
         for (const entity of entities) {
-            const agent = entity.get(PathfindingAgentComponent);
-            if (!agent.requestId) continue;
+            const agent = entity.getComponent(PathfindingAgentComponent);
+            if (!agent || !agent.currentRequestId) continue;
 
-            const progress = this.pathfinder.step(agent.requestId, iterPerEntity);
+            const progress = this.pathfinder.step(agent.currentRequestId, iterPerEntity);
 
             if (progress.state === PathfindingState.Completed) {
-                agent.path = this.pathfinder.getResult(agent.requestId)?.path ?? [];
-                this.pathfinder.cleanup(agent.requestId);
-                agent.requestId = undefined;
+                agent.path = this.pathfinder.getResult(agent.currentRequestId)?.path ?? [];
+                this.pathfinder.cleanup(agent.currentRequestId);
+                agent.currentRequestId = -1;
             }
         }
     }

@@ -126,20 +126,188 @@ class PathfindingManager {
 }
 ```
 
-### ECS Integration Example
+## ECS Integration
 
-> **Note**: ECS components and systems should be imported from `@esengine/pathfinding/ecs`.
->
-> ```typescript
-> import { PathfindingAgentComponent, PathfindingSystem } from '@esengine/pathfinding/ecs';
-> ```
+The package provides complete ECS components and systems for direct use in the ECS framework.
 
 ```typescript
-class PathfindingSystem extends EntitySystem {
+import {
+    PathfindingAgentComponent,
+    PathfindingMapComponent,
+    PathfindingSystem
+} from '@esengine/pathfinding/ecs';
+```
+
+### PathfindingMapComponent
+
+Map component attached to scene entity, manages map and pathfinder instances.
+
+```typescript
+// Create map entity
+const mapEntity = scene.createEntity('PathfindingMap');
+const mapComp = mapEntity.addComponent(new PathfindingMapComponent());
+
+// Configure map
+mapComp.width = 100;               // Map width
+mapComp.height = 100;              // Map height
+mapComp.allowDiagonal = true;      // Allow diagonal movement
+mapComp.avoidCorners = true;       // Avoid corner cutting
+
+// Configure system parameters
+mapComp.maxAgentsPerFrame = 10;    // Max agents processed per frame
+mapComp.iterationsBudget = 2000;   // Total iteration budget per frame
+
+// Configure cache
+mapComp.enableCache = true;        // Enable path caching
+mapComp.cacheMaxEntries = 1000;    // Max cache entries
+mapComp.cacheTtlMs = 5000;         // Cache TTL in milliseconds
+
+// Configure path smoothing
+mapComp.enableSmoothing = true;    // Enable path smoothing
+mapComp.smoothingType = 'los';     // 'los' | 'catmullrom' | 'combined'
+
+// Dynamically modify obstacles
+mapComp.setWalkable(10, 10, false);  // Set single cell unwalkable
+mapComp.setRectWalkable(20, 20, 5, 5, false);  // Set rectangular area
+```
+
+### PathfindingAgentComponent
+
+Agent component attached to entities that need pathfinding.
+
+```typescript
+// Create agent entity
+const agentEntity = scene.createEntity('Agent');
+const agent = agentEntity.addComponent(new PathfindingAgentComponent());
+
+// Set current position
+agent.x = 10;
+agent.y = 10;
+
+// Configure parameters
+agent.priority = 50;                 // Priority (lower = higher priority)
+agent.maxIterationsPerFrame = 100;   // Max iterations per frame
+agent.enableDynamicReplan = true;    // Enable dynamic replanning
+agent.lookaheadDistance = 5;         // Lookahead distance for obstacle detection
+agent.validationInterval = 10;       // Path validation interval (frames)
+
+// Request pathfinding
+agent.requestPathTo(50, 50);
+
+// Listen for completion
+agent.onPathComplete = (found, path) => {
+    if (found) {
+        console.log('Path found, length:', path.length);
+    } else {
+        console.log('No path found');
+    }
+};
+
+// Listen for progress
+agent.onPathProgress = (progress) => {
+    console.log('Progress:', (progress * 100).toFixed(1) + '%');
+};
+```
+
+**Common agent methods:**
+
+```typescript
+// Get next waypoint
+const waypoint = agent.getNextWaypoint();
+if (waypoint) {
+    // Move to waypoint.x, waypoint.y
+}
+
+// Advance to next waypoint when reached
+agent.advanceWaypoint();
+
+// Check state
+agent.isSearching();      // Is pathfinding in progress
+agent.hasValidPath();     // Has valid path
+agent.isPathComplete();   // Reached destination
+
+// Cancel pathfinding
+agent.cancelPath();
+
+// Get info
+agent.getRemainingWaypointCount();  // Remaining waypoints
+agent.getPathLength();              // Total path length
+agent.state;                        // Current state
+agent.progress;                     // Pathfinding progress (0-1)
+```
+
+### PathfindingSystem
+
+Pathfinding system that automatically processes all agent requests.
+
+```typescript
+// Add system to scene
+scene.addSystem(new PathfindingSystem());
+```
+
+The system automatically:
+- Processes agents by priority
+- Executes time-slicing within frame budget
+- Validates path validity and auto-replans
+- Applies path smoothing
+
+### Complete Example
+
+```typescript
+import { Scene, Entity } from '@esengine/ecs-framework';
+import {
+    PathfindingAgentComponent,
+    PathfindingMapComponent,
+    PathfindingSystem
+} from '@esengine/pathfinding/ecs';
+
+// Initialize scene
+const scene = new Scene();
+scene.addSystem(new PathfindingSystem());
+
+// Create map
+const mapEntity = scene.createEntity('Map');
+const mapComp = mapEntity.addComponent(new PathfindingMapComponent());
+mapComp.width = 100;
+mapComp.height = 100;
+mapComp.iterationsBudget = 2000;
+
+// Add some obstacles
+mapComp.setRectWalkable(40, 40, 20, 20, false);
+
+// Create multiple agents
+for (let i = 0; i < 10; i++) {
+    const agent = scene.createEntity(`Agent${i}`);
+    const pathAgent = agent.addComponent(new PathfindingAgentComponent());
+
+    // Random start position
+    pathAgent.x = Math.floor(Math.random() * 30);
+    pathAgent.y = Math.floor(Math.random() * 30);
+
+    // Request path to random destination
+    pathAgent.requestPathTo(
+        70 + Math.floor(Math.random() * 20),
+        70 + Math.floor(Math.random() * 20)
+    );
+
+    pathAgent.onPathComplete = (found) => {
+        console.log(`Agent${i} pathfinding ${found ? 'succeeded' : 'failed'}`);
+    };
+}
+
+// In game loop, scene automatically calls PathfindingSystem to process all agents
+```
+
+### Custom System Example
+
+For more control, you can create a custom system:
+
+```typescript
+class CustomPathfindingSystem extends EntitySystem {
     private pathfinder: IncrementalAStarPathfinder;
 
     constructor(grid: GridMap) {
-        super(Matcher.all(PathfindingAgentComponent, Transform));
+        super(Matcher.all(PathfindingAgentComponent));
         this.pathfinder = createIncrementalAStarPathfinder(grid);
     }
 
@@ -148,15 +316,15 @@ class PathfindingSystem extends EntitySystem {
         const iterPerEntity = Math.floor(budget / entities.length);
 
         for (const entity of entities) {
-            const agent = entity.get(PathfindingAgentComponent);
-            if (!agent.requestId) continue;
+            const agent = entity.getComponent(PathfindingAgentComponent);
+            if (!agent || !agent.currentRequestId) continue;
 
-            const progress = this.pathfinder.step(agent.requestId, iterPerEntity);
+            const progress = this.pathfinder.step(agent.currentRequestId, iterPerEntity);
 
             if (progress.state === PathfindingState.Completed) {
-                agent.path = this.pathfinder.getResult(agent.requestId)?.path ?? [];
-                this.pathfinder.cleanup(agent.requestId);
-                agent.requestId = undefined;
+                agent.path = this.pathfinder.getResult(agent.currentRequestId)?.path ?? [];
+                this.pathfinder.cleanup(agent.currentRequestId);
+                agent.currentRequestId = -1;
             }
         }
     }
