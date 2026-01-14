@@ -3,7 +3,7 @@
  * @en A* Pathfinding Algorithm Implementation
  */
 
-import { BinaryHeap } from './BinaryHeap';
+import { IndexedBinaryHeap, type IHeapIndexable } from './IndexedBinaryHeap';
 import type {
     IPathfindingMap,
     IPathfinder,
@@ -18,7 +18,7 @@ import { EMPTY_PATH_RESULT, DEFAULT_PATHFINDING_OPTIONS } from './IPathfinding';
 // 内部节点类型 | Internal Node Type
 // =============================================================================
 
-interface AStarNode {
+interface AStarNode extends IHeapIndexable {
     node: IPathNode;
     g: number;  // Cost from start
     h: number;  // Heuristic to end
@@ -26,6 +26,7 @@ interface AStarNode {
     parent: AStarNode | null;
     closed: boolean;
     opened: boolean;
+    heapIndex: number;  // For IndexedBinaryHeap O(log n) update
 }
 
 // =============================================================================
@@ -52,11 +53,11 @@ interface AStarNode {
 export class AStarPathfinder implements IPathfinder {
     private readonly map: IPathfindingMap;
     private nodeCache: Map<string | number, AStarNode> = new Map();
-    private openList: BinaryHeap<AStarNode>;
+    private openList: IndexedBinaryHeap<AStarNode>;
 
     constructor(map: IPathfindingMap) {
         this.map = map;
-        this.openList = new BinaryHeap<AStarNode>((a, b) => a.f - b.f);
+        this.openList = new IndexedBinaryHeap<AStarNode>((a, b) => a.f - b.f);
     }
 
     /**
@@ -192,7 +193,8 @@ export class AStarPathfinder implements IPathfinder {
                 f: Infinity,
                 parent: null,
                 closed: false,
-                opened: false
+                opened: false,
+                heapIndex: -1
             };
             this.nodeCache.set(node.id, astarNode);
         }
@@ -209,9 +211,11 @@ export class AStarPathfinder implements IPathfinder {
         let current: AStarNode | null = endNode;
 
         while (current) {
-            path.unshift(current.node.position);
+            path.push(current.node.position);
             current = current.parent;
         }
+
+        path.reverse();
 
         return {
             found: true,
