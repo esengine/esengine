@@ -1,5 +1,14 @@
 # @esengine/pathfinding
 
+## 12.1.2
+
+### Patch Changes
+
+- [`32f3343`](https://github.com/esengine/esengine/commit/32f33432ad25ef987efb34bc18bf5b105b0a26ea) Thanks [@esengine](https://github.com/esengine)! - fix: remove publishConfig.directory to fix npm publish
+
+- Updated dependencies [[`32f3343`](https://github.com/esengine/esengine/commit/32f33432ad25ef987efb34bc18bf5b105b0a26ea)]:
+    - @esengine/ecs-framework-math@2.10.3
+
 ## 12.1.1
 
 ### Patch Changes
