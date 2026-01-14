@@ -18,6 +18,8 @@ description: "蓝图内置 ECS 操作节点完整参考"
 
 ## 事件节点
 
+### 生命周期事件
+
 生命周期事件，作为蓝图执行的入口点：
 
 | 节点 | 说明 | 输出 |
@@ -25,6 +27,85 @@ description: "蓝图内置 ECS 操作节点完整参考"
 | `EventBeginPlay` | 蓝图启动时触发 | Exec, Self (Entity) |
 | `EventTick` | 每帧触发 | Exec, Delta Time |
 | `EventEndPlay` | 蓝图停止时触发 | Exec |
+
+### 自定义事件
+
+自定义事件节点允许你定义自己的事件，通过代码触发蓝图逻辑。
+
+| 节点 | 说明 | 输出 |
+|------|------|------|
+| `EventCustom` | 自定义事件，通过代码触发 | Exec, 自定义参数 |
+
+**创建自定义事件：**
+
+在蓝图编辑器中创建自定义事件节点时，需要设置：
+- **事件名称** (`eventName`)：用于代码中触发事件
+- **输出参数**：事件传递的数据，如 `damage`、`amount` 等
+
+**通过代码触发自定义事件：**
+
+```typescript
+// 获取实体的蓝图组件
+const blueprint = entity.getComponent(BlueprintComponent);
+
+// 触发自定义事件，传递参数
+blueprint.vm?.triggerCustomEvent('OnDamage', {
+    damage: 50,
+    source: attackerEntity
+});
+
+// 触发无参数事件
+blueprint.vm?.triggerCustomEvent('OnPickup');
+```
+
+**蓝图中接收事件数据：**
+
+自定义事件节点会将传递的参数作为输出引脚暴露：
+
+<div class="bp-graph" style="" data-connections='[{"from":"custom-exec","to":"print-exec","type":"exec"},{"from":"custom-damage","to":"print-msg","type":"float"}]'>
+  <svg class="bp-connections"></svg>
+  <div class="bp-node" style="left: 20px; top: 20px; width: 160px;">
+    <div class="bp-node-header event">
+      <span class="bp-node-header-icon"></span>
+      <span class="bp-node-header-title">Event OnDamage</span>
+      <span class="bp-header-exec" data-pin="custom-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+    </div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row output">
+        <span class="bp-pin"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#00a0e0"/></svg></span>
+        <span class="bp-pin-label">Self</span>
+      </div>
+      <div class="bp-pin-row output">
+        <span class="bp-pin" data-pin="custom-damage"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Damage</span>
+      </div>
+    </div>
+  </div>
+  <div class="bp-node" style="left: 280px; top: 20px; width: 120px;">
+    <div class="bp-node-header debug">Print</div>
+    <div class="bp-node-body">
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="print-exec"><svg width="12" height="12"><polygon points="1,1 11,6 1,11" fill="#fff"/></svg></span>
+        <span class="bp-pin-label">Exec</span>
+      </div>
+      <div class="bp-pin-row input">
+        <span class="bp-pin" data-pin="print-msg"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="#7ecd32"/></svg></span>
+        <span class="bp-pin-label">Msg</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+**常用自定义事件示例：**
+
+| 事件名 | 用途 | 参数示例 |
+|--------|------|----------|
+| `OnDamage` | 受到伤害 | `{ damage: number, source: Entity }` |
+| `OnHeal` | 治疗 | `{ amount: number }` |
+| `OnCollision` | 碰撞检测 | `{ other: Entity, point: Vector2 }` |
+| `OnPickup` | 拾取物品 | `{ item: Entity }` |
+| `OnInteract` | 交互 | `{ player: Entity }` |
+| `OnDeath` | 死亡 | `{ killer: Entity }` |
 
 ### 示例：游戏初始化
 
