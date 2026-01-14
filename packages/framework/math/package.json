@@ -2,12 +2,22 @@
   "name": "@esengine/ecs-framework-math",
   "version": "2.10.1",
   "description": "ECS框架2D数学库 - 提供向量、矩阵、几何形状和碰撞检测功能",
-  "main": "bin/index.js",
-  "types": "bin/index.d.ts",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "unpkg": "dist/index.umd.js",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "source": "./src/index.ts"
+    }
+  },
   "files": [
-    "bin/**/*",
-    "README.md",
-    "LICENSE"
+    "dist/**/*"
   ],
   "keywords": [
     "ecs",
@@ -28,15 +38,14 @@
     "build:watch": "tsc --watch",
     "rebuild": "npm run clean && npm run build",
     "build:npm": "npm run build",
-    "publish:npm": "npm run build:npm && cd dist && npm publish",
     "test": "jest --config jest.config.cjs",
     "test:watch": "jest --watch --config jest.config.cjs",
     "test:coverage": "jest --coverage --config jest.config.cjs",
     "test:ci": "jest --ci --coverage --config jest.config.cjs",
     "test:clear": "jest --clearCache",
-    "publish:patch": "npm version patch && npm run build:npm && cd dist && npm publish",
-    "publish:minor": "npm version minor && npm run build:npm && cd dist && npm publish",
-    "publish:major": "npm version major && npm run build:npm && cd dist && npm publish"
+    "type-check": "npx tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix"
   },
   "author": "yhh",
   "license": "MIT",
@@ -59,11 +68,12 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "directory": "dist"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/esengine/esengine.git",
-    "directory": "packages/math"
+    "directory": "packages/framework/math"
   }
 }
