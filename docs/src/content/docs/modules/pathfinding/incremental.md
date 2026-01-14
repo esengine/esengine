@@ -139,12 +139,8 @@ class PathfindingSystem extends EntitySystem {
     private pathfinder: IncrementalAStarPathfinder;
 
     constructor(grid: GridMap) {
-        super();
+        super(Matcher.all(PathfindingAgentComponent, Transform));
         this.pathfinder = createIncrementalAStarPathfinder(grid);
-    }
-
-    protected getMatcher() {
-        return Matcher.all(PathfindingAgentComponent, Transform);
     }
 
     protected process(entities: readonly Entity[]) {
