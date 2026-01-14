@@ -168,34 +168,13 @@ export class JPSPathfinder implements IPathfinder {
     }
 
     /**
-     * @zh 检查数组索引是否安全（防止原型污染）
-     * @en Check whether an array index is safe (prevent prototype pollution)
-     */
-    private isSafeIndex(value: unknown): boolean {
-        // Reject non-number types and prototype-polluting keys
-        if (typeof value !== 'number') {
-            return false;
-        }
-        // Explicitly guard against prototype-related keys
-        if ((value as unknown) === '__proto__' ||
-            (value as unknown) === 'constructor' ||
-            (value as unknown) === 'prototype') {
-            return false;
-        }
-        return Number.isFinite(value) &&
-               Number.isInteger(value) &&
-               value >= 0 &&
-               value < 0x7fffffff;
-    }
-
-    /**
      * @zh 初始化节点网格
      * @en Initialize node grid
      */
     private initGrid(): void {
         this.nodeGrid = [];
-        for (let x = 0; x < this.width; x++) {
-            this.nodeGrid[x] = [];
+        for (let i = 0; i < this.width; i++) {
+            this.nodeGrid[i] = [];
         }
     }
 
@@ -204,16 +183,19 @@ export class JPSPathfinder implements IPathfinder {
      * @en Get or create node
      */
     private getOrCreateNode(x: number, y: number): JPSNode {
-        if (!this.isSafeIndex(x) || !this.isSafeIndex(y)) {
+        // Bounds check to ensure valid array indices
+        const xi = x | 0;
+        const yi = y | 0;
+        if (xi < 0 || xi >= this.width || yi < 0 || yi >= this.height) {
             throw new Error('[JPSPathfinder] Invalid grid coordinates');
         }
-        if (!this.nodeGrid[x]) {
-            this.nodeGrid[x] = [];
+        if (!this.nodeGrid[xi]) {
+            this.nodeGrid[xi] = [];
         }
-        if (!this.nodeGrid[x][y]) {
-            this.nodeGrid[x][y] = {
-                x,
-                y,
+        if (!this.nodeGrid[xi][yi]) {
+            this.nodeGrid[xi][yi] = {
+                x: xi,
+                y: yi,
                 g: Infinity,
                 h: 0,
                 f: Infinity,
@@ -221,7 +203,7 @@ export class JPSPathfinder implements IPathfinder {
                 closed: false
             };
         }
-        return this.nodeGrid[x][y]!;
+        return this.nodeGrid[xi][yi]!;
     }
 
     /**
