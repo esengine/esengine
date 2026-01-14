@@ -1,6 +1,6 @@
 {
   "name": "@esengine/ecs-framework-math",
-  "version": "2.10.1",
+  "version": "2.10.2",
   "description": "ECS框架2D数学库 - 提供向量、矩阵、几何形状和碰撞检测功能",
   "type": "module",
   "main": "dist/index.cjs",
