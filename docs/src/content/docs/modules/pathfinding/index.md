@@ -18,6 +18,21 @@ description: "完整的 2D 寻路解决方案，支持增量寻路和多种高�
 npm install @esengine/pathfinding
 ```
 
+## 入口点
+
+包提供了三个独立入口点，按需引入：
+
+```typescript
+// 核心寻路（无外部依赖，除了 math）
+import { AStarPathfinder, GridPathfinder, JPSPathfinder } from '@esengine/pathfinding';
+
+// ECS 组件和系统（需要 @esengine/ecs-framework）
+import { PathfindingSystem, PathfindingAgentComponent } from '@esengine/pathfinding/ecs';
+
+// 蓝图节点（需要 @esengine/blueprint）
+import { FindPathTemplate, RequestPathAsyncTemplate } from '@esengine/pathfinding/nodes';
+```
+
 ## 快速开始
 
 ### 网格地图寻路

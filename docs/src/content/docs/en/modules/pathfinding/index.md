@@ -18,6 +18,21 @@ description: "Complete 2D pathfinding solution with incremental execution and ad
 npm install @esengine/pathfinding
 ```
 
+## Entry Points
+
+The package provides three separate entry points for better tree-shaking:
+
+```typescript
+// Core pathfinding (no external dependencies except math)
+import { AStarPathfinder, GridPathfinder, JPSPathfinder } from '@esengine/pathfinding';
+
+// ECS components and systems (requires @esengine/ecs-framework)
+import { PathfindingSystem, PathfindingAgentComponent } from '@esengine/pathfinding/ecs';
+
+// Blueprint nodes (requires @esengine/blueprint)
+import { FindPathTemplate, RequestPathAsyncTemplate } from '@esengine/pathfinding/nodes';
+```
+
 ## Quick Start
 
 ### Grid Map Pathfinding

@@ -32,7 +32,7 @@ console.log('Request ID:', request.id);
 function gameLoop() {
     const progress = pathfinder.step(request.id, 100); // 100 iterations per frame
 
-    console.log('Progress:', (progress.progress * 100).toFixed(1) + '%');
+    console.log('Progress:', (progress.estimatedProgress * 100).toFixed(1) + '%');
 
     if (progress.state === PathfindingState.Completed) {
         const result = pathfinder.getResult(request.id);
@@ -128,6 +128,12 @@ class PathfindingManager {
 
 ### ECS Integration Example
 
+> **Note**: ECS components and systems should be imported from `@esengine/pathfinding/ecs`.
+>
+> ```typescript
+> import { PathfindingAgentComponent, PathfindingSystem } from '@esengine/pathfinding/ecs';
+> ```
+
 ```typescript
 class PathfindingSystem extends EntitySystem {
     private pathfinder: IncrementalAStarPathfinder;
@@ -178,11 +184,11 @@ grid.setWalkable(50, 50, false);
 // Notify pathfinder of obstacle change region
 pathfinder.notifyObstacleChange(45, 45, 55, 55);
 
-// Continue execution - affected requests are automatically flagged
-const progress = pathfinder.getProgress(request.id);
-if (progress?.obstaclesChanged) {
+// Continue execution - check if request is affected
+if (pathfinder.isAffectedByChange(request.id)) {
     console.log('Path may be affected by obstacle change');
     // Can choose to cancel and re-request, or continue
+    pathfinder.clearChangeFlag(request.id); // Clear the flag
 }
 ```
 

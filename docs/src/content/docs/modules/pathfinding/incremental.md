@@ -32,7 +32,7 @@ console.log('Request ID:', request.id);
 function gameLoop() {
     const progress = pathfinder.step(request.id, 100); // 每帧 100 次迭代
 
-    console.log('Progress:', (progress.progress * 100).toFixed(1) + '%');
+    console.log('Progress:', (progress.estimatedProgress * 100).toFixed(1) + '%');
 
     if (progress.state === PathfindingState.Completed) {
         const result = pathfinder.getResult(request.id);
@@ -128,6 +128,12 @@ class PathfindingManager {
 
 ### ECS 集成示例
 
+> **注意**: ECS 组件和系统需要从 `@esengine/pathfinding/ecs` 导入。
+>
+> ```typescript
+> import { PathfindingAgentComponent, PathfindingSystem } from '@esengine/pathfinding/ecs';
+> ```
+
 ```typescript
 class PathfindingSystem extends EntitySystem {
     private pathfinder: IncrementalAStarPathfinder;
@@ -178,11 +184,11 @@ grid.setWalkable(50, 50, false);
 // 通知寻路器障碍物变化区域
 pathfinder.notifyObstacleChange(45, 45, 55, 55);
 
-// 继续执行 - 受影响的请求会自动标记
-const progress = pathfinder.getProgress(request.id);
-if (progress?.obstaclesChanged) {
+// 继续执行 - 检查请求是否受影响
+if (pathfinder.isAffectedByChange(request.id)) {
     console.log('Path may be affected by obstacle change');
     // 可以选择取消并重新请求，或继续执行
+    pathfinder.clearChangeFlag(request.id); // 清除标记
 }
 ```
 
