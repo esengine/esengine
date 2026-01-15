@@ -4,9 +4,6 @@
  *
  * @zh 用于 ORCA 算法中的速度优化求解
  * @en Used for velocity optimization in ORCA algorithm
- *
- * @zh 基于 RVO2 库的算法实现
- * @en Based on RVO2 library algorithm implementation
  */
 
 import { Vector2, type IVector2 } from '@esengine/ecs-framework-math';
@@ -22,7 +19,6 @@ import type { IORCALine } from './ILocalAvoidance';
  */
 const EPSILON = 0.00001;
 
-// 使用 Vector2 静态方法
 const { dot, det, lengthSq } = Vector2;
 
 // =============================================================================
@@ -153,7 +149,8 @@ export function linearProgram2(
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
-        if (det(line.direction, { x: line.point.x - result.x, y: line.point.y - result.y }) > 0) {
+        const detVal = det(line.direction, { x: line.point.x - result.x, y: line.point.y - result.y });
+        if (detVal > 0) {
             const tempResult = result.clone();
             if (!linearProgram1(lines, i, radius, optVelocity, directionOpt, result)) {
                 result.copy(tempResult);
@@ -213,17 +210,8 @@ export function linearProgram3(
                             x: 0.5 * (line1.point.x + line2.point.x),
                             y: 0.5 * (line1.point.y + line2.point.y)
                         },
-                        direction: {
-                            x: -(line1.direction.y - line2.direction.y),
-                            y: line1.direction.x - line2.direction.x
-                        }
+                        direction: { x: 0, y: 0 }
                     };
-
-                    const dirLen = Math.sqrt(lengthSq(newLine.direction));
-                    if (dirLen > EPSILON) {
-                        newLine.direction.x /= dirLen;
-                        newLine.direction.y /= dirLen;
-                    }
                 } else {
                     const diff = {
                         x: line1.point.x - line2.point.x,
@@ -236,17 +224,18 @@ export function linearProgram3(
                             x: line1.point.x + t * line1.direction.x,
                             y: line1.point.y + t * line1.direction.y
                         },
-                        direction: {
-                            x: -(line1.direction.y - line2.direction.y),
-                            y: line1.direction.x - line2.direction.x
-                        }
+                        direction: { x: 0, y: 0 }
                     };
+                }
 
-                    const dirLen = Math.sqrt(lengthSq(newLine.direction));
-                    if (dirLen > EPSILON) {
-                        newLine.direction.x /= dirLen;
-                        newLine.direction.y /= dirLen;
-                    }
+                const dirDiff = {
+                    x: line1.direction.x - line2.direction.x,
+                    y: line1.direction.y - line2.direction.y
+                };
+                const dirLen = Math.sqrt(lengthSq(dirDiff));
+                if (dirLen > EPSILON) {
+                    newLine.direction.x = dirDiff.x / dirLen;
+                    newLine.direction.y = dirDiff.y / dirLen;
                 }
 
                 projLines.push(newLine);

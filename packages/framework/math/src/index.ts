@@ -16,6 +16,7 @@ export { Vector3, type IVector3 } from './Vector3';
 export { Matrix3 } from './Matrix3';
 export { Rectangle } from './Rectangle';
 export { Circle } from './Circle';
+export { Polygon } from './Polygon';
 
 // 定点数数学（帧同步确定性计算）
 export { Fixed32, type IFixed32 } from './Fixed32';

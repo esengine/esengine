@@ -109,8 +109,8 @@ export interface IAvoidanceAgent {
 // =============================================================================
 
 /**
- * @zh 静态障碍物顶点
- * @en Static obstacle vertex
+ * @zh 静态障碍物顶点（链表节点）
+ * @en Static obstacle vertex (linked list node)
  */
 export interface IObstacleVertex {
     /**
@@ -120,20 +120,20 @@ export interface IObstacleVertex {
     point: IVector2;
 
     /**
-     * @zh 下一个顶点（构成障碍物边）
-     * @en Next vertex (forms obstacle edge)
+     * @zh 下一个顶点（构成障碍物边，循环链表）
+     * @en Next vertex (forms obstacle edge, circular linked list)
      */
-    next: IObstacleVertex | null;
+    next: IObstacleVertex;
 
     /**
-     * @zh 前一个顶点
-     * @en Previous vertex
+     * @zh 前一个顶点（循环链表）
+     * @en Previous vertex (circular linked list)
      */
-    prev: IObstacleVertex | null;
+    previous: IObstacleVertex;
 
     /**
-     * @zh 边的单位方向向量（指向下一个顶点）
-     * @en Unit direction vector of edge (towards next vertex)
+     * @zh 边的单位方向向量（从此顶点指向 next 顶点）
+     * @en Unit direction vector of edge (from this vertex towards next vertex)
      */
     direction: IVector2;
 
@@ -142,19 +142,46 @@ export interface IObstacleVertex {
      * @en Whether this is a convex vertex
      */
     isConvex: boolean;
+
+    /**
+     * @zh 顶点 ID（用于调试）
+     * @en Vertex ID (for debugging)
+     */
+    id: number;
 }
 
 /**
  * @zh 静态障碍物（多边形）
  * @en Static obstacle (polygon)
  *
- * @zh 顶点按逆时针顺序排列
- * @en Vertices are ordered counter-clockwise
+ * @zh 重要：顶点必须按逆时针（CCW）顺序排列（在 Y 轴向上的坐标系中）
+ * @en Important: Vertices must be in counter-clockwise (CCW) order (in Y-axis up coordinate system)
+ *
+ * @zh 可以使用 math 库中的 Polygon.ensureCCW() 确保正确顺序
+ * @en Use Polygon.ensureCCW() from math library to ensure correct order
+ *
+ * @zh 在 Y 轴向下的坐标系（如 Canvas）中，视觉上的 CCW 需要传入 yAxisDown=true
+ * @en In Y-axis down coordinate system (like Canvas), use yAxisDown=true for visual CCW
+ *
+ * @example
+ * ```typescript
+ * import { Polygon } from '@esengine/ecs-framework-math';
+ *
+ * // 标准 Y 轴向上坐标系
+ * const obstacle: IObstacle = {
+ *     vertices: Polygon.ensureCCW(myVertices)
+ * };
+ *
+ * // Canvas/屏幕坐标系（Y 轴向下）
+ * const obstacle: IObstacle = {
+ *     vertices: Polygon.ensureCCW(myVertices, true)
+ * };
+ * ```
  */
 export interface IObstacle {
     /**
-     * @zh 顶点列表（逆时针顺序）
-     * @en Vertex list (counter-clockwise order)
+     * @zh 顶点列表（逆时针顺序，Y 轴向上坐标系）
+     * @en Vertex list (counter-clockwise order in Y-axis up coordinate system)
      */
     vertices: IVector2[];
 }

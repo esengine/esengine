@@ -76,42 +76,6 @@ export class AvoidanceWorldComponent extends Component {
     timeStep: number = DEFAULT_ORCA_CONFIG.timeStep;
 
     // =========================================================================
-    // 调试配置 | Debug Configuration
-    // =========================================================================
-
-    /**
-     * @zh 是否显示调试信息
-     * @en Whether to show debug info
-     */
-    @Serialize()
-    @Property({ type: 'boolean', label: 'Debug Mode' })
-    debugMode: boolean = false;
-
-    /**
-     * @zh 是否显示邻居连线
-     * @en Whether to show neighbor connections
-     */
-    @Serialize()
-    @Property({ type: 'boolean', label: 'Show Neighbors' })
-    showNeighbors: boolean = false;
-
-    /**
-     * @zh 是否显示 ORCA 约束线
-     * @en Whether to show ORCA constraint lines
-     */
-    @Serialize()
-    @Property({ type: 'boolean', label: 'Show ORCA Lines' })
-    showORCALines: boolean = false;
-
-    /**
-     * @zh 是否显示速度向量
-     * @en Whether to show velocity vectors
-     */
-    @Serialize()
-    @Property({ type: 'boolean', label: 'Show Velocities' })
-    showVelocities: boolean = false;
-
-    // =========================================================================
     // 运行时实例（不序列化）| Runtime Instances (not serialized)
     // =========================================================================
 

@@ -43,6 +43,12 @@ export {
     solveORCALinearProgram
 } from './LinearProgram';
 
+export {
+    createObstacleVertices,
+    buildObstacleVertices,
+    ensureCCW
+} from './ObstacleBuilder';
+
 // =============================================================================
 // 空间索引 | Spatial Index
 // =============================================================================
