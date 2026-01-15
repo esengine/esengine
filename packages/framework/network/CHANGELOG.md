@@ -1,5 +1,12 @@
 # @esengine/network
 
+## 14.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`190924d`](https://github.com/esengine/esengine/commit/190924d2ad81df3d2b621ff70df8ba91ea2736c1)]:
+    - @esengine/ecs-framework-math@2.11.0
+
 ## 13.0.2
 
 ### Patch Changes
