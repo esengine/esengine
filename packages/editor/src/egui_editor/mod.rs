@@ -301,9 +301,104 @@ impl EditorApp {
         }
     }
 
+    /// @zh 启动界面标题栏
+    /// @en Startup screen title bar
+    fn startup_title_bar(&self, ctx: &egui::Context) {
+        let height = 32.0;
+        egui::TopBottomPanel::top("startup_titlebar")
+            .exact_height(height)
+            .frame(egui::Frame::none())
+            .show(ctx, |ui| {
+                let full_rect = ui.max_rect();
+
+                // Background - dark color matching startup screen
+                ui.painter().rect_filled(full_rect, 0.0, egui::Color32::from_rgb(0x1a, 0x1a, 0x1a));
+
+                // Border bottom
+                ui.painter().line_segment(
+                    [egui::pos2(full_rect.left(), full_rect.bottom()), egui::pos2(full_rect.right(), full_rect.bottom())],
+                    egui::Stroke::new(1.0, egui::Color32::from_rgb(0x2a, 0x2a, 0x2a)),
+                );
+
+                // Logo area
+                let logo_rect = egui::Rect::from_min_size(full_rect.min, egui::vec2(40.0, height));
+                ui.painter().text(
+                    logo_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "ES",
+                    egui::FontId::proportional(14.0),
+                    egui::Color32::from_rgb(0x4a, 0x9e, 0xff),
+                );
+
+                // Window controls
+                let btn_width = 46.0;
+                let right_start = full_rect.right() - btn_width * 3.0;
+
+                // Minimize
+                let min_rect = egui::Rect::from_min_size(egui::pos2(right_start, full_rect.top()), egui::vec2(btn_width, height));
+                let min_resp = ui.interact(min_rect, egui::Id::new("startup_btn_min"), egui::Sense::click());
+                if min_resp.hovered() {
+                    ui.painter().rect_filled(min_rect, 0.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 26));
+                }
+                let icon_color = if min_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_rgb(0x80, 0x80, 0x80) };
+                ui.painter().line_segment(
+                    [egui::pos2(min_rect.center().x - 5.0, min_rect.center().y), egui::pos2(min_rect.center().x + 5.0, min_rect.center().y)],
+                    egui::Stroke::new(1.0, icon_color),
+                );
+                if min_resp.clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                }
+
+                // Maximize
+                let max_rect = egui::Rect::from_min_size(egui::pos2(right_start + btn_width, full_rect.top()), egui::vec2(btn_width, height));
+                let max_resp = ui.interact(max_rect, egui::Id::new("startup_btn_max"), egui::Sense::click());
+                if max_resp.hovered() {
+                    ui.painter().rect_filled(max_rect, 0.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 26));
+                }
+                let icon_color = if max_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_rgb(0x80, 0x80, 0x80) };
+                ui.painter().rect_stroke(
+                    egui::Rect::from_center_size(max_rect.center(), egui::vec2(9.0, 9.0)),
+                    0.0,
+                    egui::Stroke::new(1.0, icon_color),
+                );
+                if max_resp.clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                }
+
+                // Close
+                let close_rect = egui::Rect::from_min_size(egui::pos2(right_start + btn_width * 2.0, full_rect.top()), egui::vec2(btn_width, height));
+                let close_resp = ui.interact(close_rect, egui::Id::new("startup_btn_close"), egui::Sense::click());
+                if close_resp.hovered() {
+                    ui.painter().rect_filled(close_rect, 0.0, egui::Color32::from_rgb(0xe8, 0x11, 0x23));
+                }
+                let icon_color = if close_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_rgb(0x80, 0x80, 0x80) };
+                let cx = close_rect.center();
+                ui.painter().line_segment([egui::pos2(cx.x - 4.0, cx.y - 4.0), egui::pos2(cx.x + 4.0, cx.y + 4.0)], egui::Stroke::new(1.2, icon_color));
+                ui.painter().line_segment([egui::pos2(cx.x + 4.0, cx.y - 4.0), egui::pos2(cx.x - 4.0, cx.y + 4.0)], egui::Stroke::new(1.2, icon_color));
+                if close_resp.clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+
+                // Drag area (between logo and window controls)
+                let drag_rect = egui::Rect::from_min_max(egui::pos2(40.0, full_rect.top()), egui::pos2(right_start, full_rect.bottom()));
+                ui.painter().text(drag_rect.center(), egui::Align2::CENTER_CENTER, "ESEngine Editor", egui::FontId::proportional(12.0), egui::Color32::from_rgb(0x80, 0x80, 0x80));
+
+                let drag_resp = ui.interact(drag_rect, egui::Id::new("startup_title_drag"), egui::Sense::click_and_drag());
+                if drag_resp.drag_started() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
+                if drag_resp.double_clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                }
+            });
+    }
+
     /// @zh 启动界面 - 选择项目
     /// @en Startup screen - select project
     fn startup_screen(&mut self, ctx: &egui::Context) {
+        // Render title bar first
+        self.startup_title_bar(ctx);
+
         // Extract colors before entering closures to avoid borrow conflicts
         let colors = ThemeColors::new(&self.state.tokens);
         let bg_color = colors.bg_base();
@@ -436,6 +531,9 @@ impl EditorApp {
     /// @zh 加载界面 - 启动 MCP，获取 effects
     /// @en Loading screen - starting MCP, fetching effects
     fn loading_screen(&mut self, ctx: &egui::Context) {
+        // Render title bar first (same as startup)
+        self.startup_title_bar(ctx);
+
         // Start MCP server if not running
         if self.state.is_mcp_mode() && !self.state.scene_bridge.is_mcp_running() {
             self.state.set_loading_status("Starting MCP server...");
