@@ -234,6 +234,7 @@ export default defineConfig({
                 { label: '增量寻路', slug: 'modules/pathfinding/incremental', translations: { en: 'Incremental Pathfinding' } },
                 { label: '导航网格 API', slug: 'modules/pathfinding/navmesh', translations: { en: 'NavMesh API' } },
                 { label: '路径平滑', slug: 'modules/pathfinding/smoothing', translations: { en: 'Path Smoothing' } },
+                { label: '局部避让 (ORCA)', slug: 'modules/pathfinding/local-avoidance', translations: { en: 'Local Avoidance (ORCA)' } },
                 { label: '实际示例', slug: 'modules/pathfinding/examples', translations: { en: 'Examples' } },
               ],
             },

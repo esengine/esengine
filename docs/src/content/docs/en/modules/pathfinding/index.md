@@ -330,4 +330,5 @@ for (let y = 30; y < 35; y++) {
 - [Incremental Pathfinding](./incremental) - Time-sliced execution and dynamic replanning
 - [Navigation Mesh API](./navmesh) - NavMesh building and querying
 - [Path Smoothing](./smoothing) - Line of sight and curve smoothing
+- [Local Avoidance (ORCA)](./local-avoidance) - Multi-agent collision avoidance
 - [Examples](./examples) - Game movement, dynamic obstacles, hierarchical pathfinding
