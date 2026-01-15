@@ -62,6 +62,9 @@
     <div id="loading">Loading ccesengine...</div>
     <div id="error"></div>
 
+    <!-- Load viewport RPC module -->
+    <script src="asset://localhost/viewport-rpc.js"></script>
+
     <script type="module">
         /**
          * @zh ccesengine 视口初始化脚本（嵌入式版本）
@@ -74,25 +77,47 @@
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
 
+        // ============================================================================
+        // RPC Handler Initialization
+        // ============================================================================
+
+        /** @type {ViewportRpc.ViewportRpcHandler} */
+        let rpc = null;
+
+        // Initialize RPC handler
+        if (window.ViewportRpc) {
+            rpc = window.ViewportRpc.createViewportRpc({
+                send: (msg) => {
+                    if (window.ipc?.postMessage) {
+                        window.ipc.postMessage(msg);
+                    }
+                }
+            });
+
+            // Expose handleRpcMessage for incoming messages from editor
+            window.handleRpcMessage = (data) => rpc.handleMessage(data);
+        } else {
+            console.error('[Viewport] ViewportRpc not loaded!');
+        }
+
+        // ============================================================================
+        // Helper Functions
+        // ============================================================================
+
         function showError(message) {
             loadingEl.style.display = 'none';
             errorEl.style.display = 'block';
             errorEl.textContent = message;
-            sendIPC({ type: 'Error', message });
+            rpc?.emitError(message);
         }
 
         function showStatus(message) {
             loadingEl.textContent = message;
-            sendIPC({ type: 'Status', message });
+            // Status is just for loading, use log
+            rpc?.emitLog('info', message);
         }
 
-        function sendIPC(data) {
-            if (window.ipc && window.ipc.postMessage) {
-                window.ipc.postMessage(JSON.stringify(data));
-            }
-        }
-
-        // Forward console logs to IPC for debugging
+        // Forward console logs to RPC
         const originalConsole = {
             log: console.log.bind(console),
             warn: console.warn.bind(console),
@@ -101,17 +126,20 @@
 
         console.log = (...args) => {
             originalConsole.log(...args);
-            sendIPC({ type: 'ConsoleLog', message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') });
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            rpc?.emitLog('info', message);
         };
 
         console.warn = (...args) => {
             originalConsole.warn(...args);
-            sendIPC({ type: 'ConsoleWarn', message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') });
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            rpc?.emitLog('warn', message);
         };
 
         console.error = (...args) => {
             originalConsole.error(...args);
-            sendIPC({ type: 'ConsoleError', message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') });
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            rpc?.emitLog('error', message);
         };
 
         // Engine state
@@ -119,6 +147,9 @@
         let game = null;
         let director = null;
         let scene = null;
+
+        // View mode: '2d' or '3d'
+        let viewMode = '3d';
 
         // Load modules using asset:// protocol
         const MODULES = [
@@ -208,6 +239,9 @@
 
             showStatus('Pre-registering effects...');
 
+            // Debug: List all effect names being registered
+            console.log('[ccesengine] Effects to register:', effectsData.map(e => e.name).join(', '));
+
             const EffectAsset = cc.EffectAsset;
             const programLib = cc.programLib;
 
@@ -215,6 +249,13 @@
                 console.warn('[ccesengine] EffectAsset not available for pre-registration');
                 return;
             }
+
+            // Check if geometry-renderer effect is in the data
+            const hasGeometryRenderer = effectsData.some(e =>
+                e.name === 'internal/builtin-geometry-renderer' ||
+                e.name === 'builtin-geometry-renderer'
+            );
+            console.log('[ccesengine] Has builtin-geometry-renderer effect:', hasGeometryRenderer);
 
             for (const effectData of effectsData) {
                 try {
@@ -261,13 +302,19 @@
                         registeredGraphicsEffect = effect;
                     }
 
-                    console.log(`[ccesengine] Pre-registered effect: ${effectData.name}`);
+                    console.log(`[ccesengine] Pre-registered effect: ${effectData.name}, techniques: ${effect.techniques.length}, shaders: ${effect.shaders.length}`);
                 } catch (error) {
                     console.error(`[ccesengine] Failed to pre-register effect ${effectData.name}:`, error);
                 }
             }
 
             console.log(`[ccesengine] Pre-registered ${effectsData.length} effects`);
+
+            // Debug: List all registered effects
+            if (EffectAsset.getAll) {
+                const allEffects = EffectAsset.getAll();
+                console.log('[ccesengine] All registered effects after preRegister:', Object.keys(allEffects).join(', '));
+            }
         }
 
         /**
@@ -367,16 +414,27 @@
 
         async function runGame() {
             showStatus('Starting game...');
-            game.run();
 
-            // Wait for director.root to be ready
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error('Engine ready timeout')), 5000);
+            try {
+                game.run();
+            } catch (runError) {
+                console.error('[ccesengine] game.run() error:', runError);
+                throw runError;
+            }
+
+            // Wait for director.root to be ready (no timeout - wait indefinitely)
+            await new Promise((resolve) => {
+                let checkCount = 0;
                 const check = () => {
-                    if (director?.root) {
-                        clearTimeout(timeout);
+                    checkCount++;
+                    if (cc.director?.root) {
+                        director = cc.director;
+                        console.log('[ccesengine] Engine ready after', checkCount, 'checks');
                         resolve();
                     } else {
+                        if (checkCount % 60 === 0) {
+                            console.log('[ccesengine] Waiting for engine... cc.director:', !!cc.director, 'root:', !!cc.director?.root);
+                        }
                         requestAnimationFrame(check);
                     }
                 };
@@ -462,7 +520,6 @@
 
             // Create camera node
             const cameraNode = new cc.Node('Main Camera');
-            cameraNode.setPosition(0, 0, 10);
             scene.addChild(cameraNode);
 
             // Add camera component
@@ -472,12 +529,109 @@
                 camera.clearFlags = cc.Camera?.ClearFlag?.SOLID_COLOR ?? 7;
                 // Use dark gray background (editor style)
                 camera.clearColor = cc.color('#2d2d2d');
-                camera.projection = 1; // Orthographic
-                camera.orthoHeight = 5;
+
+                // Cache the camera component
+                mainCameraComp = camera;
+
+                // Setup camera based on view mode
+                setupCameraForViewMode(cameraNode, camera);
             }
 
             // Run scene
             director.runSceneImmediate(scene);
+        }
+
+        // Camera control state
+        let cameraDistance = 20;  // Distance from target
+        let cameraYaw = -135;     // Horizontal angle (degrees) - looking from front-right
+        let cameraPitch = 30;     // Vertical angle (degrees) - slight downward angle
+        let cameraTarget = { x: 0, y: 0, z: 0 };  // Look at target
+        let orthoSize = 10;       // Orthographic size
+
+        /**
+         * @zh 根据视图模式设置相机
+         * @en Setup camera based on view mode
+         *
+         * Cocos Creator 3.x ProjectionType:
+         * - ORTHO = 0
+         * - PERSPECTIVE = 1
+         */
+        function setupCameraForViewMode(cameraNode, camera) {
+            if (!cameraNode || !camera) return;
+
+            // Get enum values from Cocos (with fallback)
+            const ORTHO = cc.Camera?.ProjectionType?.ORTHO ?? 0;
+            const PERSPECTIVE = cc.Camera?.ProjectionType?.PERSPECTIVE ?? 1;
+
+            if (viewMode === '2d') {
+                // 2D mode: Orthographic camera looking at XY plane
+                cameraNode.setPosition(cameraTarget.x, cameraTarget.y, 100);
+                cameraNode.setRotationFromEuler(0, 0, 0);
+                camera.projection = ORTHO;
+                camera.orthoHeight = orthoSize;
+            } else {
+                // 3D mode: Calculate camera position from spherical coordinates
+                const pitchRad = cameraPitch * Math.PI / 180;
+                const yawRad = cameraYaw * Math.PI / 180;
+
+                const x = cameraTarget.x + cameraDistance * Math.cos(pitchRad) * Math.sin(yawRad);
+                const y = cameraTarget.y + cameraDistance * Math.sin(pitchRad);
+                const z = cameraTarget.z + cameraDistance * Math.cos(pitchRad) * Math.cos(yawRad);
+
+                cameraNode.setPosition(x, y, z);
+
+                // Look at target
+                const target = new cc.Vec3(cameraTarget.x, cameraTarget.y, cameraTarget.z);
+                const up = new cc.Vec3(0, 1, 0);
+                if (cameraNode.lookAt) {
+                    cameraNode.lookAt(target, up);
+                }
+
+                camera.projection = PERSPECTIVE;
+                camera.fov = 60;
+            }
+            camera.near = 0.1;
+            camera.far = 1000;
+
+            console.log('[Camera] Setup:', viewMode, 'projection:', camera.projection, '(ORTHO=' + ORTHO + ', PERSPECTIVE=' + PERSPECTIVE + ')', 'pos:', cameraNode.position);
+        }
+
+        /**
+         * @zh 更新相机视图
+         * @en Update camera view
+         */
+        function updateCameraView() {
+            if (mainCameraComp) {
+                setupCameraForViewMode(mainCameraComp.node, mainCameraComp);
+            }
+        }
+
+        /**
+         * @zh 切换视图模式
+         * @en Toggle view mode
+         */
+        function setViewMode(mode) {
+            if (mode !== '2d' && mode !== '3d') return;
+            if (mode === viewMode) return;
+
+            viewMode = mode;
+
+            // Update camera
+            if (mainCameraComp) {
+                setupCameraForViewMode(mainCameraComp.node, mainCameraComp);
+            } else {
+                // Try to find camera if not cached
+                const cameraNode = scene?.getChildByName('Main Camera');
+                if (cameraNode) {
+                    const cam = cameraNode.getComponent(cc.Camera);
+                    if (cam) {
+                        mainCameraComp = cam;
+                        setupCameraForViewMode(cameraNode, cam);
+                    }
+                }
+            }
+
+            rpc?.emitViewModeChanged(viewMode);
         }
 
         function handleResize() {
@@ -497,28 +651,63 @@
                 director.root.resize(canvas.width, canvas.height);
             }
 
-            // Update main camera ortho height for 3D scene
+            // Update main camera based on view mode
             if (mainCameraComp) {
-                mainCameraComp.orthoHeight = height / 2 / 100; // Divide by 100 for world units
+                if (viewMode === '2d') {
+                    // Update ortho height for 2D mode
+                    mainCameraComp.orthoHeight = height / 2 / 100; // Divide by 100 for world units
+                }
+                // 3D perspective mode automatically adjusts with aspect ratio
             }
         }
 
-        // IPC command handlers
-        const commandHandlers = {
-            resize: (data) => {
+        // ============================================================================
+        // Register RPC Methods
+        // ============================================================================
+
+        /**
+         * @zh 注册所有 RPC 方法处理器
+         * @en Register all RPC method handlers
+         */
+        function registerRpcMethods() {
+            if (!rpc) return;
+
+            const { Methods } = window.ViewportRpc;
+
+            // Viewport control
+            rpc.registerMethod(Methods.RESIZE, () => {
                 handleResize();
-            },
-            createNode: (data) => {
-                if (!scene) return { error: 'No scene' };
-                const node = new cc.Node(data.name || 'New Node');
-                if (data.position) {
-                    node.setPosition(data.position.x || 0, data.position.y || 0, data.position.z || 0);
+                return null;
+            });
+
+            rpc.registerMethod(Methods.SET_VIEW_MODE, (params) => {
+                const mode = params?.mode || '3d';
+                setViewMode(mode);
+                return { viewMode };
+            });
+
+            rpc.registerMethod(Methods.GET_STATE, () => {
+                return window.esengine?.getState() ?? {
+                    isPlaying: false,
+                    isPaused: false,
+                    isEditMode: true,
+                    viewMode
+                };
+            });
+
+            // Scene operations
+            rpc.registerMethod(Methods.CREATE_NODE, (params) => {
+                if (!scene) throw new Error('No scene');
+                const node = new cc.Node(params?.name || 'New Node');
+                if (params?.position) {
+                    node.setPosition(params.position.x || 0, params.position.y || 0, params.position.z || 0);
                 }
                 scene.addChild(node);
-                return { nodeId: node.uuid };
-            },
-            getSceneInfo: () => {
-                if (!scene) return { error: 'No scene' };
+                return { uuid: node.uuid };
+            });
+
+            rpc.registerMethod(Methods.GET_SCENE_INFO, () => {
+                if (!scene) throw new Error('No scene');
                 const nodes = [];
                 scene.children.forEach(child => {
                     nodes.push({
@@ -532,24 +721,57 @@
                     });
                 });
                 return { sceneName: scene.name, nodes };
-            },
-        };
+            });
 
-        // Handle IPC messages from egui
-        window.handleIPCCommand = function(commandJson) {
-            try {
-                const command = JSON.parse(commandJson);
-                const handler = commandHandlers[command.type];
-                if (handler) {
-                    const result = handler(command.data);
-                    return JSON.stringify({ success: true, result });
-                } else {
-                    return JSON.stringify({ success: false, error: `Unknown command: ${command.type}` });
-                }
-            } catch (error) {
-                return JSON.stringify({ success: false, error: error.message });
-            }
-        };
+            rpc.registerMethod(Methods.SELECT_NODE, (params) => {
+                // TODO: Implement node selection
+                console.log('[RPC] selectNode:', params?.uuid);
+                return null;
+            });
+
+            // Playback control
+            rpc.registerMethod(Methods.PLAY, () => {
+                window.esengine?.play();
+                return null;
+            });
+
+            rpc.registerMethod(Methods.PAUSE, () => {
+                window.esengine?.pause();
+                return null;
+            });
+
+            rpc.registerMethod(Methods.STOP, () => {
+                window.esengine?.stop();
+                return null;
+            });
+
+            rpc.registerMethod(Methods.SET_EDIT_MODE, (params) => {
+                window.esengine?.setEditMode(params?.editMode ?? true);
+                return null;
+            });
+
+            // Camera control
+            rpc.registerMethod(Methods.RESET_CAMERA, () => {
+                cameraDistance = 20;
+                cameraYaw = -135;
+                cameraPitch = 30;
+                cameraTarget = { x: 0, y: 0, z: 0 };
+                orthoSize = 10;
+                updateCameraView();
+                return null;
+            });
+
+            rpc.registerMethod(Methods.FOCUS_SELECTED, () => {
+                // TODO: Focus on selected node
+                console.log('[RPC] focusSelected');
+                return null;
+            });
+
+            console.log('[Viewport] RPC methods registered');
+        }
+
+        // Register methods immediately
+        registerRpcMethods();
 
         // Main initialization
         async function main() {
@@ -561,11 +783,13 @@
                 // and calls initGeometryRendererMaterials()
                 showStatus('Waiting for builtin effects...');
                 const effectsData = await waitForBuiltinEffects(3000);
+                console.log('[ccesengine] Received effects data:', effectsData ? `${Array.isArray(effectsData) ? effectsData.length : 'not array'} effects` : 'null');
                 if (effectsData) {
                     // Pre-register effects before game.init()
                     preRegisterEffects(effectsData);
                 } else {
                     console.warn('[ccesengine] No builtin effects received, some features may not work');
+                    console.warn('[ccesengine] Grid rendering will NOT work without builtin-geometry-renderer effect');
                 }
 
                 await initGame();
@@ -586,11 +810,14 @@
                 // Hide loading
                 loadingEl.style.display = 'none';
 
-                sendIPC({ type: 'Ready', message: 'ccesengine initialized successfully' });
+                console.log('[ccesengine] Initialization complete');
+                rpc?.emitReady('1.0.0');
 
             } catch (error) {
-                console.error('Initialization failed:', error);
-                showError(error.message);
+                const errorMsg = error?.message || String(error);
+                const errorStack = error?.stack || '';
+                console.error('Initialization failed:', errorMsg, errorStack);
+                showError(errorMsg);
             }
         }
 
@@ -610,21 +837,38 @@
          */
         function initGeometryRenderer() {
             // Get the main camera from scene
-            const cameraNode = scene.getChildByName('Main Camera');
-            if (!cameraNode) return false;
+            const cameraNode = scene?.getChildByName('Main Camera');
+            if (!cameraNode) {
+                console.log('[ccesengine] initGeometryRenderer: cameraNode not found');
+                return false;
+            }
 
             mainCameraComp = cameraNode.getComponent(cc.Camera);
-            if (!mainCameraComp) return false;
+            if (!mainCameraComp) {
+                console.log('[ccesengine] initGeometryRenderer: Camera component not found');
+                return false;
+            }
 
             // Get internal render camera from Camera component
             const internalCamera = mainCameraComp.camera;
-            if (!internalCamera) return false;
+            if (!internalCamera) {
+                console.log('[ccesengine] initGeometryRenderer: internal camera not found, _camera:', !!mainCameraComp._camera);
+                return false;
+            }
 
             // Initialize geometry renderer on internal camera
             if (typeof internalCamera.initGeometryRenderer === 'function') {
-                internalCamera.initGeometryRenderer();
-                geometryRenderer = internalCamera.geometryRenderer;
-                return !!geometryRenderer;
+                try {
+                    internalCamera.initGeometryRenderer();
+                    geometryRenderer = internalCamera.geometryRenderer;
+                    console.log('[ccesengine] initGeometryRenderer: success, geometryRenderer:', !!geometryRenderer);
+                    return !!geometryRenderer;
+                } catch (e) {
+                    console.error('[ccesengine] initGeometryRenderer error:', e);
+                    return false;
+                }
+            } else {
+                console.log('[ccesengine] initGeometryRenderer: method not available on internal camera');
             }
             return false;
         }
@@ -633,8 +877,13 @@
          * @zh 使用 GeometryRenderer 绘制 3D 网格
          * @en Draw 3D grid using GeometryRenderer
          */
+        let drawGridCalled = false;
         function drawGrid() {
             if (!geometryRenderer) return;
+            if (!drawGridCalled) {
+                console.log('[ccesengine] drawGrid first call, viewMode:', viewMode);
+                drawGridCalled = true;
+            }
 
             const Vec3 = cc.Vec3;
             const Color = cc.Color;
@@ -648,37 +897,71 @@
             // Grid color (gray)
             const gridColor = new Color(80, 80, 80, 200);
 
-            // Draw grid lines on XY plane (Z=0)
-            for (let i = -gridExtent; i <= gridExtent; i++) {
-                if (i === 0) continue; // Skip axis
-                // Vertical lines (along Y)
-                v0.set(i * gridSize, -gridExtent * gridSize, 0);
-                v1.set(i * gridSize, gridExtent * gridSize, 0);
-                geometryRenderer.addLine(v0, v1, gridColor, false);
+            if (viewMode === '2d') {
+                // 2D mode: Draw grid on XY plane (Z=0)
+                for (let i = -gridExtent; i <= gridExtent; i++) {
+                    if (i === 0) continue; // Skip axis
+                    // Vertical lines (along Y)
+                    v0.set(i * gridSize, -gridExtent * gridSize, 0);
+                    v1.set(i * gridSize, gridExtent * gridSize, 0);
+                    geometryRenderer.addLine(v0, v1, gridColor, false);
 
-                // Horizontal lines (along X)
-                v0.set(-gridExtent * gridSize, i * gridSize, 0);
-                v1.set(gridExtent * gridSize, i * gridSize, 0);
-                geometryRenderer.addLine(v0, v1, gridColor, false);
+                    // Horizontal lines (along X)
+                    v0.set(-gridExtent * gridSize, i * gridSize, 0);
+                    v1.set(gridExtent * gridSize, i * gridSize, 0);
+                    geometryRenderer.addLine(v0, v1, gridColor, false);
+                }
+
+                // X axis (red)
+                const xAxisColor = new Color(220, 60, 60, 255);
+                v0.set(-gridExtent * gridSize, 0, 0);
+                v1.set(gridExtent * gridSize, 0, 0);
+                geometryRenderer.addLine(v0, v1, xAxisColor, false);
+
+                // Y axis (green)
+                const yAxisColor = new Color(60, 180, 60, 255);
+                v0.set(0, -gridExtent * gridSize, 0);
+                v1.set(0, gridExtent * gridSize, 0);
+                geometryRenderer.addLine(v0, v1, yAxisColor, false);
+
+                // Z axis (blue) - shorter
+                const zAxisColor = new Color(60, 60, 220, 255);
+                v0.set(0, 0, -2);
+                v1.set(0, 0, 2);
+                geometryRenderer.addLine(v0, v1, zAxisColor, false);
+            } else {
+                // 3D mode: Draw grid on XZ plane (Y=0)
+                for (let i = -gridExtent; i <= gridExtent; i++) {
+                    if (i === 0) continue; // Skip axis
+                    // Lines along Z
+                    v0.set(i * gridSize, 0, -gridExtent * gridSize);
+                    v1.set(i * gridSize, 0, gridExtent * gridSize);
+                    geometryRenderer.addLine(v0, v1, gridColor, false);
+
+                    // Lines along X
+                    v0.set(-gridExtent * gridSize, 0, i * gridSize);
+                    v1.set(gridExtent * gridSize, 0, i * gridSize);
+                    geometryRenderer.addLine(v0, v1, gridColor, false);
+                }
+
+                // X axis (red)
+                const xAxisColor = new Color(220, 60, 60, 255);
+                v0.set(-gridExtent * gridSize, 0, 0);
+                v1.set(gridExtent * gridSize, 0, 0);
+                geometryRenderer.addLine(v0, v1, xAxisColor, false);
+
+                // Y axis (green) - pointing up
+                const yAxisColor = new Color(60, 180, 60, 255);
+                v0.set(0, 0, 0);
+                v1.set(0, gridExtent * gridSize, 0);
+                geometryRenderer.addLine(v0, v1, yAxisColor, false);
+
+                // Z axis (blue)
+                const zAxisColor = new Color(60, 60, 220, 255);
+                v0.set(0, 0, -gridExtent * gridSize);
+                v1.set(0, 0, gridExtent * gridSize);
+                geometryRenderer.addLine(v0, v1, zAxisColor, false);
             }
-
-            // X axis (red)
-            const xAxisColor = new Color(220, 60, 60, 255);
-            v0.set(-gridExtent * gridSize, 0, 0);
-            v1.set(gridExtent * gridSize, 0, 0);
-            geometryRenderer.addLine(v0, v1, xAxisColor, false);
-
-            // Y axis (green)
-            const yAxisColor = new Color(60, 180, 60, 255);
-            v0.set(0, -gridExtent * gridSize, 0);
-            v1.set(0, gridExtent * gridSize, 0);
-            geometryRenderer.addLine(v0, v1, yAxisColor, false);
-
-            // Z axis (blue) - shorter since we're looking at XY plane
-            const zAxisColor = new Color(60, 60, 220, 255);
-            v0.set(0, 0, -5);
-            v1.set(0, 0, 5);
-            geometryRenderer.addLine(v0, v1, zAxisColor, false);
         }
 
         /**
@@ -687,23 +970,221 @@
          *
          * 内部 camera 可能需要几帧才能准备好，所以需要重试机制。
          * The internal camera may take a few frames to be ready, so retry is needed.
+         *
+         * 注意：必须使用 EVENT_BEFORE_UPDATE 而不是 EVENT_BEFORE_DRAW，
+         * 因为 addLine() 会调用 updateBuffer，而 updateBuffer 必须在
+         * render pass 之外执行。
+         *
+         * Note: Must use EVENT_BEFORE_UPDATE instead of EVENT_BEFORE_DRAW,
+         * because addLine() calls updateBuffer which must be executed
+         * outside of render pass.
          */
         function setupGridRendering() {
             let retryCount = 0;
-            const maxRetries = 30;
+            const maxRetries = 60; // Increase retries
+
+            console.log('[ccesengine] setupGridRendering: starting');
 
             function tryInit() {
+                if (retryCount % 10 === 0) {
+                    console.log('[ccesengine] setupGridRendering: attempt', retryCount);
+                }
+
                 if (initGeometryRenderer()) {
-                    // Register to draw grid every frame before rendering
-                    director.on(cc.Director.EVENT_BEFORE_DRAW, drawGrid);
+                    // Use Director event for proper timing with render pipeline
+                    director.on(cc.Director.EVENT_BEFORE_COMMIT, drawGrid);
+                    console.log('[ccesengine] Grid rendering enabled after', retryCount, 'attempts');
                 } else if (retryCount < maxRetries) {
                     retryCount++;
                     requestAnimationFrame(tryInit);
+                } else {
+                    console.warn('[ccesengine] Failed to initialize GeometryRenderer after', maxRetries, 'attempts');
+                    // Print diagnostic info
+                    console.log('[ccesengine] Diagnostic: scene:', !!scene, 'director:', !!director);
+                    if (scene) {
+                        const cam = scene.getChildByName('Main Camera');
+                        console.log('[ccesengine] Diagnostic: cameraNode:', !!cam);
+                        if (cam) {
+                            const comp = cam.getComponent(cc.Camera);
+                            console.log('[ccesengine] Diagnostic: cameraComp:', !!comp, 'camera:', !!comp?.camera, '_camera:', !!comp?._camera);
+                            if (comp?.camera) {
+                                console.log('[ccesengine] Diagnostic: initGeometryRenderer:', typeof comp.camera.initGeometryRenderer);
+                            }
+                        }
+                    }
                 }
             }
 
             tryInit();
         }
+
+        // ============================================================================
+        // Global API for Rust Editor IPC
+        // ============================================================================
+
+        // Expose setViewMode to window for Rust IPC
+        window.setViewMode = setViewMode;
+
+        // Engine state for play/pause/stop
+        let isPlaying = false;
+        let isPaused = false;
+        let isEditMode = true;
+
+        /**
+         * @zh 编辑器引擎控制 API
+         * @en Editor engine control API
+         */
+        window.esengine = {
+            /**
+             * @zh 播放游戏
+             * @en Play game
+             */
+            play: function() {
+                if (isPlaying && !isPaused) return;
+                isPlaying = true;
+                isPaused = false;
+                isEditMode = false;
+                if (director) director.resume();
+                rpc?.emitPlayStateChanged('playing');
+            },
+
+            pause: function() {
+                if (!isPlaying || isPaused) return;
+                isPaused = true;
+                if (director) director.pause();
+                rpc?.emitPlayStateChanged('paused');
+            },
+
+            stop: function() {
+                if (!isPlaying) return;
+                isPlaying = false;
+                isPaused = false;
+                isEditMode = true;
+                if (director) director.resume();
+                rpc?.emitPlayStateChanged('stopped');
+            },
+
+            setEditMode: function(editMode) {
+                isEditMode = editMode;
+                // TODO: Emit editModeChanged event
+            },
+
+            /**
+             * @zh 获取当前状态
+             * @en Get current state
+             */
+            getState: function() {
+                return {
+                    isPlaying,
+                    isPaused,
+                    isEditMode,
+                    viewMode
+                };
+            }
+        };
+
+        // ============================================================================
+        // Camera Controls (after engine init)
+        // ============================================================================
+
+        /**
+         * @zh 设置相机控制事件
+         * @en Setup camera control events
+         */
+        function setupCameraControls() {
+            const canvas = document.getElementById('GameCanvas');
+            if (!canvas) return;
+
+            let isDragging = false;
+            let isPanning = false;
+            let lastX = 0;
+            let lastY = 0;
+
+            // Mouse wheel: zoom
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 1.1 : 0.9;
+
+                if (viewMode === '2d') {
+                    orthoSize *= delta;
+                    orthoSize = Math.max(1, Math.min(100, orthoSize));
+                } else {
+                    cameraDistance *= delta;
+                    cameraDistance = Math.max(2, Math.min(100, cameraDistance));
+                }
+                updateCameraView();
+            }, { passive: false });
+
+            // Mouse down
+            canvas.addEventListener('mousedown', (e) => {
+                if (e.button === 2) {
+                    // Right button: rotate (3D) or disabled (2D)
+                    if (viewMode === '3d') {
+                        isDragging = true;
+                    }
+                } else if (e.button === 1) {
+                    // Middle button: pan
+                    isPanning = true;
+                }
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+
+            // Mouse move
+            canvas.addEventListener('mousemove', (e) => {
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+
+                if (isDragging && viewMode === '3d') {
+                    // Rotate camera
+                    cameraYaw -= dx * 0.5;
+                    cameraPitch += dy * 0.5;
+                    cameraPitch = Math.max(-89, Math.min(89, cameraPitch));
+                    updateCameraView();
+                } else if (isPanning) {
+                    if (viewMode === '2d') {
+                        // Pan in 2D
+                        const scale = orthoSize / canvas.height * 2;
+                        cameraTarget.x -= dx * scale;
+                        cameraTarget.y += dy * scale;
+                    } else {
+                        // Pan in 3D (move along camera plane)
+                        const yawRad = cameraYaw * Math.PI / 180;
+                        const scale = cameraDistance / 500;
+                        cameraTarget.x -= (Math.cos(yawRad) * dx + Math.sin(yawRad) * dy) * scale;
+                        cameraTarget.z += (Math.sin(yawRad) * dx - Math.cos(yawRad) * dy) * scale;
+                    }
+                    updateCameraView();
+                }
+            });
+
+            // Mouse up
+            canvas.addEventListener('mouseup', (e) => {
+                isDragging = false;
+                isPanning = false;
+            });
+
+            // Mouse leave
+            canvas.addEventListener('mouseleave', () => {
+                isDragging = false;
+                isPanning = false;
+            });
+
+            // Prevent context menu
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+
+            console.log('[ccesengine] Camera controls enabled');
+        }
+
+        // Setup camera controls after DOM ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Wait for main() to complete then setup controls
+            setTimeout(setupCameraControls, 100);
+        });
 
         main();
     </script>

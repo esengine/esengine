@@ -90,6 +90,13 @@ pub struct McpApiResponse<T> {
     pub reason: Option<String>,
 }
 
+/// @zh MCP 结构化内容包装器（服务器返回 { result: { code, data } } 格式）
+/// @en MCP structured content wrapper (server returns { result: { code, data } } format)
+#[derive(Debug, Deserialize)]
+pub struct McpStructuredContent<T> {
+    pub result: McpApiResponse<T>,
+}
+
 /// @zh Vec3 类型
 /// @en Vec3 type
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -136,13 +143,31 @@ pub struct McpComponentRef {
 /// @en MCP node data
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpNodeData {
+    /// @zh 节点路径（可选，场景根节点可能没有）
+    /// @en Node path (optional, scene root may not have it)
+    #[serde(default)]
     pub path: String,
     pub name: String,
+    /// @zh 节点属性（场景根节点可能没有）
+    /// @en Node properties (scene root may not have it)
+    #[serde(default)]
     pub properties: McpNodeProperties,
     #[serde(default)]
     pub children: Vec<McpNodeData>,
     #[serde(default)]
     pub components: Vec<McpComponentRef>,
+    /// @zh 场景资源名（仅场景根有）
+    /// @en Scene asset name (only for scene root)
+    #[serde(rename = "assetName")]
+    pub asset_name: Option<String>,
+    /// @zh 场景资源 UUID（仅场景根有）
+    /// @en Scene asset UUID (only for scene root)
+    #[serde(rename = "assetUuid")]
+    pub asset_uuid: Option<String>,
+    /// @zh 场景资源 URL（仅场景根有）
+    /// @en Scene asset URL (only for scene root)
+    #[serde(rename = "assetUrl")]
+    pub asset_url: Option<String>,
 }
 
 /// @zh MCP 组件属性值
@@ -432,6 +457,7 @@ impl McpClient {
         let response = self
             .http_client
             .post(&self.mcp_url())
+            .header("Accept", "application/json, text/event-stream")
             .json(&request)
             .send()
             .map_err(|e| format!("HTTP request failed: {}", e))?;
@@ -450,16 +476,30 @@ impl McpClient {
 
         // Try structured content first, then parse from content text
         if let Some(structured) = result.structured_content {
-            let api_response: McpApiResponse<T> = serde_json::from_value(structured)
-                .map_err(|e| format!("Failed to parse structured content: {}", e))?;
-
-            if api_response.code != 200 {
-                return Err(api_response.reason.unwrap_or_else(|| "Unknown error".to_string()));
+            // First try to parse as wrapped response { result: { code, data, reason } }
+            // This is the format returned by MCP server
+            if let Ok(wrapper) = serde_json::from_value::<McpStructuredContent<T>>(structured.clone()) {
+                if wrapper.result.code != 200 {
+                    return Err(wrapper.result.reason.unwrap_or_else(|| "Unknown error".to_string()));
+                }
+                return wrapper.result
+                    .data
+                    .ok_or_else(|| "No data in response (scene may not be open)".to_string());
             }
 
-            return api_response
-                .data
-                .ok_or_else(|| "No data in response".to_string());
+            // Fallback: try to parse as direct { code, data, reason } format
+            if let Ok(api_response) = serde_json::from_value::<McpApiResponse<T>>(structured.clone()) {
+                if api_response.code != 200 {
+                    return Err(api_response.reason.unwrap_or_else(|| "Unknown error".to_string()));
+                }
+                return api_response
+                    .data
+                    .ok_or_else(|| "No data in response".to_string());
+            }
+
+            // Last fallback: try to parse structured content directly as T
+            return serde_json::from_value(structured)
+                .map_err(|e| format!("Failed to parse structured content: {}", e));
         }
 
         // Fallback: parse from content text
@@ -618,6 +658,12 @@ impl McpClient {
     pub fn save_scene(&self) -> Result<serde_json::Value, String> {
         self.call_tool("scene-save", serde_json::json!({}))
     }
+
+    /// @zh 获取内置资源（用于 viewport 初始化）
+    /// @en Get builtin resources (for viewport initialization)
+    pub fn get_builtin_resources(&self) -> Result<serde_json::Value, String> {
+        self.call_tool("engine-get-builtin-resources", serde_json::json!({}))
+    }
 }
 
 impl Drop for McpClient {
@@ -634,8 +680,15 @@ use super::scene_data::{NodeData, NodeProperties};
 
 impl From<McpNodeData> for NodeData {
     fn from(mcp: McpNodeData) -> Self {
+        // For scene root, use asset_uuid or "/" as identifier
+        let uuid = if mcp.path.is_empty() {
+            mcp.asset_uuid.clone().unwrap_or_else(|| "/".to_string())
+        } else {
+            mcp.path.clone()
+        };
+
         NodeData {
-            uuid: mcp.path.clone(), // Use path as uuid for now
+            uuid,
             name: mcp.name,
             active: mcp.properties.active,
             children: mcp.children.into_iter().map(NodeData::from).collect(),
@@ -646,8 +699,15 @@ impl From<McpNodeData> for NodeData {
 
 impl From<McpNodeData> for NodeProperties {
     fn from(mcp: McpNodeData) -> Self {
+        // For scene root, use asset_uuid or "/" as identifier
+        let uuid = if mcp.path.is_empty() {
+            mcp.asset_uuid.unwrap_or_else(|| "/".to_string())
+        } else {
+            mcp.path
+        };
+
         NodeProperties {
-            uuid: mcp.path,
+            uuid,
             name: mcp.name,
             active: mcp.properties.active,
             position: [

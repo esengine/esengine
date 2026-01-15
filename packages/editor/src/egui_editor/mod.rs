@@ -12,6 +12,7 @@ pub mod panels;
 pub mod scene_bridge;
 pub mod scene_data;
 pub mod state;
+pub mod viewport_rpc;
 pub mod webview;
 pub mod widgets;
 
@@ -48,6 +49,9 @@ pub struct EditorApp {
     /// @zh WebView 是否已初始化
     /// @en Whether WebView has been initialized
     webview_initialized: bool,
+    /// @zh 待注入的 effects JSON（等待 WebView 就绪）
+    /// @en Pending effects JSON to inject (waiting for WebView ready)
+    pending_effects_json: Option<String>,
 }
 
 impl EditorApp {
@@ -59,6 +63,7 @@ impl EditorApp {
             webview_viewport: None,
             use_webview: false,
             webview_initialized: false,
+            pending_effects_json: None,
         }
     }
 
@@ -70,6 +75,7 @@ impl EditorApp {
             webview_viewport: Some(WebViewViewport::new(url)),
             use_webview: true,
             webview_initialized: false,
+            pending_effects_json: None,
         }
     }
 
@@ -85,6 +91,7 @@ impl EditorApp {
             webview_viewport: Some(WebViewViewport::with_embedded_ccesengine(assets_path)),
             use_webview: true,
             webview_initialized: false,
+            pending_effects_json: None,
         }
     }
 
@@ -97,6 +104,7 @@ impl EditorApp {
             webview_viewport: Some(WebViewViewport::new(vite_server)),
             use_webview: true,
             webview_initialized: false,
+            pending_effects_json: None,
         }
     }
 
@@ -116,6 +124,7 @@ impl EditorApp {
             webview_viewport: Some(WebViewViewport::with_embedded_ccesengine(assets_path)),
             use_webview: true,
             webview_initialized: false,
+            pending_effects_json: None,
         }
     }
 
@@ -139,6 +148,7 @@ impl EditorApp {
             webview_viewport: None,
             use_webview: false,
             webview_initialized: false,
+            pending_effects_json: None,
         }
     }
 
@@ -242,6 +252,16 @@ impl EditorApp {
     fn ready_screen(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Sync MCP data if in MCP mode
         self.sync_mcp_data();
+
+        // Drain WebView logs and add to Output panel
+        if let Some(ref mut viewport) = self.webview_viewport {
+            for entry in viewport.drain_logs() {
+                self.state.drawer.add_log(entry);
+            }
+        }
+
+        // Try to inject pending effects if WebView is now ready
+        self.try_inject_pending_effects();
 
         // Blur WebView when any egui widget wants keyboard focus
         if self.use_webview {
@@ -557,11 +577,61 @@ impl EditorApp {
     fn check_loading_complete(&mut self) {
         // Check if MCP server is ready
         if self.state.scene_bridge.is_mcp_ready() {
-            self.state.set_loading_status("正在获取场景数据...");
+            self.state.set_loading_status("正在获取内置资源...");
 
-            // TODO: Fetch builtin effects via MCP and inject to WebView
-            // For now, transition to Ready after a short delay
-            self.state.finish_loading();
+            // Fetch builtin resources via MCP
+            match self.state.scene_bridge.get_builtin_resources_mcp() {
+                Ok(resources) => {
+                    // Debug: Print what keys are in the response
+                    if let Some(obj) = resources.as_object() {
+                        let keys: Vec<&String> = obj.keys().collect();
+                        println!("[EditorApp] Builtin resources keys: {:?}", keys);
+                    } else {
+                        println!("[EditorApp] Builtin resources is not an object: {}", resources);
+                    }
+
+                    // Extract compiled effects from the response
+                    if let Some(compiled_effects) = resources.get("compiledEffects") {
+                        let effects_json = compiled_effects.to_string();
+                        let effects_count = compiled_effects.as_array().map_or(0, |a| a.len());
+                        println!("[EditorApp] Got {} compiled effects, storing for injection", effects_count);
+
+                        // Store effects for later injection when WebView is ready
+                        self.pending_effects_json = Some(effects_json);
+                    } else {
+                        println!("[EditorApp] No compiled effects in builtin resources");
+                    }
+
+                    self.state.finish_loading();
+                }
+                Err(e) => {
+                    println!("[EditorApp] Failed to fetch builtin resources: {}", e);
+                    // Still transition to ready even if effects fail
+                    self.state.finish_loading();
+                }
+            }
+        }
+    }
+
+    /// @zh 尝试注入待处理的 effects
+    /// @en Try to inject pending effects
+    fn try_inject_pending_effects(&mut self) {
+        // Only inject if we have pending effects and WebView is initialized
+        if self.pending_effects_json.is_some() && self.webview_initialized {
+            if let Some(effects_json) = self.pending_effects_json.take() {
+                if let Some(ref webview) = self.webview_viewport {
+                    match webview.inject_effects(&effects_json) {
+                        Ok(()) => {
+                            println!("[EditorApp] Successfully injected pending effects into WebView");
+                        }
+                        Err(e) => {
+                            println!("[EditorApp] Failed to inject pending effects: {}", e);
+                            // Put it back for retry
+                            self.pending_effects_json = Some(effects_json);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1090,7 +1160,10 @@ impl EditorApp {
                     self.webview_viewport_panel(ui);
                 } else {
                     // Render egui placeholder viewport
-                    self.state.viewport_panel(ui);
+                    let action = self.state.viewport_panel(ui);
+                    if let Some(action) = action {
+                        self.handle_viewport_action(action);
+                    }
                 }
 
                 viewport_bounds
@@ -1106,44 +1179,13 @@ impl EditorApp {
     /// @zh WebView 视口面板
     /// @en WebView viewport panel
     fn webview_viewport_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_width = ui.available_width();
+        // Render viewport panel with tab bar and controls
+        let action = self.state.viewport_panel(ui);
 
-        // Tab bar (Scene/Game)
-        let (tab_rect, _) = ui.allocate_exact_size(egui::vec2(panel_width, 24.0), egui::Sense::hover());
-        ui.painter().rect_filled(tab_rect, 0.0, egui::Color32::from_rgb(0x2d, 0x2d, 0x30));
-        ui.painter().line_segment(
-            [egui::pos2(tab_rect.left(), tab_rect.bottom()), egui::pos2(tab_rect.right(), tab_rect.bottom())],
-            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3c, 0x3c, 0x3c))
-        );
-
-        // Scene tab
-        let scene_rect = egui::Rect::from_min_size(egui::pos2(tab_rect.left() + 4.0, tab_rect.top() + 2.0), egui::vec2(60.0, 20.0));
-        ui.painter().rect_filled(scene_rect, 2.0, egui::Color32::from_rgb(0x3c, 0x3c, 0x3c));
-        ui.painter().text(scene_rect.center(), egui::Align2::CENTER_CENTER, "Scene", egui::FontId::proportional(11.0), egui::Color32::WHITE);
-
-        // Game tab
-        let game_rect = egui::Rect::from_min_size(egui::pos2(scene_rect.right() + 4.0, tab_rect.top() + 2.0), egui::vec2(60.0, 20.0));
-        ui.painter().text(game_rect.center(), egui::Align2::CENTER_CENTER, "Game", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x88, 0x88, 0x88));
-
-        // Status info
-        let status_text = if let Some(ref viewport) = self.webview_viewport {
-            if viewport.is_ready() {
-                "WebView Ready"
-            } else if let Some(err) = viewport.error() {
-                err
-            } else {
-                "Initializing..."
-            }
-        } else {
-            "WebView not configured"
-        };
-        ui.painter().text(
-            egui::pos2(tab_rect.right() - 8.0, tab_rect.center().y),
-            egui::Align2::RIGHT_CENTER,
-            status_text,
-            egui::FontId::proportional(10.0),
-            egui::Color32::from_rgb(0x66, 0x66, 0x66)
-        );
+        // Handle viewport actions with WebView IPC
+        if let Some(action) = action {
+            self.handle_viewport_action(action);
+        }
 
         // WebView area
         if let Some(ref mut viewport) = self.webview_viewport {
@@ -1159,6 +1201,35 @@ impl EditorApp {
                 egui::FontId::proportional(14.0),
                 egui::Color32::from_rgb(0x66, 0x66, 0x66)
             );
+        }
+    }
+
+    /// @zh 处理视口动作
+    /// @en Handle viewport action
+    fn handle_viewport_action(&mut self, action: panels::ViewportAction) {
+        use panels::ViewportAction;
+
+        match action {
+            ViewportAction::SwitchToScene => {
+                if let Some(ref viewport) = self.webview_viewport {
+                    let _ = viewport.eval_script("if (window.esengine) { window.esengine.setEditMode(true); }");
+                }
+            }
+            ViewportAction::SwitchToGame => {
+                if let Some(ref viewport) = self.webview_viewport {
+                    let _ = viewport.eval_script("if (window.esengine) { window.esengine.setEditMode(false); }");
+                }
+            }
+            ViewportAction::ToggleViewMode(mode) => {
+                let mode_str = match mode {
+                    state::ViewportMode::Mode2D => "2d",
+                    state::ViewportMode::Mode3D => "3d",
+                };
+                if let Some(ref viewport) = self.webview_viewport {
+                    let script = format!("if (window.setViewMode) {{ window.setViewMode('{}'); }}", mode_str);
+                    let _ = viewport.eval_script(&script);
+                }
+            }
         }
     }
 
@@ -1492,14 +1563,39 @@ impl EditorApp {
                 ui.painter().rect_filled(left_rect, 0.0, egui::Color32::from_rgb(0x25, 0x25, 0x26));
                 ui.painter().line_segment([egui::pos2(left_rect.right(), left_rect.top()), egui::pos2(left_rect.right(), left_rect.bottom())], egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3c, 0x3c, 0x3c)));
 
-                // Section header "FAVORITES"
-                ui.painter().text(egui::pos2(left_rect.left() + 10.0, left_rect.top() + 14.0), egui::Align2::LEFT_CENTER, "▼ FAVORITES", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x99, 0x99, 0x99));
-                ui.painter().text(egui::pos2(left_rect.left() + 20.0, left_rect.top() + 32.0), egui::Align2::LEFT_CENTER, "No favorites", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x55, 0x55, 0x55));
+                // Current path display
+                let path_display = self.state.content_browser.current_path_display();
+                ui.painter().text(egui::pos2(left_rect.left() + 10.0, left_rect.top() + 14.0), egui::Align2::LEFT_CENTER, &path_display, egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x99, 0x99, 0x99));
+
+                // Back button (if not at root)
+                let can_go_up = self.state.content_browser.current_path != self.state.content_browser.root_path;
+                let mut go_up = false;
+                if can_go_up {
+                    let back_rect = egui::Rect::from_min_size(egui::pos2(left_rect.left() + 4.0, left_rect.top() + 28.0), egui::vec2(left_width - 8.0, 22.0));
+                    let back_resp = ui.interact(back_rect, egui::Id::new("cb_back"), egui::Sense::click());
+                    if back_resp.hovered() {
+                        ui.painter().rect_filled(back_rect, 2.0, egui::Color32::from_rgb(0x35, 0x35, 0x38));
+                    }
+                    Icons::draw(ui.painter(), egui::pos2(back_rect.left() + 12.0, back_rect.center().y), 12.0, "chevron-left", egui::Color32::from_rgb(0x88, 0x88, 0x88));
+                    ui.painter().text(egui::pos2(back_rect.left() + 26.0, back_rect.center().y), egui::Align2::LEFT_CENTER, "..", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0xaa, 0xaa, 0xaa));
+                    if back_resp.clicked() {
+                        go_up = true;
+                    }
+                }
 
                 // Folder items
-                let mut y = left_rect.top() + 52.0;
+                let start_y = if can_go_up { left_rect.top() + 52.0 } else { left_rect.top() + 32.0 };
+                let mut y = start_y;
                 let mut clicked_folder: Option<usize> = None;
+                let mut double_clicked_folder: Option<usize> = None;
+                let folder_text_max_width = left_width - 40.0; // Account for icon and padding
+
                 for (i, folder) in self.state.content_browser.folders.iter().enumerate() {
+                    // Stop if we've exceeded the visible area
+                    if y > left_rect.bottom() {
+                        break;
+                    }
+
                     let row_rect = egui::Rect::from_min_size(egui::pos2(left_rect.left(), y), egui::vec2(left_width, 24.0));
                     let is_sel = self.state.content_browser.selected_folder == Some(i);
 
@@ -1512,17 +1608,38 @@ impl EditorApp {
                         ui.painter().rect_filled(row_rect, 0.0, egui::Color32::from_rgb(0x09, 0x47, 0x71));
                     }
 
-                    Icons::draw(ui.painter(), egui::pos2(left_rect.left() + 14.0, row_rect.center().y), 12.0, if folder.expanded { "chevron-down" } else { "chevron-right" }, egui::Color32::from_rgb(0x88, 0x88, 0x88));
-                    Icons::draw(ui.painter(), egui::pos2(left_rect.left() + 28.0, row_rect.center().y), 14.0, "folder", egui::Color32::from_rgb(0xdc, 0xb6, 0x7a));
-                    ui.painter().text(egui::pos2(left_rect.left() + 44.0, row_rect.center().y), egui::Align2::LEFT_CENTER, &folder.name, egui::FontId::proportional(12.0), egui::Color32::from_rgb(0xe0, 0xe0, 0xe0));
+                    Icons::draw(ui.painter(), egui::pos2(left_rect.left() + 14.0, row_rect.center().y), 14.0, "folder", egui::Color32::from_rgb(0xdc, 0xb6, 0x7a));
+
+                    // Truncate folder name if too long
+                    let folder_font = egui::FontId::proportional(12.0);
+                    let display_name = truncate_text(&folder.name, folder_text_max_width, &folder_font, ui);
+                    ui.painter().text(egui::pos2(left_rect.left() + 32.0, row_rect.center().y), egui::Align2::LEFT_CENTER, &display_name, folder_font, egui::Color32::from_rgb(0xe0, 0xe0, 0xe0));
+
+                    // Show tooltip with full name if truncated
+                    if display_name != folder.name && row_resp.hovered() {
+                        egui::show_tooltip_at_pointer(ui.ctx(), egui::Id::new(format!("folder_tip_{}", i)), |ui| {
+                            ui.label(&folder.name);
+                        });
+                    }
 
                     if row_resp.clicked() {
                         clicked_folder = Some(i);
+                    }
+                    if row_resp.double_clicked() {
+                        double_clicked_folder = Some(i);
                     }
                     y += 24.0;
                 }
                 if let Some(idx) = clicked_folder {
                     self.state.content_browser.selected_folder = Some(idx);
+                }
+                // Handle double-click to enter folder
+                if let Some(idx) = double_clicked_folder {
+                    self.state.content_browser.enter_folder(idx);
+                }
+                // Handle back button
+                if go_up {
+                    self.state.content_browser.go_up();
                 }
 
                 // Right panel - toolbar + assets
@@ -1552,8 +1669,48 @@ impl EditorApp {
                     }
                 }
 
-                // Breadcrumb
-                ui.painter().text(egui::pos2(toolbar_rect.left() + 180.0, toolbar_rect.center().y), egui::Align2::LEFT_CENTER, "Assets / Textures", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x99, 0x99, 0x99));
+                // Breadcrumb - clickable path segments
+                let breadcrumb_segments = self.state.content_browser.get_breadcrumb_segments();
+                let mut bx = toolbar_rect.left() + 180.0;
+                let breadcrumb_font = egui::FontId::proportional(11.0);
+                let separator = " / ";
+                let mut clicked_segment: Option<usize> = None;
+
+                for (idx, segment) in breadcrumb_segments.iter().enumerate() {
+                    // Draw separator (except for first segment)
+                    if idx > 0 {
+                        ui.painter().text(egui::pos2(bx, toolbar_rect.center().y), egui::Align2::LEFT_CENTER, separator, breadcrumb_font.clone(), egui::Color32::from_rgb(0x66, 0x66, 0x66));
+                        let sep_galley = ui.fonts(|f| f.layout_no_wrap(separator.to_string(), breadcrumb_font.clone(), egui::Color32::WHITE));
+                        bx += sep_galley.rect.width();
+                    }
+
+                    // Calculate segment width
+                    let seg_galley = ui.fonts(|f| f.layout_no_wrap(segment.clone(), breadcrumb_font.clone(), egui::Color32::WHITE));
+                    let seg_width = seg_galley.rect.width();
+                    let seg_rect = egui::Rect::from_min_size(egui::pos2(bx, toolbar_rect.top() + 4.0), egui::vec2(seg_width, 20.0));
+
+                    let seg_resp = ui.interact(seg_rect, egui::Id::new(format!("breadcrumb_{}", idx)), egui::Sense::click());
+                    let text_color = if seg_resp.hovered() {
+                        egui::Color32::from_rgb(0x3b, 0x82, 0xf6) // Blue on hover
+                    } else if idx == breadcrumb_segments.len() - 1 {
+                        egui::Color32::from_rgb(0xcc, 0xcc, 0xcc) // Current segment brighter
+                    } else {
+                        egui::Color32::from_rgb(0x99, 0x99, 0x99)
+                    };
+
+                    ui.painter().text(egui::pos2(bx, toolbar_rect.center().y), egui::Align2::LEFT_CENTER, segment, breadcrumb_font.clone(), text_color);
+
+                    if seg_resp.clicked() && idx < breadcrumb_segments.len() - 1 {
+                        clicked_segment = Some(idx);
+                    }
+
+                    bx += seg_width;
+                }
+
+                // Handle breadcrumb click
+                if let Some(idx) = clicked_segment {
+                    self.state.content_browser.navigate_to_segment(idx);
+                }
 
                 // Assets area
                 let assets_rect = egui::Rect::from_min_max(egui::pos2(right_rect.left(), toolbar_rect.bottom() + 1.0), right_rect.max);
@@ -1562,8 +1719,15 @@ impl EditorApp {
                 let card_size = 64.0;
                 let gap = 8.0;
                 let mut clicked_asset: Option<usize> = None;
+                let mut double_clicked_asset: Option<usize> = None;
+                let asset_font = egui::FontId::proportional(11.0);
 
                 for (i, asset) in self.state.content_browser.assets.iter().enumerate() {
+                    // Stop if we've exceeded the visible area
+                    if ay > assets_rect.bottom() {
+                        break;
+                    }
+
                     if ax + card_size > assets_rect.right() - 12.0 {
                         ax = assets_rect.left() + 12.0;
                         ay += card_size + 20.0 + gap;
@@ -1595,18 +1759,40 @@ impl EditorApp {
                         AssetType::Script => "file-code",
                         AssetType::Image => "image",
                         AssetType::Json => "file",
-                        _ => "folder"
+                        AssetType::Folder => "folder",
+                        _ => "file"
                     };
                     Icons::draw(ui.painter(), card_rect.center(), 32.0, icon, egui::Color32::from_rgb(0x88, 0x88, 0x88));
-                    ui.painter().text(egui::pos2(ax + card_size / 2.0, ay + card_size + 10.0), egui::Align2::CENTER_CENTER, &asset.name, egui::FontId::proportional(11.0), egui::Color32::from_rgb(0xe0, 0xe0, 0xe0));
+
+                    // Truncate asset name if too long (max width = card_size + some extra)
+                    let display_name = truncate_text(&asset.name, card_size + 8.0, &asset_font, ui);
+                    ui.painter().text(egui::pos2(ax + card_size / 2.0, ay + card_size + 10.0), egui::Align2::CENTER_CENTER, &display_name, asset_font.clone(), egui::Color32::from_rgb(0xe0, 0xe0, 0xe0));
+
+                    // Show tooltip with full name if truncated or on hover for longer names
+                    if (display_name != asset.name || asset.name.len() > 10) && card_resp.hovered() {
+                        egui::show_tooltip_at_pointer(ui.ctx(), egui::Id::new(format!("asset_tip_{}", i)), |ui| {
+                            ui.label(&asset.name);
+                        });
+                    }
 
                     if card_resp.clicked() {
                         clicked_asset = Some(i);
+                    }
+                    if card_resp.double_clicked() {
+                        double_clicked_asset = Some(i);
                     }
                     ax += card_size + gap;
                 }
                 if let Some(idx) = clicked_asset {
                     self.state.content_browser.selected_asset = Some(idx);
+                }
+                // Handle double-click on folder asset (if any)
+                if let Some(idx) = double_clicked_asset {
+                    if let Some(asset) = self.state.content_browser.assets.get(idx) {
+                        if asset.asset_type == AssetType::Folder {
+                            // TODO: Enter folder
+                        }
+                    }
                 }
             });
     }
@@ -1657,6 +1843,17 @@ impl EditorApp {
                     self.state.drawer.output_filter = idx;
                 }
 
+                // Clear button
+                let clear_rect = egui::Rect::from_min_size(egui::pos2(header_rect.right() - 80.0, header_rect.top() + 4.0), egui::vec2(48.0, 20.0));
+                let clear_resp = ui.interact(clear_rect, egui::Id::new("output_clear"), egui::Sense::click());
+                if clear_resp.hovered() {
+                    ui.painter().rect_filled(clear_rect, 3.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x3d));
+                }
+                ui.painter().text(clear_rect.center(), egui::Align2::CENTER_CENTER, "Clear", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x88, 0x88, 0x88));
+                if clear_resp.clicked() {
+                    self.state.drawer.clear_logs();
+                }
+
                 // Close button
                 let close_rect = egui::Rect::from_min_size(egui::pos2(header_rect.right() - 28.0, header_rect.top() + 4.0), egui::vec2(22.0, 22.0));
                 let close_resp = ui.interact(close_rect, egui::Id::new("output_close"), egui::Sense::click());
@@ -1668,32 +1865,75 @@ impl EditorApp {
                     self.state.drawer.output_open = false;
                 }
 
-                // Log content
+                // Log content with scroll
                 let content_rect = ui.available_rect_before_wrap();
+                ui.allocate_ui_at_rect(content_rect, |ui| {
+                    // Filter logs first
+                    let filtered_logs: Vec<_> = self.state.drawer.logs.iter().enumerate().filter(|(_, entry)| {
+                        let log_type = match entry.level {
+                            state::LogLevel::Info => 1,
+                            state::LogLevel::Warn => 2,
+                            state::LogLevel::Error => 3,
+                        };
+                        self.state.drawer.output_filter == 0 || self.state.drawer.output_filter == log_type
+                    }).collect();
 
-                // Sample log entries
-                let logs = [
-                    (1, "[INFO] 12:34:56", "Engine initialized", egui::Color32::from_rgb(0x4a, 0xde, 0x80)),
-                    (1, "[INFO] 12:34:56", "Loading scene: main.scene", egui::Color32::from_rgb(0x4a, 0xde, 0x80)),
-                    (2, "[WARN] 12:34:57", "Asset not found: missing_texture.png", egui::Color32::from_rgb(0xfb, 0xbd, 0x23)),
-                    (1, "[INFO] 12:34:58", "Scene loaded successfully", egui::Color32::from_rgb(0x4a, 0xde, 0x80)),
-                ];
+                    if filtered_logs.is_empty() {
+                        ui.centered_and_justified(|ui| {
+                            ui.label(egui::RichText::new("No logs yet").color(egui::Color32::from_rgb(0x66, 0x66, 0x66)));
+                        });
+                        return;
+                    }
 
-                let mut y = content_rect.top() + 4.0;
-                for (log_type, time, msg, color) in logs {
-                    // Filter: 0=All, 1=Info, 2=Warn, 3=Error
-                    if self.state.drawer.output_filter != 0 && self.state.drawer.output_filter != log_type {
-                        continue;
-                    }
-                    let row_rect = egui::Rect::from_min_size(egui::pos2(content_rect.left(), y), egui::vec2(content_rect.width(), 18.0));
-                    let row_resp = ui.interact(row_rect, egui::Id::new(format!("log_{}", y as i32)), egui::Sense::click());
-                    if row_resp.hovered() {
-                        ui.painter().rect_filled(row_rect, 0.0, egui::Color32::from_rgb(0x2d, 0x2d, 0x30));
-                    }
-                    ui.painter().text(egui::pos2(content_rect.left() + 8.0, y + 9.0), egui::Align2::LEFT_CENTER, time, egui::FontId::monospace(10.0), color);
-                    ui.painter().text(egui::pos2(content_rect.left() + 120.0, y + 9.0), egui::Align2::LEFT_CENTER, msg, egui::FontId::monospace(10.0), egui::Color32::from_rgb(0xcc, 0xcc, 0xcc));
-                    y += 18.0;
-                }
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
+                            ui.set_min_width(content_rect.width() - 16.0);
+
+                            for (_i, entry) in filtered_logs {
+                                let color = match entry.level {
+                                    state::LogLevel::Info => egui::Color32::from_rgb(0x4a, 0xde, 0x80),
+                                    state::LogLevel::Warn => egui::Color32::from_rgb(0xfb, 0xbd, 0x23),
+                                    state::LogLevel::Error => egui::Color32::from_rgb(0xf8, 0x71, 0x71),
+                                };
+
+                                let level_str = match entry.level {
+                                    state::LogLevel::Info => "[INFO]",
+                                    state::LogLevel::Warn => "[WARN]",
+                                    state::LogLevel::Error => "[ERROR]",
+                                };
+
+                                let full_text = format!("{} {} {}", level_str, entry.time, entry.message);
+
+                                ui.horizontal(|ui| {
+                                    // Time/level part (colored)
+                                    ui.label(egui::RichText::new(format!("{} {}", level_str, entry.time))
+                                        .monospace()
+                                        .size(10.0)
+                                        .color(color));
+
+                                    // Message part (selectable for copy)
+                                    let response = ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&entry.message)
+                                                .monospace()
+                                                .size(10.0)
+                                                .color(egui::Color32::from_rgb(0xcc, 0xcc, 0xcc))
+                                        ).sense(egui::Sense::click())
+                                    );
+
+                                    // Right-click context menu for copy
+                                    response.context_menu(|ui| {
+                                        if ui.button("Copy").clicked() {
+                                            ui.output_mut(|o| o.copied_text = full_text.clone());
+                                            ui.close_menu();
+                                        }
+                                    });
+                                });
+                            }
+                        });
+                });
             });
     }
 
@@ -1822,6 +2062,46 @@ impl EditorApp {
     /// @en Render context menu
     fn render_context_menu(&mut self, _ctx: &egui::Context) {
         // TODO: Implement context menu
+    }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// @zh 截断文本以适应指定宽度，添加省略号
+/// @en Truncate text to fit specified width, adding ellipsis
+fn truncate_text(text: &str, max_width: f32, font: &egui::FontId, ui: &egui::Ui) -> String {
+    let galley = ui.fonts(|f| f.layout_no_wrap(text.to_string(), font.clone(), egui::Color32::WHITE));
+    if galley.rect.width() <= max_width {
+        return text.to_string();
+    }
+
+    // Binary search for the right length
+    let ellipsis = "…";
+    let ellipsis_galley = ui.fonts(|f| f.layout_no_wrap(ellipsis.to_string(), font.clone(), egui::Color32::WHITE));
+    let target_width = max_width - ellipsis_galley.rect.width();
+
+    let chars: Vec<char> = text.chars().collect();
+    let mut left = 0;
+    let mut right = chars.len();
+
+    while left < right {
+        let mid = (left + right + 1) / 2;
+        let substr: String = chars[..mid].iter().collect();
+        let galley = ui.fonts(|f| f.layout_no_wrap(substr, font.clone(), egui::Color32::WHITE));
+        if galley.rect.width() <= target_width {
+            left = mid;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    if left == 0 {
+        ellipsis.to_string()
+    } else {
+        let truncated: String = chars[..left].iter().collect();
+        format!("{}{}", truncated, ellipsis)
     }
 }
 

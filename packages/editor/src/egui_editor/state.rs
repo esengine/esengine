@@ -54,6 +54,35 @@ pub enum ViewMode {
     List,
 }
 
+/// @zh 视口模式（2D/3D）
+/// @en Viewport mode (2D/3D)
+#[derive(Clone, Copy, PartialEq, Default, Debug)]
+pub enum ViewportMode {
+    /// @zh 2D 视图（正交相机，XY 平面网格）
+    /// @en 2D view (orthographic camera, XY plane grid)
+    Mode2D,
+    /// @zh 3D 视图（透视相机，XZ 平面网格）
+    /// @en 3D view (perspective camera, XZ plane grid)
+    #[default]
+    Mode3D,
+}
+
+/// @zh 播放状态
+/// @en Play state
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum PlayState {
+    /// @zh 停止（编辑模式）
+    /// @en Stopped (edit mode)
+    #[default]
+    Stopped,
+    /// @zh 播放中
+    /// @en Playing
+    Playing,
+    /// @zh 暂停
+    /// @en Paused
+    Paused,
+}
+
 /// @zh Gizmo 手柄类型
 /// @en Gizmo handle type
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -282,7 +311,6 @@ impl InspectorState {
 
 /// @zh 内容浏览器状态
 /// @en Content browser state
-#[derive(Default)]
 pub struct ContentBrowserState {
     pub view_mode: ViewMode,
     pub selected_folder: Option<usize>,
@@ -290,11 +318,228 @@ pub struct ContentBrowserState {
     pub folders: Vec<FolderItem>,
     pub assets: Vec<AssetItem>,
     pub search: String,
+    /// @zh 项目根目录
+    /// @en Project root path
+    pub root_path: Option<PathBuf>,
+    /// @zh 当前浏览的路径
+    /// @en Current browsing path
+    pub current_path: Option<PathBuf>,
+}
+
+impl Default for ContentBrowserState {
+    fn default() -> Self {
+        Self {
+            view_mode: ViewMode::default(),
+            selected_folder: None,
+            selected_asset: None,
+            folders: Vec::new(),
+            assets: Vec::new(),
+            search: String::new(),
+            root_path: None,
+            current_path: None,
+        }
+    }
+}
+
+impl ContentBrowserState {
+    /// @zh 设置项目根目录并扫描内容
+    /// @en Set project root and scan content
+    pub fn set_root(&mut self, path: PathBuf) {
+        self.root_path = Some(path.clone());
+        self.current_path = Some(path.clone());
+        self.scan_directory(&path);
+    }
+
+    /// @zh 扫描目录
+    /// @en Scan directory
+    pub fn scan_directory(&mut self, path: &PathBuf) {
+        self.folders.clear();
+        self.assets.clear();
+        self.selected_folder = None;
+        self.selected_asset = None;
+
+        if let Ok(entries) = std::fs::read_dir(path) {
+            let mut folders = Vec::new();
+            let mut assets = Vec::new();
+
+            for entry in entries.filter_map(|e| e.ok()) {
+                let file_name = entry.file_name().to_string_lossy().to_string();
+
+                // Skip hidden files and common non-asset directories
+                if file_name.starts_with('.') || file_name == "node_modules" || file_name == "target" {
+                    continue;
+                }
+
+                if entry.path().is_dir() {
+                    folders.push(FolderItem::new(&file_name));
+                } else {
+                    // Determine asset type from extension
+                    let ext = entry.path().extension()
+                        .map(|e| e.to_string_lossy().to_lowercase())
+                        .unwrap_or_default();
+
+                    let asset_type = match ext.as_str() {
+                        "scene" => AssetType::Scene,
+                        "ts" | "js" => AssetType::Script,
+                        "png" | "jpg" | "jpeg" | "webp" | "gif" => AssetType::Image,
+                        "json" => AssetType::Json,
+                        _ => AssetType::Other,
+                    };
+
+                    assets.push(AssetItem::new(&file_name, asset_type));
+                }
+            }
+
+            // Sort: folders first (alphabetically), then assets (alphabetically)
+            folders.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+            assets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+            self.folders = folders;
+            self.assets = assets;
+        }
+    }
+
+    /// @zh 进入子目录
+    /// @en Enter subdirectory
+    pub fn enter_folder(&mut self, index: usize) {
+        if let (Some(current), Some(folder)) = (self.current_path.clone(), self.folders.get(index)) {
+            let new_path = current.join(&folder.name);
+            if new_path.is_dir() {
+                self.current_path = Some(new_path.clone());
+                self.scan_directory(&new_path);
+            }
+        }
+    }
+
+    /// @zh 返回上级目录
+    /// @en Go to parent directory
+    pub fn go_up(&mut self) {
+        if let Some(current) = self.current_path.clone() {
+            if let Some(root) = &self.root_path {
+                // Don't go above root
+                if current != *root {
+                    if let Some(parent) = current.parent() {
+                        self.current_path = Some(parent.to_path_buf());
+                        self.scan_directory(&parent.to_path_buf());
+                    }
+                }
+            }
+        }
+    }
+
+    /// @zh 获取当前路径的显示名称
+    /// @en Get display name for current path
+    pub fn current_path_display(&self) -> String {
+        if let (Some(current), Some(root)) = (&self.current_path, &self.root_path) {
+            if current == root {
+                "assets".to_string()
+            } else {
+                current.strip_prefix(root)
+                    .map(|p| format!("assets/{}", p.display()))
+                    .unwrap_or_else(|_| current.display().to_string())
+            }
+        } else {
+            "No project".to_string()
+        }
+    }
+
+    /// @zh 获取面包屑导航路径段
+    /// @en Get breadcrumb navigation path segments
+    pub fn get_breadcrumb_segments(&self) -> Vec<String> {
+        let mut segments = vec!["Assets".to_string()];
+
+        if let (Some(current), Some(root)) = (&self.current_path, &self.root_path) {
+            if current != root {
+                if let Ok(rel_path) = current.strip_prefix(root) {
+                    for component in rel_path.components() {
+                        if let std::path::Component::Normal(name) = component {
+                            segments.push(name.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        segments
+    }
+
+    /// @zh 导航到指定的路径段
+    /// @en Navigate to specified path segment
+    pub fn navigate_to_segment(&mut self, segment_index: usize) {
+        if let Some(root) = &self.root_path.clone() {
+            if segment_index == 0 {
+                // Navigate to root
+                self.current_path = Some(root.clone());
+                self.scan_directory(root);
+            } else if let Some(current) = &self.current_path.clone() {
+                if let Ok(rel_path) = current.strip_prefix(root) {
+                    // Build path up to segment_index
+                    let mut new_path = root.clone();
+                    for (idx, component) in rel_path.components().enumerate() {
+                        if idx >= segment_index {
+                            break;
+                        }
+                        if let std::path::Component::Normal(name) = component {
+                            new_path = new_path.join(name);
+                        }
+                    }
+                    if new_path.is_dir() {
+                        self.current_path = Some(new_path.clone());
+                        self.scan_directory(&new_path);
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ============================================================================
 // Drawer State
 // ============================================================================
+
+/// @zh 日志级别
+/// @en Log level
+#[derive(Clone, Copy, PartialEq)]
+pub enum LogLevel {
+    Info,
+    Warn,
+    Error,
+}
+
+/// @zh 日志条目
+/// @en Log entry
+#[derive(Clone)]
+pub struct LogEntry {
+    pub level: LogLevel,
+    pub time: String,
+    pub message: String,
+}
+
+impl LogEntry {
+    pub fn info(message: impl Into<String>) -> Self {
+        Self {
+            level: LogLevel::Info,
+            time: chrono::Local::now().format("%H:%M:%S").to_string(),
+            message: message.into(),
+        }
+    }
+
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self {
+            level: LogLevel::Warn,
+            time: chrono::Local::now().format("%H:%M:%S").to_string(),
+            message: message.into(),
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            level: LogLevel::Error,
+            time: chrono::Local::now().format("%H:%M:%S").to_string(),
+            message: message.into(),
+        }
+    }
+}
 
 /// @zh 抽屉状态
 /// @en Drawer state
@@ -303,6 +548,8 @@ pub struct DrawerState {
     pub output_open: bool,
     pub height: f32,
     pub output_filter: usize,
+    pub logs: Vec<LogEntry>,
+    pub max_logs: usize,
 }
 
 impl Default for DrawerState {
@@ -312,7 +559,22 @@ impl Default for DrawerState {
             output_open: false,
             height: 300.0,
             output_filter: 0,
+            logs: Vec::new(),
+            max_logs: 1000,
         }
+    }
+}
+
+impl DrawerState {
+    pub fn add_log(&mut self, entry: LogEntry) {
+        self.logs.push(entry);
+        if self.logs.len() > self.max_logs {
+            self.logs.remove(0);
+        }
+    }
+
+    pub fn clear_logs(&mut self) {
+        self.logs.clear();
     }
 }
 
@@ -348,6 +610,10 @@ pub struct EditorState {
     // Playback state
     pub is_playing: bool,
     pub is_paused: bool,
+    pub play_state: PlayState,
+
+    // Viewport state
+    pub viewport_mode: ViewportMode,
 
     // Selection state
     pub selected_entity: Option<usize>,
@@ -399,6 +665,8 @@ impl EditorState {
             pivot_mode: PivotMode::Pivot,
             is_playing: false,
             is_paused: false,
+            play_state: PlayState::Stopped,
+            viewport_mode: ViewportMode::Mode3D,
             selected_entity: None,
             hierarchy_items: Vec::new(),
             hierarchy_search: String::new(),
@@ -436,6 +704,8 @@ impl EditorState {
             pivot_mode: PivotMode::Pivot,
             is_playing: false,
             is_paused: false,
+            play_state: PlayState::Stopped,
+            viewport_mode: ViewportMode::Mode3D,
             selected_entity: None,
             hierarchy_items: Vec::new(),
             hierarchy_search: String::new(),
@@ -481,7 +751,16 @@ impl EditorState {
 
         // Create new MCP bridge
         self.scene_bridge = SceneBridge::new_mcp(project_path.clone(), cli_path);
-        self.project_path = Some(project_path);
+        self.project_path = Some(project_path.clone());
+
+        // Initialize Content Browser with project assets folder
+        let assets_path = project_path.join("assets");
+        if assets_path.exists() {
+            self.content_browser.set_root(assets_path);
+        } else {
+            // Fallback to project root if no assets folder
+            self.content_browser.set_root(project_path);
+        }
 
         // Reset scene state
         self.scene_state = SceneState::new();

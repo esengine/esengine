@@ -6,4 +6,4 @@
 
 pub mod viewport;
 
-pub use viewport::WebViewViewportConfig;
+pub use viewport::{ViewportAction, WebViewViewportConfig};

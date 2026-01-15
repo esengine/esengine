@@ -8,10 +8,15 @@
 
 use eframe::egui;
 use raw_window_handle::RawWindowHandle;
+use serde::Serialize;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, Arc};
 use std::thread;
 use wry::{WebView, WebViewBuilder};
+
+use super::state::LogEntry;
+use super::viewport_rpc::{self, RpcRequest, ViewMode};
 
 /// @zh ccesengine 视口 HTML 模板
 /// @en ccesengine viewport HTML template
@@ -183,6 +188,12 @@ pub struct WebViewViewport {
     asset_server: Option<AssetServer>,
     ready: bool,
     error: Option<String>,
+    /// @zh 日志接收器（从 IPC handler 接收日志）
+    /// @en Log receiver (receives logs from IPC handler)
+    log_receiver: Option<mpsc::Receiver<LogEntry>>,
+    /// @zh RPC 请求 ID 计数器
+    /// @en RPC request ID counter
+    next_rpc_id: AtomicU64,
 }
 
 impl WebViewViewport {
@@ -198,6 +209,8 @@ impl WebViewViewport {
             asset_server: None,
             ready: false,
             error: None,
+            log_receiver: None,
+            next_rpc_id: AtomicU64::new(1),
         }
     }
 
@@ -213,6 +226,8 @@ impl WebViewViewport {
             asset_server: None,
             ready: false,
             error: None,
+            log_receiver: None,
+            next_rpc_id: AtomicU64::new(1),
         }
     }
 
@@ -245,6 +260,8 @@ impl WebViewViewport {
                     asset_server: Some(server),
                     ready: false,
                     error: None,
+                    log_receiver: None,
+                    next_rpc_id: AtomicU64::new(1),
                 }
             }
             Err(e) => {
@@ -258,6 +275,8 @@ impl WebViewViewport {
                     asset_server: None,
                     ready: false,
                     error: Some(format!("Failed to start asset server: {}", e)),
+                    log_receiver: None,
+                    next_rpc_id: AtomicU64::new(1),
                 }
             }
         }
@@ -280,6 +299,10 @@ impl WebViewViewport {
 
         self.bounds = bounds;
 
+        // Create channel for log forwarding
+        let (log_sender, log_receiver) = mpsc::channel::<LogEntry>();
+        self.log_receiver = Some(log_receiver);
+
         match window_handle {
             Win32(_handle) => {
                 // Create WebView2 builder with correct bounds
@@ -296,9 +319,80 @@ impl WebViewViewport {
                             bounds.height() as f64,
                         )),
                     })
-                    .with_ipc_handler(|msg| {
-                        // Handle IPC messages from the WebView
-                        println!("[WebView IPC] {}", msg.body());
+                    .with_ipc_handler(move |msg| {
+                        let body = msg.body();
+
+                        // Try to parse as JSON
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+                            // Check if it's a JSON-RPC 2.0 notification
+                            if json.get("jsonrpc").is_some() {
+                                let method = json.get("method")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("");
+                                let params = json.get("params");
+
+                                let entry = match method {
+                                    "viewport.log" => {
+                                        let level = params
+                                            .and_then(|p| p.get("level"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("info");
+                                        let message = params
+                                            .and_then(|p| p.get("message"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        match level {
+                                            "error" => LogEntry::error(message),
+                                            "warn" => LogEntry::warn(message),
+                                            _ => LogEntry::info(message),
+                                        }
+                                    }
+                                    "viewport.error" => {
+                                        let message = params
+                                            .and_then(|p| p.get("message"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("Unknown error");
+                                        LogEntry::error(format!("[Viewport Error] {}", message))
+                                    }
+                                    "viewport.ready" => {
+                                        let version = params
+                                            .and_then(|p| p.get("version"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("unknown");
+                                        LogEntry::info(format!("[Viewport Ready] v{}", version))
+                                    }
+                                    _ => {
+                                        // Skip non-log RPC notifications
+                                        return;
+                                    }
+                                };
+
+                                let _ = log_sender.send(entry);
+                                return;
+                            }
+
+                            // Legacy format: {"type": "...", "message": "..."}
+                            let msg_type = json.get("type")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            let message = json.get("message")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(body);
+
+                            let entry = match msg_type {
+                                "ConsoleError" | "Error" => LogEntry::error(message),
+                                "ConsoleWarn" => LogEntry::warn(message),
+                                "ConsoleLog" | "Status" => LogEntry::info(message),
+                                "Ready" => LogEntry::info(format!("[Ready] {}", message)),
+                                _ => LogEntry::info(format!("[{}] {}", msg_type, message)),
+                            };
+
+                            let _ = log_sender.send(entry);
+                            return;
+                        }
+
+                        // Fallback for non-JSON messages
+                        let _ = log_sender.send(LogEntry::info(format!("[IPC] {}", body)));
                     });
 
                 // Use HTML content or URL
@@ -344,15 +438,7 @@ impl WebViewViewport {
             return;
         }
 
-        // Debug: log bounds changes
-        println!(
-            "[WebView] set_bounds: x={:.0}, y={:.0}, w={:.0}, h={:.0}",
-            bounds.left(),
-            bounds.top(),
-            bounds.width(),
-            bounds.height()
-        );
-
+        let size_changed = self.bounds.width() != bounds.width() || self.bounds.height() != bounds.height();
         self.bounds = bounds;
 
         if let Some(ref webview) = self.webview {
@@ -366,6 +452,11 @@ impl WebViewViewport {
                     bounds.height() as f64,
                 )),
             });
+
+            // Notify viewport to resize via RPC
+            if size_changed && self.ready {
+                let _ = self.rpc_resize();
+            }
         }
     }
 
@@ -434,6 +525,88 @@ impl WebViewViewport {
         if let Some(ref webview) = self.webview {
             let _ = webview.set_visible(visible);
         }
+    }
+
+    /// @zh 获取待处理的日志（非阻塞）
+    /// @en Get pending logs (non-blocking)
+    pub fn drain_logs(&mut self) -> Vec<LogEntry> {
+        let mut logs = Vec::new();
+        if let Some(ref receiver) = self.log_receiver {
+            while let Ok(entry) = receiver.try_recv() {
+                logs.push(entry);
+            }
+        }
+        logs
+    }
+
+    // ========================================================================
+    // RPC Methods
+    // ========================================================================
+
+    /// @zh 发送 RPC 请求到 viewport
+    /// @en Send RPC request to viewport
+    fn send_rpc<P: Serialize>(&self, method: &str, params: P) -> Result<(), String> {
+        let id = self.next_rpc_id.fetch_add(1, Ordering::SeqCst);
+        let request = RpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: method.to_string(),
+            params: Some(serde_json::to_value(params).map_err(|e| e.to_string())?),
+            id,
+        };
+        let json = serde_json::to_string(&request).map_err(|e| e.to_string())?;
+        let script = format!("window.handleRpcMessage && window.handleRpcMessage('{}')", json.replace('\'', "\\'"));
+        self.eval_script(&script)
+    }
+
+    /// @zh 发送无参数的 RPC 请求
+    /// @en Send RPC request without parameters
+    fn send_rpc_no_params(&self, method: &str) -> Result<(), String> {
+        let id = self.next_rpc_id.fetch_add(1, Ordering::SeqCst);
+        let request = RpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: method.to_string(),
+            params: None,
+            id,
+        };
+        let json = serde_json::to_string(&request).map_err(|e| e.to_string())?;
+        let script = format!("window.handleRpcMessage && window.handleRpcMessage('{}')", json.replace('\'', "\\'"));
+        self.eval_script(&script)
+    }
+
+    /// @zh 设置视图模式
+    /// @en Set view mode
+    pub fn rpc_set_view_mode(&self, mode: ViewMode) -> Result<(), String> {
+        self.send_rpc(viewport_rpc::method_names::SET_VIEW_MODE, viewport_rpc::methods::SetViewModeParams { mode })
+    }
+
+    /// @zh 调整视口大小
+    /// @en Resize viewport
+    pub fn rpc_resize(&self) -> Result<(), String> {
+        self.send_rpc_no_params(viewport_rpc::method_names::RESIZE)
+    }
+
+    /// @zh 播放
+    /// @en Play
+    pub fn rpc_play(&self) -> Result<(), String> {
+        self.send_rpc_no_params(viewport_rpc::method_names::PLAY)
+    }
+
+    /// @zh 暂停
+    /// @en Pause
+    pub fn rpc_pause(&self) -> Result<(), String> {
+        self.send_rpc_no_params(viewport_rpc::method_names::PAUSE)
+    }
+
+    /// @zh 停止
+    /// @en Stop
+    pub fn rpc_stop(&self) -> Result<(), String> {
+        self.send_rpc_no_params(viewport_rpc::method_names::STOP)
+    }
+
+    /// @zh 重置相机
+    /// @en Reset camera
+    pub fn rpc_reset_camera(&self) -> Result<(), String> {
+        self.send_rpc_no_params(viewport_rpc::method_names::RESET_CAMERA)
     }
 }
 

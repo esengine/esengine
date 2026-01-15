@@ -175,8 +175,8 @@ impl SceneBridge {
                     println!("[SceneBridge/MCP] Received scene tree: {} nodes", node_data.count_nodes());
                     scene_state.update_tree(node_data);
                 }
-                Err(e) => {
-                    println!("[SceneBridge/MCP] Failed to query scene: {}", e);
+                Err(_e) => {
+                    // Scene may not be open yet - silently ignore
                 }
             }
         }
@@ -416,6 +416,25 @@ impl SceneBridge {
             client.open_scene(db_url_or_uuid)?;
             println!("[SceneBridge/MCP] Opened scene: {}", db_url_or_uuid);
             Ok(())
+        } else {
+            Err("MCP client not initialized".to_string())
+        }
+    }
+
+    /// @zh 获取内置资源（用于 viewport 初始化）
+    /// @en Get builtin resources (for viewport initialization)
+    ///
+    /// @zh 返回编译后的 effects 数据作为 JSON 字符串
+    /// @en Returns compiled effects data as JSON string
+    pub fn get_builtin_resources_mcp(&self) -> Result<serde_json::Value, String> {
+        if self.mode != BridgeMode::Mcp {
+            return Err("Not in MCP mode".to_string());
+        }
+
+        if let Some(ref client) = self.mcp_client {
+            let result = client.get_builtin_resources()?;
+            println!("[SceneBridge/MCP] Fetched builtin resources");
+            Ok(result)
         } else {
             Err("MCP client not initialized".to_string())
         }
