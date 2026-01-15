@@ -1,5 +1,13 @@
 # @esengine/demos
 
+## 1.0.22
+
+### Patch Changes
+
+- Updated dependencies [[`c6c8da1`](https://github.com/esengine/esengine/commit/c6c8da1f5b707a4ab43279b0a046a58797d08c66)]:
+    - @esengine/pathfinding@13.0.0
+    - @esengine/spatial@13.0.0
+
 ## 1.0.21
 
 ### Patch Changes
