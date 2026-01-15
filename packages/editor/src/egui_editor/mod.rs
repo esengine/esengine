@@ -176,6 +176,8 @@ impl EditorApp {
         // Fetch hierarchy if needed
         if self.state.scene_state.hierarchy_dirty || self.state.scene_state.tree.is_none() {
             self.state.scene_bridge.request_hierarchy_mcp(&mut self.state.scene_state);
+            // Sync hierarchy items after fetching
+            self.state.sync_hierarchy_from_scene();
         }
 
         // Fetch properties for selected node if needed
@@ -1304,11 +1306,18 @@ impl EditorApp {
                 } else {
                     let items = self.state.hierarchy_items.clone();
                     let mut selected = self.state.selected_entity;
+                    let mut selected_uuid: Option<String> = None;
                     let mut idx = 0usize;
                     for item in &items {
-                        self.render_hierarchy_node(ui, item, 0, &mut idx, &mut selected, panel_width);
+                        self.render_hierarchy_node(ui, item, 0, &mut idx, &mut selected, &mut selected_uuid, panel_width);
                     }
-                    self.state.selected_entity = selected;
+                    // If selection changed, also update scene_state
+                    if self.state.selected_entity != selected {
+                        self.state.selected_entity = selected;
+                        if let Some(uuid) = selected_uuid {
+                            self.state.scene_state.select_node(Some(uuid));
+                        }
+                    }
                 }
             });
     }
@@ -1330,7 +1339,7 @@ impl EditorApp {
         ui.painter().text(tab_inner.center(), egui::Align2::CENTER_CENTER, title, egui::FontId::proportional(11.0), egui::Color32::WHITE);
     }
 
-    fn render_hierarchy_node(&self, ui: &mut egui::Ui, item: &HierarchyItem, depth: usize, idx: &mut usize, selected: &mut Option<usize>, panel_width: f32) {
+    fn render_hierarchy_node(&self, ui: &mut egui::Ui, item: &HierarchyItem, depth: usize, idx: &mut usize, selected: &mut Option<usize>, selected_uuid: &mut Option<String>, panel_width: f32) {
         let current_idx = *idx;
         *idx += 1;
         let indent = 6.0 + depth as f32 * 14.0;
@@ -1371,15 +1380,21 @@ impl EditorApp {
         }
         x += 16.0;
 
-        // Type icon
-        let (icon, icon_color) = match item.node_type {
-            NodeType::World => ("globe", egui::Color32::from_rgb(0x4a, 0x9e, 0xff)),
-            NodeType::Folder => ("folder", egui::Color32::from_rgb(0xdc, 0xb6, 0x7a)),
-            NodeType::Camera => ("camera", egui::Color32::from_rgb(0x4a, 0x9e, 0xff)),
-            NodeType::Light => ("sun", egui::Color32::from_rgb(0xff, 0xd7, 0x00)),
-            NodeType::Script => ("file-code", egui::Color32::from_rgb(0x9c, 0xdc, 0xfe)),
-            NodeType::Sprite => ("image", egui::Color32::from_rgb(0x4e, 0xc9, 0xb0)),
-            NodeType::UI => ("layout-grid", egui::Color32::from_rgb(0xdc, 0xdc, 0xaa)),
+        // Type icon - use components to determine icon if available
+        let (icon, icon_color) = if !item.components.is_empty() {
+            let (icon_name, rgb) = scene_data::get_node_icon(&item.components);
+            (icon_name, egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2]))
+        } else {
+            match item.node_type {
+                NodeType::World => ("globe", egui::Color32::from_rgb(0x4a, 0x9e, 0xff)),
+                NodeType::Folder => ("folder", egui::Color32::from_rgb(0xdc, 0xb6, 0x7a)),
+                NodeType::Camera => ("camera", egui::Color32::from_rgb(0x4a, 0x9e, 0xff)),
+                NodeType::Light => ("sun", egui::Color32::from_rgb(0xff, 0xd7, 0x00)),
+                NodeType::Script => ("file-code", egui::Color32::from_rgb(0x9c, 0xdc, 0xfe)),
+                NodeType::Sprite => ("image", egui::Color32::from_rgb(0x4e, 0xc9, 0xb0)),
+                NodeType::UI => ("layout-grid", egui::Color32::from_rgb(0xdc, 0xdc, 0xaa)),
+                NodeType::Node => ("box", egui::Color32::from_rgb(0x88, 0x88, 0x88)),
+            }
         };
         Icons::draw(ui.painter(), egui::pos2(x + 7.0, cy), 14.0, icon, icon_color);
         x += 20.0;
@@ -1388,21 +1403,28 @@ impl EditorApp {
         let name_color = if is_selected { egui::Color32::WHITE } else { egui::Color32::from_rgb(0xe0, 0xe0, 0xe0) };
         ui.painter().text(egui::pos2(x, cy), egui::Align2::LEFT_CENTER, &item.name, egui::FontId::proportional(12.0), name_color);
 
-        // Type label
-        let type_str = match item.node_type {
-            NodeType::World => "World", NodeType::Folder => "Folder", NodeType::Camera => "Camera",
-            NodeType::Light => "Light", NodeType::Script => "Script", NodeType::Sprite => "Sprite", NodeType::UI => "UI",
+        // Type label - show first component if available, otherwise node type
+        let type_str = if !item.components.is_empty() {
+            // Show the most relevant component
+            item.components.first().map(|s| s.as_str()).unwrap_or("Node")
+        } else {
+            match item.node_type {
+                NodeType::World => "World", NodeType::Folder => "Folder", NodeType::Camera => "Camera",
+                NodeType::Light => "Light", NodeType::Script => "Script", NodeType::Sprite => "Sprite",
+                NodeType::UI => "UI", NodeType::Node => "Node",
+            }
         };
         ui.painter().text(egui::pos2(row_rect.right() - 8.0, cy), egui::Align2::RIGHT_CENTER, type_str, egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x88, 0x88, 0x88));
 
         // Click to select
         if response.clicked() {
             *selected = Some(current_idx);
+            *selected_uuid = Some(item.uuid.clone());
         }
 
         if item.expanded {
             for child in &item.children {
-                self.render_hierarchy_node(ui, child, depth + 1, idx, selected, panel_width);
+                self.render_hierarchy_node(ui, child, depth + 1, idx, selected, selected_uuid, panel_width);
             }
         }
     }
@@ -1786,13 +1808,9 @@ impl EditorApp {
                 if let Some(idx) = clicked_asset {
                     self.state.content_browser.selected_asset = Some(idx);
                 }
-                // Handle double-click on folder asset (if any)
+                // Handle double-click on asset
                 if let Some(idx) = double_clicked_asset {
-                    if let Some(asset) = self.state.content_browser.assets.get(idx) {
-                        if asset.asset_type == AssetType::Folder {
-                            // TODO: Enter folder
-                        }
-                    }
+                    self.handle_asset_double_click(idx);
                 }
             });
     }
@@ -2038,6 +2056,55 @@ impl EditorApp {
                     self.state.active_menu = None;
                 }
             });
+    }
+
+    /// @zh 处理资源双击事件
+    /// @en Handle asset double-click event
+    fn handle_asset_double_click(&mut self, index: usize) {
+        let asset = match self.state.content_browser.assets.get(index) {
+            Some(a) => a.clone(),
+            None => return,
+        };
+
+        match asset.asset_type {
+            AssetType::Folder => {
+                // Enter folder (shouldn't happen in assets, but handle anyway)
+            }
+            AssetType::Scene => {
+                // Open scene via MCP
+                if self.state.is_mcp_mode() {
+                    if let Some(ref root_path) = self.state.content_browser.root_path {
+                        if let Some(db_url) = asset.get_db_url(root_path) {
+                            println!("[ContentBrowser] Opening scene: {}", db_url);
+                            match self.state.scene_bridge.open_scene_mcp(&db_url) {
+                                Ok(_) => {
+                                    // Scene opened successfully, refresh hierarchy
+                                    self.state.scene_state.mark_hierarchy_dirty();
+                                    self.state.scene_state.select_node(None);
+                                    self.state.drawer.add_log(state::LogEntry::info(format!("Opened scene: {}", asset.name)));
+                                }
+                                Err(e) => {
+                                    println!("[ContentBrowser] Failed to open scene: {}", e);
+                                    self.state.drawer.add_log(state::LogEntry::error(format!("Failed to open scene: {}", e)));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            AssetType::Script => {
+                // TODO: Open script in external editor
+                println!("[ContentBrowser] Script: {:?}", asset.path);
+            }
+            AssetType::Image => {
+                // TODO: Preview image
+                println!("[ContentBrowser] Image: {:?}", asset.path);
+            }
+            _ => {
+                // Other asset types
+                println!("[ContentBrowser] Asset: {:?}", asset.path);
+            }
+        }
     }
 
     /// @zh 处理菜单动作

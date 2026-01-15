@@ -134,6 +134,9 @@ pub enum NodeType {
     Script,
     Sprite,
     UI,
+    /// @zh 通用节点
+    /// @en Generic node
+    Node,
 }
 
 /// @zh 资源类型
@@ -157,21 +160,37 @@ pub enum AssetType {
 #[derive(Clone)]
 pub struct HierarchyItem {
     pub name: String,
+    pub uuid: String,
     pub node_type: NodeType,
     pub visible: bool,
     pub expanded: bool,
     pub children: Vec<HierarchyItem>,
+    /// @zh 组件列表（用于图标显示）
+    /// @en Component list (for icon display)
+    pub components: Vec<String>,
 }
 
 impl HierarchyItem {
     pub fn new(name: impl Into<String>, node_type: NodeType) -> Self {
         Self {
             name: name.into(),
+            uuid: String::new(),
             node_type,
             visible: true,
             expanded: false,
             children: Vec::new(),
+            components: Vec::new(),
         }
+    }
+
+    pub fn with_uuid(mut self, uuid: impl Into<String>) -> Self {
+        self.uuid = uuid.into();
+        self
+    }
+
+    pub fn with_components(mut self, components: Vec<String>) -> Self {
+        self.components = components;
+        self
     }
 
     pub fn with_children(mut self, children: Vec<HierarchyItem>) -> Self {
@@ -215,14 +234,26 @@ impl FolderItem {
 pub struct AssetItem {
     pub name: String,
     pub asset_type: AssetType,
+    /// @zh 资源的完整路径
+    /// @en Full path to the asset
+    pub path: PathBuf,
 }
 
 impl AssetItem {
-    pub fn new(name: impl Into<String>, asset_type: AssetType) -> Self {
+    pub fn new(name: impl Into<String>, asset_type: AssetType, path: PathBuf) -> Self {
         Self {
             name: name.into(),
             asset_type,
+            path,
         }
+    }
+
+    /// @zh 获取资源的 db:// URL（相对于 assets 目录）
+    /// @en Get db:// URL for the asset (relative to assets directory)
+    pub fn get_db_url(&self, root_path: &PathBuf) -> Option<String> {
+        self.path.strip_prefix(root_path)
+            .ok()
+            .map(|rel| format!("db://assets/{}", rel.display().to_string().replace('\\', "/")))
     }
 }
 
@@ -386,7 +417,7 @@ impl ContentBrowserState {
                         _ => AssetType::Other,
                     };
 
-                    assets.push(AssetItem::new(&file_name, asset_type));
+                    assets.push(AssetItem::new(&file_name, asset_type, entry.path()));
                 }
             }
 
@@ -815,5 +846,59 @@ impl EditorState {
     /// @en Check if ready
     pub fn is_ready(&self) -> bool {
         self.phase == EditorPhase::Ready
+    }
+
+    /// @zh 从场景状态同步层级数据
+    /// @en Sync hierarchy data from scene state
+    pub fn sync_hierarchy_from_scene(&mut self) {
+        use super::scene_data::NodeData;
+
+        fn convert_node(node: &NodeData) -> HierarchyItem {
+            let children: Vec<HierarchyItem> = node.children.iter()
+                .map(convert_node)
+                .collect();
+
+            HierarchyItem::new(&node.name, NodeType::Node)
+                .with_uuid(&node.uuid)
+                .with_components(node.components.clone())
+                .with_children(children)
+                .expanded(true) // Default expanded for loaded scenes
+        }
+
+        if let Some(ref tree) = self.scene_state.tree {
+            // Convert the tree to hierarchy items
+            // The root node's children are the top-level items
+            self.hierarchy_items = tree.children.iter()
+                .map(convert_node)
+                .collect();
+        } else {
+            self.hierarchy_items.clear();
+        }
+    }
+
+    /// @zh 根据 UUID 查找并选中节点
+    /// @en Find and select node by UUID
+    pub fn select_node_by_uuid(&mut self, uuid: Option<String>) {
+        self.scene_state.select_node(uuid.clone());
+
+        // Also find and set selected_entity index for the hierarchy panel
+        if let Some(ref uuid) = uuid {
+            fn find_index(items: &[HierarchyItem], uuid: &str, start_idx: &mut usize) -> Option<usize> {
+                for item in items {
+                    if item.uuid == uuid {
+                        return Some(*start_idx);
+                    }
+                    *start_idx += 1;
+                    if let Some(found) = find_index(&item.children, uuid, start_idx) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            let mut idx = 0;
+            self.selected_entity = find_index(&self.hierarchy_items, uuid, &mut idx);
+        } else {
+            self.selected_entity = None;
+        }
     }
 }
