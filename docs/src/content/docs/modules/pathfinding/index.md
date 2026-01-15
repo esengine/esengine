@@ -138,4 +138,5 @@ interface IPathfindingOptions {
 - [增量寻路](./incremental) - 时间切片和动态重规划
 - [导航网格 API](./navmesh) - NavMesh 构建和查询
 - [路径平滑](./smoothing) - 视线简化和曲线平滑
+- [局部避让 (ORCA)](./local-avoidance) - 多代理碰撞避让
 - [实际示例](./examples) - 游戏移动、动态障碍物、分层寻路

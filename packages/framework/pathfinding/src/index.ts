@@ -125,7 +125,34 @@ export {
 } from './smoothing';
 
 // =============================================================================
+// Local Avoidance (ORCA) | 局部避让
+// =============================================================================
+
+export type {
+    IVector2,
+    IORCALine,
+    IAvoidanceAgent,
+    IObstacle,
+    IORCASolverConfig,
+    IORCAResult,
+    IORCASolver,
+    INeighborResult,
+    ISpatialIndex
+} from './avoidance';
+
+export {
+    DEFAULT_ORCA_CONFIG,
+    DEFAULT_AGENT_PARAMS,
+    ORCASolver,
+    createORCASolver,
+    KDTree,
+    createKDTree,
+    solveORCALinearProgram
+} from './avoidance';
+
+// =============================================================================
 // Sub-path Exports | 子路径导出
 // =============================================================================
 // ECS Components & Systems: import from '@esengine/pathfinding/ecs'
 // Blueprint Nodes: import from '@esengine/pathfinding/nodes'
+// Avoidance: import from '@esengine/pathfinding/avoidance'
