@@ -1,0 +1,283 @@
+---
+title: "ORCA 局部避让演示"
+description: "使用 ECS 架构实现的多代理碰撞避让交互式演示"
+---
+
+import DemoPlayground from '../../../components/DemoPlayground.vue';
+
+export const orcaScenes = [
+    { id: 'circle', label: '○', name: '圆形交换' },
+    { id: 'cross', label: '+', name: '十字路口' },
+    { id: 'funnel', label: '▷', name: '漏斗' },
+    { id: 'random', label: '✦', name: '随机' }
+];
+
+export const orcaParams = [
+    { id: 'agentCount', label: 'Agents', desc: '代理数量，越多计算越复杂', value: 40, min: 10, max: 500, step: 10 },
+    { id: 'maxSpeed', label: 'Speed', desc: '最大移动速度', value: 90, min: 30, max: 150, step: 10 },
+    { id: 'radius', label: 'Radius', desc: '碰撞半径，影响避让距离', value: 3, min: 3, max: 15, step: 1 },
+    { id: 'neighborDist', label: 'Neighbor', desc: '邻居检测范围，越大越早开始避让', value: 70, min: 30, max: 120, step: 10 }
+];
+
+export const orcaDemoCode = `// ORCA 局部避让 - ECS 架构演示
+// ============================================
+// 使用工具栏按钮切换场景，使用参数面板调整参数
+
+const {
+    Core, Scene, Component, EntitySystem, Matcher, Time,
+    ECSComponent, ECSSystem,
+    AvoidanceAgentComponent, LocalAvoidanceSystem
+} = ESEngine;
+
+const WIDTH = 580, HEIGHT = 380;
+const CX = WIDTH / 2, CY = HEIGHT / 2;
+
+// 从外部获取参数（由 DemoPlayground 传入）
+const params = window.__demoParams || {
+    agentCount: 40, maxSpeed: 90, radius: 3, neighborDist: 70
+};
+
+// ============================================
+// 组件定义
+// ============================================
+
+@ECSComponent('AgentTarget')
+class AgentTargetComponent extends Component {
+    targetX = 0;
+    targetY = 0;
+    color = '#00d4ff';
+}
+
+// ============================================
+// 系统定义
+// ============================================
+
+@ECSSystem('TargetFollow', { updateOrder: 40 })
+class TargetFollowSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(AvoidanceAgentComponent, AgentTargetComponent));
+    }
+    process(entities) {
+        for (const entity of entities) {
+            const avoid = entity.getComponent(AvoidanceAgentComponent);
+            const target = entity.getComponent(AgentTargetComponent);
+            avoid.setPreferredVelocityTowards(target.targetX, target.targetY);
+        }
+    }
+}
+
+@ECSSystem('Movement', { updateOrder: 60 })
+class MovementSystem extends EntitySystem {
+    constructor() { super(Matcher.all(AvoidanceAgentComponent)); }
+    process(entities) {
+        const dt = Time.deltaTime;
+        for (const entity of entities) {
+            const a = entity.getComponent(AvoidanceAgentComponent);
+            a.positionX += a.velocityX * dt;
+            a.positionY += a.velocityY * dt;
+            // 边界反弹
+            if (a.positionX < 10 || a.positionX > WIDTH - 10) a.velocityX *= -0.5;
+            if (a.positionY < 10 || a.positionY > HEIGHT - 10) a.velocityY *= -0.5;
+            a.positionX = Math.max(10, Math.min(WIDTH - 10, a.positionX));
+            a.positionY = Math.max(10, Math.min(HEIGHT - 10, a.positionY));
+        }
+    }
+}
+
+@ECSSystem('Render', { updateOrder: 100 })
+class RenderSystem extends EntitySystem {
+    ctx: CanvasRenderingContext2D;
+    fps = 0; frameCount = 0; lastFpsTime = 0;
+
+    constructor(context: CanvasRenderingContext2D) {
+        super(Matcher.all(AvoidanceAgentComponent, AgentTargetComponent));
+        this.ctx = context;
+    }
+
+    process(entities) {
+        // 运动模糊效果
+        this.ctx.fillStyle = 'rgba(22, 33, 62, 0.3)';
+        this.ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // FPS 计算
+        this.frameCount++;
+        const now = performance.now();
+        if (now - this.lastFpsTime >= 1000) {
+            this.fps = this.frameCount;
+            this.frameCount = 0;
+            this.lastFpsTime = now;
+        }
+
+        // 绘制代理
+        for (const entity of entities) {
+            const a = entity.getComponent(AvoidanceAgentComponent);
+            const t = entity.getComponent(AgentTargetComponent);
+            const x = a.positionX, y = a.positionY;
+
+            // 目标点
+            this.ctx.beginPath();
+            this.ctx.arc(t.targetX, t.targetY, 3, 0, Math.PI * 2);
+            this.ctx.fillStyle = 'rgba(255,71,87,0.4)';
+            this.ctx.fill();
+
+            // 代理光晕
+            const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, a.radius * 2);
+            gradient.addColorStop(0, t.color);
+            gradient.addColorStop(1, 'transparent');
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, a.radius * 2, 0, Math.PI * 2);
+            this.ctx.fillStyle = gradient;
+            this.ctx.fill();
+
+            // 代理圆
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, a.radius, 0, Math.PI * 2);
+            this.ctx.fillStyle = t.color;
+            this.ctx.fill();
+
+            // 速度方向
+            const speed = Math.sqrt(a.velocityX ** 2 + a.velocityY ** 2);
+            if (speed > 1) {
+                const vx = a.velocityX / speed, vy = a.velocityY / speed;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y);
+                this.ctx.lineTo(x + vx * a.radius * 1.8, y + vy * a.radius * 1.8);
+                this.ctx.strokeStyle = '#fff';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+            }
+        }
+
+        // HUD
+        this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        this.ctx.fillRect(5, 5, 120, 35);
+        this.ctx.fillStyle = '#00d4ff';
+        this.ctx.font = '11px monospace';
+        this.ctx.fillText(\`Agents: \${entities.length}\`, 10, 20);
+        this.ctx.fillText(\`FPS: \${this.fps}\`, 10, 32);
+    }
+}
+
+// ============================================
+// 场景
+// ============================================
+
+class ORCADemoScene extends Scene {
+    initialize() {
+        this.name = 'ORCADemo';
+        this.addSystem(new TargetFollowSystem());
+        this.addSystem(new LocalAvoidanceSystem());
+        this.addSystem(new MovementSystem());
+        this.addSystem(new RenderSystem(ctx));
+    }
+
+    onStart() { this.loadScenario('circle'); }
+
+    loadScenario(type: string) {
+        // 清除现有实体
+        const result = this.queryAll(AvoidanceAgentComponent);
+        this.destroyEntities([...result.entities]);
+
+        const count = params.agentCount;
+        const configs = {
+            circle: () => {
+                const r = 150;
+                for (let i = 0; i < count; i++) {
+                    const angle = (i / count) * Math.PI * 2;
+                    this.createAgent(
+                        CX + Math.cos(angle) * r, CY + Math.sin(angle) * r,
+                        CX - Math.cos(angle) * r, CY - Math.sin(angle) * r,
+                        \`hsl(\${(i / count) * 360}, 80%, 60%)\`
+                    );
+                }
+            },
+            cross: () => {
+                const n = Math.floor(count / 4);
+                for (let i = 0; i < n; i++) {
+                    this.createAgent(30, 80 + i * 12, WIDTH - 30, 80 + i * 12, '#00d4ff');
+                    this.createAgent(WIDTH - 30, HEIGHT - 80 - i * 12, 30, HEIGHT - 80 - i * 12, '#ff6b6b');
+                    this.createAgent(150 + i * 12, 30, 150 + i * 12, HEIGHT - 30, '#4ecdc4');
+                    this.createAgent(WIDTH - 150 - i * 12, HEIGHT - 30, WIDTH - 150 - i * 12, 30, '#ffe66d');
+                }
+            },
+            funnel: () => {
+                for (let i = 0; i < count; i++) {
+                    this.createAgent(
+                        30 + Math.random() * 100, 50 + Math.random() * (HEIGHT - 100),
+                        WIDTH - 30, CY,
+                        \`hsl(\${180 + Math.random() * 60}, 80%, 60%)\`
+                    );
+                }
+            },
+            random: () => {
+                for (let i = 0; i < count; i++) {
+                    this.createAgent(
+                        30 + Math.random() * (WIDTH - 60), 30 + Math.random() * (HEIGHT - 60),
+                        30 + Math.random() * (WIDTH - 60), 30 + Math.random() * (HEIGHT - 60),
+                        \`hsl(\${Math.random() * 360}, 70%, 60%)\`
+                    );
+                }
+            }
+        };
+        configs[type]?.();
+    }
+
+    createAgent(x: number, y: number, tx: number, ty: number, color: string) {
+        const entity = this.createEntity('Agent');
+        const avoid = entity.addComponent(new AvoidanceAgentComponent());
+        avoid.setPosition(x, y);
+        avoid.radius = params.radius;
+        avoid.maxSpeed = params.maxSpeed;
+        avoid.neighborDist = params.neighborDist;
+        avoid.timeHorizon = 2;
+        avoid.autoApplyVelocity = true;
+
+        const target = entity.addComponent(new AgentTargetComponent());
+        target.targetX = tx;
+        target.targetY = ty;
+        target.color = color;
+    }
+}
+
+// ============================================
+// 初始化
+// ============================================
+
+Core.create({ debug: false });
+const demoScene = new ORCADemoScene();
+Core.setScene(demoScene);
+
+let lastTime = performance.now();
+let animationId: number;
+
+function gameLoop() {
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+    Core.update(dt);
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+gameLoop();`;
+
+这是一个使用 **ECS 架构** 实现的 ORCA (Optimal Reciprocal Collision Avoidance) 局部避让交互式演示。
+
+点击 **Run** 启动模拟，使用工具栏切换场景，调整参数面板中的设置观察不同效果。
+
+<DemoPlayground
+    client:load
+    title="ORCA 局部避让 - ECS 架构"
+    code={orcaDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={orcaScenes}
+    params={orcaParams}
+/>
+
+<script is:inline src="/esengine/js/esengine.iife.js"></script>
+
+## 相关文档
+
+- [ORCA 局部避让 API](/esengine/modules/pathfinding/local-avoidance) - 完整 API 文档和使用指南
+- [寻路系统](/esengine/modules/pathfinding) - 寻路模块概述
+- [快速开始](/esengine/guide/getting-started) - ECS 框架入门

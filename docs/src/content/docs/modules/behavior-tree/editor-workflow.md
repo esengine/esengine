@@ -112,7 +112,7 @@ setInterval(() => {
 
 ## 实现自定义执行器
 
-要扩展行为树的功能，需要创建自定义执行器（详见[自定义节点执行器](/modules/behavior-tree/custom-actions/)）：
+要扩展行为树的功能，需要创建自定义执行器（详见[自定义节点执行器](../custom-actions/)）：
 
 ```typescript
 import {
@@ -250,6 +250,6 @@ setInterval(() => {
 
 ## 下一步
 
-- 查看[自定义节点执行器](/modules/behavior-tree/custom-actions/)学习如何创建自定义节点
-- 查看[高级用法](/modules/behavior-tree/advanced-usage/)了解性能优化等高级特性
-- 查看[最佳实践](/modules/behavior-tree/best-practices/)优化你的AI设计
+- 查看[自定义节点执行器](../custom-actions/)学习如何创建自定义节点
+- 查看[高级用法](../advanced-usage/)了解性能优化等高级特性
+- 查看[最佳实践](../best-practices/)优化你的AI设计

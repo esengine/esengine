@@ -100,6 +100,6 @@ console.log('Current state:', runtime.state);
 
 ## Next Steps
 
-- [Core Concepts](/en/modules/behavior-tree/core-concepts/) - Understand nodes and execution
-- [Custom Actions](/en/modules/behavior-tree/custom-actions/) - Create your own nodes
-- [Editor Guide](/en/modules/behavior-tree/editor-guide/) - Visual tree creation
+- [Core Concepts](../core-concepts/) - Understand nodes and execution
+- [Custom Actions](../custom-actions/) - Create your own nodes
+- [Editor Guide](../editor-guide/) - Visual tree creation

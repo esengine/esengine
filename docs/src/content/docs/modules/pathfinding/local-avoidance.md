@@ -293,3 +293,7 @@ console.log('代理数量:', world.agentCount);
 console.log('本帧处理数:', world.agentsProcessedThisFrame);
 console.log('计算耗时:', world.computeTimeMs, 'ms');
 ```
+
+## 在线演示
+
+查看 [ORCA 局部避让交互式演示](/esengine/examples/orca-avoidance-demo/) 体验不同场景和参数配置的效果。

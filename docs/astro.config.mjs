@@ -348,6 +348,7 @@ export default defineConfig({
           translations: { en: 'Examples' },
           items: [
             { label: '示例总览', slug: 'examples', translations: { en: 'Examples Overview' } },
+            { label: 'ORCA 局部避让', slug: 'examples/orca-avoidance-demo', translations: { en: 'ORCA Local Avoidance' } },
             { label: 'Worker 系统演示', slug: 'examples/worker-system-demo', translations: { en: 'Worker System Demo' } },
           ],
         },

@@ -192,7 +192,7 @@ const tree = BehaviorTreeBuilder.create('Actions')
     .build();
 ```
 
-要实现自定义动作,需要创建自定义执行器,参见[自定义节点执行器](/modules/behavior-tree/custom-actions/)。
+要实现自定义动作,需要创建自定义执行器,参见[自定义节点执行器](../custom-actions/)。
 
 #### Condition(条件)
 
@@ -487,7 +487,7 @@ NodeRuntimeState
 
 现在你已经理解了行为树的核心概念,接下来可以:
 
-- 查看[快速开始](/modules/behavior-tree/getting-started/)创建第一个行为树
-- 学习[自定义节点执行器](/modules/behavior-tree/custom-actions/)创建自定义节点
-- 探索[高级用法](/modules/behavior-tree/advanced-usage/)了解更多功能
-- 阅读[最佳实践](/modules/behavior-tree/best-practices/)学习设计模式
+- 查看[快速开始](../getting-started/)创建第一个行为树
+- 学习[自定义节点执行器](../custom-actions/)创建自定义节点
+- 探索[高级用法](../advanced-usage/)了解更多功能
+- 阅读[最佳实践](../best-practices/)学习设计模式

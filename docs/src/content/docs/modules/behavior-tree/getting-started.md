@@ -333,11 +333,11 @@ BehaviorTreeStarter.restart(entity);
 
 现在你已经创建了第一个行为树,接下来可以:
 
-1. 学习[核心概念](/modules/behavior-tree/core-concepts/)深入理解行为树原理
-2. 学习[资产管理](/modules/behavior-tree/asset-management/)了解如何加载和复用行为树、使用子树
-3. 查看[自定义节点执行器](/modules/behavior-tree/custom-actions/)学习如何创建自定义节点
-4. 根据你的场景查看集成教程：[Cocos Creator](/modules/behavior-tree/cocos-integration/) 或 [Node.js](/modules/behavior-tree/nodejs-usage/)
-5. 查看[高级用法](/modules/behavior-tree/advanced-usage/)了解更多功能
+1. 学习[核心概念](../core-concepts/)深入理解行为树原理
+2. 学习[资产管理](../asset-management/)了解如何加载和复用行为树、使用子树
+3. 查看[自定义节点执行器](../custom-actions/)学习如何创建自定义节点
+4. 根据你的场景查看集成教程：[Cocos Creator](../cocos-integration/) 或 [Node.js](../nodejs-usage/)
+5. 查看[高级用法](../advanced-usage/)了解更多功能
 
 ## 常见问题
 
@@ -384,4 +384,4 @@ console.log('活动节点:', Array.from(runtime?.activeNodeIds || []));
 
 内置的`executeAction`和`executeCondition`节点只是占位符。要实现真正的自定义逻辑,你需要创建自定义执行器:
 
-参见[自定义节点执行器](/modules/behavior-tree/custom-actions/)学习如何创建。
+参见[自定义节点执行器](../custom-actions/)学习如何创建。
