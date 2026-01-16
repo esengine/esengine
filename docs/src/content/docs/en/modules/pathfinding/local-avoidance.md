@@ -293,3 +293,7 @@ console.log('Agent count:', world.agentCount);
 console.log('Processed this frame:', world.agentsProcessedThisFrame);
 console.log('Compute time:', world.computeTimeMs, 'ms');
 ```
+
+## Interactive Demo
+
+Check out the [ORCA Local Avoidance Interactive Demo](/esengine/en/examples/orca-avoidance-demo/) to experience different scenarios and parameter configurations.
