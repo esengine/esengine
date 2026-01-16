@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORCA Local Avoidance Demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .demo-area {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .canvas-container {
+            flex: 1;
+            position: relative;
+        }
+        #gameCanvas {
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            background: radial-gradient(circle at center, #0a0a1a 0%, #000 100%);
+            display: block;
+            width: 100%;
+            cursor: crosshair;
+        }
+        .canvas-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        .controls {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .control-section {
+            margin-bottom: 20px;
+        }
+        .control-section h3 {
+            margin: 0 0 12px 0;
+            color: #00d4ff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .control-group {
+            margin-bottom: 12px;
+        }
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            color: #aaa;
+            font-size: 13px;
+        }
+        .control-group label span {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #333;
+            border-radius: 3px;
+            outline: none;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00d4ff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        .btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            color: #000;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #ff4757 0%, #cc3344 100%);
+            color: #fff;
+        }
+        .stats {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+        }
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .stat-line:last-child {
+            border-bottom: none;
+        }
+        .stat-value {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        .stat-value.good { color: #4eff4a; }
+        .stat-value.warn { color: #ffff4a; }
+        .stat-value.bad { color: #ff4a4a; }
+        .scenario-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .legend-dot.agent { background: #00d4ff; }
+        .legend-dot.target { background: #ff4757; border: 2px solid #fff; }
+        .legend-dot.obstacle { background: #ffa502; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 ORCA Local Avoidance Demo</h1>
+        <p class="subtitle">Optimal Reciprocal Collision Avoidance - 多代理碰撞避让演示</p>
+
+        <div class="demo-area">
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="800" height="600"></canvas>
+                <div class="canvas-overlay">
+                    <div>FPS: <span id="fpsOverlay">0</span></div>
+                    <div>Agents: <span id="agentCountOverlay">0</span></div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-section">
+                    <h3>📊 场景预设</h3>
+                    <div class="scenario-btns">
+                        <button class="btn btn-secondary" onclick="loadScenario('circle')">圆形交换</button>
+                        <button class="btn btn-secondary" onclick="loadScenario('cross')">十字路口</button>
+                        <button class="btn btn-secondary" onclick="loadScenario('funnel')">漏斗通道</button>
+                        <button class="btn btn-secondary" onclick="loadScenario('random')">随机漫游</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>⚙️ 参数设置</h3>
+                    <div class="control-group">
+                        <label>代理数量 <span id="agentCountValue">50</span></label>
+                        <input type="range" id="agentCount" min="10" max="200" value="50" step="10">
+                    </div>
+                    <div class="control-group">
+                        <label>代理半径 <span id="radiusValue">8</span></label>
+                        <input type="range" id="radius" min="4" max="20" value="8" step="1">
+                    </div>
+                    <div class="control-group">
+                        <label>最大速度 <span id="maxSpeedValue">100</span></label>
+                        <input type="range" id="maxSpeed" min="50" max="300" value="100" step="10">
+                    </div>
+                    <div class="control-group">
+                        <label>邻居距离 <span id="neighborDistValue">80</span></label>
+                        <input type="range" id="neighborDist" min="30" max="150" value="80" step="10">
+                    </div>
+                    <div class="control-group">
+                        <label>时间视野 <span id="timeHorizonValue">2.0</span></label>
+                        <input type="range" id="timeHorizon" min="0.5" max="5" value="2" step="0.1">
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>🎮 控制</h3>
+                    <button class="btn btn-primary" onclick="toggleSimulation()" id="toggleBtn">⏸️ 暂停</button>
+                    <button class="btn btn-secondary" onclick="resetSimulation()">🔄 重置</button>
+                    <button class="btn btn-danger" onclick="clearAll()">🗑️ 清空</button>
+                </div>
+
+                <div class="control-section">
+                    <h3>📈 性能统计</h3>
+                    <div class="stats">
+                        <div class="stat-line">
+                            <span>帧率</span>
+                            <span class="stat-value" id="fps">0 FPS</span>
+                        </div>
+                        <div class="stat-line">
+                            <span>帧时间</span>
+                            <span class="stat-value" id="frameTime">0 ms</span>
+                        </div>
+                        <div class="stat-line">
+                            <span>KDTree构建</span>
+                            <span class="stat-value" id="kdtreeTime">0 ms</span>
+                        </div>
+                        <div class="stat-line">
+                            <span>ORCA计算</span>
+                            <span class="stat-value" id="orcaTime">0 ms</span>
+                        </div>
+                        <div class="stat-line">
+                            <span>碰撞次数</span>
+                            <span class="stat-value" id="collisions">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot agent"></div> 代理</div>
+            <div class="legend-item"><div class="legend-dot target"></div> 目标点</div>
+            <div class="legend-item"><div class="legend-dot obstacle"></div> 障碍物</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ============================================================
+        // ORCA ECS Demo - 使用 ECS 架构的局部避让演示
+        // ============================================================
+
+        // 由于这是独立demo，我们内联简化版的ORCA实现
+        // 实际项目中应从 @esengine/pathfinding/ecs 导入
+
+        // -------------------- 向量工具 --------------------
+        const Vec2 = {
+            dot: (a, b) => a.x * b.x + a.y * b.y,
+            det: (a, b) => a.x * b.y - a.y * b.x,
+            len: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+            lenSq: (v) => v.x * v.x + v.y * v.y,
+            normalize: (v) => {
+                const l = Vec2.len(v);
+                return l > 0.0001 ? { x: v.x / l, y: v.y / l } : { x: 0, y: 0 };
+            },
+            sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
+            add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y }),
+            scale: (v, s) => ({ x: v.x * s, y: v.y * s }),
+            dist: (a, b) => Vec2.len(Vec2.sub(a, b)),
+            distSq: (a, b) => Vec2.lenSq(Vec2.sub(a, b))
+        };
+
+        // -------------------- KDTree --------------------
+        class KDTree {
+            constructor() {
+                this.agents = [];
+            }
+            build(agents) {
+                this.agents = agents;
+            }
+            queryNeighbors(pos, range, maxResults, excludeId = -1) {
+                const rangeSq = range * range;
+                const results = [];
+                for (const agent of this.agents) {
+                    if (agent.id === excludeId) continue;
+                    const distSq = Vec2.distSq(pos, agent.position);
+                    if (distSq < rangeSq) {
+                        results.push({ agent, distSq });
+                    }
+                }
+                results.sort((a, b) => a.distSq - b.distSq);
+                return results.slice(0, maxResults);
+            }
+        }
+
+        // -------------------- ORCA Solver --------------------
+        class ORCASolver {
+            constructor(timeStep = 1/60) {
+                this.timeStep = timeStep;
+                this.EPSILON = 0.00001;
+            }
+
+            computeNewVelocity(agent, neighbors, obstacles) {
+                const orcaLines = [];
+                const invTimeHorizon = 1.0 / agent.timeHorizon;
+
+                // 处理邻居代理
+                for (const neighbor of neighbors) {
+                    const relPos = Vec2.sub(neighbor.position, agent.position);
+                    const relVel = Vec2.sub(agent.velocity, neighbor.velocity);
+                    const combinedRadius = agent.radius + neighbor.radius;
+                    const distSq = Vec2.lenSq(relPos);
+
+                    let u, direction;
+
+                    if (distSq > combinedRadius * combinedRadius) {
+                        // 无碰撞
+                        const w = Vec2.sub(relVel, Vec2.scale(relPos, invTimeHorizon));
+                        const wLenSq = Vec2.lenSq(w);
+                        const dotProduct1 = Vec2.dot(w, relPos);
+
+                        if (dotProduct1 < 0 && dotProduct1 * dotProduct1 > combinedRadius * combinedRadius * wLenSq) {
+                            const wLen = Math.sqrt(wLenSq);
+                            const unitW = Vec2.scale(w, 1 / wLen);
+                            direction = { x: unitW.y, y: -unitW.x };
+                            u = Vec2.scale(unitW, combinedRadius * invTimeHorizon - wLen);
+                        } else {
+                            const leg = Math.sqrt(distSq - combinedRadius * combinedRadius);
+                            if (Vec2.det(relPos, w) > 0) {
+                                direction = Vec2.scale({
+                                    x: relPos.x * leg - relPos.y * combinedRadius,
+                                    y: relPos.x * combinedRadius + relPos.y * leg
+                                }, 1 / distSq);
+                            } else {
+                                direction = Vec2.scale({
+                                    x: relPos.x * leg + relPos.y * combinedRadius,
+                                    y: -relPos.x * combinedRadius + relPos.y * leg
+                                }, -1 / distSq);
+                            }
+                            const dotProduct2 = Vec2.dot(relVel, direction);
+                            u = Vec2.sub(Vec2.scale(direction, dotProduct2), relVel);
+                        }
+                    } else {
+                        // 碰撞情况
+                        const invTimeStep = 1.0 / this.timeStep;
+                        const w = Vec2.sub(relVel, Vec2.scale(relPos, invTimeStep));
+                        const wLen = Vec2.len(w);
+                        const unitW = wLen > this.EPSILON ? Vec2.scale(w, 1/wLen) : { x: 1, y: 0 };
+                        direction = { x: unitW.y, y: -unitW.x };
+                        u = Vec2.scale(unitW, combinedRadius * invTimeStep - wLen);
+                    }
+
+                    orcaLines.push({
+                        point: Vec2.add(agent.velocity, Vec2.scale(u, 0.5)),
+                        direction
+                    });
+                }
+
+                // 线性规划求解
+                return this.solveLinearProgram(orcaLines, agent.maxSpeed, agent.preferredVelocity);
+            }
+
+            solveLinearProgram(lines, maxSpeed, preferredVelocity) {
+                let result = { ...preferredVelocity };
+
+                // 限制在最大速度内
+                if (Vec2.lenSq(result) > maxSpeed * maxSpeed) {
+                    result = Vec2.scale(Vec2.normalize(result), maxSpeed);
+                }
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    // 检查当前结果是否满足约束
+                    if (Vec2.det(line.direction, Vec2.sub(line.point, result)) > 0) {
+                        // 投影到约束线上
+                        const t = Vec2.dot(line.direction, Vec2.sub(result, line.point));
+                        result = Vec2.add(line.point, Vec2.scale(line.direction, t));
+
+                        // 限制在最大速度内
+                        if (Vec2.lenSq(result) > maxSpeed * maxSpeed) {
+                            result = Vec2.scale(Vec2.normalize(result), maxSpeed);
+                        }
+                    }
+                }
+
+                return result;
+            }
+        }
+
+        // -------------------- ECS Components --------------------
+        class Entity {
+            constructor(id) {
+                this.id = id;
+                this.components = new Map();
+            }
+            addComponent(component) {
+                this.components.set(component.constructor.name, component);
+                component.entity = this;
+                return component;
+            }
+            getComponent(type) {
+                return this.components.get(type.name);
+            }
+            hasComponent(type) {
+                return this.components.has(type.name);
+            }
+        }
+
+        class TransformComponent {
+            constructor(x = 0, y = 0) {
+                this.position = { x, y };
+            }
+        }
+
+        class AvoidanceAgentComponent {
+            constructor() {
+                this.velocity = { x: 0, y: 0 };
+                this.preferredVelocity = { x: 0, y: 0 };
+                this.targetPosition = null;
+                this.radius = 8;
+                this.maxSpeed = 100;
+                this.neighborDist = 80;
+                this.maxNeighbors = 10;
+                this.timeHorizon = 2;
+            }
+
+            setPreferredVelocityTowards(targetX, targetY) {
+                const transform = this.entity.getComponent(TransformComponent);
+                const dx = targetX - transform.position.x;
+                const dy = targetY - transform.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 1) {
+                    this.preferredVelocity = {
+                        x: (dx / dist) * this.maxSpeed,
+                        y: (dy / dist) * this.maxSpeed
+                    };
+                } else {
+                    this.preferredVelocity = { x: 0, y: 0 };
+                }
+            }
+        }
+
+        class RenderComponent {
+            constructor(color = '#00d4ff') {
+                this.color = color;
+            }
+        }
+
+        // -------------------- ECS Systems --------------------
+        class LocalAvoidanceSystem {
+            constructor() {
+                this.kdTree = new KDTree();
+                this.solver = new ORCASolver();
+                this.kdTreeTime = 0;
+                this.orcaTime = 0;
+            }
+
+            update(entities, dt) {
+                const agents = [];
+
+                // 收集所有代理数据
+                for (const entity of entities) {
+                    const transform = entity.getComponent(TransformComponent);
+                    const avoidance = entity.getComponent(AvoidanceAgentComponent);
+                    if (!transform || !avoidance) continue;
+
+                    agents.push({
+                        id: entity.id,
+                        entity,
+                        position: transform.position,
+                        velocity: avoidance.velocity,
+                        preferredVelocity: avoidance.preferredVelocity,
+                        radius: avoidance.radius,
+                        maxSpeed: avoidance.maxSpeed,
+                        neighborDist: avoidance.neighborDist,
+                        maxNeighbors: avoidance.maxNeighbors,
+                        timeHorizon: avoidance.timeHorizon
+                    });
+                }
+
+                // 构建KDTree
+                const t1 = performance.now();
+                this.kdTree.build(agents);
+                this.kdTreeTime = performance.now() - t1;
+
+                // 计算新速度
+                const t2 = performance.now();
+                const newVelocities = new Map();
+
+                for (const agent of agents) {
+                    const neighborResults = this.kdTree.queryNeighbors(
+                        agent.position,
+                        agent.neighborDist,
+                        agent.maxNeighbors,
+                        agent.id
+                    );
+                    const neighbors = neighborResults.map(r => r.agent);
+                    const newVel = this.solver.computeNewVelocity(agent, neighbors, []);
+                    newVelocities.set(agent.entity, newVel);
+                }
+                this.orcaTime = performance.now() - t2;
+
+                // 应用速度并更新位置
+                for (const [entity, newVel] of newVelocities) {
+                    const transform = entity.getComponent(TransformComponent);
+                    const avoidance = entity.getComponent(AvoidanceAgentComponent);
+
+                    avoidance.velocity = newVel;
+                    transform.position.x += newVel.x * dt;
+                    transform.position.y += newVel.y * dt;
+                }
+            }
+        }
+
+        class TargetFollowSystem {
+            update(entities, dt) {
+                for (const entity of entities) {
+                    const avoidance = entity.getComponent(AvoidanceAgentComponent);
+                    if (!avoidance || !avoidance.targetPosition) continue;
+
+                    avoidance.setPreferredVelocityTowards(
+                        avoidance.targetPosition.x,
+                        avoidance.targetPosition.y
+                    );
+                }
+            }
+        }
+
+        class RenderSystem {
+            constructor(ctx) {
+                this.ctx = ctx;
+            }
+
+            update(entities) {
+                for (const entity of entities) {
+                    const transform = entity.getComponent(TransformComponent);
+                    const avoidance = entity.getComponent(AvoidanceAgentComponent);
+                    const render = entity.getComponent(RenderComponent);
+                    if (!transform || !render) continue;
+
+                    const { x, y } = transform.position;
+                    const radius = avoidance ? avoidance.radius : 8;
+
+                    // 绘制代理
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+                    this.ctx.fillStyle = render.color;
+                    this.ctx.fill();
+
+                    // 绘制速度方向
+                    if (avoidance && Vec2.lenSq(avoidance.velocity) > 1) {
+                        const vel = Vec2.normalize(avoidance.velocity);
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x, y);
+                        this.ctx.lineTo(x + vel.x * radius * 1.5, y + vel.y * radius * 1.5);
+                        this.ctx.strokeStyle = '#fff';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.stroke();
+                    }
+
+                    // 绘制目标点
+                    if (avoidance && avoidance.targetPosition) {
+                        this.ctx.beginPath();
+                        this.ctx.arc(avoidance.targetPosition.x, avoidance.targetPosition.y, 4, 0, Math.PI * 2);
+                        this.ctx.fillStyle = 'rgba(255, 71, 87, 0.5)';
+                        this.ctx.fill();
+                    }
+                }
+            }
+        }
+
+        // -------------------- World --------------------
+        class World {
+            constructor() {
+                this.entities = [];
+                this.systems = [];
+                this.nextId = 0;
+            }
+
+            createEntity() {
+                const entity = new Entity(this.nextId++);
+                this.entities.push(entity);
+                return entity;
+            }
+
+            addSystem(system) {
+                this.systems.push(system);
+            }
+
+            update(dt) {
+                for (const system of this.systems) {
+                    system.update(this.entities, dt);
+                }
+            }
+
+            clear() {
+                this.entities = [];
+                this.nextId = 0;
+            }
+        }
+
+        // -------------------- Demo Application --------------------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const world = new World();
+        const avoidanceSystem = new LocalAvoidanceSystem();
+        const targetFollowSystem = new TargetFollowSystem();
+        const renderSystem = new RenderSystem(ctx);
+
+        world.addSystem(targetFollowSystem);
+        world.addSystem(avoidanceSystem);
+
+        let running = true;
+        let lastTime = 0;
+        let frameCount = 0;
+        let fps = 0;
+        let lastFpsTime = 0;
+        let totalFrameTime = 0;
+
+        // 参数
+        const params = {
+            agentCount: 50,
+            radius: 8,
+            maxSpeed: 100,
+            neighborDist: 80,
+            timeHorizon: 2.0
+        };
+
+        // 绑定滑块事件
+        function bindSlider(id, param, callback) {
+            const slider = document.getElementById(id);
+            const valueSpan = document.getElementById(id + 'Value');
+            slider.addEventListener('input', () => {
+                params[param] = parseFloat(slider.value);
+                valueSpan.textContent = slider.value;
+                if (callback) callback();
+            });
+        }
+
+        bindSlider('agentCount', 'agentCount');
+        bindSlider('radius', 'radius', updateAgentParams);
+        bindSlider('maxSpeed', 'maxSpeed', updateAgentParams);
+        bindSlider('neighborDist', 'neighborDist', updateAgentParams);
+        bindSlider('timeHorizon', 'timeHorizon', updateAgentParams);
+
+        function updateAgentParams() {
+            for (const entity of world.entities) {
+                const avoidance = entity.getComponent(AvoidanceAgentComponent);
+                if (avoidance) {
+                    avoidance.radius = params.radius;
+                    avoidance.maxSpeed = params.maxSpeed;
+                    avoidance.neighborDist = params.neighborDist;
+                    avoidance.timeHorizon = params.timeHorizon;
+                }
+            }
+        }
+
+        function createAgent(x, y, targetX, targetY, color = '#00d4ff') {
+            const entity = world.createEntity();
+            entity.addComponent(new TransformComponent(x, y));
+
+            const avoidance = entity.addComponent(new AvoidanceAgentComponent());
+            avoidance.radius = params.radius;
+            avoidance.maxSpeed = params.maxSpeed;
+            avoidance.neighborDist = params.neighborDist;
+            avoidance.timeHorizon = params.timeHorizon;
+            avoidance.targetPosition = { x: targetX, y: targetY };
+
+            entity.addComponent(new RenderComponent(color));
+            return entity;
+        }
+
+        // 场景预设
+        window.loadScenario = function(scenario) {
+            world.clear();
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const count = params.agentCount;
+
+            switch (scenario) {
+                case 'circle': {
+                    const radius = Math.min(cx, cy) - 50;
+                    for (let i = 0; i < count; i++) {
+                        const angle = (i / count) * Math.PI * 2;
+                        const x = cx + Math.cos(angle) * radius;
+                        const y = cy + Math.sin(angle) * radius;
+                        const targetX = cx - Math.cos(angle) * radius;
+                        const targetY = cy - Math.sin(angle) * radius;
+                        const hue = (i / count) * 360;
+                        createAgent(x, y, targetX, targetY, `hsl(${hue}, 80%, 60%)`);
+                    }
+                    break;
+                }
+                case 'cross': {
+                    const half = Math.floor(count / 4);
+                    for (let i = 0; i < half; i++) {
+                        createAgent(50, 100 + i * 10, canvas.width - 50, 100 + i * 10, '#00d4ff');
+                        createAgent(canvas.width - 50, 400 + i * 10, 50, 400 + i * 10, '#ff6b6b');
+                        createAgent(200 + i * 10, 50, 200 + i * 10, canvas.height - 50, '#4ecdc4');
+                        createAgent(500 + i * 10, canvas.height - 50, 500 + i * 10, 50, '#ffe66d');
+                    }
+                    break;
+                }
+                case 'funnel': {
+                    for (let i = 0; i < count; i++) {
+                        const x = 50 + Math.random() * 150;
+                        const y = 100 + Math.random() * 400;
+                        createAgent(x, y, canvas.width - 50, cy, `hsl(${Math.random() * 60 + 180}, 80%, 60%)`);
+                    }
+                    break;
+                }
+                case 'random': {
+                    for (let i = 0; i < count; i++) {
+                        const x = 50 + Math.random() * (canvas.width - 100);
+                        const y = 50 + Math.random() * (canvas.height - 100);
+                        const targetX = 50 + Math.random() * (canvas.width - 100);
+                        const targetY = 50 + Math.random() * (canvas.height - 100);
+                        createAgent(x, y, targetX, targetY, `hsl(${Math.random() * 360}, 70%, 60%)`);
+                    }
+                    break;
+                }
+            }
+        };
+
+        window.toggleSimulation = function() {
+            running = !running;
+            document.getElementById('toggleBtn').textContent = running ? '⏸️ 暂停' : '▶️ 继续';
+        };
+
+        window.resetSimulation = function() {
+            loadScenario('circle');
+        };
+
+        window.clearAll = function() {
+            world.clear();
+        };
+
+        function countCollisions() {
+            let count = 0;
+            const entities = world.entities;
+            for (let i = 0; i < entities.length; i++) {
+                for (let j = i + 1; j < entities.length; j++) {
+                    const t1 = entities[i].getComponent(TransformComponent);
+                    const t2 = entities[j].getComponent(TransformComponent);
+                    const a1 = entities[i].getComponent(AvoidanceAgentComponent);
+                    const a2 = entities[j].getComponent(AvoidanceAgentComponent);
+                    if (!t1 || !t2 || !a1 || !a2) continue;
+
+                    const dist = Vec2.dist(t1.position, t2.position);
+                    if (dist < (a1.radius + a2.radius) * 0.9) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function gameLoop(timestamp) {
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+            lastTime = timestamp;
+
+            // FPS计算
+            frameCount++;
+            if (timestamp - lastFpsTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFpsTime = timestamp;
+            }
+
+            // 清空画布
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (running) {
+                const frameStart = performance.now();
+                world.update(dt);
+                totalFrameTime = performance.now() - frameStart;
+            }
+
+            // 渲染
+            renderSystem.update(world.entities);
+
+            // 更新统计
+            const collisions = countCollisions();
+            document.getElementById('fps').textContent = fps + ' FPS';
+            document.getElementById('fps').className = 'stat-value ' + (fps >= 55 ? 'good' : fps >= 30 ? 'warn' : 'bad');
+            document.getElementById('frameTime').textContent = totalFrameTime.toFixed(2) + ' ms';
+            document.getElementById('kdtreeTime').textContent = avoidanceSystem.kdTreeTime.toFixed(2) + ' ms';
+            document.getElementById('orcaTime').textContent = avoidanceSystem.orcaTime.toFixed(2) + ' ms';
+            document.getElementById('collisions').textContent = collisions;
+            document.getElementById('collisions').className = 'stat-value ' + (collisions === 0 ? 'good' : 'bad');
+            document.getElementById('fpsOverlay').textContent = fps;
+            document.getElementById('agentCountOverlay').textContent = world.entities.length;
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 初始化
+        loadScenario('circle');
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

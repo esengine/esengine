@@ -11,6 +11,11 @@ title: "示例"
 - **特性**: 1000+粒子实时物理模拟、碰撞检测、性能对比
 - **技术点**: SharedArrayBuffer、Canvas 2D优化、实体生命周期管理
 
+### [ORCA 局部避让演示](./orca-avoidance-demo)
+- **功能**: 多代理碰撞避让 (ORCA 算法)
+- **特性**: 50-200代理实时避让、多种场景预设、参数调节
+- **技术点**: KDTree空间索引、线性规划求解、ECS架构
+
 ## 🔗 外部示例
 
 ### [割草机演示](https://github.com/esengine/lawn-mower-demo)
