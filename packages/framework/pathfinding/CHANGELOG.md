@@ -1,5 +1,46 @@
 # @esengine/pathfinding
 
+## 13.0.0
+
+### Minor Changes
+
+- [#460](https://github.com/esengine/esengine/pull/460) [`c6c8da1`](https://github.com/esengine/esengine/commit/c6c8da1f5b707a4ab43279b0a046a58797d08c66) Thanks [@esengine](https://github.com/esengine)! - feat(pathfinding): add ORCA local avoidance system
+
+    ### New Features
+    - **ORCA Algorithm**: Implement Optimal Reciprocal Collision Avoidance for multi-agent collision avoidance
+    - **ECS Components**: Add `AvoidanceAgentComponent` and `AvoidanceWorldComponent` for easy integration
+    - **LocalAvoidanceSystem**: System that automatically processes all avoidance agents each frame
+    - **KD-Tree Spatial Index**: Efficient neighbor queries with `createKDTree()`
+    - **Direct Solver API**: Use `createORCASolver()` for non-ECS usage
+    - **Static Obstacle Support**: Define polygonal obstacles with CCW vertex ordering
+    - **Pathfinding Integration**: Works seamlessly with `PathfindingAgentComponent`
+
+    ### Usage
+
+    ```typescript
+    import { AvoidanceWorldComponent, AvoidanceAgentComponent, LocalAvoidanceSystem } from '@esengine/pathfinding/ecs';
+
+    // Setup world
+    const world = entity.addComponent(new AvoidanceWorldComponent());
+    world.addRectObstacle(0, 0, 100, 10);
+
+    // Setup agents
+    const agent = entity.addComponent(new AvoidanceAgentComponent());
+    agent.radius = 0.5;
+    agent.maxSpeed = 5;
+
+    // Add system
+    scene.addSystem(new LocalAvoidanceSystem());
+
+    // Each frame
+    agent.setPreferredVelocityTowards(targetX, targetY);
+    ```
+
+### Patch Changes
+
+- Updated dependencies [[`190924d`](https://github.com/esengine/esengine/commit/190924d2ad81df3d2b621ff70df8ba91ea2736c1)]:
+    - @esengine/ecs-framework-math@2.11.0
+
 ## 12.1.2
 
 ### Patch Changes
