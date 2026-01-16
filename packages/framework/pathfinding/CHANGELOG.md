@@ -1,5 +1,18 @@
 # @esengine/pathfinding
 
+## 13.1.0
+
+### Minor Changes
+
+- [#462](https://github.com/esengine/esengine/pull/462) [`bbb7a2b`](https://github.com/esengine/esengine/commit/bbb7a2b7e2768e31d9ff9bc5d28181e7f51247ea) Thanks [@esengine](https://github.com/esengine)! - feat(pathfinding): add standalone avoidance subpath export
+
+    Added `@esengine/pathfinding/avoidance` export path for direct access to ORCA local avoidance module without importing the full pathfinding package.
+
+    ```typescript
+    // New import path
+    import { createORCASolver, createKDTree } from '@esengine/pathfinding/avoidance';
+    ```
+
 ## 13.0.0
 
 ### Minor Changes
