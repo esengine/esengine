@@ -15,6 +15,10 @@
             "types": "./dist/ecs.d.ts",
             "import": "./dist/ecs.js"
         },
+        "./avoidance": {
+            "types": "./dist/avoidance.d.ts",
+            "import": "./dist/avoidance.js"
+        },
         "./nodes": {
             "types": "./dist/nodes.d.ts",
             "import": "./dist/nodes.js"
