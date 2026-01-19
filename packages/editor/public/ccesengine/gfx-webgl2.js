@@ -3214,6 +3214,7 @@ var WebGL2CommandBuffer = function (_CommandBuffer) {
     this._numDrawCalls = 0;
     this._numInstances = 0;
     this._numTris = 0;
+    this._isInRenderPass = false;
   };
   _proto.end = function end() {
     if (this._isStateInvalid) {

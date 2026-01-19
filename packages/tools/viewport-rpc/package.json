@@ -1,0 +1,36 @@
+{
+  "name": "@esengine/viewport-rpc",
+  "version": "1.0.0",
+  "description": "Type-safe RPC protocol for editor-viewport communication",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/browser.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && npm run copy:editor",
+    "build:watch": "tsup --watch",
+    "copy:editor": "node -e \"require('fs').copyFileSync('dist/browser.js', '../../editor/assets/viewport-rpc.js')\"",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

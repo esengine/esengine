@@ -19,6 +19,7 @@ pub mod widgets;
 use eframe::egui;
 use raw_window_handle::HasWindowHandle;
 
+use crate::effect_compiler::EffectCompiler;
 use crate::theme_egui::build_egui_theme;
 use crate::theme_tokens::ThemeTokens;
 
@@ -52,6 +53,9 @@ pub struct EditorApp {
     /// @zh 待注入的 effects JSON（等待 WebView 就绪）
     /// @en Pending effects JSON to inject (waiting for WebView ready)
     pending_effects_json: Option<String>,
+    /// @zh 待配置 viewport 项目路径
+    /// @en Pending viewport project configuration
+    pending_viewport_config: bool,
 }
 
 impl EditorApp {
@@ -64,6 +68,7 @@ impl EditorApp {
             use_webview: false,
             webview_initialized: false,
             pending_effects_json: None,
+            pending_viewport_config: false,
         }
     }
 
@@ -76,6 +81,7 @@ impl EditorApp {
             use_webview: true,
             webview_initialized: false,
             pending_effects_json: None,
+            pending_viewport_config: false,
         }
     }
 
@@ -92,6 +98,7 @@ impl EditorApp {
             use_webview: true,
             webview_initialized: false,
             pending_effects_json: None,
+            pending_viewport_config: false,
         }
     }
 
@@ -105,6 +112,7 @@ impl EditorApp {
             use_webview: true,
             webview_initialized: false,
             pending_effects_json: None,
+            pending_viewport_config: false,
         }
     }
 
@@ -125,6 +133,7 @@ impl EditorApp {
             use_webview: true,
             webview_initialized: false,
             pending_effects_json: None,
+            pending_viewport_config: false,
         }
     }
 
@@ -149,6 +158,7 @@ impl EditorApp {
             use_webview: false,
             webview_initialized: false,
             pending_effects_json: None,
+            pending_viewport_config: false,
         }
     }
 
@@ -158,34 +168,43 @@ impl EditorApp {
         ThemeColors::new(&self.state.tokens)
     }
 
-    /// @zh 同步 MCP 场景数据
-    /// @en Synchronize MCP scene data
-    fn sync_mcp_data(&mut self) {
-        if !self.state.is_mcp_mode() {
-            return;
-        }
+    /// @zh 处理来自 viewport 的场景通知
+    /// @en Process scene notifications from viewport
+    fn process_scene_notifications(&mut self) {
+        let mut hierarchy_updated = false;
 
-        // Start MCP server if not running
-        if !self.state.scene_bridge.is_mcp_running() {
-            if let Err(e) = self.state.scene_bridge.start_mcp() {
-                println!("[MCP] Failed to start server: {}", e);
-                return;
+        if let Some(ref mut viewport) = self.webview_viewport {
+            for notification in viewport.drain_scene_notifications() {
+                match notification {
+                    webview::SceneNotification::HierarchyChanged(tree) => {
+                        let node_count = tree.count_nodes();
+                        println!("[Editor] Received hierarchy update: {} nodes", node_count);
+                        self.state.scene_state.update_tree(tree);
+                        hierarchy_updated = true;
+                    }
+                    webview::SceneNotification::SceneLoaded { name } => {
+                        println!("[Editor] Scene loaded: {}", name);
+                        self.state.scene_state.scene_loaded = true;
+                        self.state.scene_state.mark_hierarchy_dirty();
+                    }
+                    webview::SceneNotification::NodePropertiesReceived { uuid, properties } => {
+                        // Only update if this matches the currently selected node
+                        if self.state.scene_state.selected_uuid.as_ref() == Some(&uuid) {
+                            println!("[Editor] Received properties for selected node: {}", properties.name);
+                            // Convert components to ComponentData
+                            let components: Vec<scene_data::ComponentData> = properties.components.clone();
+                            self.state.scene_state.update_properties(properties);
+                            self.state.scene_state.update_components(components);
+                        }
+                    }
+                }
             }
         }
 
-        // Fetch hierarchy if needed
-        if self.state.scene_state.hierarchy_dirty || self.state.scene_state.tree.is_none() {
-            self.state.scene_bridge.request_hierarchy_mcp(&mut self.state.scene_state);
-            // Sync hierarchy items after fetching
+        // Sync hierarchy items from scene state if tree was updated
+        if hierarchy_updated {
             self.state.sync_hierarchy_from_scene();
-        }
-
-        // Fetch properties for selected node if needed
-        if let Some(ref uuid) = self.state.scene_state.selected_uuid {
-            if self.state.scene_state.properties_dirty || self.state.scene_state.selected_properties.is_none() {
-                let uuid_clone = uuid.clone();
-                self.state.scene_bridge.request_properties_mcp(&uuid_clone, &mut self.state.scene_state);
-            }
+            println!("[Editor] Hierarchy items synced: {} items", self.state.hierarchy_items.len());
         }
     }
 
@@ -202,12 +221,32 @@ impl EditorApp {
             return;
         }
 
+        // Skip if bounds.top() is too small (WebView would overlap titlebar)
+        // Titlebar is 32px, toolbar is 36px, so top should be at least 60px
+        if bounds.top() < 60.0 {
+            println!("[WebView] Skipping init: bounds.top()={} is too small", bounds.top());
+            return;
+        }
+
         if let Some(ref mut viewport) = self.webview_viewport {
             if let Ok(handle) = frame.window_handle() {
                 viewport.initialize(handle.as_raw(), bounds);
                 if viewport.is_ready() {
                     self.webview_initialized = true;
                     println!("[WebView] Initialized successfully at {:?}", bounds);
+
+                    // Inject effects immediately after WebView is ready
+                    if let Some(effects_json) = self.pending_effects_json.take() {
+                        match viewport.inject_effects(&effects_json) {
+                            Ok(()) => {
+                                println!("[WebView] Effects injected immediately after init");
+                            }
+                            Err(e) => {
+                                println!("[WebView] Failed to inject effects: {}", e);
+                                self.pending_effects_json = Some(effects_json);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -216,6 +255,90 @@ impl EditorApp {
     #[cfg(not(target_os = "windows"))]
     fn initialize_webview(&mut self, _frame: &eframe::Frame, _bounds: egui::Rect) {
         // WebView2 only supported on Windows
+    }
+
+    /// @zh 将场景数据同步到 WebView viewport
+    /// @en Sync scene data to WebView viewport
+    fn sync_scene_to_viewport(&self, tree: &NodeData) {
+        if let Some(ref viewport) = self.webview_viewport {
+            // Convert NodeData to JSON for the viewport
+            if let Ok(json) = serde_json::to_string(tree) {
+                let script = format!(
+                    "if (window.esengine && window.esengine.syncSceneFromData) {{ window.esengine.syncSceneFromData({}); }}",
+                    json
+                );
+                if let Err(e) = viewport.eval_script(&script) {
+                    println!("[Viewport] Failed to sync scene: {}", e);
+                } else {
+                    println!("[Viewport] Scene synced to viewport");
+                }
+            }
+        }
+    }
+
+    /// @zh 将选中节点同步到 WebView viewport（用于高亮显示并请求属性）
+    /// @en Sync selected node to WebView viewport (for highlighting and request properties)
+    fn sync_selection_to_viewport(&self, uuid: Option<&str>) {
+        if let Some(ref viewport) = self.webview_viewport {
+            // Use the new select_node method which also requests properties
+            if let Err(e) = viewport.select_node(uuid) {
+                println!("[Viewport] Failed to sync selection: {}", e);
+            }
+        }
+    }
+
+    /// @zh 配置 viewport 使用项目资源服务器
+    /// @en Configure viewport to use project resource server
+    fn configure_viewport_project(&self) {
+        println!("[Viewport] configure_viewport_project called");
+        if let Some(ref viewport) = self.webview_viewport {
+            if let Some(port) = viewport.get_server_port() {
+                let server_url = format!("http://127.0.0.1:{}", port);
+                println!("[Viewport] Server URL: {}", server_url);
+                // Use the early setter that works before window.esengine is ready
+                // This sets projectLibraryUrl immediately, then also calls esengine.setProjectConfig
+                // if it's available for full configuration
+                let script = format!(
+                    r#"(function() {{
+                        var config = {{ serverUrl: '{}' }};
+                        console.log('[viewport] Rust called setProjectConfig with:', config);
+                        if (window._setProjectConfigEarly) {{
+                            window._setProjectConfigEarly(config);
+                        }}
+                        if (window.esengine && window.esengine.setProjectConfig) {{
+                            window.esengine.setProjectConfig(config);
+                        }}
+                    }})()"#,
+                    server_url
+                );
+                if let Err(e) = viewport.eval_script(&script) {
+                    println!("[Viewport] Failed to configure project: {}", e);
+                } else {
+                    println!("[Viewport] Project configured with server: {}", server_url);
+                }
+            } else {
+                println!("[Viewport] No server port available!");
+            }
+        } else {
+            println!("[Viewport] No webview_viewport!");
+        }
+    }
+
+    /// @zh 在 viewport 中加载场景
+    /// @en Load scene in viewport
+    ///
+    /// @param scene_url - 场景资源 URL（如 db://assets/scenes/login.scene）
+    pub fn load_scene_in_viewport(&self, scene_url: &str) {
+        if let Some(ref viewport) = self.webview_viewport {
+            match viewport.load_scene(scene_url) {
+                Ok(()) => {
+                    println!("[Viewport] Loading scene: {}", scene_url);
+                }
+                Err(e) => {
+                    println!("[Viewport] Failed to load scene: {}", e);
+                }
+            }
+        }
     }
 }
 
@@ -252,8 +375,8 @@ impl EditorApp {
     /// @zh 就绪阶段 - 主编辑器界面
     /// @en Ready phase - main editor interface
     fn ready_screen(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // Sync MCP data if in MCP mode
-        self.sync_mcp_data();
+        // Process scene notifications from viewport
+        self.process_scene_notifications();
 
         // Drain WebView logs and add to Output panel
         if let Some(ref mut viewport) = self.webview_viewport {
@@ -534,27 +657,9 @@ impl EditorApp {
         // Render title bar first (same as startup)
         self.startup_title_bar(ctx);
 
-        // Start MCP server if not running
-        if self.state.is_mcp_mode() && !self.state.scene_bridge.is_mcp_running() {
-            self.state.set_loading_status("Starting MCP server...");
-            match self.state.scene_bridge.start_mcp() {
-                Ok(()) => {
-                    println!("[Loading] MCP server process started");
-                    self.state.set_loading_status("Waiting for MCP server...");
-                }
-                Err(e) => {
-                    println!("[Loading] Failed to start MCP server: {}", e);
-                    self.state.set_loading_status(&format!("Error: {}", e));
-                }
-            }
-        }
-
-        // Poll MCP server ready status (non-blocking)
-        if self.state.is_mcp_mode() && self.state.scene_bridge.is_mcp_running() {
-            if self.state.scene_bridge.poll_mcp_ready() {
-                self.state.set_loading_status("MCP server ready!");
-            }
-        }
+        // No longer need MCP - viewport loads scenes directly via ccesengine
+        // Just proceed to ready state after a brief delay for viewport init
+        self.state.set_loading_status("Initializing viewport...");
 
         let colors = ThemeColors::new(&self.state.tokens);
         let bg_color = colors.bg_base();
@@ -670,47 +775,96 @@ impl EditorApp {
             self.use_webview = true;
             self.webview_initialized = false;
         }
+        // Set project path for viewport to access library resources
+        if let Some(ref project_path) = self.state.project_path {
+            if let Some(ref mut viewport) = self.webview_viewport {
+                viewport.set_project_path(project_path.clone());
+            }
+        }
+        // Compile effects using Rust effect compiler
+        self.compile_effects_for_viewport();
+        // Configure viewport to use project server (will be called after viewport is ready)
+        self.pending_viewport_config = true;
+    }
+
+    /// @zh 使用 Rust effect compiler 编译 effects
+    /// @en Compile effects using Rust effect compiler
+    fn compile_effects_for_viewport(&mut self) {
+        let cli_path = match &self.state.cli_path {
+            Some(p) => p.clone(),
+            None => {
+                println!("[EditorApp] CLI path not set, cannot compile effects");
+                return;
+            }
+        };
+
+        // Engine path is relative to CLI: packages/engine
+        let engine_path = cli_path.join("packages").join("engine");
+        let chunks_dir = engine_path.join("editor").join("assets").join("chunks");
+        let effects_dir = engine_path.join("editor").join("assets").join("effects");
+
+        if !chunks_dir.exists() {
+            println!("[EditorApp] Chunks directory not found: {:?}", chunks_dir);
+            return;
+        }
+
+        if !effects_dir.exists() {
+            println!("[EditorApp] Effects directory not found: {:?}", effects_dir);
+            return;
+        }
+
+        println!("[EditorApp] Loading chunks from: {:?}", chunks_dir);
+        println!("[EditorApp] Loading effects from: {:?}", effects_dir);
+
+        let mut compiler = EffectCompiler::new();
+
+        // Load chunks first
+        match compiler.load_chunks_from_dir(&chunks_dir) {
+            Ok(count) => println!("[EditorApp] Loaded {} chunks", count),
+            Err(e) => {
+                println!("[EditorApp] Failed to load chunks: {}", e);
+                return;
+            }
+        }
+
+        // Compile effects
+        match compiler.load_effects_from_dir(&effects_dir) {
+            Ok(effects) => {
+                println!("[EditorApp] Compiled {} effects", effects.len());
+                for effect in &effects {
+                    println!("[EditorApp]   - {}", effect.name);
+                }
+
+                // The HTML expects an array of effects directly, not wrapped in an object
+                match serde_json::to_string(&effects) {
+                    Ok(json) => {
+                        println!("[EditorApp] Effects JSON ready ({} bytes)", json.len());
+                        // Set effects on viewport for initialization script injection
+                        if let Some(ref mut viewport) = self.webview_viewport {
+                            viewport.set_pending_effects(json.clone());
+                            println!("[EditorApp] Effects set on viewport for pre-injection");
+                        }
+                        // Also keep a copy for fallback injection
+                        self.pending_effects_json = Some(json);
+                    }
+                    Err(e) => {
+                        println!("[EditorApp] Failed to serialize effects: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("[EditorApp] Failed to compile effects: {}", e);
+            }
+        }
     }
 
     /// @zh 检查加载是否完成
     /// @en Check if loading is complete
     fn check_loading_complete(&mut self) {
-        // Check if MCP server is ready
-        if self.state.scene_bridge.is_mcp_ready() {
-            self.state.set_loading_status("正在获取内置资源...");
-
-            // Fetch builtin resources via MCP
-            match self.state.scene_bridge.get_builtin_resources_mcp() {
-                Ok(resources) => {
-                    // Debug: Print what keys are in the response
-                    if let Some(obj) = resources.as_object() {
-                        let keys: Vec<&String> = obj.keys().collect();
-                        println!("[EditorApp] Builtin resources keys: {:?}", keys);
-                    } else {
-                        println!("[EditorApp] Builtin resources is not an object: {}", resources);
-                    }
-
-                    // Extract compiled effects from the response
-                    if let Some(compiled_effects) = resources.get("compiledEffects") {
-                        let effects_json = compiled_effects.to_string();
-                        let effects_count = compiled_effects.as_array().map_or(0, |a| a.len());
-                        println!("[EditorApp] Got {} compiled effects, storing for injection", effects_count);
-
-                        // Store effects for later injection when WebView is ready
-                        self.pending_effects_json = Some(effects_json);
-                    } else {
-                        println!("[EditorApp] No compiled effects in builtin resources");
-                    }
-
-                    self.state.finish_loading();
-                }
-                Err(e) => {
-                    println!("[EditorApp] Failed to fetch builtin resources: {}", e);
-                    // Still transition to ready even if effects fail
-                    self.state.finish_loading();
-                }
-            }
-        }
+        // No longer need MCP - just transition to ready state
+        // Viewport will load scenes directly using ccesengine
+        self.state.set_loading_status("Ready");
+        self.state.finish_loading();
     }
 
     /// @zh 尝试注入待处理的 effects
@@ -732,6 +886,12 @@ impl EditorApp {
                     }
                 }
             }
+        }
+
+        // Configure viewport project after initialization
+        if self.pending_viewport_config && self.webview_initialized {
+            self.configure_viewport_project();
+            self.pending_viewport_config = false;
         }
     }
 }
@@ -1287,9 +1447,21 @@ impl EditorApp {
             self.handle_viewport_action(action);
         }
 
-        // WebView area
+        // WebView area - pass dropdown overlay rect if camera settings is open
+        // The dropdown panel is 200x160 and appears below the tab bar
+        let dropdown_overlay = if self.state.camera_settings_open {
+            // Calculate dropdown position relative to viewport area
+            // The dropdown appears at the left side of the viewport, below the tab bar
+            let available = ui.available_rect_before_wrap();
+            Some(egui::Rect::from_min_size(
+                egui::pos2(available.left(), available.top()),
+                egui::vec2(200.0, 160.0),
+            ))
+        } else {
+            None
+        };
         if let Some(ref mut viewport) = self.webview_viewport {
-            webview_viewport_area(ui, viewport);
+            webview_viewport_area(ui, viewport, dropdown_overlay);
         } else {
             // Fallback placeholder
             let available = ui.available_rect_before_wrap();
@@ -1327,6 +1499,33 @@ impl EditorApp {
                 };
                 if let Some(ref viewport) = self.webview_viewport {
                     let script = format!("if (window.setViewMode) {{ window.setViewMode('{}'); }}", mode_str);
+                    let _ = viewport.eval_script(&script);
+                }
+            }
+            ViewportAction::ToggleGrid(visible) => {
+                if let Some(ref viewport) = self.webview_viewport {
+                    let script = format!("if (window.setGridVisible) {{ window.setGridVisible({}); }}", visible);
+                    let _ = viewport.eval_script(&script);
+                }
+            }
+            ViewportAction::ToggleSnap(enabled) => {
+                if let Some(ref viewport) = self.webview_viewport {
+                    let script = format!("if (window.setSnapEnabled) {{ window.setSnapEnabled({}); }}", enabled);
+                    let _ = viewport.eval_script(&script);
+                }
+            }
+            ViewportAction::UpdateCameraSettings { near, far, fov } => {
+                if let Some(ref viewport) = self.webview_viewport {
+                    let script = format!(
+                        r#"
+                        if (window.esengine) {{
+                            if (window.esengine.setCameraNearPlane) window.esengine.setCameraNearPlane({});
+                            if (window.esengine.setCameraFarPlane) window.esengine.setCameraFarPlane({});
+                            if (window.esengine.setCameraFOV) window.esengine.setCameraFOV({});
+                        }}
+                        "#,
+                        near, far, fov
+                    );
                     let _ = viewport.eval_script(&script);
                 }
             }
@@ -1405,16 +1604,19 @@ impl EditorApp {
                     let items = self.state.hierarchy_items.clone();
                     let mut selected = self.state.selected_entity;
                     let mut selected_uuid: Option<String> = None;
+                    let mut selected_path: Option<String> = None;
                     let mut idx = 0usize;
                     for item in &items {
-                        self.render_hierarchy_node(ui, item, 0, &mut idx, &mut selected, &mut selected_uuid, panel_width);
+                        self.render_hierarchy_node(ui, item, 0, &mut idx, &mut selected, &mut selected_uuid, &mut selected_path, panel_width);
                     }
-                    // If selection changed, also update scene_state
+                    // If selection changed, also update scene_state and viewport
                     if self.state.selected_entity != selected {
                         self.state.selected_entity = selected;
-                        if let Some(uuid) = selected_uuid {
-                            self.state.scene_state.select_node(Some(uuid));
-                        }
+                        // Clone uuid for viewport sync before moving into scene_state
+                        let uuid_for_viewport = selected_uuid.clone();
+                        self.state.scene_state.select_node_with_path(selected_uuid, selected_path);
+                        // Sync selection to viewport for highlighting
+                        self.sync_selection_to_viewport(uuid_for_viewport.as_deref());
                     }
                 }
             });
@@ -1437,7 +1639,7 @@ impl EditorApp {
         ui.painter().text(tab_inner.center(), egui::Align2::CENTER_CENTER, title, egui::FontId::proportional(11.0), egui::Color32::WHITE);
     }
 
-    fn render_hierarchy_node(&self, ui: &mut egui::Ui, item: &HierarchyItem, depth: usize, idx: &mut usize, selected: &mut Option<usize>, selected_uuid: &mut Option<String>, panel_width: f32) {
+    fn render_hierarchy_node(&self, ui: &mut egui::Ui, item: &HierarchyItem, depth: usize, idx: &mut usize, selected: &mut Option<usize>, selected_uuid: &mut Option<String>, selected_path: &mut Option<String>, panel_width: f32) {
         let current_idx = *idx;
         *idx += 1;
         let indent = 6.0 + depth as f32 * 14.0;
@@ -1497,13 +1699,8 @@ impl EditorApp {
         Icons::draw(ui.painter(), egui::pos2(x + 7.0, cy), 14.0, icon, icon_color);
         x += 20.0;
 
-        // Name
-        let name_color = if is_selected { egui::Color32::WHITE } else { egui::Color32::from_rgb(0xe0, 0xe0, 0xe0) };
-        ui.painter().text(egui::pos2(x, cy), egui::Align2::LEFT_CENTER, &item.name, egui::FontId::proportional(12.0), name_color);
-
         // Type label - show first component if available, otherwise node type
         let type_str = if !item.components.is_empty() {
-            // Show the most relevant component
             item.components.first().map(|s| s.as_str()).unwrap_or("Node")
         } else {
             match item.node_type {
@@ -1512,17 +1709,71 @@ impl EditorApp {
                 NodeType::UI => "UI", NodeType::Node => "Node",
             }
         };
-        ui.painter().text(egui::pos2(row_rect.right() - 8.0, cy), egui::Align2::RIGHT_CENTER, type_str, egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x88, 0x88, 0x88));
+
+        // Fonts
+        let name_font = egui::FontId::proportional(12.0);
+        let type_font = egui::FontId::proportional(10.0);
+
+        // Calculate available space
+        let right_margin = 8.0;
+        let spacing = 8.0;
+        let available_width = row_rect.right() - x - right_margin;
+
+        // Calculate actual text widths
+        let name_full_width = ui.fonts(|f| f.layout_no_wrap(item.name.clone(), name_font.clone(), egui::Color32::WHITE).rect.width());
+        let type_full_width = ui.fonts(|f| f.layout_no_wrap(type_str.to_string(), type_font.clone(), egui::Color32::WHITE).rect.width());
+
+        // Decide on truncation strategy based on available width
+        let min_type_width = 40.0;
+        let min_name_width = 40.0;
+
+        // Calculate how much space each element gets
+        let (display_name, display_type, type_x) = if available_width < min_name_width + min_type_width + spacing {
+            // Very narrow: just show truncated name, hide type
+            let name_max = available_width.max(20.0);
+            let truncated_name = self.truncate_text(ui, &item.name, &name_font, name_max);
+            (truncated_name, String::new(), 0.0)
+        } else {
+            // Normal case: allocate space proportionally
+            // Type gets up to 40% of available width, rest goes to name
+            let type_max_width = (available_width * 0.4).min(type_full_width).max(min_type_width);
+            let name_max_width = available_width - type_max_width - spacing;
+
+            let truncated_name = if name_full_width > name_max_width {
+                self.truncate_text(ui, &item.name, &name_font, name_max_width)
+            } else {
+                item.name.clone()
+            };
+
+            let truncated_type = if type_full_width > type_max_width {
+                self.truncate_text(ui, type_str, &type_font, type_max_width)
+            } else {
+                type_str.to_string()
+            };
+
+            let type_x = row_rect.right() - right_margin;
+            (truncated_name, truncated_type, type_x)
+        };
+
+        // Draw name
+        let name_color = if is_selected { egui::Color32::WHITE } else { egui::Color32::from_rgb(0xe0, 0xe0, 0xe0) };
+        ui.painter().text(egui::pos2(x, cy), egui::Align2::LEFT_CENTER, &display_name, name_font, name_color);
+
+        // Draw type label (right aligned) if not hidden
+        if !display_type.is_empty() {
+            ui.painter().text(egui::pos2(type_x, cy), egui::Align2::RIGHT_CENTER, &display_type, type_font, egui::Color32::from_rgb(0x66, 0x66, 0x66));
+        }
 
         // Click to select
         if response.clicked() {
             *selected = Some(current_idx);
             *selected_uuid = Some(item.uuid.clone());
+            *selected_path = Some(item.path.clone());
         }
 
         if item.expanded {
             for child in &item.children {
-                self.render_hierarchy_node(ui, child, depth + 1, idx, selected, selected_uuid, panel_width);
+                self.render_hierarchy_node(ui, child, depth + 1, idx, selected, selected_uuid, selected_path, panel_width);
             }
         }
     }
@@ -1554,24 +1805,55 @@ impl EditorApp {
             return;
         }
 
+        // Get node properties from scene state
+        let props = self.state.scene_state.selected_properties.clone();
+        let node_name = props.as_ref().map(|p| p.name.as_str()).unwrap_or("Node");
+        let node_active = props.as_ref().map(|p| p.active).unwrap_or(true);
+
+        // Sync inspector state with real data
+        if let Some(ref p) = props {
+            self.state.inspector.position = p.position;
+            self.state.inspector.rotation = p.rotation;
+            self.state.inspector.scale = p.scale;
+            self.state.inspector.visible = p.active;
+        }
+
+        // Get component list from scene state
+        let components = self.state.scene_state.selected_components.clone();
+
         egui::ScrollArea::vertical()
             .id_source("inspector_scroll")
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                // Entity header
+                // Entity header with real node name
                 let (entity_rect, _) = ui.allocate_exact_size(egui::vec2(panel_width, 32.0), egui::Sense::hover());
-                Icons::draw(ui.painter(), egui::pos2(entity_rect.left() + 16.0, entity_rect.center().y), 14.0, "check", egui::Color32::from_rgb(0x4a, 0x9e, 0xff));
+                let check_color = if node_active { egui::Color32::from_rgb(0x4a, 0x9e, 0xff) } else { egui::Color32::from_rgb(0x66, 0x66, 0x66) };
+                Icons::draw(ui.painter(), egui::pos2(entity_rect.left() + 16.0, entity_rect.center().y), 14.0, "check", check_color);
                 Icons::draw(ui.painter(), egui::pos2(entity_rect.left() + 36.0, entity_rect.center().y), 16.0, "box", egui::Color32::from_rgb(0x88, 0x88, 0x88));
-                ui.painter().text(egui::pos2(entity_rect.left() + 52.0, entity_rect.center().y), egui::Align2::LEFT_CENTER, "Player", egui::FontId::proportional(14.0), egui::Color32::from_rgb(0xe8, 0xe8, 0xe8));
+                ui.painter().text(egui::pos2(entity_rect.left() + 52.0, entity_rect.center().y), egui::Align2::LEFT_CENTER, node_name, egui::FontId::proportional(14.0), egui::Color32::from_rgb(0xe8, 0xe8, 0xe8));
 
-                // Transform component
+                // Transform component (always present with node properties)
                 self.draw_component_section(ui, "Transform", "move", 0, panel_width);
 
-                // Sprite Renderer
-                self.draw_component_section(ui, "Sprite Renderer", "image", 1, panel_width);
+                // Render each component from MCP
+                for (idx, comp) in components.iter().enumerate() {
+                    // Get component display name (strip "cc." prefix if present)
+                    let display_name = comp.comp_type.strip_prefix("cc.").unwrap_or(&comp.comp_type);
+                    let icon = scene_data::get_component_icon(display_name);
+                    self.draw_dynamic_component_section(ui, display_name, icon, idx + 1, &comp.properties, panel_width);
+                }
 
-                // Script
-                self.draw_component_section(ui, "PlayerController", "file-code", 2, panel_width);
+                // Show loading state if properties not yet loaded
+                if props.is_none() {
+                    let (loading_rect, _) = ui.allocate_exact_size(egui::vec2(panel_width, 40.0), egui::Sense::hover());
+                    ui.painter().text(
+                        loading_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "Loading properties...",
+                        egui::FontId::proportional(11.0),
+                        egui::Color32::from_rgb(0x66, 0x66, 0x66),
+                    );
+                }
 
                 ui.add_space(16.0);
 
@@ -1639,6 +1921,159 @@ impl EditorApp {
                     widgets::property_row_bool(ui, "Grounded", &mut self.state.inspector.script_grounded);
                 }
             }
+        }
+    }
+
+    /// @zh 绘制动态组件区段（来自 MCP 的组件属性）
+    /// @en Draw dynamic component section (from MCP component properties)
+    fn draw_dynamic_component_section(
+        &mut self,
+        ui: &mut egui::Ui,
+        name: &str,
+        icon: &str,
+        comp_idx: usize,
+        properties: &std::collections::HashMap<String, PropertyValue>,
+        panel_width: f32,
+    ) {
+        // Use a stable ID for expansion state
+        let id = egui::Id::new(format!("comp_expanded_{}", comp_idx));
+        let expanded = ui.memory_mut(|mem| *mem.data.get_temp_mut_or_insert_with(id, || true));
+
+        // Header 28px
+        let (header_rect, header_resp) =
+            ui.allocate_exact_size(egui::vec2(panel_width, 28.0), egui::Sense::click());
+
+        let bg_color = if header_resp.hovered() {
+            egui::Color32::from_rgb(0x2a, 0x2d, 0x2e)
+        } else {
+            egui::Color32::from_rgb(0x25, 0x25, 0x26)
+        };
+        ui.painter().rect_filled(header_rect, 0.0, bg_color);
+        ui.painter().line_segment(
+            [
+                egui::pos2(header_rect.left(), header_rect.bottom()),
+                egui::pos2(header_rect.right(), header_rect.bottom()),
+            ],
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x1a, 0x1a, 0x1a)),
+        );
+
+        if header_resp.clicked() {
+            ui.memory_mut(|mem| {
+                let val = mem.data.get_temp_mut_or_insert_with(id, || true);
+                *val = !*val;
+            });
+        }
+
+        let cy = header_rect.center().y;
+        let arrow_icon = if expanded {
+            "chevron-down"
+        } else {
+            "chevron-right"
+        };
+        Icons::draw(
+            ui.painter(),
+            egui::pos2(header_rect.left() + 14.0, cy),
+            10.0,
+            arrow_icon,
+            egui::Color32::from_rgb(0x6a, 0x6a, 0x6a),
+        );
+
+        let icon_color = if header_resp.hovered() || expanded {
+            egui::Color32::from_rgb(0x00, 0x7a, 0xcc)
+        } else {
+            egui::Color32::from_rgb(0x9d, 0x9d, 0x9d)
+        };
+        Icons::draw(
+            ui.painter(),
+            egui::pos2(header_rect.left() + 30.0, cy),
+            12.0,
+            icon,
+            icon_color,
+        );
+
+        let text_color = if header_resp.hovered() || expanded {
+            egui::Color32::from_rgb(0xcc, 0xcc, 0xcc)
+        } else {
+            egui::Color32::from_rgb(0x9d, 0x9d, 0x9d)
+        };
+        ui.painter().text(
+            egui::pos2(header_rect.left() + 46.0, cy),
+            egui::Align2::LEFT_CENTER,
+            name,
+            egui::FontId::proportional(12.0),
+            text_color,
+        );
+
+        // Property count badge
+        let prop_count = properties.len();
+        if prop_count > 0 {
+            let count_text = format!("{}", prop_count);
+            ui.painter().text(
+                egui::pos2(header_rect.right() - 16.0, cy),
+                egui::Align2::RIGHT_CENTER,
+                &count_text,
+                egui::FontId::proportional(10.0),
+                egui::Color32::from_rgb(0x66, 0x66, 0x66),
+            );
+        }
+
+        // Content - render properties
+        if expanded {
+            // Sort properties by name for consistent display
+            let mut prop_list: Vec<_> = properties.iter().collect();
+            prop_list.sort_by(|a, b| a.0.cmp(b.0));
+
+            for (prop_name, prop_value) in prop_list {
+                self.draw_property_row(ui, prop_name, prop_value, panel_width);
+            }
+        }
+    }
+
+    /// @zh 绘制属性行（使用统一的 widget 样式）
+    /// @en Draw property row (using unified widget style)
+    fn draw_property_row(&self, ui: &mut egui::Ui, name: &str, value: &PropertyValue, _panel_width: f32) {
+        // Use the unified dynamic property row widget
+        widgets::property_row_dynamic(ui, name, value);
+    }
+
+    /// @zh 截断文本以适应指定宽度
+    /// @en Truncate text to fit within specified width
+    fn truncate_text(&self, ui: &egui::Ui, text: &str, font: &egui::FontId, max_width: f32) -> String {
+        let ellipsis = "...";
+        let ellipsis_width = ui.fonts(|f| f.layout_no_wrap(ellipsis.to_string(), font.clone(), egui::Color32::WHITE).rect.width());
+
+        if max_width < ellipsis_width + 10.0 {
+            return ellipsis.to_string();
+        }
+
+        let full_width = ui.fonts(|f| f.layout_no_wrap(text.to_string(), font.clone(), egui::Color32::WHITE).rect.width());
+        if full_width <= max_width {
+            return text.to_string();
+        }
+
+        // Binary search for the right length
+        let chars: Vec<char> = text.chars().collect();
+        let mut left = 0;
+        let mut right = chars.len();
+
+        while left < right {
+            let mid = (left + right + 1) / 2;
+            let truncated: String = chars[..mid].iter().collect();
+            let test = format!("{}{}", truncated, ellipsis);
+            let test_width = ui.fonts(|f| f.layout_no_wrap(test.clone(), font.clone(), egui::Color32::WHITE).rect.width());
+
+            if test_width <= max_width {
+                left = mid;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        if left == 0 {
+            ellipsis.to_string()
+        } else {
+            let truncated: String = chars[..left].iter().collect();
+            format!("{}{}", truncated, ellipsis)
         }
     }
 
@@ -1884,9 +2319,29 @@ impl EditorApp {
                     };
                     Icons::draw(ui.painter(), card_rect.center(), 32.0, icon, egui::Color32::from_rgb(0x88, 0x88, 0x88));
 
-                    // Truncate asset name if too long (max width = card_size + some extra)
-                    let display_name = truncate_text(&asset.name, card_size + 8.0, &asset_font, ui);
-                    ui.painter().text(egui::pos2(ax + card_size / 2.0, ay + card_size + 10.0), egui::Align2::CENTER_CENTER, &display_name, asset_font.clone(), egui::Color32::from_rgb(0xe0, 0xe0, 0xe0));
+                    // Truncate asset name if too long (max width = card_size - padding)
+                    let display_name = truncate_text(&asset.name, card_size - 8.0, &asset_font, ui);
+                    let text_y = ay + card_size + 10.0;
+
+                    // Draw text background for better visibility
+                    let text_rect = egui::Rect::from_min_size(
+                        egui::pos2(ax, ay + card_size + 2.0),
+                        egui::vec2(card_size, 16.0),
+                    );
+                    let text_bg = if is_sel {
+                        egui::Color32::from_rgb(0x09, 0x47, 0x71)
+                    } else {
+                        egui::Color32::from_rgb(0x1e, 0x1e, 0x20)
+                    };
+                    ui.painter().rect_filled(text_rect, 2.0, text_bg);
+
+                    // Draw text with higher contrast
+                    let text_color = if is_sel {
+                        egui::Color32::WHITE
+                    } else {
+                        egui::Color32::from_rgb(0xcc, 0xcc, 0xcc)
+                    };
+                    ui.painter().text(egui::pos2(ax + card_size / 2.0, text_y), egui::Align2::CENTER_CENTER, &display_name, asset_font.clone(), text_color);
 
                     // Show tooltip with full name if truncated or on hover for longer names
                     if (display_name != asset.name || asset.name.len() > 10) && card_resp.hovered() {
@@ -1959,6 +2414,29 @@ impl EditorApp {
                     self.state.drawer.output_filter = idx;
                 }
 
+                // Copy All button
+                let copy_rect = egui::Rect::from_min_size(egui::pos2(header_rect.right() - 130.0, header_rect.top() + 4.0), egui::vec2(44.0, 20.0));
+                let copy_resp = ui.interact(copy_rect, egui::Id::new("output_copy"), egui::Sense::click());
+                if copy_resp.hovered() {
+                    ui.painter().rect_filled(copy_rect, 3.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x3d));
+                }
+                ui.painter().text(copy_rect.center(), egui::Align2::CENTER_CENTER, "Copy", egui::FontId::proportional(11.0), egui::Color32::from_rgb(0x88, 0x88, 0x88));
+                if copy_resp.clicked() {
+                    let all_text: String = self.state.drawer.logs.iter()
+                        .map(|e| {
+                            let lvl = match e.level {
+                                state::LogLevel::Info => "[INFO]",
+                                state::LogLevel::Warn => "[WARN]",
+                                state::LogLevel::Error => "[ERROR]",
+                            };
+                            let cnt = if e.count > 1 { format!("(x{}) ", e.count) } else { String::new() };
+                            format!("{} {} {}{}", lvl, e.time, cnt, e.message)
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    ui.output_mut(|o| o.copied_text = all_text);
+                }
+
                 // Clear button
                 let clear_rect = egui::Rect::from_min_size(egui::pos2(header_rect.right() - 80.0, header_rect.top() + 4.0), egui::vec2(48.0, 20.0));
                 let clear_resp = ui.interact(clear_rect, egui::Id::new("output_clear"), egui::Sense::click());
@@ -2003,15 +2481,16 @@ impl EditorApp {
 
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
-                        .stick_to_bottom(true)
+                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                         .show(ui, |ui| {
                             ui.set_min_width(content_rect.width() - 16.0);
+                            ui.spacing_mut().item_spacing.y = 2.0;
 
-                            for (_i, entry) in filtered_logs {
+                            for (i, entry) in filtered_logs {
                                 let color = match entry.level {
-                                    state::LogLevel::Info => egui::Color32::from_rgb(0x4a, 0xde, 0x80),
-                                    state::LogLevel::Warn => egui::Color32::from_rgb(0xfb, 0xbd, 0x23),
-                                    state::LogLevel::Error => egui::Color32::from_rgb(0xf8, 0x71, 0x71),
+                                    state::LogLevel::Info => egui::Color32::from_rgb(0x4e, 0xc9, 0xb0),
+                                    state::LogLevel::Warn => egui::Color32::from_rgb(0xdc, 0xdc, 0xaa),
+                                    state::LogLevel::Error => egui::Color32::from_rgb(0xf1, 0x4c, 0x4c),
                                 };
 
                                 let level_str = match entry.level {
@@ -2020,33 +2499,28 @@ impl EditorApp {
                                     state::LogLevel::Error => "[ERROR]",
                                 };
 
-                                let full_text = format!("{} {} {}", level_str, entry.time, entry.message);
+                                let count_str = if entry.count > 1 {
+                                    format!(" (x{})", entry.count)
+                                } else {
+                                    String::new()
+                                };
 
-                                ui.horizontal(|ui| {
-                                    // Time/level part (colored)
-                                    ui.label(egui::RichText::new(format!("{} {}", level_str, entry.time))
-                                        .monospace()
-                                        .size(10.0)
-                                        .color(color));
+                                let full_text = format!("{} {}{} {}", level_str, entry.time, count_str, entry.message);
 
-                                    // Message part (selectable for copy)
-                                    let response = ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(&entry.message)
-                                                .monospace()
-                                                .size(10.0)
-                                                .color(egui::Color32::from_rgb(0xcc, 0xcc, 0xcc))
-                                        ).sense(egui::Sense::click())
-                                    );
+                                let response = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(&full_text)
+                                            .monospace()
+                                            .size(11.0)
+                                            .color(color)
+                                    ).sense(egui::Sense::click())
+                                );
 
-                                    // Right-click context menu for copy
-                                    response.context_menu(|ui| {
-                                        if ui.button("Copy").clicked() {
-                                            ui.output_mut(|o| o.copied_text = full_text.clone());
-                                            ui.close_menu();
-                                        }
-                                    });
-                                });
+                                if response.clicked() {
+                                    ui.output_mut(|o| o.copied_text = entry.message.clone());
+                                }
+
+                                response.on_hover_text_at_pointer(format!("Click to copy (log #{})", i));
                             }
                         });
                 });
@@ -2169,24 +2643,17 @@ impl EditorApp {
                 // Enter folder (shouldn't happen in assets, but handle anyway)
             }
             AssetType::Scene => {
-                // Open scene via MCP
-                if self.state.is_mcp_mode() {
-                    if let Some(ref root_path) = self.state.content_browser.root_path {
-                        if let Some(db_url) = asset.get_db_url(root_path) {
-                            println!("[ContentBrowser] Opening scene: {}", db_url);
-                            match self.state.scene_bridge.open_scene_mcp(&db_url) {
-                                Ok(_) => {
-                                    // Scene opened successfully, refresh hierarchy
-                                    self.state.scene_state.mark_hierarchy_dirty();
-                                    self.state.scene_state.select_node(None);
-                                    self.state.drawer.add_log(state::LogEntry::info(format!("Opened scene: {}", asset.name)));
-                                }
-                                Err(e) => {
-                                    println!("[ContentBrowser] Failed to open scene: {}", e);
-                                    self.state.drawer.add_log(state::LogEntry::error(format!("Failed to open scene: {}", e)));
-                                }
-                            }
-                        }
+                // Open scene directly via viewport (no MCP needed)
+                if let Some(ref root_path) = self.state.content_browser.root_path {
+                    if let Some(db_url) = asset.get_db_url(root_path) {
+                        println!("[ContentBrowser] Opening scene: {}", db_url);
+
+                        // Load scene directly in viewport using ccesengine
+                        self.load_scene_in_viewport(&db_url);
+
+                        // Update UI state
+                        self.state.scene_state.select_node(None);
+                        self.state.drawer.add_log(state::LogEntry::info(format!("Loading scene: {}", asset.name)));
                     }
                 }
             }
@@ -2213,11 +2680,9 @@ impl EditorApp {
                 self.open_project_dialog();
             }
             "Save" => {
-                if self.state.is_mcp_mode() {
-                    if let Err(e) = self.state.scene_bridge.save_scene_mcp() {
-                        println!("[Menu] Failed to save scene: {}", e);
-                    }
-                }
+                // TODO: Implement scene saving via viewport/ccesengine
+                println!("[Menu] Save not yet implemented without MCP");
+                self.state.drawer.add_log(state::LogEntry::warn("Save not yet implemented".to_string()));
             }
             _ => {}
         }
@@ -2462,7 +2927,7 @@ pub fn find_cces_cli_path() -> Option<std::path::PathBuf> {
     if let Ok(path) = std::env::var("CCES_CLI_PATH") {
         let cli_path = PathBuf::from(&path);
         if cli_path.join("dist/cli.js").exists() {
-            println!("[MCP] Found cces-cli via CCES_CLI_PATH: {:?}", cli_path);
+            println!("[CLI] Found cces-cli via CCES_CLI_PATH: {:?}", cli_path);
             return Some(cli_path);
         }
     }
@@ -2472,7 +2937,7 @@ pub fn find_cces_cli_path() -> Option<std::path::PathBuf> {
     let sibling_cli = manifest_dir.parent().and_then(|p| Some(p.join("cces-cli")));
     if let Some(ref cli_path) = sibling_cli {
         if cli_path.join("dist/cli.js").exists() {
-            println!("[MCP] Found cces-cli (sibling): {:?}", cli_path);
+            println!("[CLI] Found cces-cli (sibling): {:?}", cli_path);
             return Some(cli_path.clone());
         }
     }
@@ -2492,7 +2957,7 @@ pub fn find_cces_cli_path() -> Option<std::path::PathBuf> {
         if let Some(ref cwd) = cwd {
             let full_path = cwd.join(path);
             if full_path.join("dist/cli.js").exists() {
-                println!("[MCP] Found cces-cli at: {:?}", full_path);
+                println!("[CLI] Found cces-cli at: {:?}", full_path);
                 return Some(full_path);
             }
         }

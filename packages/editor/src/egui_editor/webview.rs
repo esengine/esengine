@@ -15,6 +15,7 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 use wry::{WebView, WebViewBuilder};
 
+use super::scene_data::NodeData;
 use super::state::LogEntry;
 use super::viewport_rpc::{self, RpcRequest, ViewMode};
 
@@ -35,6 +36,12 @@ fn generate_viewport_html(port: u16) -> String {
 struct AssetServer {
     port: u16,
     assets_path: Arc<PathBuf>,
+    /// @zh 项目库目录路径（用于加载场景资源）
+    /// @en Project library path (for loading scene resources)
+    project_library_path: Arc<std::sync::RwLock<Option<PathBuf>>>,
+    /// @zh 引擎 internal bundle 库路径
+    /// @en Engine internal bundle library path
+    internal_library_path: Arc<PathBuf>,
     _handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -54,6 +61,20 @@ impl AssetServer {
 
         let assets_path = Arc::new(assets_path);
         let assets_path_clone = assets_path.clone();
+        let project_library_path: Arc<std::sync::RwLock<Option<PathBuf>>> =
+            Arc::new(std::sync::RwLock::new(None));
+        let project_library_path_clone = project_library_path.clone();
+
+        // Calculate internal library path (from cces-cli/packages/engine/editor/library)
+        // This path is relative to packages/editor/public -> ../../cces-cli/packages/engine/editor/library
+        let internal_library_path = assets_path
+            .parent()  // packages/editor
+            .and_then(|p| p.parent())  // packages
+            .map(|p| p.join("cces-cli/packages/engine/editor/library"))
+            .unwrap_or_else(|| assets_path.join("../../../cces-cli/packages/engine/editor/library"));
+        let internal_library_path = Arc::new(internal_library_path);
+        let internal_library_path_clone = internal_library_path.clone();
+        println!("[Asset Server] Internal library path: {:?}", internal_library_path);
 
         // Generate viewport HTML with correct port
         let viewport_html = generate_viewport_html(port);
@@ -91,6 +112,236 @@ impl AssetServer {
                             tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
                                 .unwrap(),
                         );
+                    let _ = request.respond(response);
+                    continue;
+                }
+
+                // Handle UUID-based asset requests at root level (e.g., /a3/a3cd009f-...json)
+                // These are internal bundle assets requested when importBase is the server URL
+                // UUID paths have format: /{2-char-hex}/{uuid}.json or /{2-char-hex}/{uuid}
+                let is_uuid_path = {
+                    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+                    parts.len() >= 2 &&
+                    parts[0].len() == 2 &&
+                    parts[0].chars().all(|c| c.is_ascii_hexdigit())
+                };
+
+                if is_uuid_path {
+                    // First try internal library, then project library
+                    let relative = path.trim_start_matches('/');
+                    let internal_file_path = internal_library_path_clone.join(relative);
+
+                    if internal_file_path.exists() {
+                        println!("[Asset Server] UUID asset (internal): {} -> {:?}", path, internal_file_path);
+                        let response = match std::fs::read(&internal_file_path) {
+                            Ok(content) => {
+                                let mime_type = get_mime_type(&internal_file_path);
+                                tiny_http::Response::from_data(content)
+                                    .with_header(
+                                        tiny_http::Header::from_bytes(&b"Content-Type"[..], mime_type.as_bytes())
+                                            .unwrap(),
+                                    )
+                                    .with_header(
+                                        tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                            .unwrap(),
+                                    )
+                            }
+                            Err(e) => {
+                                eprintln!("[Asset Server] Error loading internal asset {:?}: {}", internal_file_path, e);
+                                tiny_http::Response::from_string(format!("Error: {}", e))
+                                    .with_status_code(500)
+                            }
+                        };
+                        let _ = request.respond(response);
+                        continue;
+                    }
+
+                    // Try project library if available
+                    if let Ok(guard) = project_library_path_clone.read() {
+                        if let Some(ref lib_path) = *guard {
+                            let project_file_path = lib_path.join(relative);
+                            if project_file_path.exists() {
+                                println!("[Asset Server] UUID asset (project): {} -> {:?}", path, project_file_path);
+                                let response = match std::fs::read(&project_file_path) {
+                                    Ok(content) => {
+                                        let mime_type = get_mime_type(&project_file_path);
+                                        tiny_http::Response::from_data(content)
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(&b"Content-Type"[..], mime_type.as_bytes())
+                                                    .unwrap(),
+                                            )
+                                            .with_header(
+                                                tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                                    .unwrap(),
+                                            )
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[Asset Server] Error loading project asset {:?}: {}", project_file_path, e);
+                                        tiny_http::Response::from_string(format!("Error: {}", e))
+                                            .with_status_code(500)
+                                    }
+                                };
+                                let _ = request.respond(response);
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Asset not found in either library
+                    eprintln!("[Asset Server] UUID asset not found: {}", path);
+                    let response = tiny_http::Response::from_string(format!("Asset not found: {}", path))
+                        .with_status_code(404);
+                    let _ = request.respond(response);
+                    continue;
+                }
+
+                // Handle project library requests - serve from project's library directory
+                // Format: /library/{uuid_prefix}/{uuid}.json or /library/{uuid_prefix}/{uuid}
+                if path.starts_with("/library/") {
+                    if let Ok(guard) = project_library_path_clone.read() {
+                        if let Some(ref lib_path) = *guard {
+                            let relative = path.trim_start_matches("/library/");
+                            let file_path = lib_path.join(relative);
+                            println!("[Asset Server] Library request: {} -> {:?}", path, file_path);
+
+                            let response = match std::fs::read(&file_path) {
+                                Ok(content) => {
+                                    let mime_type = get_mime_type(&file_path);
+                                    tiny_http::Response::from_data(content)
+                                        .with_header(
+                                            tiny_http::Header::from_bytes(&b"Content-Type"[..], mime_type.as_bytes())
+                                                .unwrap(),
+                                        )
+                                        .with_header(
+                                            tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                                .unwrap(),
+                                        )
+                                }
+                                Err(e) => {
+                                    eprintln!("[Asset Server] Error loading library {:?}: {}", file_path, e);
+                                    tiny_http::Response::from_string(format!("Not found: {}", path))
+                                        .with_status_code(404)
+                                }
+                            };
+                            let _ = request.respond(response);
+                            continue;
+                        }
+                    }
+                    // Project not set - return 404
+                    let response = tiny_http::Response::from_string("Project not loaded")
+                        .with_status_code(404);
+                    let _ = request.respond(response);
+                    continue;
+                }
+
+                // Handle main bundle requests - serve from project's library directory
+                // Format: /remote/main/config.json or /remote/main/{uuid}.json
+                // Engine expects remote bundles at /remote/{bundleName}/ (see downloader.ts line 105)
+                if path.starts_with("/remote/main/") {
+                    if let Ok(guard) = project_library_path_clone.read() {
+                        if let Some(ref lib_path) = *guard {
+                            let relative = path.trim_start_matches("/remote/main/");
+
+                            // Map config.json to .main file
+                            let file_path = if relative == "config.json" || relative.starts_with("config.") {
+                                lib_path.join(".main")
+                            } else if relative == "index.js" || relative.starts_with("index.") {
+                                // Return empty JS module for index.js
+                                println!("[Asset Server] Main bundle index.js request (returning empty module)");
+                                let response = tiny_http::Response::from_data(b"// Main bundle entry".to_vec())
+                                    .with_header(
+                                        tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/javascript"[..])
+                                            .unwrap(),
+                                    )
+                                    .with_header(
+                                        tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                            .unwrap(),
+                                    );
+                                let _ = request.respond(response);
+                                continue;
+                            } else {
+                                lib_path.join(relative)
+                            };
+                            println!("[Asset Server] Main bundle request: {} -> {:?}", path, file_path);
+
+                            let response = match std::fs::read(&file_path) {
+                                Ok(content) => {
+                                    let mime_type = get_mime_type(&file_path);
+                                    tiny_http::Response::from_data(content)
+                                        .with_header(
+                                            tiny_http::Header::from_bytes(&b"Content-Type"[..], mime_type.as_bytes())
+                                                .unwrap(),
+                                        )
+                                        .with_header(
+                                            tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                                .unwrap(),
+                                        )
+                                }
+                                Err(e) => {
+                                    eprintln!("[Asset Server] Error loading main bundle {:?}: {}", file_path, e);
+                                    tiny_http::Response::from_string(format!("Not found: {}", path))
+                                        .with_status_code(404)
+                                }
+                            };
+                            let _ = request.respond(response);
+                            continue;
+                        }
+                    }
+                    // Project not set - return 404
+                    let response = tiny_http::Response::from_string("Project not loaded for main bundle")
+                        .with_status_code(404);
+                    let _ = request.respond(response);
+                    continue;
+                }
+
+                // Handle internal bundle requests - serve from engine's editor/library directory
+                // Format: /remote/internal/{uuid_prefix}/{uuid}.json or /remote/internal/config.json
+                // Engine expects remote bundles at /remote/{bundleName}/ (see downloader.ts line 105)
+                if path.starts_with("/remote/internal/") {
+                    let relative = path.trim_start_matches("/remote/internal/");
+
+                    // Map config.json to .internal file
+                    // The engine expects config.json but the library stores it as .internal
+                    let file_path = if relative == "config.json" || relative.starts_with("config.") {
+                        internal_library_path_clone.join(".internal")
+                    } else if relative == "index.js" || relative.starts_with("index.") {
+                        // Return empty JS module for index.js (internal bundle doesn't have it)
+                        println!("[Asset Server] Internal bundle index.js request (returning empty module)");
+                        let response = tiny_http::Response::from_data(b"// Internal bundle entry".to_vec())
+                            .with_header(
+                                tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/javascript"[..])
+                                    .unwrap(),
+                            )
+                            .with_header(
+                                tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                    .unwrap(),
+                            );
+                        let _ = request.respond(response);
+                        continue;
+                    } else {
+                        internal_library_path_clone.join(relative)
+                    };
+                    println!("[Asset Server] Internal bundle request: {} -> {:?}", path, file_path);
+
+                    let response = match std::fs::read(&file_path) {
+                        Ok(content) => {
+                            let mime_type = get_mime_type(&file_path);
+                            tiny_http::Response::from_data(content)
+                                .with_header(
+                                    tiny_http::Header::from_bytes(&b"Content-Type"[..], mime_type.as_bytes())
+                                        .unwrap(),
+                                )
+                                .with_header(
+                                    tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                        .unwrap(),
+                                )
+                        }
+                        Err(e) => {
+                            eprintln!("[Asset Server] Error loading internal {:?}: {}", file_path, e);
+                            tiny_http::Response::from_string(format!("Not found: {}", path))
+                                .with_status_code(404)
+                        }
+                    };
                     let _ = request.respond(response);
                     continue;
                 }
@@ -172,9 +423,40 @@ impl AssetServer {
         Ok(Self {
             port,
             assets_path,
+            project_library_path,
+            internal_library_path,
             _handle: Some(handle),
         })
     }
+
+    /// @zh 设置项目library路径
+    /// @en Set project library path
+    fn set_project_library(&self, library_path: PathBuf) {
+        if let Ok(mut guard) = self.project_library_path.write() {
+            println!("[Asset Server] Setting project library path: {:?}", library_path);
+            *guard = Some(library_path);
+        }
+    }
+}
+
+use super::scene_data::NodeProperties;
+
+/// @zh 场景通知类型
+/// @en Scene notification type
+#[derive(Debug)]
+pub enum SceneNotification {
+    /// @zh 层级树更新
+    /// @en Hierarchy tree updated
+    HierarchyChanged(NodeData),
+    /// @zh 场景已加载
+    /// @en Scene loaded
+    SceneLoaded { name: String },
+    /// @zh 节点属性更新
+    /// @en Node properties updated
+    NodePropertiesReceived {
+        uuid: String,
+        properties: NodeProperties,
+    },
 }
 
 /// @zh WebView2 视口状态
@@ -185,15 +467,24 @@ pub struct WebViewViewport {
     url: String,
     html: Option<String>,
     assets_path: Option<PathBuf>,
+    /// @zh Cocos项目路径（用于加载场景资源）
+    /// @en Cocos project path (for loading scene resources)
+    project_path: Option<PathBuf>,
     asset_server: Option<AssetServer>,
     ready: bool,
     error: Option<String>,
     /// @zh 日志接收器（从 IPC handler 接收日志）
     /// @en Log receiver (receives logs from IPC handler)
     log_receiver: Option<mpsc::Receiver<LogEntry>>,
+    /// @zh 场景通知接收器
+    /// @en Scene notification receiver
+    scene_receiver: Option<mpsc::Receiver<SceneNotification>>,
     /// @zh RPC 请求 ID 计数器
     /// @en RPC request ID counter
     next_rpc_id: AtomicU64,
+    /// @zh 预编译的 effects JSON（用于初始化脚本）
+    /// @en Pre-compiled effects JSON (for initialization script)
+    pending_effects: Option<String>,
 }
 
 impl WebViewViewport {
@@ -206,11 +497,14 @@ impl WebViewViewport {
             url: url.into(),
             html: None,
             assets_path: None,
+            project_path: None,
             asset_server: None,
             ready: false,
             error: None,
             log_receiver: None,
+            scene_receiver: None,
             next_rpc_id: AtomicU64::new(1),
+            pending_effects: None,
         }
     }
 
@@ -223,11 +517,14 @@ impl WebViewViewport {
             url: String::new(),
             html: Some(html.into()),
             assets_path: None,
+            project_path: None,
             asset_server: None,
             ready: false,
             error: None,
             log_receiver: None,
+            scene_receiver: None,
             next_rpc_id: AtomicU64::new(1),
+            pending_effects: None,
         }
     }
 
@@ -257,11 +554,14 @@ impl WebViewViewport {
                     url,
                     html: None,
                     assets_path: Some(assets_path),
+                    project_path: None,
                     asset_server: Some(server),
                     ready: false,
                     error: None,
                     log_receiver: None,
+                    scene_receiver: None,
                     next_rpc_id: AtomicU64::new(1),
+                    pending_effects: None,
                 }
             }
             Err(e) => {
@@ -272,14 +572,40 @@ impl WebViewViewport {
                     url: String::new(),
                     html: None,
                     assets_path: Some(assets_path),
+                    project_path: None,
                     asset_server: None,
                     ready: false,
                     error: Some(format!("Failed to start asset server: {}", e)),
                     log_receiver: None,
+                    scene_receiver: None,
                     next_rpc_id: AtomicU64::new(1),
+                    pending_effects: None,
                 }
             }
         }
+    }
+
+    /// @zh 设置预编译的 effects（在 initialize 之前调用）
+    /// @en Set pre-compiled effects (call before initialize)
+    pub fn set_pending_effects(&mut self, effects_json: String) {
+        self.pending_effects = Some(effects_json);
+    }
+
+    /// @zh 设置项目路径（用于加载场景资源）
+    /// @en Set project path (for loading scene resources)
+    pub fn set_project_path(&mut self, project_path: PathBuf) {
+        // Set library path for AssetServer
+        let library_path = project_path.join("library");
+        if let Some(ref server) = self.asset_server {
+            server.set_project_library(library_path);
+        }
+        self.project_path = Some(project_path);
+    }
+
+    /// @zh 获取asset server端口
+    /// @en Get asset server port
+    pub fn get_server_port(&self) -> Option<u16> {
+        self.asset_server.as_ref().map(|s| s.port)
     }
 
     /// @zh 初始化 WebView（需要在有窗口句柄和边界后调用）
@@ -302,6 +628,10 @@ impl WebViewViewport {
         // Create channel for log forwarding
         let (log_sender, log_receiver) = mpsc::channel::<LogEntry>();
         self.log_receiver = Some(log_receiver);
+
+        // Create channel for scene notifications
+        let (scene_sender, scene_receiver) = mpsc::channel::<SceneNotification>();
+        self.scene_receiver = Some(scene_receiver);
 
         match window_handle {
             Win32(_handle) => {
@@ -330,6 +660,48 @@ impl WebViewViewport {
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("");
                                 let params = json.get("params");
+
+                                // Handle scene notifications
+                                match method {
+                                    "scene.hierarchyChanged" => {
+                                        if let Some(tree_value) = params.and_then(|p| p.get("tree")) {
+                                            if let Ok(tree) = serde_json::from_value::<NodeData>(tree_value.clone()) {
+                                                println!("[IPC] Received hierarchy update: {} nodes", tree.count_nodes());
+                                                let _ = scene_sender.send(SceneNotification::HierarchyChanged(tree));
+                                            }
+                                        }
+                                        return;
+                                    }
+                                    "scene.loaded" | "viewport.sceneChanged" => {
+                                        let name = params
+                                            .and_then(|p| p.get("sceneName"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("Unknown")
+                                            .to_string();
+                                        let _ = scene_sender.send(SceneNotification::SceneLoaded { name: name.clone() });
+                                        let _ = log_sender.send(LogEntry::info(format!("[Scene] Loaded: {}", name)));
+                                        return;
+                                    }
+                                    "scene.nodeProperties" => {
+                                        if let Some(p) = params {
+                                            let uuid = p.get("uuid")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            if let Some(props_value) = p.get("properties") {
+                                                if let Ok(properties) = serde_json::from_value::<NodeProperties>(props_value.clone()) {
+                                                    println!("[IPC] Received node properties: {} ({})", properties.name, uuid);
+                                                    let _ = scene_sender.send(SceneNotification::NodePropertiesReceived {
+                                                        uuid,
+                                                        properties,
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        return;
+                                    }
+                                    _ => {}
+                                }
 
                                 let entry = match method {
                                     "viewport.log" => {
@@ -403,6 +775,38 @@ impl WebViewViewport {
                 } else {
                     self.error = Some("No HTML or URL provided".to_string());
                     return;
+                }
+
+                // Inject project config and effects via initialization script (runs before page load)
+                // This ensures these values are available before any page scripts execute
+                let mut init_scripts = Vec::new();
+
+                // Inject project config URL (for asset loading)
+                if let Some(ref server) = self.asset_server {
+                    let server_url = format!("http://127.0.0.1:{}", server.port);
+                    let config_script = format!(
+                        r#"window._pendingProjectConfig = {{ serverUrl: '{}' }};
+                        console.log('[Init] Project config pre-injected:', window._pendingProjectConfig);"#,
+                        server_url
+                    );
+                    init_scripts.push(config_script);
+                    println!("[WebView] Project config will be pre-injected: {}", server_url);
+                }
+
+                // Inject effects data
+                if let Some(ref effects_json) = self.pending_effects {
+                    let effects_script = format!(
+                        "window.__BUILTIN_EFFECTS__ = {}; console.log('[Init] Effects pre-injected');",
+                        effects_json
+                    );
+                    init_scripts.push(effects_script);
+                    println!("[WebView] Effects will be pre-injected via initialization script");
+                }
+
+                // Combine all initialization scripts
+                if !init_scripts.is_empty() {
+                    let combined_script = init_scripts.join("\n");
+                    builder = builder.with_initialization_script(&combined_script);
                 }
 
                 let result = builder.build_as_child(unsafe {
@@ -539,6 +943,18 @@ impl WebViewViewport {
         logs
     }
 
+    /// @zh 获取待处理的场景通知（非阻塞）
+    /// @en Get pending scene notifications (non-blocking)
+    pub fn drain_scene_notifications(&mut self) -> Vec<SceneNotification> {
+        let mut notifications = Vec::new();
+        if let Some(ref receiver) = self.scene_receiver {
+            while let Ok(notification) = receiver.try_recv() {
+                notifications.push(notification);
+            }
+        }
+        notifications
+    }
+
     // ========================================================================
     // RPC Methods
     // ========================================================================
@@ -608,6 +1024,68 @@ impl WebViewViewport {
     pub fn rpc_reset_camera(&self) -> Result<(), String> {
         self.send_rpc_no_params(viewport_rpc::method_names::RESET_CAMERA)
     }
+
+    /// @zh 加载场景
+    /// @en Load scene
+    ///
+    /// @param scene_url - 场景资源 URL（如 db://assets/scenes/login.scene）或 UUID
+    pub fn load_scene(&self, scene_url: &str) -> Result<(), String> {
+        // Escape single quotes in URL
+        let escaped_url = scene_url.replace('\'', "\\'");
+        let script = format!(
+            "if (window.esengine && window.esengine.loadScene) {{ window.esengine.loadScene('{}'); }}",
+            escaped_url
+        );
+        self.eval_script(&script)
+    }
+
+    /// @zh 请求节点属性（通过 RPC 发送请求，响应通过 IPC 返回）
+    /// @en Request node properties (send request via RPC, response returned via IPC)
+    ///
+    /// @zh 响应会通过 scene.nodeProperties 通知返回，需要通过 drain_scene_notifications 获取
+    /// @en Response will be returned via scene.nodeProperties notification, get via drain_scene_notifications
+    pub fn request_node_properties(&self, uuid: &str) -> Result<(), String> {
+        let escaped_uuid = uuid.replace('\'', "\\'");
+        // Use a simpler approach - call a JS function that emits the properties notification
+        let script = format!(
+            r#"(function() {{
+                const uuid = '{}';
+                if (window.getNodeProperties) {{
+                    const props = window.getNodeProperties(uuid);
+                    if (props && window.rpc) {{
+                        window.rpc.notify('scene.nodeProperties', {{ uuid: uuid, properties: props }});
+                    }}
+                }}
+            }})()"#,
+            escaped_uuid
+        );
+        self.eval_script(&script)
+    }
+
+    /// @zh 选择节点（同步到 viewport 并请求属性）
+    /// @en Select node (sync to viewport and request properties)
+    pub fn select_node(&self, uuid: Option<&str>) -> Result<(), String> {
+        let uuid_json = match uuid {
+            Some(u) => format!("'{}'", u.replace('\'', "\\'")),
+            None => "null".to_string(),
+        };
+        let script = format!(
+            r#"(function() {{
+                const uuid = {};
+                if (window.esengine && window.esengine.selectNode) {{
+                    window.esengine.selectNode(uuid);
+                }}
+                if (uuid && window.getNodeProperties && window.rpc) {{
+                    const props = window.getNodeProperties(uuid);
+                    if (props) {{
+                        window.rpc.notify('scene.nodeProperties', {{ uuid: uuid, properties: props }});
+                    }}
+                }}
+            }})()"#,
+            uuid_json
+        );
+        self.eval_script(&script)
+    }
 }
 
 impl Drop for WebViewViewport {
@@ -676,15 +1154,40 @@ fn get_mime_type(path: &std::path::Path) -> &'static str {
 
 /// @zh 在 egui UI 中渲染 WebView 占位区域
 /// @en Render WebView placeholder area in egui UI
+///
+/// @zh `dropdown_overlay` 参数用于指定下拉菜单覆盖区域，WebView 会缩小以避免重叠
+/// @en `dropdown_overlay` parameter specifies dropdown overlay rect, WebView shrinks to avoid overlap
 pub fn webview_viewport_area(
     ui: &mut egui::Ui,
     viewport: &mut WebViewViewport,
+    dropdown_overlay: Option<egui::Rect>,
 ) -> egui::Response {
     let available = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(available, egui::Sense::hover());
 
-    // Update WebView bounds to match the allocated area
-    viewport.set_bounds(available);
+    // Adjust WebView bounds if there's a dropdown overlay
+    // Shrink the WebView to avoid overlapping with the dropdown
+    let webview_bounds = if let Some(overlay) = dropdown_overlay {
+        // If the dropdown overlaps with the viewport, shrink from the top
+        if overlay.intersects(available) {
+            let overlap_height = overlay.bottom() - available.top();
+            if overlap_height > 0.0 {
+                egui::Rect::from_min_max(
+                    egui::pos2(available.left(), available.top() + overlap_height),
+                    available.max,
+                )
+            } else {
+                available
+            }
+        } else {
+            available
+        }
+    } else {
+        available
+    };
+
+    // Update WebView bounds to match the adjusted area
+    viewport.set_bounds(webview_bounds);
 
     // Draw placeholder if not ready
     if !viewport.is_ready() {

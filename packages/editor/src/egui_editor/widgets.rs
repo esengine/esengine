@@ -379,3 +379,363 @@ pub fn panel_separator(ui: &mut egui::Ui) {
         egui::Stroke::new(1.0, ui::PANEL_BORDER),
     );
 }
+
+// ============================================================================
+// Dynamic Property Rows (for MCP component properties)
+// ============================================================================
+
+use super::scene_data::PropertyValue;
+
+/// @zh 动态数值属性行
+/// @en Dynamic number property row
+pub fn property_row_dynamic_number(ui: &mut egui::Ui, label: &str, value: f64, min: Option<f64>, max: Option<f64>) {
+    ui.horizontal(|ui| {
+        ui.set_height(22.0);
+        ui.add_space(8.0);
+
+        // Label
+        ui.label(
+            egui::RichText::new(label)
+                .size(11.0)
+                .color(egui::Color32::from_rgb(0xaa, 0xaa, 0xaa))
+        );
+
+        // Spacer
+        let label_width = 90.0;
+        let used = ui.min_rect().width();
+        if used < label_width {
+            ui.add_space(label_width - used);
+        }
+
+        // Value - using DragValue style display
+        let mut val = value as f32;
+        let id = ui.id().with(label);
+        drag_value(ui, id, &mut val, 0.1, egui::Color32::from_rgb(0x55, 0x55, 0x55));
+    });
+}
+
+/// @zh 动态字符串属性行
+/// @en Dynamic string property row
+pub fn property_row_dynamic_string(ui: &mut egui::Ui, label: &str, value: &str) {
+    let row_height = 22.0;
+    ui.horizontal(|ui| {
+        ui.set_height(row_height);
+        ui.add_space(8.0);
+
+        // Label
+        ui.label(
+            egui::RichText::new(label)
+                .size(11.0)
+                .color(egui::Color32::from_rgb(0xaa, 0xaa, 0xaa))
+        );
+
+        // Spacer
+        let label_width = 90.0;
+        let used = ui.min_rect().width();
+        if used < label_width {
+            ui.add_space(label_width - used);
+        }
+
+        // Text field styled display
+        let field_width = ui.available_width() - 8.0;
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(field_width, row_height - 4.0), egui::Sense::click());
+        ui.painter().rect_filled(rect, 2.0, egui::Color32::from_rgb(0x1e, 0x1e, 0x1e));
+        ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3e, 0x3e, 0x3e)));
+        ui.painter().text(
+            egui::pos2(rect.left() + 6.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            value,
+            egui::FontId::proportional(11.0),
+            egui::Color32::from_rgb(0xcc, 0xcc, 0xcc),
+        );
+    });
+}
+
+/// @zh 动态布尔属性行
+/// @en Dynamic boolean property row
+pub fn property_row_dynamic_bool(ui: &mut egui::Ui, label: &str, value: bool) {
+    let row_height = 22.0;
+    let (row_rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+
+    // Label
+    ui.painter().text(
+        egui::pos2(row_rect.left() + 8.0, row_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(11.0),
+        egui::Color32::from_rgb(0xaa, 0xaa, 0xaa),
+    );
+
+    // Checkbox display
+    let checkbox_x = row_rect.left() + 100.0;
+    let checkbox_rect = egui::Rect::from_center_size(
+        egui::pos2(checkbox_x + 8.0, row_rect.center().y),
+        egui::vec2(16.0, 16.0),
+    );
+
+    let bg_color = if value {
+        ui::SELECTION
+    } else {
+        egui::Color32::from_rgb(0x2a, 0x2a, 0x2a)
+    };
+
+    ui.painter().rect_filled(checkbox_rect, 2.0, bg_color);
+    ui.painter().rect_stroke(checkbox_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x48, 0x48, 0x48)));
+
+    if value {
+        // Checkmark
+        let c = checkbox_rect.center();
+        let stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
+        ui.painter().line_segment([c + egui::vec2(-4.0, 0.0), c + egui::vec2(-1.0, 3.0)], stroke);
+        ui.painter().line_segment([c + egui::vec2(-1.0, 3.0), c + egui::vec2(4.0, -3.0)], stroke);
+    }
+}
+
+/// @zh 动态颜色属性行
+/// @en Dynamic color property row
+pub fn property_row_dynamic_color(ui: &mut egui::Ui, label: &str, value: [f32; 4]) {
+    let row_height = 22.0;
+    let (row_rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+
+    // Label
+    ui.painter().text(
+        egui::pos2(row_rect.left() + 8.0, row_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(11.0),
+        egui::Color32::from_rgb(0xaa, 0xaa, 0xaa),
+    );
+
+    // Color swatch
+    let swatch_rect = egui::Rect::from_min_size(
+        egui::pos2(row_rect.left() + 100.0, row_rect.top() + 3.0),
+        egui::vec2(row_height - 6.0, row_height - 6.0),
+    );
+
+    let color = egui::Color32::from_rgba_unmultiplied(
+        (value[0] * 255.0) as u8,
+        (value[1] * 255.0) as u8,
+        (value[2] * 255.0) as u8,
+        (value[3] * 255.0) as u8,
+    );
+
+    // Checkerboard for alpha
+    let checker = egui::Color32::from_rgb(0x40, 0x40, 0x40);
+    ui.painter().rect_filled(swatch_rect, 2.0, checker);
+    ui.painter().rect_filled(swatch_rect, 2.0, color);
+    ui.painter().rect_stroke(swatch_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x48, 0x48, 0x48)));
+
+    // Hex value
+    let hex = format!(
+        "#{:02X}{:02X}{:02X}{:02X}",
+        (value[0] * 255.0) as u8,
+        (value[1] * 255.0) as u8,
+        (value[2] * 255.0) as u8,
+        (value[3] * 255.0) as u8
+    );
+    ui.painter().text(
+        egui::pos2(swatch_rect.right() + 8.0, row_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        hex,
+        egui::FontId::monospace(10.0),
+        egui::Color32::from_rgb(0x88, 0x88, 0x88),
+    );
+}
+
+/// @zh 动态 Vec2 属性行
+/// @en Dynamic Vec2 property row
+pub fn property_row_dynamic_vec2(ui: &mut egui::Ui, label: &str, value: [f32; 2]) {
+    ui.horizontal(|ui| {
+        ui.set_height(22.0);
+        ui.add_space(8.0);
+
+        // Label
+        ui.label(
+            egui::RichText::new(label)
+                .size(11.0)
+                .color(egui::Color32::from_rgb(0xaa, 0xaa, 0xaa))
+        );
+
+        // Spacer
+        let label_width = 90.0;
+        let used = ui.min_rect().width();
+        if used < label_width {
+            ui.add_space(label_width - used);
+        }
+
+        // X value
+        let mut x = value[0];
+        let x_id = ui.id().with(format!("{}_x", label));
+        drag_value(ui, x_id, &mut x, 0.1, ui::AXIS_X);
+
+        ui.add_space(2.0);
+
+        // Y value
+        let mut y = value[1];
+        let y_id = ui.id().with(format!("{}_y", label));
+        drag_value(ui, y_id, &mut y, 0.1, ui::AXIS_Y);
+    });
+}
+
+/// @zh 动态 Vec3 属性行
+/// @en Dynamic Vec3 property row
+pub fn property_row_dynamic_vec3(ui: &mut egui::Ui, label: &str, value: [f32; 3]) {
+    ui.horizontal(|ui| {
+        ui.set_height(22.0);
+        ui.add_space(8.0);
+
+        // Label
+        ui.label(
+            egui::RichText::new(label)
+                .size(11.0)
+                .color(egui::Color32::from_rgb(0xaa, 0xaa, 0xaa))
+        );
+
+        // Spacer
+        let label_width = 90.0;
+        let used = ui.min_rect().width();
+        if used < label_width {
+            ui.add_space(label_width - used);
+        }
+
+        // X value
+        let mut x = value[0];
+        let x_id = ui.id().with(format!("{}_x", label));
+        drag_value(ui, x_id, &mut x, 0.1, ui::AXIS_X);
+
+        ui.add_space(2.0);
+
+        // Y value
+        let mut y = value[1];
+        let y_id = ui.id().with(format!("{}_y", label));
+        drag_value(ui, y_id, &mut y, 0.1, ui::AXIS_Y);
+
+        ui.add_space(2.0);
+
+        // Z value
+        let mut z = value[2];
+        let z_id = ui.id().with(format!("{}_z", label));
+        drag_value(ui, z_id, &mut z, 0.1, ui::AXIS_Z);
+    });
+}
+
+/// @zh 动态资源属性行
+/// @en Dynamic asset property row
+pub fn property_row_dynamic_asset(ui: &mut egui::Ui, label: &str, value: Option<&str>, asset_type: &str) {
+    let row_height = 22.0;
+    let (row_rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+
+    // Label
+    ui.painter().text(
+        egui::pos2(row_rect.left() + 8.0, row_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(11.0),
+        egui::Color32::from_rgb(0xaa, 0xaa, 0xaa),
+    );
+
+    // Asset field
+    let field_start = row_rect.left() + 100.0;
+    let field_rect = egui::Rect::from_min_max(
+        egui::pos2(field_start, row_rect.top() + 1.0),
+        egui::pos2(row_rect.right() - 8.0, row_rect.bottom() - 1.0),
+    );
+
+    ui.painter().rect_filled(field_rect, 2.0, egui::Color32::from_rgb(0x1c, 0x1c, 0x1c));
+    ui.painter().rect_stroke(field_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x38, 0x38, 0x38)));
+
+    let none_text = format!("None ({})", asset_type);
+    let display_text = value.unwrap_or(&none_text);
+
+    ui.painter().text(
+        egui::pos2(field_rect.left() + 8.0, field_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        display_text,
+        egui::FontId::proportional(11.0),
+        if value.is_some() {
+            egui::Color32::from_rgb(0xcc, 0xcc, 0xcc)
+        } else {
+            egui::Color32::from_rgb(0x66, 0x66, 0x66)
+        },
+    );
+}
+
+/// @zh 动态枚举属性行
+/// @en Dynamic enum property row
+pub fn property_row_dynamic_enum(ui: &mut egui::Ui, label: &str, value: i32, options: &[String]) {
+    let row_height = 22.0;
+    let (row_rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), egui::Sense::hover());
+
+    // Label
+    ui.painter().text(
+        egui::pos2(row_rect.left() + 8.0, row_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(11.0),
+        egui::Color32::from_rgb(0xaa, 0xaa, 0xaa),
+    );
+
+    // Dropdown styled display
+    let field_start = row_rect.left() + 100.0;
+    let field_rect = egui::Rect::from_min_max(
+        egui::pos2(field_start, row_rect.top() + 1.0),
+        egui::pos2(row_rect.right() - 8.0, row_rect.bottom() - 1.0),
+    );
+
+    ui.painter().rect_filled(field_rect, 2.0, egui::Color32::from_rgb(0x1c, 0x1c, 0x1c));
+    ui.painter().rect_stroke(field_rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x38, 0x38, 0x38)));
+
+    let current_text = options.get(value as usize).cloned().unwrap_or_else(|| format!("{}", value));
+
+    ui.painter().text(
+        egui::pos2(field_rect.left() + 8.0, field_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        &current_text,
+        egui::FontId::proportional(11.0),
+        egui::Color32::from_rgb(0xcc, 0xcc, 0xcc),
+    );
+
+    // Dropdown arrow
+    let arrow_x = field_rect.right() - 12.0;
+    let arrow_y = field_rect.center().y;
+    ui.painter().add(egui::Shape::convex_polygon(
+        vec![
+            egui::pos2(arrow_x - 4.0, arrow_y - 2.0),
+            egui::pos2(arrow_x + 4.0, arrow_y - 2.0),
+            egui::pos2(arrow_x, arrow_y + 3.0),
+        ],
+        egui::Color32::from_rgb(0x88, 0x88, 0x88),
+        egui::Stroke::NONE,
+    ));
+}
+
+/// @zh 根据 PropertyValue 类型自动选择合适的属性行样式
+/// @en Automatically select the appropriate property row style based on PropertyValue type
+pub fn property_row_dynamic(ui: &mut egui::Ui, label: &str, value: &PropertyValue) {
+    match value {
+        PropertyValue::Number { value, min, max } => {
+            property_row_dynamic_number(ui, label, *value, *min, *max);
+        }
+        PropertyValue::String { value } => {
+            property_row_dynamic_string(ui, label, value);
+        }
+        PropertyValue::Boolean { value } => {
+            property_row_dynamic_bool(ui, label, *value);
+        }
+        PropertyValue::Color { value } => {
+            property_row_dynamic_color(ui, label, *value);
+        }
+        PropertyValue::Vec2 { value } => {
+            property_row_dynamic_vec2(ui, label, *value);
+        }
+        PropertyValue::Vec3 { value } => {
+            property_row_dynamic_vec3(ui, label, *value);
+        }
+        PropertyValue::Asset { value, asset_type } => {
+            property_row_dynamic_asset(ui, label, value.as_deref(), asset_type);
+        }
+        PropertyValue::Enum { value, options } => {
+            property_row_dynamic_enum(ui, label, *value, options);
+        }
+    }
+}

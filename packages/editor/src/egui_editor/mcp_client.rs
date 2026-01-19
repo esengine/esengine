@@ -134,9 +134,33 @@ pub struct McpNodeProperties {
 /// @en MCP component identifier
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpComponentRef {
+    /// @zh 组件标识符 (e.g., "cc.UITransform")
+    /// @en Component identifier (e.g., "cc.UITransform")
     #[serde(rename = "cid")]
     pub cid: Option<String>,
+    /// @zh 组件名称
+    /// @en Component name
     pub name: String,
+    /// @zh 组件路径 (e.g., "Canvas/Node/UITransform_1")
+    /// @en Component path (e.g., "Canvas/Node/UITransform_1")
+    #[serde(default)]
+    pub path: String,
+    /// @zh 组件类型 (e.g., "UITransform")
+    /// @en Component type (e.g., "UITransform")
+    #[serde(rename = "type", default)]
+    pub comp_type: String,
+    /// @zh 组件 UUID
+    /// @en Component UUID
+    #[serde(default)]
+    pub uuid: String,
+    /// @zh 组件是否启用
+    /// @en Whether the component is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// @zh MCP 节点数据
@@ -533,12 +557,17 @@ impl McpClient {
 
     /// @zh 查询节点
     /// @en Query node
+    ///
+    /// @zh 参数需要包装在 options 对象中，因为 MCP 装饰器使用 @param(SchemaNodeQuery) options
+    /// @en Arguments need to be wrapped in options object because MCP decorator uses @param(SchemaNodeQuery) options
     pub fn query_node(&self, path: &str, query_children: bool) -> Result<McpNodeData, String> {
         self.call_tool(
             "scene-query-node",
             serde_json::json!({
-                "path": path,
-                "queryChildren": query_children
+                "options": {
+                    "path": path,
+                    "queryChildren": query_children
+                }
             }),
         )
     }
@@ -553,8 +582,10 @@ impl McpClient {
         self.call_tool(
             "scene-update-node",
             serde_json::json!({
-                "path": path,
-                "properties": properties
+                "options": {
+                    "path": path,
+                    "properties": properties
+                }
             }),
         )
     }
@@ -570,9 +601,11 @@ impl McpClient {
         self.call_tool(
             "scene-create-node-by-type",
             serde_json::json!({
-                "path": parent_path,
-                "name": name,
-                "nodeType": node_type
+                "options": {
+                    "path": parent_path,
+                    "name": name,
+                    "nodeType": node_type
+                }
             }),
         )
     }
@@ -583,7 +616,9 @@ impl McpClient {
         self.call_tool(
             "scene-delete-node",
             serde_json::json!({
-                "path": path
+                "options": {
+                    "path": path
+                }
             }),
         )
     }
@@ -594,7 +629,9 @@ impl McpClient {
         self.call_tool(
             "scene-query-component",
             serde_json::json!({
-                "path": component_path
+                "component": {
+                    "path": component_path
+                }
             }),
         )
     }
@@ -609,8 +646,10 @@ impl McpClient {
         self.call_tool(
             "scene-add-component",
             serde_json::json!({
-                "nodePath": node_path,
-                "component": component
+                "addComponentInfo": {
+                    "nodePath": node_path,
+                    "component": component
+                }
             }),
         )
     }
@@ -621,7 +660,9 @@ impl McpClient {
         self.call_tool(
             "scene-delete-component",
             serde_json::json!({
-                "path": component_path
+                "component": {
+                    "path": component_path
+                }
             }),
         )
     }
@@ -676,7 +717,7 @@ impl Drop for McpClient {
 // Conversion to Local Types
 // ============================================================================
 
-use super::scene_data::{NodeData, NodeProperties};
+use super::scene_data::{ComponentData, NodeData, NodeProperties, NodeTransform, PropertyValue, Vec3Json};
 
 impl From<McpNodeData> for NodeData {
     fn from(mcp: McpNodeData) -> Self {
@@ -687,12 +728,33 @@ impl From<McpNodeData> for NodeData {
             mcp.path.clone()
         };
 
+        // Include transform properties for viewport rendering
+        let properties = NodeTransform {
+            position: Some(Vec3Json::new(
+                mcp.properties.position.x,
+                mcp.properties.position.y,
+                mcp.properties.position.z,
+            )),
+            scale: Some(Vec3Json::new(
+                mcp.properties.scale.x,
+                mcp.properties.scale.y,
+                mcp.properties.scale.z,
+            )),
+            euler_angles: Some(Vec3Json::new(
+                mcp.properties.euler_angles.x,
+                mcp.properties.euler_angles.y,
+                mcp.properties.euler_angles.z,
+            )),
+            active: Some(mcp.properties.active),
+        };
+
         NodeData {
             uuid,
-            name: mcp.name,
+            name: mcp.name.clone(),
             active: mcp.properties.active,
             children: mcp.children.into_iter().map(NodeData::from).collect(),
             components: mcp.components.iter().map(|c| c.name.clone()).collect(),
+            properties: Some(properties),
         }
     }
 }
@@ -726,6 +788,125 @@ impl From<McpNodeData> for NodeProperties {
                 mcp.properties.scale.z,
             ],
             components: vec![], // Components need separate query
+        }
+    }
+}
+
+impl From<McpComponentData> for ComponentData {
+    fn from(mcp: McpComponentData) -> Self {
+        let properties = mcp
+            .properties
+            .into_iter()
+            .filter_map(|(key, prop)| {
+                convert_property_value(&prop).map(|v| (key, v))
+            })
+            .collect();
+
+        ComponentData {
+            comp_type: mcp.name.clone(),
+            uuid: mcp.cid,
+            enabled: true, // MCP doesn't provide enabled state for components
+            properties,
+        }
+    }
+}
+
+/// @zh 转换 MCP 属性值为本地属性值类型
+/// @en Convert MCP property value to local property value type
+fn convert_property_value(prop: &McpPropertyValue) -> Option<PropertyValue> {
+    let prop_type = prop.prop_type.as_deref().unwrap_or("");
+
+    match prop_type {
+        "Float" | "Integer" | "number" => {
+            let value = prop.value.as_f64()?;
+            Some(PropertyValue::Number {
+                value,
+                min: None,
+                max: None,
+            })
+        }
+        "String" | "string" => {
+            let value = prop.value.as_str().unwrap_or("").to_string();
+            Some(PropertyValue::String { value })
+        }
+        "Boolean" | "boolean" => {
+            let value = prop.value.as_bool().unwrap_or(false);
+            Some(PropertyValue::Boolean { value })
+        }
+        "Color" | "color" => {
+            // Color can be object { r, g, b, a } or array [r, g, b, a]
+            let color = if let Some(obj) = prop.value.as_object() {
+                let r = obj.get("r").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                let g = obj.get("g").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                let b = obj.get("b").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                let a = obj.get("a").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                [r, g, b, a]
+            } else if let Some(arr) = prop.value.as_array() {
+                let r = arr.first().and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                let g = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                let b = arr.get(2).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                let a = arr.get(3).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                [r, g, b, a]
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            };
+            Some(PropertyValue::Color { value: color })
+        }
+        "Vec2" | "vec2" => {
+            let vec = if let Some(obj) = prop.value.as_object() {
+                let x = obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                [x, y]
+            } else if let Some(arr) = prop.value.as_array() {
+                let x = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let y = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                [x, y]
+            } else {
+                [0.0, 0.0]
+            };
+            Some(PropertyValue::Vec2 { value: vec })
+        }
+        "Vec3" | "vec3" => {
+            let vec = if let Some(obj) = prop.value.as_object() {
+                let x = obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                [x, y, z]
+            } else if let Some(arr) = prop.value.as_array() {
+                let x = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let y = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let z = arr.get(2).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                [x, y, z]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
+            Some(PropertyValue::Vec3 { value: vec })
+        }
+        "Enum" | "enum" => {
+            let value = prop.value.as_i64().unwrap_or(0) as i32;
+            Some(PropertyValue::Enum {
+                value,
+                options: vec![],
+            })
+        }
+        // Default: try to infer type from value
+        "" | _ => {
+            if let Some(v) = prop.value.as_f64() {
+                Some(PropertyValue::Number {
+                    value: v,
+                    min: None,
+                    max: None,
+                })
+            } else if let Some(v) = prop.value.as_bool() {
+                Some(PropertyValue::Boolean { value: v })
+            } else if let Some(v) = prop.value.as_str() {
+                Some(PropertyValue::String {
+                    value: v.to_string(),
+                })
+            } else {
+                // Complex object or unknown type
+                None
+            }
         }
     }
 }

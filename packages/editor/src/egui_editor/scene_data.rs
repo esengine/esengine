@@ -10,6 +10,35 @@ use serde::{Deserialize, Serialize};
 // Scene Tree Types
 // ============================================================================
 
+/// @zh 节点变换属性（用于 viewport 同步）
+/// @en Node transform properties (for viewport sync)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NodeTransform {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<Vec3Json>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale: Option<Vec3Json>,
+    #[serde(rename = "eulerAngles", skip_serializing_if = "Option::is_none")]
+    pub euler_angles: Option<Vec3Json>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+}
+
+/// @zh Vec3 JSON 格式
+/// @en Vec3 in JSON format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vec3Json {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Vec3Json {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+}
+
 /// @zh 节点数据（层级树用）
 /// @en Node data for hierarchy tree
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +48,10 @@ pub struct NodeData {
     pub active: bool,
     pub children: Vec<NodeData>,
     pub components: Vec<String>,
+    /// @zh 节点变换属性（用于 viewport 同步）
+    /// @en Node transform properties (for viewport sync)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub properties: Option<NodeTransform>,
 }
 
 impl NodeData {
@@ -31,6 +64,7 @@ impl NodeData {
             active: true,
             children: Vec::new(),
             components: Vec::new(),
+            properties: None,
         }
     }
 
@@ -188,9 +222,17 @@ pub struct SceneState {
     /// @en Selected node UUID
     pub selected_uuid: Option<String>,
 
+    /// @zh 选中的节点路径（用于 MCP 查询）
+    /// @en Selected node path (for MCP queries)
+    pub selected_path: Option<String>,
+
     /// @zh 选中节点的属性
     /// @en Selected node properties
     pub selected_properties: Option<NodeProperties>,
+
+    /// @zh 选中节点的组件详情
+    /// @en Selected node component details
+    pub selected_components: Vec<ComponentData>,
 
     /// @zh 是否需要刷新层级
     /// @en Whether hierarchy needs refresh
@@ -224,12 +266,38 @@ impl SceneState {
 
     /// @zh 设置选中的节点
     /// @en Set selected node
+    ///
+    /// @zh 注意：不立即清空属性和组件，等新数据加载后再替换，避免 UI 闪烁
+    /// @en Note: Don't clear properties/components immediately, replace when new data loads to avoid UI flicker
     pub fn select_node(&mut self, uuid: Option<String>) {
         if self.selected_uuid != uuid {
             self.selected_uuid = uuid;
-            self.selected_properties = None;
+            self.selected_path = None;
+            // Don't clear properties immediately - keep showing old data until new data arrives
+            // This prevents UI flickering during selection changes
             self.properties_dirty = true;
         }
+    }
+
+    /// @zh 设置选中的节点（包含路径）
+    /// @en Set selected node (with path)
+    ///
+    /// @zh 注意：不立即清空属性和组件，等新数据加载后再替换，避免 UI 闪烁
+    /// @en Note: Don't clear properties/components immediately, replace when new data loads to avoid UI flicker
+    pub fn select_node_with_path(&mut self, uuid: Option<String>, path: Option<String>) {
+        if self.selected_uuid != uuid {
+            self.selected_uuid = uuid;
+            self.selected_path = path;
+            // Don't clear properties immediately - keep showing old data until new data arrives
+            // This prevents UI flickering during selection changes
+            self.properties_dirty = true;
+        }
+    }
+
+    /// @zh 更新选中节点的组件
+    /// @en Update selected node components
+    pub fn update_components(&mut self, components: Vec<ComponentData>) {
+        self.selected_components = components;
     }
 
     /// @zh 更新场景树

@@ -161,6 +161,9 @@ pub enum AssetType {
 pub struct HierarchyItem {
     pub name: String,
     pub uuid: String,
+    /// @zh 节点路径（如 "Canvas/Node1"）
+    /// @en Node path (e.g., "Canvas/Node1")
+    pub path: String,
     pub node_type: NodeType,
     pub visible: bool,
     pub expanded: bool,
@@ -175,6 +178,7 @@ impl HierarchyItem {
         Self {
             name: name.into(),
             uuid: String::new(),
+            path: String::new(),
             node_type,
             visible: true,
             expanded: false,
@@ -185,6 +189,11 @@ impl HierarchyItem {
 
     pub fn with_uuid(mut self, uuid: impl Into<String>) -> Self {
         self.uuid = uuid.into();
+        self
+    }
+
+    pub fn with_path(mut self, path: impl Into<String>) -> Self {
+        self.path = path.into();
         self
     }
 
@@ -544,6 +553,7 @@ pub struct LogEntry {
     pub level: LogLevel,
     pub time: String,
     pub message: String,
+    pub count: usize,
 }
 
 impl LogEntry {
@@ -552,6 +562,7 @@ impl LogEntry {
             level: LogLevel::Info,
             time: chrono::Local::now().format("%H:%M:%S").to_string(),
             message: message.into(),
+            count: 1,
         }
     }
 
@@ -560,6 +571,7 @@ impl LogEntry {
             level: LogLevel::Warn,
             time: chrono::Local::now().format("%H:%M:%S").to_string(),
             message: message.into(),
+            count: 1,
         }
     }
 
@@ -568,6 +580,7 @@ impl LogEntry {
             level: LogLevel::Error,
             time: chrono::Local::now().format("%H:%M:%S").to_string(),
             message: message.into(),
+            count: 1,
         }
     }
 }
@@ -598,6 +611,15 @@ impl Default for DrawerState {
 
 impl DrawerState {
     pub fn add_log(&mut self, entry: LogEntry) {
+        // 检查是否与最后一条日志相同（相同级别和消息）
+        if let Some(last) = self.logs.last_mut() {
+            if last.level == entry.level && last.message == entry.message {
+                last.count += 1;
+                last.time = entry.time; // 更新时间为最新
+                return;
+            }
+        }
+
         self.logs.push(entry);
         if self.logs.len() > self.max_logs {
             self.logs.remove(0);
@@ -645,6 +667,23 @@ pub struct EditorState {
 
     // Viewport state
     pub viewport_mode: ViewportMode,
+    pub show_grid: bool,
+    pub snap_enabled: bool,
+    pub snap_size: f32,
+
+    // Camera settings
+    /// @zh 相机近裁剪面距离
+    /// @en Camera near clipping plane distance
+    pub camera_near_plane: f32,
+    /// @zh 相机远裁剪面距离
+    /// @en Camera far clipping plane distance
+    pub camera_far_plane: f32,
+    /// @zh 相机视野角度
+    /// @en Camera field of view
+    pub camera_fov: f32,
+    /// @zh 相机设置面板是否打开
+    /// @en Whether camera settings panel is open
+    pub camera_settings_open: bool,
 
     // Selection state
     pub selected_entity: Option<usize>,
@@ -698,6 +737,13 @@ impl EditorState {
             is_paused: false,
             play_state: PlayState::Stopped,
             viewport_mode: ViewportMode::Mode3D,
+            show_grid: true,
+            snap_enabled: false,
+            snap_size: 1.0,
+            camera_near_plane: 0.1,
+            camera_far_plane: 100000.0,
+            camera_fov: 60.0,
+            camera_settings_open: false,
             selected_entity: None,
             hierarchy_items: Vec::new(),
             hierarchy_search: String::new(),
@@ -737,6 +783,13 @@ impl EditorState {
             is_paused: false,
             play_state: PlayState::Stopped,
             viewport_mode: ViewportMode::Mode3D,
+            show_grid: true,
+            snap_enabled: false,
+            snap_size: 1.0,
+            camera_near_plane: 0.1,
+            camera_far_plane: 100000.0,
+            camera_fov: 60.0,
+            camera_settings_open: false,
             selected_entity: None,
             hierarchy_items: Vec::new(),
             hierarchy_search: String::new(),
@@ -853,23 +906,31 @@ impl EditorState {
     pub fn sync_hierarchy_from_scene(&mut self) {
         use super::scene_data::NodeData;
 
-        fn convert_node(node: &NodeData) -> HierarchyItem {
+        fn convert_node(node: &NodeData, parent_path: &str) -> HierarchyItem {
+            // Build the path for this node
+            let node_path = if parent_path.is_empty() {
+                node.name.clone()
+            } else {
+                format!("{}/{}", parent_path, node.name)
+            };
+
             let children: Vec<HierarchyItem> = node.children.iter()
-                .map(convert_node)
+                .map(|child| convert_node(child, &node_path))
                 .collect();
 
             HierarchyItem::new(&node.name, NodeType::Node)
                 .with_uuid(&node.uuid)
+                .with_path(&node_path)
                 .with_components(node.components.clone())
                 .with_children(children)
-                .expanded(true) // Default expanded for loaded scenes
+                .expanded(true)
         }
 
         if let Some(ref tree) = self.scene_state.tree {
             // Convert the tree to hierarchy items
-            // The root node's children are the top-level items
+            // The root node's children are the top-level items (use empty parent path)
             self.hierarchy_items = tree.children.iter()
-                .map(convert_node)
+                .map(|child| convert_node(child, ""))
                 .collect();
         } else {
             self.hierarchy_items.clear();

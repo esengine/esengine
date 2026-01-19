@@ -75,17 +75,6 @@
     <!-- Load viewport RPC module -->
     <script src="asset://localhost/viewport-rpc.js"></script>
 
-    <!-- Synchronous script for early config (must run before module scripts) -->
-    <script>
-        // Global setter that works before ES modules are loaded
-        // Rust calls this via eval_script immediately after webview is ready
-        window._pendingProjectConfig = null;
-        window._setProjectConfigEarly = function(config) {
-            console.log('[viewport] _setProjectConfigEarly called:', config);
-            window._pendingProjectConfig = config;
-        };
-    </script>
-
     <script type="module">
         /**
          * @zh ccesengine 视口初始化脚本（嵌入式版本）
@@ -172,7 +161,7 @@
         let director = null;
         let scene = null;
 
-        // Project configuration (set by synchronous script or Rust eval_script)
+        // Project configuration
         let projectServerUrl = null;
         let projectLibraryUrl = null;
 
@@ -284,9 +273,8 @@
             });
         }
 
-        // Store registered effects for later programLib.register and material creation
+        // Store registered effects for later material creation
         let registeredGraphicsEffect = null;
-        let pendingEffectsForProgramLib = [];
 
         /**
          * @zh 在 game.init() 之前预注册 effects
@@ -321,12 +309,6 @@
             GOURAND: 0, FLAT: 1,
             // polygon mode
             FILL: 0, POINT: 1, LINE: 2,
-            // primitive mode
-            POINT_LIST: 0, LINE_LIST: 1, LINE_STRIP: 2, LINE_LOOP: 3,
-            LINE_LIST_ADJACENCY: 4, LINE_STRIP_ADJACENCY: 5,
-            TRIANGLE_LIST: 7, TRIANGLE_STRIP: 8, TRIANGLE_FAN: 9,
-            TRIANGLE_LIST_ADJACENCY: 10, TRIANGLE_STRIP_ADJACENCY: 11,
-            TRIANGLE_PATCH_ADJACENCY: 12, QUAD_PATCH_LIST: 13,
             // color mask
             NONE: 0, R: 1, G: 2, B: 4, A: 8, ALL: 15,
             // boolean
@@ -430,7 +412,9 @@
             }
 
             showStatus('Pre-registering effects...');
-            console.log(`[ccesengine] preRegisterEffects called with ${effectsData.length} effects`);
+
+            // Debug: List all effect names being registered
+            console.log('[ccesengine] Effects to register:', effectsData.map(e => e.name).join(', '));
 
             const EffectAsset = cc.EffectAsset;
             const programLib = cc.programLib;
@@ -440,25 +424,15 @@
                 return;
             }
 
-            // Log available registration methods and existing effects
-            console.log('[ccesengine] EffectAsset.register exists:', typeof EffectAsset.register === 'function');
-            console.log('[ccesengine] EffectAsset.get exists:', typeof EffectAsset.get === 'function');
-            console.log('[ccesengine] EffectAsset.getAll exists:', typeof EffectAsset.getAll === 'function');
-            console.log('[ccesengine] EffectAsset._effects exists:', typeof EffectAsset._effects === 'object');
-
-            // Check for any pre-existing effects
-            const existingEffects = EffectAsset.getAll ? EffectAsset.getAll() : (EffectAsset._effects || {});
-            const existingNames = Object.keys(existingEffects);
-            if (existingNames.length > 0) {
-                console.log(`[ccesengine] Pre-existing effects (${existingNames.length}):`, existingNames.join(', '));
-            } else {
-                console.log('[ccesengine] No pre-existing effects');
-            }
+            // Check if geometry-renderer effect is in the data
+            const hasGeometryRenderer = effectsData.some(e =>
+                e.name === 'internal/builtin-geometry-renderer' ||
+                e.name === 'builtin-geometry-renderer'
+            );
+            console.log('[ccesengine] Has builtin-geometry-renderer effect:', hasGeometryRenderer);
 
             for (const effectData of effectsData) {
                 try {
-                    console.log(`[ccesengine] Pre-registering effect: '${effectData.name}'`);
-
                     // Create EffectAsset instance
                     const effect = new EffectAsset();
                     effect._name = effectData.name;
@@ -502,47 +476,38 @@
                         }
                     }
 
-                    // DON'T call effect.onLoaded() here - it internally calls programLib.register()
-                    // which triggers shader compilation before Root.initialize() has registered CCSkinning UBO.
-                    // Instead, just register to EffectAsset static map.
-                    // programLib.register will be called in finalizeEffectsRegistration() after game.init()
+                    // Register with programLib (shader compilation)
+                    if (programLib?.register) {
+                        programLib.register(effect);
+                    }
+
+                    // Call onLoaded if available
+                    if (effect.onLoaded) {
+                        effect.onLoaded();
+                    }
 
                     // Register to EffectAsset static map - CRITICAL for Material.initialize()
-                    // This allows EffectAsset.get() to find the effect by name
                     if (EffectAsset.register) {
                         EffectAsset.register(effect);
-                    } else if (EffectAsset._effects) {
-                        // Fallback: directly add to _effects map if register() doesn't exist
-                        EffectAsset._effects[effect.name] = effect;
-                        console.log(`[ccesengine] Registered effect via _effects map: '${effect.name}'`);
-                    } else {
-                        console.warn(`[ccesengine] Cannot register effect '${effect.name}': no registration method available`);
                     }
-
-                    // Verify registration worked
-                    const verifyEffect = EffectAsset.get ? EffectAsset.get(effect.name) : EffectAsset._effects?.[effect.name];
-                    if (!verifyEffect) {
-                        console.warn(`[ccesengine] Effect '${effect.name}' NOT found after registration`);
-                    }
-
-                    // Store effect for later programLib.register (after Root.initialize)
-                    pendingEffectsForProgramLib.push(effect);
 
                     // Store graphics effect for later material creation
                     if (effectData.name === 'internal/builtin-graphics' || effectData.name === 'builtin-graphics') {
                         registeredGraphicsEffect = effect;
                     }
+
+                    console.log(`[ccesengine] Pre-registered effect: ${effectData.name}, techniques: ${effect.techniques.length}, shaders: ${effect.shaders.length}`);
                 } catch (error) {
                     console.error(`[ccesengine] Failed to pre-register effect ${effectData.name}:`, error);
                 }
             }
 
-            // Log final registration state
-            const allEffects = EffectAsset.getAll ? EffectAsset.getAll() : (EffectAsset._effects || {});
-            const registeredNames = Object.keys(allEffects);
-            console.log(`[ccesengine] Total effects registered: ${registeredNames.length}`);
-            if (registeredNames.length > 0) {
-                console.log('[ccesengine] Registered effect names:', registeredNames.join(', '));
+            console.log(`[ccesengine] Pre-registered ${effectsData.length} effects`);
+
+            // Debug: List all registered effects
+            if (EffectAsset.getAll) {
+                const allEffects = EffectAsset.getAll();
+                console.log('[ccesengine] All registered effects after preRegister:', Object.keys(allEffects).join(', '));
             }
         }
 
@@ -554,140 +519,9 @@
          * At this point render pipeline is active, safe to create materials.
          */
         function finalizeEffectsRegistration() {
-            // Effects are now registered via EVENT_POST_SUBSYSTEM_INIT handler in initGame()
-            // This function handles post-init tasks only
-
-            // Fallback: register any remaining effects (shouldn't happen normally)
-            const programLib = cc.programLib;
-            if (programLib?.register && pendingEffectsForProgramLib.length > 0) {
-                console.log(`[ccesengine] Late registration of ${pendingEffectsForProgramLib.length} effects...`);
-                for (const effect of pendingEffectsForProgramLib) {
-                    try {
-                        programLib.register(effect);
-                    } catch (regError) {
-                        console.warn(`[ccesengine] Failed to register effect ${effect._name}:`, regError);
-                    }
-                }
-                pendingEffectsForProgramLib = [];
-            }
-
-            // Create essential builtin materials
-            createBuiltinMaterials();
-
             // Create graphics material if effect was registered
             if (registeredGraphicsEffect) {
                 createGraphicsMaterial(registeredGraphicsEffect);
-            }
-        }
-
-        /**
-         * @zh 创建必要的内置材质
-         * @en Create essential builtin materials
-         */
-        function createBuiltinMaterials() {
-            try {
-                const Material = cc.Material;
-                const builtinResMgr = cc.builtinResMgr;
-                const EffectAsset = cc.EffectAsset;
-
-                if (!Material || !builtinResMgr || !EffectAsset) {
-                    console.warn('[ccesengine] Cannot create builtin materials: missing classes');
-                    return;
-                }
-
-                // List of builtin materials to create (matching CLI's BUILTIN_MATERIALS)
-                const materialConfigs = [
-                    { uuid: 'ui-base-material', name: 'ui-base-material', effect: 'builtin-sprite', defines: { USE_TEXTURE: false } },
-                    { uuid: 'ui-sprite-material', name: 'ui-sprite-material', effect: 'builtin-sprite', defines: { USE_TEXTURE: true } },
-                    { uuid: 'ui-sprite-gray-material', name: 'ui-sprite-gray-material', effect: 'builtin-sprite', defines: { USE_TEXTURE: true, IS_GRAY: true } },
-                    { uuid: 'ui-sprite-alpha-sep-material', name: 'ui-sprite-alpha-sep-material', effect: 'builtin-sprite', defines: { USE_TEXTURE: true, CC_USE_EMBEDDED_ALPHA: true } },
-                    { uuid: 'default-material', name: 'default-material', effect: 'builtin-unlit' },
-                    // Skybox material - required for scene globals
-                    { uuid: 'default-skybox-material', name: 'default-skybox-material', effect: 'skybox' },
-                ];
-
-                // Effect name variants to try (effects may be registered with different names)
-                const effectNameVariants = {
-                    'builtin-sprite': ['builtin-sprite', 'for2d/builtin-sprite', 'sprite'],
-                    'builtin-unlit': ['builtin-unlit', 'builtin-standard', 'unlit'],
-                    'builtin-graphics': ['builtin-graphics', 'internal/builtin-graphics', 'graphics'],
-                    'skybox': ['skybox', 'pipeline/skybox', 'builtin-skybox'],
-                };
-
-                // Log available effects for debugging
-                const allEffects = EffectAsset.getAll ? EffectAsset.getAll() : (EffectAsset._effects || {});
-                const effectNames = Object.keys(allEffects);
-                console.log(`[ccesengine] createBuiltinMaterials - found ${effectNames.length} registered effects`);
-                if (effectNames.length > 0) {
-                    console.log('[ccesengine] Available effects:', effectNames.join(', '));
-                } else {
-                    console.warn('[ccesengine] NO effects registered! Check preRegisterEffects()');
-                }
-
-                for (const config of materialConfigs) {
-                    // Check if already exists
-                    if (builtinResMgr.get && builtinResMgr.get(config.uuid)) {
-                        console.log(`[ccesengine] Material '${config.name}' already exists, skipping`);
-                        continue;
-                    }
-
-                    // Try to find the effect using name variants
-                    let effect = null;
-                    const variants = effectNameVariants[config.effect] || [config.effect];
-                    console.log(`[ccesengine] Looking for effect '${config.effect}' with variants:`, variants);
-
-                    for (const name of variants) {
-                        effect = EffectAsset.get ? EffectAsset.get(name) : allEffects[name];
-                        if (effect) {
-                            console.log(`[ccesengine] Found effect using variant: '${name}'`);
-                            break;
-                        }
-                    }
-
-                    // Also try searching in all effects
-                    if (!effect) {
-                        const searchTerm = config.effect.replace('builtin-', '');
-                        console.log(`[ccesengine] Searching all effects for term: '${searchTerm}'`);
-                        for (const name of effectNames) {
-                            if (name.includes(searchTerm)) {
-                                effect = EffectAsset.get ? EffectAsset.get(name) : allEffects[name];
-                                if (effect) {
-                                    console.log(`[ccesengine] Found effect '${name}' via search for '${config.effect}'`);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!effect) {
-                        console.warn(`[ccesengine] Effect '${config.effect}' not found for material '${config.name}'`);
-                        console.warn(`[ccesengine] Tried variants: ${variants.join(', ')}`);
-                        continue;
-                    }
-
-                    // Create the material
-                    const material = new Material();
-                    material._uuid = config.uuid;
-                    material._name = config.name;
-
-                    try {
-                        const initParams = { effectAsset: effect };
-                        if (config.defines) {
-                            initParams.defines = config.defines;
-                        }
-                        material.initialize(initParams);
-
-                        // Register with builtinResMgr
-                        if (material.passes?.length > 0 && builtinResMgr.addAsset) {
-                            builtinResMgr.addAsset(config.uuid, material);
-                            console.log(`[ccesengine] Created builtin material: ${config.name}`);
-                        }
-                    } catch (initError) {
-                        console.warn(`[ccesengine] Failed to create material '${config.name}':`, initError);
-                    }
-                }
-            } catch (err) {
-                console.warn('[ccesengine] createBuiltinMaterials error:', err);
             }
         }
 
@@ -744,116 +578,9 @@
             }
         }
 
-        /**
-         * @zh 修补 Skybox 以优雅处理缺失的材质
-         * @en Patch Skybox to handle missing materials gracefully
-         */
-        function patchSkyboxForMissingMaterials() {
-            try {
-                const Skybox = cc.Skybox || cc.renderer?.Skybox;
-                if (!Skybox) {
-                    console.log('[ccesengine] Skybox class not found, skipping patch');
-                    return;
-                }
-
-                // Patch _updatePipeline to catch material errors
-                const original_updatePipeline = Skybox.prototype._updatePipeline;
-                if (original_updatePipeline) {
-                    Skybox.prototype._updatePipeline = function() {
-                        try {
-                            return original_updatePipeline.apply(this, arguments);
-                        } catch (err) {
-                            console.warn('[ccesengine] Skybox._updatePipeline error (ignored):', err.message);
-                            // Disable skybox to prevent further errors
-                            this._enabled = false;
-                        }
-                    };
-                }
-
-                // Patch setEnvMaps to catch material errors
-                const originalSetEnvMaps = Skybox.prototype.setEnvMaps;
-                if (originalSetEnvMaps) {
-                    Skybox.prototype.setEnvMaps = function() {
-                        try {
-                            return originalSetEnvMaps.apply(this, arguments);
-                        } catch (err) {
-                            console.warn('[ccesengine] Skybox.setEnvMaps error (ignored):', err.message);
-                        }
-                    };
-                }
-
-                console.log('[ccesengine] Skybox patched for missing materials');
-            } catch (err) {
-                console.warn('[ccesengine] Failed to patch Skybox:', err);
-            }
-        }
-
         // Flag to track if game needs re-initialization with project config
         let gameInitializedWithProject = false;
         let pendingProjectConfig = null;
-
-        // Track missing classes that we've created placeholders for
-        const missingClassPlaceholders = new Map();
-
-        /**
-         * @zh 设置缺失类处理器
-         * @en Set up missing class handler
-         *
-         * When a scene references a script class that isn't loaded,
-         * we create a placeholder component so the scene can still be visualized.
-         */
-        function setupMissingClassHandler() {
-            // Cocos stores class ID to class mappings in cc.js._registeredClassIds
-            // When deserializing, it looks up classes by their encoded ID
-            const js = cc.js;
-            if (!js) {
-                console.warn('[ccesengine] cc.js not available for missing class handler');
-                return;
-            }
-
-            // Override the class lookup to handle missing classes
-            const originalGetClassById = js.getClassById;
-            if (originalGetClassById) {
-                js.getClassById = function(classId) {
-                    let cls = originalGetClassById.call(js, classId);
-                    if (!cls && classId) {
-                        // Check if we already created a placeholder for this class
-                        if (missingClassPlaceholders.has(classId)) {
-                            return missingClassPlaceholders.get(classId);
-                        }
-
-                        // Create a placeholder component class
-                        console.log(`[ccesengine] Creating placeholder for missing class: ${classId}`);
-
-                        const Component = cc.Component;
-                        if (Component) {
-                            // Create a placeholder class that extends Component
-                            class MissingScriptPlaceholder extends Component {
-                                constructor() {
-                                    super();
-                                    this._missingClassId = classId;
-                                }
-
-                                onLoad() {
-                                    // Do nothing - placeholder component
-                                }
-                            }
-
-                            // Register the placeholder class with the missing class ID
-                            MissingScriptPlaceholder.prototype.__classname__ = `MissingScript_${classId}`;
-                            js._setClassId(classId, MissingScriptPlaceholder);
-                            missingClassPlaceholders.set(classId, MissingScriptPlaceholder);
-
-                            return MissingScriptPlaceholder;
-                        }
-                    }
-                    return cls;
-                };
-                console.log('[ccesengine] Missing class handler installed');
-            } else {
-                console.warn('[ccesengine] cc.js.getClassById not found');
-            }
-        }
 
         /**
          * @zh 初始化游戏引擎（模仿 CLI 的 Engine.initEngine）
@@ -865,88 +592,15 @@
             // Set up EditorExtends globally (like CLI does)
             window.EditorExtends = EditorExtends;
 
-            // Note: setupMissingClassHandler is called earlier in main() before any asset loading
-
             try {
-                // Register effects with programLib after subsystem init but before pipeline activation
-                // EVENT_POST_SUBSYSTEM_INIT fires after director.init() (CCSkinning registered)
-                // but before _setupRenderPipeline() (which needs effects)
-                game.once(cc.Game.EVENT_POST_SUBSYSTEM_INIT, () => {
-                    console.log('[ccesengine] EVENT_POST_SUBSYSTEM_INIT - registering effects with programLib');
-                    const programLib = cc.programLib;
-                    if (programLib?.register && pendingEffectsForProgramLib.length > 0) {
-                        for (const effect of pendingEffectsForProgramLib) {
-                            try {
-                                programLib.register(effect);
-                            } catch (regError) {
-                                console.warn(`[ccesengine] Failed to register effect ${effect._name}:`, regError);
-                            }
-                        }
-                        console.log(`[ccesengine] Registered ${pendingEffectsForProgramLib.length} effects with programLib`);
-                        pendingEffectsForProgramLib = []; // Clear the array
-                    }
-                });
-
-                // Builtin assets UUIDs from cc.config.json (base + 2d modules)
-                // These are essential assets like default materials, textures, effects
-                const builtinAssets = [
-                    // base module
-                    '970b0598-bcb0-4714-91fb-2e81440dccd8',
-                    'bcd64cc6-2dd9-43f6-abbe-66318d332032',
-                    'd930590d-bb92-4cc8-8bd1-23cd027f9edf',
-                    'a3cd009f-0ab0-420d-9278-b9fdab939bbc',
-                    // 2d module
-                    '60f7195c-ec2a-45eb-ba94-8955f60e81d0',
-                    '1c02ae6f-4492-4915-b8f8-7492a3b1e4cd',
-                    '810e96e4-e456-4468-9b59-f4e8f39732c0',
-                    'efe8e2a3-eace-427b-b4f1-cb8a937ec77d',
-                    'e9aa9a3e-5b2b-4ac7-a2c7-073de2b2b24f',
-                    '8bbdbcdd-5cd4-4100-b6d5-b7c9625b6107',
-                    '50f4348b-c883-4e2f-8f11-ce233b859fa1',
-                    'fda095cb-831d-4601-ad94-846013963de8',
-                    'f92806d7-1768-443f-afe8-12bcde84d0f0',
-                    'dd3a144d-ab7f-41f0-82b8-2e43a090d496',
-                    'f0416e68-0200-4b77-a926-4f9d16e494da',
-                ];
-
-                // Get server URL - matching CLI's configuration approach
-                // Note: window.location.origin can return "null" (string) in some WebView contexts,
-                // so we prefer the injected serverUrl from pendingProjectConfig
-                let serverUrl = pendingProjectConfig?.serverUrl;
-                if (!serverUrl || serverUrl === 'null') {
-                    // Fallback: try to construct from window.location
-                    const origin = window.location.origin;
-                    if (origin && origin !== 'null') {
-                        serverUrl = origin;
-                    } else {
-                        // Last resort: construct from protocol/host/port
-                        serverUrl = `${window.location.protocol}//${window.location.host}`;
-                    }
-                }
-                // IMPORTANT: Ensure serverUrl ends with trailing slash for proper URL concatenation
-                // The downloader builds URLs like: `${remoteServerAddress}remote/${bundleName}`
-                // Without trailing slash: http://127.0.0.1:64292remote/internal (invalid!)
-                // With trailing slash: http://127.0.0.1:64292/remote/internal (valid)
-                if (serverUrl && !serverUrl.endsWith('/')) {
-                    serverUrl = serverUrl + '/';
-                }
-                const libraryUrl = serverUrl + 'library';
-
-                // Debug: log the server URL being used
-                console.log('[ccesengine] Server URL:', serverUrl);
-                console.log('[ccesengine] Window location:', window.location.href, 'origin:', window.location.origin);
-                console.log('[ccesengine] pendingProjectConfig:', pendingProjectConfig);
-
-                // Build init config matching CLI's Engine.initEngine configuration exactly
-                // CLI uses: importBase: serverURL, nativeBase: serverURL, server: serverURL
-                // remoteBundles: ['internal', 'main'] tells engine to load these from {server}/remote/{bundle}/
+                // Build init config matching CLI's configuration
                 const initConfig = {
                     debugMode: cc.debug?.DebugMode?.WARN || 1,
                     showFPS: false,
                     frameRate: 60,
                     overrideSettings: {
                         engine: {
-                            builtinAssets: builtinAssets,  // Enable builtin assets loading (like CLI's queryInternalAssetList)
+                            builtinAssets: null,  // 禁用内置资源加载，使用预注册的 effects
                             macros: {
                                 ENABLE_TILEDMAP_CULLING: true,
                                 TOUCH_TIMEOUT: 5000,
@@ -971,25 +625,22 @@
                         physics: {
                             enabled: false, // Disable physics in editor mode
                         },
-                        assets: {
-                            // CLI pattern: importBase/nativeBase/server all set to serverURL
-                            // Assets are loaded from {server}/{uuid_prefix}/{uuid}.json
-                            importBase: serverUrl,
-                            nativeBase: serverUrl,
-                            server: serverUrl,
-                            // CLI uses: remoteBundles: ['internal', 'main']
-                            // Server routes /remote/internal/ to internal library
-                            remoteBundles: ['internal', 'main'],
-                            preloadBundles: [],
-                        },
                     },
                     exactFitScreen: true,
                 };
 
                 if (pendingProjectConfig && pendingProjectConfig.serverUrl) {
+                    const libraryUrl = pendingProjectConfig.serverUrl + '/library';
                     projectLibraryUrl = libraryUrl;
+                    initConfig.overrideSettings.assets = {
+                        importBase: libraryUrl,
+                        nativeBase: libraryUrl,
+                        server: libraryUrl,
+                        remoteBundles: [],
+                        preloadBundles: [],
+                    };
+                    console.log('[ccesengine] Assets config:', libraryUrl);
                     gameInitializedWithProject = true;
-                    console.log('[ccesengine] Project config applied: library =', libraryUrl);
                 }
 
                 // Set up timeout for init
@@ -1000,6 +651,7 @@
                 });
 
                 await Promise.race([initPromise, timeoutPromise]);
+                console.log('[ccesengine] game.init() completed');
             } catch (initError) {
                 console.error('[ccesengine] game.init() failed:', initError);
                 throw initError;
@@ -1018,11 +670,17 @@
 
             // Wait for director.root to be ready (no timeout - wait indefinitely)
             await new Promise((resolve) => {
+                let checkCount = 0;
                 const check = () => {
+                    checkCount++;
                     if (cc.director?.root) {
                         director = cc.director;
+                        console.log('[ccesengine] Engine ready after', checkCount, 'checks');
                         resolve();
                     } else {
+                        if (checkCount % 60 === 0) {
+                            console.log('[ccesengine] Waiting for engine... cc.director:', !!cc.director, 'root:', !!cc.director?.root);
+                        }
                         requestAnimationFrame(check);
                     }
                 };
@@ -1032,84 +690,8 @@
             // Patch the shader compilation to filter reserved GLSL macros
             patchShaderCompilation();
 
-            // Note: No longer using mock bundles - server properly serves internal bundle
-            // patchBundleLoading();
-
-            // Register missing builtin UBOs to avoid warnings
-            patchMissingBuiltinUBOs();
-        }
-
-        /**
-         * @zh 注册缺失的内置 UBO 以避免警告
-         * @en Register missing builtin UBOs to avoid warnings
-         *
-         * 某些 UBO (如 CCSkinning) 只有在加载完整引擎模块时才会注册。
-         * 在编辑器视口中，我们可能不需要这些功能，但编译的 effect 可能引用它们。
-         * 这里注册占位 UBO 以避免警告。
-         *
-         * Some UBOs (like CCSkinning) are only registered when full engine modules are loaded.
-         * In editor viewport, we may not need these features but compiled effects may reference them.
-         * Register placeholder UBOs here to avoid warnings.
-         */
-        function patchMissingBuiltinUBOs() {
-            try {
-                // Access localDescriptorSetLayout
-                const localDSL = cc.localDescriptorSetLayout;
-                if (!localDSL || !localDSL.layouts || !localDSL.bindings) return;
-
-                // ModelLocalBindings enum values
-                const UBO_SKINNING_ANIMATION = 2;
-                const UBO_SKINNING_TEXTURE = 3;
-
-                const SetIndex = cc.SetIndex || { LOCAL: 2 };
-                const Type = cc.gfx?.Type || { FLOAT4: 16 };
-                const DescriptorType = cc.gfx?.DescriptorType || { UNIFORM_BUFFER: 0 };
-                const ShaderStageFlagBit = cc.gfx?.ShaderStageFlagBit || { VERTEX: 1 };
-                const MemoryAccessBit = cc.gfx?.MemoryAccessBit || { READ_ONLY: 1 };
-                const ViewDimension = cc.gfx?.ViewDimension || { BUFFER: 0 };
-
-                const UniformBlock = cc.gfx?.UniformBlock || cc.UniformBlock;
-                const Uniform = cc.gfx?.Uniform || cc.Uniform;
-                const DescriptorSetLayoutBinding = cc.gfx?.DescriptorSetLayoutBinding || cc.DescriptorSetLayoutBinding;
-
-                if (!UniformBlock || !Uniform) return;
-
-                // Register CCSkinning if missing
-                if (!localDSL.layouts['CCSkinning']) {
-                    localDSL.layouts['CCSkinning'] = new UniformBlock(
-                        SetIndex.LOCAL, UBO_SKINNING_TEXTURE, 'CCSkinning',
-                        [new Uniform('cc_joints', Type.FLOAT4, 30)], 1
-                    );
-                    if (DescriptorSetLayoutBinding && !localDSL.bindings[UBO_SKINNING_TEXTURE]) {
-                        localDSL.bindings[UBO_SKINNING_TEXTURE] = new DescriptorSetLayoutBinding(
-                            UBO_SKINNING_TEXTURE, DescriptorType.UNIFORM_BUFFER, 1,
-                            ShaderStageFlagBit.VERTEX, MemoryAccessBit.READ_ONLY, ViewDimension.BUFFER
-                        );
-                    }
-                }
-
-                if (!localDSL.layouts['CCSkinningTexture']) {
-                    localDSL.layouts['CCSkinningTexture'] = new UniformBlock(
-                        SetIndex.LOCAL, UBO_SKINNING_TEXTURE, 'CCSkinningTexture',
-                        [new Uniform('cc_jointTextureInfo', Type.FLOAT4, 1)], 1
-                    );
-                }
-
-                if (!localDSL.layouts['CCSkinningAnimation']) {
-                    localDSL.layouts['CCSkinningAnimation'] = new UniformBlock(
-                        SetIndex.LOCAL, UBO_SKINNING_ANIMATION, 'CCSkinningAnimation',
-                        [new Uniform('cc_jointAnimInfo', Type.FLOAT4, 1)], 1
-                    );
-                    if (DescriptorSetLayoutBinding && !localDSL.bindings[UBO_SKINNING_ANIMATION]) {
-                        localDSL.bindings[UBO_SKINNING_ANIMATION] = new DescriptorSetLayoutBinding(
-                            UBO_SKINNING_ANIMATION, DescriptorType.UNIFORM_BUFFER, 1,
-                            ShaderStageFlagBit.VERTEX, MemoryAccessBit.READ_ONLY, ViewDimension.BUFFER
-                        );
-                    }
-                }
-            } catch (e) {
-                // Ignore errors - this is just to suppress warnings
-            }
+            // Patch bundle loading to handle internal bundle
+            patchBundleLoading();
         }
 
         /**
@@ -1178,44 +760,23 @@
             }
         }
 
-        // Shared mock bundle and flag
-        let mockInternalBundle = null;
-        let bundleLoadingPatched = false;
-
         /**
-         * @zh 创建 mock bundle 对象
-         * @en Create mock bundle object
+         * @zh 拦截 bundle 加载，处理内置 bundle
+         * @en Patch bundle loading to handle internal bundle
          */
-        function createMockBundle(name, serverUrl) {
-            // Base URL for this bundle's assets
-            const bundleBase = serverUrl ? `${serverUrl}/remote/${name}/` : '';
+        function patchBundleLoading() {
+            const assetManager = cc.assetManager;
+            if (!assetManager) return;
 
-            return {
-                name: name,
+            const originalLoadBundle = assetManager.loadBundle?.bind(assetManager);
+            if (!originalLoadBundle) return;
+
+            // Create mock internal bundle
+            const mockInternalBundle = {
+                name: 'internal',
                 deps: [],
                 _isLoaded: true,
-                base: bundleBase,
-                _config: {
-                    base: bundleBase,
-                    importBase: bundleBase,
-                    nativeBase: bundleBase,
-                    name: name,
-                    deps: [],
-                    uuids: [],
-                    paths: {},
-                    scenes: {},
-                    packs: {},
-                    versions: { import: [], native: [] },
-                    redirect: [],
-                    debug: false,
-                    types: [],
-                    extensionMap: {},
-                },
-                get config() { return this._config; },
                 getInfoWithPath: () => null,
-                getAssetInfo: (uuid) => null, // Required by url-transformer
-                getDirWithPath: () => null,
-                getSceneInfo: () => null,
                 get: (path, type, callback) => {
                     if (typeof type === 'function') callback = type;
                     if (callback) callback(null, null);
@@ -1248,129 +809,33 @@
                 release: () => {},
                 releaseAll: () => {},
             };
-        }
 
-        /**
-         * @zh 早期 bundle 加载补丁 - 在 game.init() 之前调用
-         * @en Early bundle loading patch - called before game.init()
-         *
-         * 这个函数设置 mock internal bundle，防止引擎尝试从服务器下载 bundle 配置。
-         * This function sets up mock internal bundle to prevent engine from downloading bundle config.
-         */
-        function patchBundleLoadingEarly() {
-            if (bundleLoadingPatched) return;
+            // Store in bundles cache
+            if (assetManager.bundles) {
+                assetManager.bundles.add('internal', mockInternalBundle);
+            }
 
-            const serverUrl = window.location.origin;
-
-            // Create mock internal bundle
-            mockInternalBundle = createMockBundle('internal', serverUrl);
-
-            // The assetManager might not be fully initialized yet, but we need to
-            // intercept loadBundle. We'll patch it when it becomes available.
-            const patchAssetManager = () => {
-                const assetManager = cc.assetManager;
-                if (!assetManager) {
-                    console.warn('[ccesengine] assetManager not available yet');
-                    return false;
+            assetManager.loadBundle = function(nameOrUrl, options, onComplete) {
+                // Normalize arguments
+                if (typeof options === 'function') {
+                    onComplete = options;
+                    options = null;
                 }
 
-                // Add to bundles cache if available
-                if (assetManager.bundles) {
-                    assetManager.bundles.add('internal', mockInternalBundle);
-                    console.log('[ccesengine] Mock internal bundle added to cache');
+                // Intercept internal bundle loading
+                if (nameOrUrl === 'internal' || nameOrUrl === 'INTERNAL') {
+                    console.log('[ccesengine] Intercepted internal bundle load, using mock');
+                    if (onComplete) {
+                        setTimeout(() => onComplete(null, mockInternalBundle), 0);
+                    }
+                    return;
                 }
 
-                // Patch loadBundle if not already patched
-                if (!assetManager._originalLoadBundle) {
-                    assetManager._originalLoadBundle = assetManager.loadBundle?.bind(assetManager);
-
-                    assetManager.loadBundle = function(nameOrUrl, options, onComplete) {
-                        // Normalize arguments
-                        if (typeof options === 'function') {
-                            onComplete = options;
-                            options = null;
-                        }
-
-                        const bundleName = typeof nameOrUrl === 'string' ? nameOrUrl.split('/').pop() : nameOrUrl;
-
-                        // Intercept internal bundle loading
-                        if (bundleName === 'internal' || bundleName === 'INTERNAL') {
-                            console.log('[ccesengine] Intercepted internal bundle load');
-                            if (onComplete) {
-                                setTimeout(() => onComplete(null, mockInternalBundle), 0);
-                            }
-                            return;
-                        }
-
-                        // Pass through to original for other bundles
-                        if (assetManager._originalLoadBundle) {
-                            return assetManager._originalLoadBundle(nameOrUrl, options, onComplete);
-                        }
-                    };
-                    console.log('[ccesengine] loadBundle patched');
-                }
-
-                bundleLoadingPatched = true;
-                return true;
+                // Pass through to original for other bundles
+                return originalLoadBundle(nameOrUrl, options, onComplete);
             };
 
-            // Try to patch now
-            if (!patchAssetManager()) {
-                // If assetManager not ready, try again after a short delay
-                // This handles the case where the function is called before engine is fully loaded
-                console.log('[ccesengine] Will retry patching assetManager...');
-            }
-        }
-
-        /**
-         * @zh 后期 bundle 加载补丁 - 在 game.run() 之后调用
-         * @en Late bundle loading patch - called after game.run()
-         *
-         * 确保 mock bundle 已经正确安装。
-         * Ensures mock bundle is correctly installed.
-         */
-        function patchBundleLoading() {
-            const assetManager = cc.assetManager;
-            if (!assetManager) return;
-
-            // Ensure mock bundle is in cache (in case early patching didn't work)
-            if (!mockInternalBundle) {
-                const serverUrl = window.location.origin;
-                mockInternalBundle = createMockBundle('internal', serverUrl);
-            }
-
-            if (assetManager.bundles && !assetManager.bundles.get('internal')) {
-                assetManager.bundles.add('internal', mockInternalBundle);
-                console.log('[ccesengine] Mock internal bundle added to cache (late)');
-            }
-
-            // Ensure loadBundle is patched
-            if (!assetManager._originalLoadBundle) {
-                assetManager._originalLoadBundle = assetManager.loadBundle?.bind(assetManager);
-
-                assetManager.loadBundle = function(nameOrUrl, options, onComplete) {
-                    // Normalize arguments
-                    if (typeof options === 'function') {
-                        onComplete = options;
-                        options = null;
-                    }
-
-                    const bundleName = typeof nameOrUrl === 'string' ? nameOrUrl.split('/').pop() : nameOrUrl;
-
-                    // Intercept internal bundle loading
-                    if (bundleName === 'internal' || bundleName === 'INTERNAL') {
-                        if (onComplete) {
-                            setTimeout(() => onComplete(null, mockInternalBundle), 0);
-                        }
-                        return;
-                    }
-
-                    // Pass through to original for other bundles
-                    if (assetManager._originalLoadBundle) {
-                        return assetManager._originalLoadBundle(nameOrUrl, options, onComplete);
-                    }
-                };
-            }
+            console.log('[ccesengine] Bundle loading patched for internal bundle');
         }
 
         function createDefaultScene() {
@@ -1447,6 +912,8 @@
             }
             camera.near = 0.1;
             camera.far = 100000; // Extended far plane for grid visibility at large distances
+
+            console.log('[Camera] Setup:', viewMode, 'projection:', camera.projection, '(ORTHO=' + ORTHO + ', PERSPECTIVE=' + PERSPECTIVE + ')', 'pos:', cameraNode.position, 'rot:', cameraPitch, cameraYaw);
         }
 
         /**
@@ -1597,6 +1064,7 @@
 
             rpc.registerMethod(Methods.SELECT_NODE, (params) => {
                 // TODO: Implement node selection
+                console.log('[RPC] selectNode:', params?.uuid);
                 return null;
             });
 
@@ -1634,113 +1102,39 @@
 
             rpc.registerMethod(Methods.FOCUS_SELECTED, () => {
                 // TODO: Focus on selected node
+                console.log('[RPC] focusSelected');
                 return null;
             });
+
+            console.log('[Viewport] RPC methods registered');
         }
 
         // Register methods immediately
         registerRpcMethods();
-
-        /**
-         * @zh 初始化 localDescriptorSetLayout 以避免 UBO 警告
-         * @en Initialize localDescriptorSetLayout to avoid UBO warnings
-         *
-         * CCSkinning 等 UBO 只在 Root.initialize() 中注册，但 effect 编译时需要它们。
-         * 手动调用 localDescriptorSetLayout_ResizeMaxJoints 来提前注册。
-         */
-        function initializeLocalDescriptorSetLayout() {
-            try {
-                // Try to call the engine's resize function
-                if (cc.localDescriptorSetLayout_ResizeMaxJoints) {
-                    cc.localDescriptorSetLayout_ResizeMaxJoints(256);
-                    console.log('[ccesengine] Called localDescriptorSetLayout_ResizeMaxJoints(256)');
-                    return;
-                }
-
-                // Fallback: manually initialize UBOSkinning in localDescriptorSetLayout
-                const rendering = cc.rendering;
-                if (!rendering) return;
-
-                const { localDescriptorSetLayout, UBOSkinning, SetIndex, ModelLocalBindings } = rendering;
-                if (!localDescriptorSetLayout || !UBOSkinning) return;
-
-                // Call initLayout if available
-                if (UBOSkinning.initLayout) {
-                    UBOSkinning.initLayout(256);
-                }
-
-                // Register CCSkinning in localDescriptorSetLayout
-                if (!localDescriptorSetLayout.layouts['CCSkinning']) {
-                    localDescriptorSetLayout.layouts['CCSkinning'] = UBOSkinning.LAYOUT;
-                    const binding = UBOSkinning.BINDING ?? ModelLocalBindings?.UBO_SKINNING_TEXTURE ?? 3;
-                    localDescriptorSetLayout.bindings[binding] = UBOSkinning.DESCRIPTOR;
-                    console.log('[ccesengine] Registered CCSkinning in localDescriptorSetLayout');
-                }
-            } catch (error) {
-                console.warn('[ccesengine] Failed to initialize localDescriptorSetLayout:', error);
-            }
-        }
-
-        /**
-         * @zh 等待项目配置（由 Rust 通过 _setProjectConfigEarly 设置）
-         * @en Wait for project config (set by Rust via _setProjectConfigEarly)
-         */
-        async function waitForProjectConfig(timeoutMs = 5000) {
-            const startTime = Date.now();
-            while (Date.now() - startTime < timeoutMs) {
-                if (window._pendingProjectConfig && window._pendingProjectConfig.serverUrl) {
-                    console.log('[ccesengine] Project config received:', window._pendingProjectConfig);
-                    return window._pendingProjectConfig;
-                }
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            console.warn('[ccesengine] Timeout waiting for project config, proceeding without it');
-            return null;
-        }
 
         // Main initialization
         async function main() {
             try {
                 await loadModules();
 
-                // Set up missing class handler EARLY - before any scene/asset loading
-                // This allows scenes to load even when custom scripts aren't available
-                setupMissingClassHandler();
-
-                // Patch Skybox to handle missing materials gracefully
-                patchSkyboxForMissingMaterials();
-
-                // Initialize localDescriptorSetLayout BEFORE any effect processing
-                // This ensures CCSkinning and other UBOs are registered before effects are compiled
-                initializeLocalDescriptorSetLayout();
-
-                // Wait for project config from Rust (set via _setProjectConfigEarly in sync script)
-                showStatus('Waiting for project config...');
-                const projectConfig = await waitForProjectConfig(5000);
-                if (projectConfig) {
-                    pendingProjectConfig = projectConfig;
-                    projectServerUrl = projectConfig.serverUrl;
-                    projectLibraryUrl = projectConfig.serverUrl + '/library';
-                    console.log('[ccesengine] Project configured: libraryUrl =', projectLibraryUrl);
-                }
-
-                // Wait for builtin effects data before game.init()
-                // Effects are pre-registered (to EffectAsset map) but NOT to programLib yet
-                // programLib.register is deferred to finalizeEffectsRegistration() after game.init()
-                // to ensure Root.initialize() has registered CCSkinning UBO first
+                // IMPORTANT: Wait for and register builtin effects BEFORE game.init()
+                // This ensures effects are available when render pipeline activates
+                // and calls initGeometryRendererMaterials()
                 showStatus('Waiting for builtin effects...');
                 const effectsData = await waitForBuiltinEffects(3000);
+                console.log('[ccesengine] Received effects data:', effectsData ? `${Array.isArray(effectsData) ? effectsData.length : 'not array'} effects` : 'null');
                 if (effectsData) {
+                    // Pre-register effects before game.init()
                     preRegisterEffects(effectsData);
                 } else {
-                    console.warn('[ccesengine] No builtin effects received, grid rendering may not work');
+                    console.warn('[ccesengine] No builtin effects received, some features may not work');
+                    console.warn('[ccesengine] Grid rendering will NOT work without builtin-geometry-renderer effect');
                 }
 
                 await initGame();
                 await runGame();
 
-                // Now Root.initialize() has been called, CCSkinning UBO is registered.
-                // Safe to register effects with programLib and create materials.
+                // Post-initialization: ensure materials are properly compiled
                 finalizeEffectsRegistration();
 
                 createDefaultScene();
@@ -1754,6 +1148,8 @@
 
                 // Hide loading
                 loadingEl.style.display = 'none';
+
+                console.log('[ccesengine] Initialization complete');
                 rpc?.emitReady('1.0.0');
 
             } catch (error) {
@@ -1779,15 +1175,23 @@
          * The initGeometryRenderer method is on the internal camera, not the component.
          */
         function initGeometryRenderer() {
+            // Get the main camera from scene
             const cameraNode = scene?.getChildByName('Main Camera');
-            if (!cameraNode) return false;
+            if (!cameraNode) {
+                console.log('[ccesengine] initGeometryRenderer: cameraNode not found');
+                return false;
+            }
 
             mainCameraComp = cameraNode.getComponent(cc.Camera);
-            if (!mainCameraComp) return false;
+            if (!mainCameraComp) {
+                console.log('[ccesengine] initGeometryRenderer: Camera component not found');
+                return false;
+            }
 
             // Get internal render camera from Camera component
             const internalCamera = mainCameraComp.camera;
             if (!internalCamera) {
+                console.log('[ccesengine] initGeometryRenderer: internal camera not found, _camera:', !!mainCameraComp._camera);
                 return false;
             }
 
@@ -1796,11 +1200,14 @@
                 try {
                     internalCamera.initGeometryRenderer();
                     geometryRenderer = internalCamera.geometryRenderer;
+                    console.log('[ccesengine] initGeometryRenderer: success, geometryRenderer:', !!geometryRenderer);
                     return !!geometryRenderer;
                 } catch (e) {
                     console.error('[ccesengine] initGeometryRenderer error:', e);
                     return false;
                 }
+            } else {
+                console.log('[ccesengine] initGeometryRenderer: method not available on internal camera');
             }
             return false;
         }
@@ -1821,11 +1228,22 @@
          * - Grid extent scales dynamically with camera distance
          * - Max line count limited for performance
          */
-        const MAX_LINES_PER_AXIS = 150;
+        let drawGridCalled = false;
+        let drawGridCallCount = 0;
+        const MAX_LINES_PER_AXIS = 150; // Increased for better grid coverage
 
         function drawGrid() {
             if (!geometryRenderer) return;
             if (!gridVisible) return;
+            drawGridCallCount++;
+            if (!drawGridCalled) {
+                console.log('[ccesengine] drawGrid first call, viewMode:', viewMode, 'cameraPos:', JSON.stringify(cameraPos));
+                drawGridCalled = true;
+            }
+            // Log every 60 frames (about every second)
+            if (drawGridCallCount % 60 === 0) {
+                console.log('[ccesengine] drawGrid frame', drawGridCallCount, 'geometryRenderer.empty:', geometryRenderer.empty?.());
+            }
 
             const Vec3 = cc.Vec3;
             const Color = cc.Color;
@@ -2006,6 +1424,11 @@
                 v1.set(0, 0, gridCenter.z + axisExtent);
                 geometryRenderer.addLine(v0, v1, new Color(60, 60, 180, 255), false);
             }
+
+            // Debug: log line count on first few frames
+            if (drawGridCallCount <= 3) {
+                console.log('[ccesengine] drawGrid: gridLevels:', gridLevels.length, 'visibleExtent:', visibleExtent, 'cameraHeight:', viewMode === '2d' ? orthoSize * 2 : Math.max(Math.abs(cameraPos.y), 2));
+            }
         }
 
         /**
@@ -2156,19 +1579,41 @@
          */
         function setupGridRendering() {
             let retryCount = 0;
-            const maxRetries = 60;
+            const maxRetries = 60; // Increase retries
+
+            console.log('[ccesengine] setupGridRendering: starting');
 
             function tryInit() {
+                if (retryCount % 10 === 0) {
+                    console.log('[ccesengine] setupGridRendering: attempt', retryCount);
+                }
+
                 if (initGeometryRenderer()) {
+                    // Use Director event for proper timing with render pipeline
+                    // Draw grid and node markers each frame
                     director.on(cc.Director.EVENT_BEFORE_COMMIT, () => {
                         drawGrid();
                         drawNodeMarkers();
                     });
+                    console.log('[ccesengine] Grid and marker rendering enabled after', retryCount, 'attempts');
                 } else if (retryCount < maxRetries) {
                     retryCount++;
                     requestAnimationFrame(tryInit);
                 } else {
-                    console.warn('[ccesengine] Failed to initialize GeometryRenderer');
+                    console.warn('[ccesengine] Failed to initialize GeometryRenderer after', maxRetries, 'attempts');
+                    // Print diagnostic info
+                    console.log('[ccesengine] Diagnostic: scene:', !!scene, 'director:', !!director);
+                    if (scene) {
+                        const cam = scene.getChildByName('Main Camera');
+                        console.log('[ccesengine] Diagnostic: cameraNode:', !!cam);
+                        if (cam) {
+                            const comp = cam.getComponent(cc.Camera);
+                            console.log('[ccesengine] Diagnostic: cameraComp:', !!comp, 'camera:', !!comp?.camera, '_camera:', !!comp?._camera);
+                            if (comp?.camera) {
+                                console.log('[ccesengine] Diagnostic: initGeometryRenderer:', typeof comp.camera.initGeometryRenderer);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -2192,6 +1637,7 @@
          */
         window.setGridVisible = function(visible) {
             gridVisible = visible;
+            console.log('[ccesengine] Grid visibility:', visible);
         };
 
         /**
@@ -2200,6 +1646,7 @@
          */
         window.setSnapEnabled = function(enabled) {
             snapEnabled = enabled;
+            console.log('[ccesengine] Snap enabled:', enabled);
         };
 
         // Engine state for play/pause/stop
@@ -2227,6 +1674,7 @@
                 }
                 const data = await response.json();
                 assetsInfoCache = data;
+                console.log('[esengine] Assets info loaded, entries:', Object.keys(data.map || {}).length);
                 return data;
             } catch (err) {
                 console.error('[esengine] Error fetching .assets-info.json:', err);
@@ -2264,6 +1712,8 @@
                     return assetsInfo.map[path].uuid;
                 }
             }
+
+            console.warn('[esengine] URL not found in assets info:', dbUrl, 'tried:', pathVariants);
             return null;
         }
 
@@ -2277,136 +1727,6 @@
             // UUID 前两位作为目录，完整 UUID 作为文件名
             const prefix = uuid.substring(0, 2);
             return `${prefix}/${uuid}.json`;
-        }
-
-        /**
-         * @zh 从 library 初始化主 bundle
-         * @en Initialize main bundle from library
-         * @param {string} libraryUrl - Library URL
-         */
-        async function initializeMainBundle(libraryUrl) {
-            const assetManager = cc.assetManager;
-            if (!assetManager) return;
-
-            // Fetch the bundle config from library
-            try {
-                const configUrl = `${libraryUrl}/config.json`;
-                const response = await fetch(configUrl);
-                if (!response.ok) {
-                    console.warn('[esengine] No config.json found at', configUrl);
-                    return;
-                }
-                const bundleConfig = await response.json();
-                console.log('[esengine] Loaded bundle config from', configUrl);
-
-                // Create a proper bundle with the config
-                const Bundle = cc.AssetManager?.Bundle || cc.Bundle;
-                if (Bundle) {
-                    const mainBundle = new Bundle();
-
-                    // Initialize bundle with config
-                    bundleConfig.base = libraryUrl + '/';
-                    bundleConfig.importBase = libraryUrl + '/';
-                    bundleConfig.nativeBase = libraryUrl + '/native/';
-
-                    mainBundle.init(bundleConfig);
-
-                    // Register as 'main' bundle
-                    if (assetManager.bundles) {
-                        assetManager.bundles.add('main', mainBundle);
-                        assetManager.bundles.add('resources', mainBundle); // Also register as resources
-                    }
-                    console.log('[esengine] Main bundle initialized from library');
-
-                    // Try to load project scripts
-                    await loadProjectScripts(libraryUrl, bundleConfig);
-                }
-            } catch (err) {
-                console.warn('[esengine] initializeMainBundle failed:', err);
-            }
-        }
-
-        /**
-         * @zh 加载项目脚本
-         * @en Load project scripts
-         * @param {string} libraryUrl - Library URL
-         * @param {Object} bundleConfig - Bundle config from config.json
-         */
-        async function loadProjectScripts(libraryUrl, bundleConfig) {
-            if (!bundleConfig) {
-                console.log('[esengine] No bundle config for script loading');
-                return;
-            }
-
-            // In Cocos Creator, scripts are registered via cc.js._registeredClassIds
-            // We need to load script modules so they can register their classes
-            const scripts = [];
-
-            // Check versions map for scripts (they have specific UUIDs)
-            // Also check packs and paths
-            if (bundleConfig.packs) {
-                for (const [packId, uuids] of Object.entries(bundleConfig.packs)) {
-                    // Pack files contain multiple assets
-                    console.log(`[esengine] Found pack: ${packId} with ${uuids.length} assets`);
-                }
-            }
-
-            // Try to load scripts from imports folder based on type info
-            // In Cocos, script assets have type "cc.Script" or extension ".ts"/".js"
-            if (bundleConfig.paths && bundleConfig.types) {
-                for (const [uuid, info] of Object.entries(bundleConfig.paths)) {
-                    // info is [path, typeIndex]
-                    if (Array.isArray(info)) {
-                        const path = info[0];
-                        const typeIndex = info[1];
-                        const assetType = bundleConfig.types?.[typeIndex];
-
-                        // Check if it's a script
-                        if (assetType === 'cc.Script' ||
-                            (typeof path === 'string' && (path.endsWith('.ts') || path.endsWith('.js')))) {
-                            scripts.push({ uuid, path });
-                        }
-                    }
-                }
-            }
-
-            // If no scripts found via paths, try to find them via scenes dependencies
-            if (scripts.length === 0 && bundleConfig.scenes) {
-                console.log('[esengine] Checking scenes for script dependencies...');
-                // Scenes list their dependencies which may include scripts
-            }
-
-            console.log(`[esengine] Found ${scripts.length} potential scripts to load`);
-
-            // Try to load scripts
-            let loadedCount = 0;
-            for (const script of scripts) {
-                try {
-                    // Scripts in library are stored at imports/{uuid}.cjs or {uuid}.js
-                    const possiblePaths = [
-                        `${libraryUrl}/imports/${script.uuid.slice(0, 2)}/${script.uuid}.cjs`,
-                        `${libraryUrl}/imports/${script.uuid.slice(0, 2)}/${script.uuid}.js`,
-                        `${libraryUrl}/${script.uuid}.cjs`,
-                        `${libraryUrl}/${script.uuid}.js`,
-                    ];
-
-                    for (const scriptUrl of possiblePaths) {
-                        try {
-                            // Use dynamic import to load the script module
-                            await import(/* webpackIgnore: true */ scriptUrl);
-                            console.log(`[esengine] Loaded script: ${script.uuid}`);
-                            loadedCount++;
-                            break;
-                        } catch (importErr) {
-                            // Try next path
-                        }
-                    }
-                } catch (err) {
-                    console.warn(`[esengine] Failed to load script ${script.uuid}:`, err);
-                }
-            }
-
-            console.log(`[esengine] Loaded ${loadedCount}/${scripts.length} scripts`);
         }
 
         /**
@@ -2468,18 +1788,24 @@
              * @param {string} config.serverUrl - 资源服务器URL（如 http://127.0.0.1:12345）
              */
             setProjectConfig: async function(config) {
-                console.log('[esengine] setProjectConfig called:', config);
+                console.log('[esengine] Setting project config:', config);
                 if (config.serverUrl) {
                     projectServerUrl = config.serverUrl;
                     const libraryUrl = config.serverUrl + '/library';
                     projectLibraryUrl = libraryUrl;
-                    console.log('[esengine] setProjectConfig: libraryUrl =', libraryUrl);
 
+                    // Store config for potential engine re-init
                     pendingProjectConfig = config;
 
+                    // Configure assetManager (matching CLI's approach)
                     const assetManager = cc.assetManager;
                     if (assetManager) {
-                        // Configure asset settings
+                        // Configure downloader remote server
+                        if (assetManager.downloader) {
+                            assetManager.downloader.remoteServerAddress = libraryUrl;
+                            console.log('[esengine] Downloader remoteServerAddress:', libraryUrl);
+                        }
+
                         if (cc.settings) {
                             cc.settings.overrideSettings('assets', 'server', libraryUrl);
                             cc.settings.overrideSettings('assets', 'importBase', libraryUrl);
@@ -2488,17 +1814,10 @@
                             cc.settings.overrideSettings('assets', 'preloadBundles', []);
                         }
 
-                        // Fetch assets info for URL-to-UUID conversion
+                        // Pre-fetch assets info for URL to UUID mapping
                         await fetchAssetsInfo();
 
-                        // Initialize main bundle from library
-                        try {
-                            await initializeMainBundle(libraryUrl);
-                        } catch (bundleErr) {
-                            console.warn('[esengine] setProjectConfig: Failed to init main bundle:', bundleErr);
-                        }
-
-                        console.log('[esengine] setProjectConfig: complete');
+                        console.log('[esengine] Project configured successfully');
                     }
                 }
             },
@@ -2509,99 +1828,111 @@
              * @param {string} sceneUrl - 场景资源 URL（如 db://assets/scenes/login.scene）或 UUID
              */
             loadScene: async function(sceneUrl) {
-                console.log('[esengine] loadScene called:', sceneUrl);
+                console.log('[esengine] Loading scene:', sceneUrl);
 
                 if (!director) {
-                    console.error('[esengine] loadScene: Director not available');
+                    console.error('[esengine] Director not available');
                     return { success: false, error: 'Director not available' };
                 }
 
                 try {
                     const assetManager = cc.assetManager;
                     if (!assetManager) {
-                        console.error('[esengine] loadScene: AssetManager not available');
+                        console.error('[esengine] AssetManager not available');
                         return { success: false, error: 'AssetManager not available' };
                     }
 
                     if (!projectLibraryUrl) {
-                        console.error('[esengine] loadScene: Project not configured. Call setProjectConfig first.');
+                        console.error('[esengine] Project library URL not configured');
                         return { success: false, error: 'Project not configured' };
                     }
 
+                    // Clear node and component path caches (like CLI does)
                     EditorExtends.Node.clear();
                     EditorExtends.Component.clear();
 
+                    // Resolve UUID from URL or use as-is if already a UUID
                     let uuid = sceneUrl;
                     if (sceneUrl.startsWith('db://') || sceneUrl.includes('/') || sceneUrl.includes('\\')) {
                         uuid = await urlToUuid(sceneUrl);
                         if (!uuid) {
-                            console.error('[esengine] loadScene: Failed to resolve UUID for:', sceneUrl);
+                            console.error('[esengine] Failed to resolve UUID for:', sceneUrl);
                             return { success: false, error: 'Failed to resolve scene UUID from URL' };
                         }
-                        console.log('[esengine] loadScene: Resolved UUID:', uuid);
+                        console.log('[esengine] Resolved UUID:', uuid);
                     }
 
+                    // Load scene using assetManager.loadAny (like CLI's sceneUtils.loadAny)
+                    console.log('[esengine] Loading scene with UUID:', uuid);
+
                     return new Promise((resolve) => {
+                        // Remove from cache first to ensure fresh load
                         assetManager.assets.remove(uuid);
 
-                        console.log('[esengine] loadScene: Loading asset:', uuid);
                         assetManager.loadAny(uuid, (err, sceneAsset) => {
                             if (err) {
-                                console.error('[esengine] loadScene: Failed to load:', err);
+                                console.error('[esengine] Failed to load scene:', err);
                                 resolve({ success: false, error: err.message || String(err) });
                                 return;
                             }
 
                             if (!sceneAsset) {
-                                console.error('[esengine] loadScene: Scene asset is null');
+                                console.error('[esengine] Scene asset is null');
                                 resolve({ success: false, error: 'Scene asset is null' });
                                 return;
                             }
 
+                            console.log('[esengine] Scene asset loaded:', sceneAsset._name || sceneAsset.name);
+
+                            // Run the scene (like CLI's sceneUtils.runScene)
                             try {
-                                console.log('[esengine] loadScene: Running scene immediate...');
                                 director.runSceneImmediate(
                                     sceneAsset,
-                                    () => {
-                                        console.log('[esengine] loadScene: onBeforeLoadScene callback');
-                                    },
+                                    () => { /* onLaunched callback */ },
                                     (runErr, instance) => {
-                                        if (runErr) {
-                                            console.error('[esengine] loadScene: runSceneImmediate error:', runErr);
-                                            if (runErr.stack) console.error('[esengine] Stack:', runErr.stack);
-                                            resolve({ success: false, error: runErr?.message || String(runErr) });
-                                            return;
-                                        }
-                                        if (!instance) {
-                                            console.error('[esengine] loadScene: Scene instance is null');
-                                            resolve({ success: false, error: 'Scene instance is null' });
+                                        if (runErr || !instance) {
+                                            console.error('[esengine] Failed to run scene:', runErr);
+                                            resolve({ success: false, error: runErr?.message || 'Unknown error' });
                                             return;
                                         }
 
                                         scene = instance;
-                                        console.log('[esengine] loadScene: Scene loaded successfully:', scene?.name);
-                                        console.log('[esengine] loadScene: Node count:', scene?.children?.length || 0);
+                                        console.log('[esengine] Scene running:', scene?.name);
+
+                                        // Log node tree for debugging
+                                        this.logNodeTree(scene);
+
+                                        // Emit hierarchy changed to notify editor
                                         setTimeout(() => emitHierarchyChanged(), 100);
+
                                         resolve({ success: true, sceneName: scene?.name });
                                     }
                                 );
                             } catch (runErr) {
-                                console.error('[esengine] loadScene: Exception during runSceneImmediate');
-                                console.error('[esengine] Error type:', typeof runErr);
-                                console.error('[esengine] Error constructor:', runErr?.constructor?.name);
-                                if (runErr instanceof Error) {
-                                    console.error('[esengine] Message:', runErr.message);
-                                    console.error('[esengine] Stack:', runErr.stack);
-                                } else {
-                                    console.error('[esengine] Error value:', JSON.stringify(runErr, null, 2));
-                                }
-                                resolve({ success: false, error: runErr?.message || String(runErr) || 'Unknown error' });
+                                console.error('[esengine] Failed to run scene:', runErr);
+                                resolve({ success: false, error: runErr.message || String(runErr) });
                             }
                         });
                     });
                 } catch (err) {
-                    console.error('[esengine] loadScene: Exception:', err);
+                    console.error('[esengine] Error loading scene:', err);
                     return { success: false, error: String(err) };
+                }
+            },
+
+            /**
+             * @zh 打印节点树用于调试
+             * @en Log node tree for debugging
+             */
+            logNodeTree: function(node, indent = 0) {
+                const prefix = '  '.repeat(indent);
+                const uiTransform = node.getComponent && node.getComponent('cc.UITransform');
+                const sizeInfo = uiTransform ? `[${uiTransform.width}x${uiTransform.height}]` : '';
+                console.log(`${prefix}${node.name} ${sizeInfo}`);
+                if (node.children && indent < 3) {
+                    for (const child of node.children) {
+                        this.logNodeTree(child, indent + 1);
+                    }
                 }
             },
 
@@ -2612,8 +1943,11 @@
              */
             syncSceneFromData: function(sceneData) {
                 if (!scene || !sceneData) {
+                    console.warn('[esengine] Cannot sync: scene or data not available');
                     return;
                 }
+
+                console.log('[esengine] Syncing scene from data:', sceneData.name);
 
                 // Clear existing children (except camera)
                 const children = [...scene.children];
@@ -2708,14 +2042,24 @@
                     const extentY = Math.max(100, (maxY - minY) / 2);
                     const extent = Math.max(extentX, extentY) * 1.2; // Add 20% padding
 
+                    // Update camera target and ortho size for 2D mode
                     cameraTarget.x = centerX;
                     cameraTarget.y = centerY;
                     orthoSize = extent;
 
+                    console.log('[esengine] UI scene detected, auto-fit camera:', {
+                        center: { x: centerX, y: centerY },
+                        extent: extent,
+                        bounds: { minX, maxX, minY, maxY }
+                    });
+
+                    // If in 2D mode, update camera immediately
                     if (viewMode === '2d') {
                         updateCameraView();
                     }
                 }
+
+                console.log('[esengine] Scene synced, node count:', scene.children.length, 'tracked markers:', sceneNodes.length);
             },
 
             /**
@@ -2725,6 +2069,7 @@
              */
             selectNode: function(uuid) {
                 selectedNodeUuid = uuid;
+                console.log('[esengine] Selected node:', uuid);
             },
 
             /**
@@ -2734,6 +2079,7 @@
              */
             setNodeMarkersVisible: function(visible) {
                 nodeMarkersVisible = visible;
+                console.log('[esengine] Node markers visible:', visible);
             },
 
             /**
@@ -2744,6 +2090,7 @@
             setCameraNearPlane: function(distance) {
                 if (mainCameraComp && typeof distance === 'number' && distance > 0) {
                     mainCameraComp.near = distance;
+                    console.log('[esengine] Camera near plane set to:', distance);
                 }
             },
 
@@ -2764,6 +2111,7 @@
             setCameraFarPlane: function(distance) {
                 if (mainCameraComp && typeof distance === 'number' && distance > 0) {
                     mainCameraComp.far = distance;
+                    console.log('[esengine] Camera far plane set to:', distance);
                 }
             },
 
@@ -2784,6 +2132,7 @@
             setCameraFOV: function(fov) {
                 if (mainCameraComp && typeof fov === 'number' && fov > 0 && fov < 180) {
                     mainCameraComp.fov = fov;
+                    console.log('[esengine] Camera FOV set to:', fov);
                 }
             },
 
@@ -2796,11 +2145,6 @@
                 return mainCameraComp ? mainCameraComp.fov : 60;
             }
         };
-
-        // Apply pending project config if it was set before window.esengine was ready
-        if (window._pendingProjectConfig) {
-            window.esengine.setProjectConfig(window._pendingProjectConfig);
-        }
 
         // Camera controls: RMB=look, MMB=pan, scroll=zoom, WASD+RMB=move
         function setupCameraControls() {
@@ -2955,6 +2299,8 @@
                 requestAnimationFrame(updateMovement);
             }
             updateMovement();
+
+            console.log('[ccesengine] Camera controls enabled (free look mode)');
         }
 
         function setupAxisIndicator() {
@@ -3057,6 +2403,7 @@
             }
 
             drawAxis();
+            console.log('[ccesengine] Axis indicator enabled');
         }
 
         function extractComponents(node) {
@@ -3233,15 +2580,19 @@
 
         function emitHierarchyChanged() {
             if (!rpc) return;
+
             const treeData = getSceneTree();
             rpc.notify('scene.hierarchyChanged', { tree: treeData });
+            console.log('[Viewport] Emitted hierarchyChanged, nodes:', treeData.children?.length || 0);
         }
 
         function registerSceneRpcMethods() {
             if (!rpc) return;
 
             rpc.registerMethod('scene.getTree', () => {
-                return getSceneTree();
+                const tree = getSceneTree();
+                console.log('[RPC] scene.getTree - nodes:', tree.children?.length || 0);
+                return tree;
             });
 
             rpc.registerMethod('scene.getNodeProperties', (params) => {
@@ -3253,12 +2604,14 @@
                 if (!props) {
                     throw new Error('Node not found: ' + uuid);
                 }
+                console.log('[RPC] scene.getNodeProperties -', props.name);
                 return props;
             });
 
             rpc.registerMethod('scene.selectNode', (params) => {
                 const uuid = params?.uuid || null;
                 selectedNodeUuid = uuid;
+                console.log('[RPC] scene.selectNode:', uuid);
                 return { selected: uuid };
             });
 
@@ -3273,6 +2626,7 @@
                     throw new Error('Node not found: ' + uuid);
                 }
 
+                // Parse path and set value
                 const parts = path.split('.');
                 let target = node;
                 for (let i = 0; i < parts.length - 1; i++) {
@@ -3284,8 +2638,11 @@
                 const lastPart = parts[parts.length - 1];
                 target[lastPart] = value;
 
+                console.log('[RPC] scene.setNodeProperty:', uuid, path, '=', value);
                 return { success: true };
             });
+
+            console.log('[Viewport] Scene RPC methods registered');
         }
 
         // Register scene RPC methods immediately

@@ -206,6 +206,8 @@ impl SceneBridge {
     /// @zh 请求节点属性（MCP 模式，直接返回结果）
     /// @en Request node properties (MCP mode, returns result directly)
     pub fn request_properties_mcp(&mut self, path: &str, scene_state: &mut SceneState) {
+        use super::scene_data::ComponentData;
+
         if self.mode != BridgeMode::Mcp {
             return;
         }
@@ -213,9 +215,40 @@ impl SceneBridge {
         if let Some(ref client) = self.mcp_client {
             match client.query_node(path, false) {
                 Ok(mcp_node) => {
-                    let props: NodeProperties = mcp_node.into();
+                    // Get node properties
+                    let props: NodeProperties = mcp_node.clone().into();
                     println!("[SceneBridge/MCP] Received node properties: {}", props.name);
                     scene_state.update_properties(props);
+
+                    // Query each component's details
+                    let mut components: Vec<ComponentData> = Vec::new();
+                    for comp_ref in &mcp_node.components {
+                        // Use the component path from the MCP response (format: "nodePath/ClassName_N")
+                        // This is the correct path format for querying component details
+                        if !comp_ref.path.is_empty() {
+                            match client.query_component(&comp_ref.path) {
+                                Ok(mcp_comp) => {
+                                    println!(
+                                        "[SceneBridge/MCP] Loaded component: {} ({} properties)",
+                                        mcp_comp.name,
+                                        mcp_comp.properties.len()
+                                    );
+                                    components.push(mcp_comp.into());
+                                }
+                                Err(e) => {
+                                    // Only log errors that aren't "component not found" - those are expected
+                                    // for some dynamically created nodes
+                                    if !e.contains("not found") && !e.contains("not fount") && !e.contains("does not exist") {
+                                        println!(
+                                            "[SceneBridge/MCP] Failed to query component {}: {}",
+                                            comp_ref.name, e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    scene_state.update_components(components);
                 }
                 Err(e) => {
                     println!("[SceneBridge/MCP] Failed to query node properties: {}", e);

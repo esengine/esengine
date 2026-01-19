@@ -2,6 +2,7 @@
 //!
 //! Native desktop editor using egui + WebView.
 
+pub mod effect_compiler;
 pub mod egui_editor;
 pub mod theme_egui;
 pub mod theme_showcase;
