@@ -131,6 +131,14 @@ interface IPathfindingOptions {
 | 精度 | 网格对齐 | 连续坐标 |
 | 动态修改 | 容易 | 需要重建 |
 
+## 在线演示
+
+体验寻路系统的交互式演示：
+
+- [A* 寻路演示](/esengine/examples/astar-pathfinding-demo) - 网格寻路可视化
+- [多代理寻路演示](/esengine/examples/multi-agent-pathfinding-demo) - A* + ORCA 避让结合
+- [ORCA 局部避让演示](/esengine/examples/orca-avoidance-demo) - 多代理碰撞避让
+
 ## 文档导航
 
 - [网格地图 API](./grid-map) - 网格操作和 A* 寻路

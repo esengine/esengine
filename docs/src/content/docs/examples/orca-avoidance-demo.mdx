@@ -22,11 +22,12 @@ export const orcaParams = [
 export const orcaDemoCode = `// ORCA 局部避让 - ECS 架构演示
 // ============================================
 // 使用工具栏按钮切换场景，使用参数面板调整参数
+// 左键点击画布添加代理，右键点击添加障碍物
 
 const {
     Core, Scene, Component, EntitySystem, Matcher, Time,
     ECSComponent, ECSSystem,
-    AvoidanceAgentComponent, LocalAvoidanceSystem
+    AvoidanceAgentComponent, AvoidanceWorldComponent, LocalAvoidanceSystem
 } = ESEngine;
 
 const WIDTH = 580, HEIGHT = 380;
@@ -36,6 +37,9 @@ const CX = WIDTH / 2, CY = HEIGHT / 2;
 const params = window.__demoParams || {
     agentCount: 40, maxSpeed: 90, radius: 3, neighborDist: 70
 };
+
+// 避让世界组件引用（用于添加障碍物）
+let worldComponent: any = null;
 
 // ============================================
 // 组件定义
@@ -99,6 +103,24 @@ class RenderSystem extends EntitySystem {
         this.ctx.fillStyle = 'rgba(22, 33, 62, 0.3)';
         this.ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+        // 绘制障碍物
+        this.ctx.fillStyle = '#2d4263';
+        if (worldComponent) {
+            for (const obs of worldComponent.obstacles) {
+                // 障碍物存储为顶点列表，绘制为多边形
+                const v = obs.vertices;
+                if (v.length >= 3) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(v[0].x, v[0].y);
+                    for (let i = 1; i < v.length; i++) {
+                        this.ctx.lineTo(v[i].x, v[i].y);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                }
+            }
+        }
+
         // FPS 计算
         this.frameCount++;
         const now = performance.now();
@@ -150,11 +172,14 @@ class RenderSystem extends EntitySystem {
 
         // HUD
         this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        this.ctx.fillRect(5, 5, 120, 35);
+        this.ctx.fillRect(5, 5, 150, 58);
         this.ctx.fillStyle = '#00d4ff';
         this.ctx.font = '11px monospace';
         this.ctx.fillText(\`Agents: \${entities.length}\`, 10, 20);
-        this.ctx.fillText(\`FPS: \${this.fps}\`, 10, 32);
+        this.ctx.fillText(\`Obstacles: \${worldComponent?.obstacles.length || 0}\`, 10, 32);
+        this.ctx.fillText(\`FPS: \${this.fps}\`, 10, 44);
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText('Left:Add Right:Obstacle', 10, 55);
     }
 }
 
@@ -163,20 +188,36 @@ class RenderSystem extends EntitySystem {
 // ============================================
 
 class ORCADemoScene extends Scene {
+    worldEntity: any = null;
+
     initialize() {
         this.name = 'ORCADemo';
+
+        // 先创建避让世界实体（必须在 addSystem 之前，这样 LocalAvoidanceSystem 初始化时能找到）
+        this.worldEntity = this.createEntity('AvoidanceWorld');
+        worldComponent = this.worldEntity.addComponent(new AvoidanceWorldComponent());
+
         this.addSystem(new TargetFollowSystem());
         this.addSystem(new LocalAvoidanceSystem());
         this.addSystem(new MovementSystem());
         this.addSystem(new RenderSystem(ctx));
     }
 
-    onStart() { this.loadScenario('circle'); }
+    onStart() {
+        this.loadScenario('circle');
+    }
 
     loadScenario(type: string) {
-        // 清除现有实体
+        console.log('loadScenario called:', type);
+
+        // 清除现有代理实体
         const result = this.queryAll(AvoidanceAgentComponent);
         this.destroyEntities([...result.entities]);
+
+        // 清除障碍物
+        if (worldComponent) {
+            worldComponent.clearObstacles();
+        }
 
         const count = params.agentCount;
         const configs = {
@@ -247,6 +288,41 @@ Core.create({ debug: false });
 const demoScene = new ORCADemoScene();
 Core.setScene(demoScene);
 
+// 暴露场景给 DemoPlayground
+window.__demoScene = demoScene;
+
+// 鼠标事件处理
+canvas.addEventListener('click', (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    // 左键添加代理
+    const color = \`hsl(\${Math.random() * 360}, 80%, 60%)\`;
+    demoScene.createAgent(x, y, CX + (Math.random() - 0.5) * 200, CY + (Math.random() - 0.5) * 200, color);
+});
+
+canvas.addEventListener('contextmenu', (e: MouseEvent) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    // 右键添加障碍物到 AvoidanceWorldComponent
+    // ORCA 使用数学坐标系(Y向上)，屏幕坐标系的 CW 顺序 = 数学坐标系的 CCW
+    // 顺序：左上 → 右上 → 右下 → 左下
+    if (worldComponent) {
+        worldComponent.addObstacle({
+            vertices: [
+                { x: x - 15, y: y - 15 },  // 左上
+                { x: x + 15, y: y - 15 },  // 右上
+                { x: x + 15, y: y + 15 },  // 右下
+                { x: x - 15, y: y + 15 }   // 左下
+            ]
+        });
+    }
+});
+
 let lastTime = performance.now();
 let animationId: number;
 
@@ -263,6 +339,10 @@ gameLoop();`;
 这是一个使用 **ECS 架构** 实现的 ORCA (Optimal Reciprocal Collision Avoidance) 局部避让交互式演示。
 
 点击 **Run** 启动模拟，使用工具栏切换场景，调整参数面板中的设置观察不同效果。
+
+**交互操作：**
+- **左键点击** 画布添加新代理
+- **右键点击** 画布放置障碍物
 
 <DemoPlayground
     client:load

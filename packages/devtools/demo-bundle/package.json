@@ -1,0 +1,26 @@
+{
+    "name": "@esengine/demo-bundle",
+    "version": "1.0.0",
+    "description": "Browser bundle for ESEngine demos",
+    "type": "module",
+    "main": "./dist/esengine.iife.js",
+    "scripts": {
+        "build": "rollup -c",
+        "build:watch": "rollup -c -w",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/ecs-framework-math": "workspace:*",
+        "@esengine/pathfinding": "workspace:*"
+    },
+    "devDependencies": {
+        "@rollup/plugin-commonjs": "^25.0.0",
+        "@rollup/plugin-node-resolve": "^15.0.0",
+        "@rollup/plugin-typescript": "^11.0.0",
+        "rollup": "^4.0.0",
+        "rollup-plugin-dts": "^6.0.0",
+        "typescript": "^5.8.0"
+    },
+    "private": true
+}

@@ -1,0 +1,405 @@
+---
+title: "寻路算法对比"
+description: "对比 A*、双向 A*、JPS 算法的性能和搜索过程"
+---
+
+import DemoPlayground from '../../../components/DemoPlayground.vue';
+
+export const algoScenes = [
+    { id: 'open', label: '○', name: '开阔地形' },
+    { id: 'maze', label: '⬛', name: '迷宫' },
+    { id: 'rooms', label: '⬜', name: '房间' },
+    { id: 'dense', label: '▓', name: '密集障碍' }
+];
+
+export const algoParams = [
+    { id: 'gridSize', label: 'Grid', desc: '网格大小', value: 60, min: 30, max: 100, step: 10 },
+    { id: 'obstacleRate', label: 'Obstacles', desc: '障碍物密度（%）', value: 30, min: 10, max: 50, step: 5 }
+];
+
+export const algoDemoCode = `// 寻路算法对比 - A* vs 双向A* vs JPS
+// ============================================
+// 对比不同算法的搜索效率和路径质量
+
+const {
+    Core, Scene, Component, EntitySystem, Matcher, Time,
+    ECSComponent, ECSSystem,
+    GridMap, createGridMap,
+    AStarPathfinder, GridPathfinder, JPSPathfinder,
+    octileDistance
+} = ESEngine;
+
+const WIDTH = 580, HEIGHT = 380;
+
+const params = window.__demoParams || {
+    gridSize: 60, obstacleRate: 30
+};
+
+// 算法结果存储
+let results = {
+    astar: { time: 0, nodes: 0, pathLen: 0, path: [] },
+    bidir: { time: 0, nodes: 0, pathLen: 0, path: [] },
+    jps: { time: 0, nodes: 0, pathLen: 0, path: [] }
+};
+
+let gridMap = null;
+let startPos = { x: 2, y: 2 };
+let endPos = { x: 0, y: 0 };
+let selectedAlgo = 'all'; // 'all', 'astar', 'bidir', 'jps'
+
+// ============================================
+// 渲染
+// ============================================
+
+function render(ctx) {
+    if (!gridMap) return;
+
+    const cellW = WIDTH / gridMap.width;
+    const cellH = HEIGHT / gridMap.height;
+
+    // 清屏
+    ctx.fillStyle = '#16213e';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // 绘制障碍物
+    ctx.fillStyle = '#2d4263';
+    for (let y = 0; y < gridMap.height; y++) {
+        for (let x = 0; x < gridMap.width; x++) {
+            if (!gridMap.isWalkable(x, y)) {
+                ctx.fillRect(x * cellW, y * cellH, cellW - 1, cellH - 1);
+            }
+        }
+    }
+
+    // 绘制网格线
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= gridMap.width; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * cellW, 0);
+        ctx.lineTo(x * cellW, HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= gridMap.height; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * cellH);
+        ctx.lineTo(WIDTH, y * cellH);
+        ctx.stroke();
+    }
+
+    // 绘制路径
+    const colors = {
+        astar: { stroke: '#ff6b6b', fill: 'rgba(255,107,107,0.3)', name: 'A*' },
+        bidir: { stroke: '#4ecdc4', fill: 'rgba(78,205,196,0.3)', name: 'Bidirectional' },
+        jps: { stroke: '#ffe66d', fill: 'rgba(255,230,109,0.3)', name: 'JPS' }
+    };
+
+    const drawPath = (path, color, offset) => {
+        if (path.length < 2) return;
+        ctx.strokeStyle = color.stroke;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(path[0].x * cellW + cellW/2 + offset, path[0].y * cellH + cellH/2);
+        for (let i = 1; i < path.length; i++) {
+            ctx.lineTo(path[i].x * cellW + cellW/2 + offset, path[i].y * cellH + cellH/2);
+        }
+        ctx.stroke();
+    };
+
+    // 根据选择显示路径
+    if (selectedAlgo === 'all' || selectedAlgo === 'astar') {
+        drawPath(results.astar.path, colors.astar, -2);
+    }
+    if (selectedAlgo === 'all' || selectedAlgo === 'bidir') {
+        drawPath(results.bidir.path, colors.bidir, 0);
+    }
+    if (selectedAlgo === 'all' || selectedAlgo === 'jps') {
+        drawPath(results.jps.path, colors.jps, 2);
+    }
+
+    // 绘制起点终点
+    ctx.fillStyle = '#00d4ff';
+    ctx.beginPath();
+    ctx.arc(startPos.x * cellW + cellW/2, startPos.y * cellH + cellH/2, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(endPos.x * cellW + cellW/2, endPos.y * cellH + cellH/2, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // HUD - 算法对比面板
+    const panelX = 5, panelY = 5;
+    const panelW = 200, panelH = 95;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Algorithm Comparison', panelX + 5, panelY + 15);
+
+    ctx.font = '10px monospace';
+    const algos = ['astar', 'bidir', 'jps'];
+    const labels = ['A*', 'Bi-A*', 'JPS'];
+
+    // 表头
+    ctx.fillStyle = '#888';
+    ctx.fillText('Algo    Time    Nodes   Path', panelX + 5, panelY + 30);
+
+    algos.forEach((algo, i) => {
+        const r = results[algo];
+        const y = panelY + 45 + i * 15;
+        ctx.fillStyle = colors[algo].stroke;
+        ctx.fillText(
+            \`\${labels[i].padEnd(6)} \${r.time.toFixed(2).padStart(6)}ms \${String(r.nodes).padStart(5)} \${String(r.pathLen).padStart(5)}\`,
+            panelX + 5, y
+        );
+    });
+
+    // 提示
+    ctx.fillStyle = '#666';
+    ctx.font = '9px monospace';
+    ctx.fillText('Click: set start/end', panelX + 5, panelY + 90);
+
+    // 图例
+    const legendX = WIDTH - 95, legendY = 5;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(legendX, legendY, 90, 55);
+    ctx.font = '10px monospace';
+    algos.forEach((algo, i) => {
+        ctx.fillStyle = colors[algo].stroke;
+        ctx.fillRect(legendX + 5, legendY + 8 + i * 15, 10, 10);
+        ctx.fillText(labels[i], legendX + 20, legendY + 17 + i * 15);
+    });
+}
+
+// ============================================
+// 寻路执行
+// ============================================
+
+function runPathfinding() {
+    if (!gridMap) return;
+
+    const options = {
+        allowDiagonal: true,
+        heuristic: octileDistance
+    };
+
+    // A* 标准
+    const astar = new AStarPathfinder(gridMap);
+    let t0 = performance.now();
+    let result = astar.findPath(startPos.x, startPos.y, endPos.x, endPos.y, options);
+    results.astar = {
+        time: performance.now() - t0,
+        nodes: result.nodesSearched,
+        pathLen: result.path.length,
+        path: result.path
+    };
+
+    // 双向 A*
+    const bidir = new GridPathfinder(gridMap, { mode: 'bidirectional' });
+    t0 = performance.now();
+    result = bidir.findPath(startPos.x, startPos.y, endPos.x, endPos.y, options);
+    results.bidir = {
+        time: performance.now() - t0,
+        nodes: result.nodesSearched,
+        pathLen: result.path.length,
+        path: result.path
+    };
+
+    // JPS
+    const jps = new JPSPathfinder(gridMap);
+    t0 = performance.now();
+    result = jps.findPath(startPos.x, startPos.y, endPos.x, endPos.y, { allowDiagonal: true });
+    results.jps = {
+        time: performance.now() - t0,
+        nodes: result.nodesSearched,
+        pathLen: result.path.length,
+        path: result.path
+    };
+}
+
+// ============================================
+// 地图生成
+// ============================================
+
+function generateMap(type) {
+    const w = params.gridSize;
+    const h = Math.floor(w * HEIGHT / WIDTH);
+
+    gridMap = createGridMap(w, h);
+
+    const generators = {
+        open: () => {
+            // 少量随机障碍
+            const rate = 0.1;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (Math.random() < rate) gridMap.setWalkable(x, y, false);
+                }
+            }
+        },
+        maze: () => {
+            // 迷宫
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    gridMap.setWalkable(x, y, false);
+                }
+            }
+            const carve = (x, y) => {
+                gridMap.setWalkable(x, y, true);
+                const dirs = [[0,-2],[0,2],[-2,0],[2,0]].sort(() => Math.random() - 0.5);
+                for (const [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < w-1 && ny > 0 && ny < h-1 && !gridMap.isWalkable(nx, ny)) {
+                        gridMap.setWalkable(x + dx/2, y + dy/2, true);
+                        carve(nx, ny);
+                    }
+                }
+            };
+            carve(1, 1);
+        },
+        rooms: () => {
+            // 房间布局
+            const roomW = Math.floor(w / 4);
+            const roomH = Math.floor(h / 3);
+            for (let ry = 0; ry < 3; ry++) {
+                for (let rx = 0; rx < 4; rx++) {
+                    const bx = rx * roomW, by = ry * roomH;
+                    for (let x = bx; x < bx + roomW && x < w; x++) {
+                        if (by < h) gridMap.setWalkable(x, by, false);
+                        if (by + roomH - 1 < h) gridMap.setWalkable(x, by + roomH - 1, false);
+                    }
+                    for (let y = by; y < by + roomH && y < h; y++) {
+                        if (bx < w) gridMap.setWalkable(bx, y, false);
+                        if (bx + roomW - 1 < w) gridMap.setWalkable(bx + roomW - 1, y, false);
+                    }
+                    // 门
+                    const doorX = bx + Math.floor(roomW / 2);
+                    const doorY = by + Math.floor(roomH / 2);
+                    if (doorX < w && by < h) gridMap.setWalkable(doorX, by, true);
+                    if (doorX < w && by + roomH - 1 < h) gridMap.setWalkable(doorX, by + roomH - 1, true);
+                    if (bx < w && doorY < h) gridMap.setWalkable(bx, doorY, true);
+                    if (bx + roomW - 1 < w && doorY < h) gridMap.setWalkable(bx + roomW - 1, doorY, true);
+                }
+            }
+        },
+        dense: () => {
+            // 密集随机障碍
+            const rate = params.obstacleRate / 100;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (Math.random() < rate) gridMap.setWalkable(x, y, false);
+                }
+            }
+        }
+    };
+
+    generators[type]?.();
+
+    // 设置起点终点
+    startPos = findWalkable(2, 2);
+    endPos = findWalkable(w - 3, h - 3);
+
+    runPathfinding();
+}
+
+function findWalkable(px, py) {
+    if (gridMap.isWalkable(px, py)) return { x: px, y: py };
+    for (let r = 1; r < 20; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dy = -r; dy <= r; dy++) {
+                const x = px + dx, y = py + dy;
+                if (x >= 0 && x < gridMap.width && y >= 0 && y < gridMap.height) {
+                    if (gridMap.isWalkable(x, y)) return { x, y };
+                }
+            }
+        }
+    }
+    return { x: 1, y: 1 };
+}
+
+// ============================================
+// 初始化
+// ============================================
+
+generateMap('open');
+
+// 鼠标交互
+let clickMode = 'start'; // 'start' or 'end'
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const cellW = WIDTH / gridMap.width;
+    const cellH = HEIGHT / gridMap.height;
+    const gx = Math.floor(mx / cellW);
+    const gy = Math.floor(my / cellH);
+
+    if (gridMap.isWalkable(gx, gy)) {
+        if (clickMode === 'start') {
+            startPos = { x: gx, y: gy };
+            clickMode = 'end';
+        } else {
+            endPos = { x: gx, y: gy };
+            clickMode = 'start';
+        }
+        runPathfinding();
+    }
+});
+
+// 场景切换支持
+window.__demoScene = {
+    loadScenario: (type) => {
+        generateMap(type);
+    }
+};
+
+// 游戏循环
+function gameLoop() {
+    render(ctx);
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();`;
+
+这是一个**寻路算法对比演示**，展示 A*、双向 A* 和 JPS 三种算法的性能差异。
+
+点击 **Run** 开始运行。点击地图可以设置起点/终点，观察不同算法的搜索效率。
+
+**算法特点：**
+- **A*** - 经典启发式搜索，适合中小型地图
+- **双向 A*** - 从起点和终点同时搜索，大地图更高效
+- **JPS (跳点搜索)** - 在开阔地形优势明显，可跳过大量节点
+
+<DemoPlayground
+    client:load
+    title="寻路算法对比 - A* vs 双向A* vs JPS"
+    code={algoDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={algoScenes}
+    params={algoParams}
+/>
+
+<script is:inline src="/esengine/js/esengine.iife.js"></script>
+
+## 性能指标说明
+
+| 指标 | 说明 |
+|------|------|
+| **Time** | 寻路耗时（毫秒） |
+| **Nodes** | 搜索的节点数量（越少越高效） |
+| **Path** | 最终路径长度（节点数） |
+
+## 场景说明
+
+- **开阔地形** - JPS 优势明显，可跳过大量空白区域
+- **迷宫** - 通道狭窄，算法差异较小
+- **房间** - 模拟室内环境，需要穿过门廊
+- **密集障碍** - 随机分布，测试一般情况
+
+## 相关文档
+
+- [A* 寻路演示](/esengine/examples/astar-pathfinding-demo) - 基础 A* 演示
+- [寻路系统 API](/esengine/modules/pathfinding) - 完整 API 文档

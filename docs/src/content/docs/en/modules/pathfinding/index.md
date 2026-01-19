@@ -323,6 +323,14 @@ for (let y = 30; y < 35; y++) {
 | Dynamic Updates | Easy | Requires rebuild |
 | Setup Complexity | Simple | More complex |
 
+## Interactive Demos
+
+Experience the pathfinding system with interactive demos:
+
+- [A* Pathfinding Demo](/esengine/en/examples/astar-pathfinding-demo) - Grid pathfinding visualization
+- [Multi-Agent Pathfinding Demo](/esengine/en/examples/multi-agent-pathfinding-demo) - A* + ORCA avoidance combined
+- [ORCA Local Avoidance Demo](/esengine/en/examples/orca-avoidance-demo) - Multi-agent collision avoidance
+
 ## Documentation
 
 - [Grid Map API](./grid-map) - Grid operations and A* pathfinder
