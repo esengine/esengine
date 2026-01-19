@@ -348,7 +348,18 @@ export default defineConfig({
           translations: { en: 'Examples' },
           items: [
             { label: '示例总览', slug: 'examples', translations: { en: 'Examples Overview' } },
-            { label: 'ORCA 局部避让', slug: 'examples/orca-avoidance-demo', translations: { en: 'ORCA Local Avoidance' } },
+            {
+              label: '寻路演示',
+              translations: { en: 'Pathfinding Demos' },
+              items: [
+                { label: 'A* 寻路', slug: 'examples/astar-pathfinding-demo', translations: { en: 'A* Pathfinding' } },
+                { label: '搜索可视化', slug: 'examples/search-visualization-demo', translations: { en: 'Search Visualization' } },
+                { label: '算法对比', slug: 'examples/algorithm-comparison-demo', translations: { en: 'Algorithm Comparison' } },
+                { label: 'HPA* 分层寻路', slug: 'examples/hpa-pathfinding-demo', translations: { en: 'HPA* Hierarchical' } },
+                { label: '多代理寻路', slug: 'examples/multi-agent-pathfinding-demo', translations: { en: 'Multi-Agent Pathfinding' } },
+                { label: 'ORCA 局部避让', slug: 'examples/orca-avoidance-demo', translations: { en: 'ORCA Local Avoidance' } },
+              ],
+            },
             { label: 'Worker 系统演示', slug: 'examples/worker-system-demo', translations: { en: 'Worker System Demo' } },
           ],
         },

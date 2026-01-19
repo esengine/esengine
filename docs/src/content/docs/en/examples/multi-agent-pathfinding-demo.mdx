@@ -1,0 +1,510 @@
+---
+title: "Multi-Agent Pathfinding Demo"
+description: "Interactive multi-agent pathfinding and avoidance demo using ECS architecture"
+---
+
+import DemoPlayground from '../../../../components/DemoPlayground.vue';
+
+export const multiAgentScenes = [
+    { id: 'swap', label: '⇄', name: 'Swap Positions' },
+    { id: 'gather', label: '◉', name: 'Gather' },
+    { id: 'scatter', label: '✦', name: 'Scatter' },
+    { id: 'patrol', label: '↻', name: 'Patrol' }
+];
+
+export const multiAgentParams = [
+    { id: 'agentCount', label: 'Agents', desc: 'Number of agents', value: 8, min: 2, max: 20, step: 2 },
+    { id: 'speed', label: 'Speed', desc: 'Movement speed (grids/sec)', value: 5, min: 1, max: 15, step: 1 },
+    { id: 'avoidance', label: 'Avoidance', desc: 'Enable local avoidance (0=no, 1=yes)', value: 1, min: 0, max: 1, step: 1 },
+    { id: 'gridSize', label: 'Grid', desc: 'Grid size', value: 30, min: 20, max: 50, step: 5 }
+];
+
+export const multiAgentDemoCode = `// Multi-Agent Pathfinding - ECS Architecture Demo
+// ============================================
+// Shows multiple agents pathfinding simultaneously with ORCA avoidance
+
+const {
+    Core, Scene, Component, EntitySystem, Matcher, Time,
+    ECSComponent, ECSSystem,
+    PathfindingAgentComponent, PathfindingMapComponent, PathfindingSystem,
+    AvoidanceAgentComponent, AvoidanceWorldComponent, LocalAvoidanceSystem
+} = ESEngine;
+
+const WIDTH = 580, HEIGHT = 380;
+
+const params = window.__demoParams || {
+    agentCount: 8, speed: 5, avoidance: 1, gridSize: 30
+};
+
+// Avoidance world component reference
+let worldComponent: any = null;
+
+// ============================================
+// Component Definitions
+// ============================================
+
+@ECSComponent('AgentVisual')
+class AgentVisualComponent extends Component {
+    color = '#00d4ff';
+    targetColor = '#ff6b6b';
+    index = 0;
+}
+
+// ============================================
+// Render System
+// ============================================
+
+@ECSSystem('Render', { updateOrder: 100 })
+class RenderSystem extends EntitySystem {
+    ctx: CanvasRenderingContext2D;
+    mapComp: PathfindingMapComponent | null = null;
+    fps = 0; frameCount = 0; lastFpsTime = 0;
+
+    constructor(context: CanvasRenderingContext2D) {
+        super(Matcher.all(PathfindingAgentComponent, AgentVisualComponent));
+        this.ctx = context;
+    }
+
+    process(entities) {
+        const ctx = this.ctx;
+
+        // Clear screen
+        ctx.fillStyle = '#16213e';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Find map component
+        if (!this.mapComp) {
+            const mapEntities = this.scene.entities.findEntitiesWithComponent(PathfindingMapComponent);
+            if (mapEntities.length > 0) {
+                this.mapComp = mapEntities[0].getComponent(PathfindingMapComponent);
+            }
+        }
+
+        const map = this.mapComp?.map;
+        if (!map) return;
+
+        const cellW = WIDTH / map.width;
+        const cellH = HEIGHT / map.height;
+
+        // Draw obstacles
+        ctx.fillStyle = '#2d4263';
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                if (!map.isWalkable(x, y)) {
+                    ctx.fillRect(x * cellW + 1, y * cellH + 1, cellW - 2, cellH - 2);
+                }
+            }
+        }
+
+        // FPS
+        this.frameCount++;
+        const now = performance.now();
+        if (now - this.lastFpsTime >= 1000) {
+            this.fps = this.frameCount;
+            this.frameCount = 0;
+            this.lastFpsTime = now;
+        }
+
+        // Draw agents (note: agent.x/y are now pixel coordinates)
+        for (const entity of entities) {
+            const agent = entity.getComponent(PathfindingAgentComponent);
+            const visual = entity.getComponent(AgentVisualComponent);
+
+            // Draw path (path points are grid coords, need conversion)
+            if (agent.path.length > agent.pathIndex) {
+                ctx.strokeStyle = visual.color + '40';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(agent.x, agent.y);  // agent.x/y already pixel coords
+                for (let i = agent.pathIndex; i < agent.path.length; i++) {
+                    const p = agent.path[i];
+                    ctx.lineTo(p.x * cellW + cellW/2, p.y * cellH + cellH/2);
+                }
+                ctx.stroke();
+            }
+
+            // Draw target (targetX/Y are grid coords)
+            ctx.fillStyle = visual.targetColor + '60';
+            ctx.beginPath();
+            ctx.arc(agent.targetX * cellW + cellW/2, agent.targetY * cellH + cellH/2, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw agent (agent.x/y are pixel coords)
+            const x = agent.x;
+            const y = agent.y;
+
+            // Glow
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, 15);
+            gradient.addColorStop(0, visual.color);
+            gradient.addColorStop(1, 'transparent');
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Agent
+            ctx.beginPath();
+            ctx.arc(x, y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = visual.color;
+            ctx.fill();
+
+            // Number
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(visual.index + 1), x, y + 3);
+        }
+
+        // HUD
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(5, 5, 150, 50);
+        ctx.fillStyle = '#00d4ff';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(\`Agents: \${entities.length}\`, 10, 20);
+        ctx.fillText(\`Avoidance: \${params.avoidance ? 'ON' : 'OFF'}\`, 10, 32);
+        ctx.fillText(\`FPS: \${this.fps}\`, 10, 44);
+    }
+}
+
+// ============================================
+// Preferred Velocity System (runs before LocalAvoidanceSystem)
+// Resets and sets preferred velocity towards next waypoint each frame
+// Required because LocalAvoidanceSystem only auto-sets when preferredVelocity=0
+// ============================================
+
+@ECSSystem('PreferredVelocity', { updateOrder: 45 })
+class PreferredVelocitySystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(PathfindingAgentComponent, AvoidanceAgentComponent));
+    }
+
+    process(entities) {
+        for (const entity of entities) {
+            const agent = entity.getComponent(PathfindingAgentComponent);
+            const avoid = entity.getComponent(AvoidanceAgentComponent);
+
+            // Sync position first (LocalAvoidanceSystem syncs later, need to sync here first)
+            avoid.positionX = agent.x;
+            avoid.positionY = agent.y;
+
+            // Reset preferred velocity
+            avoid.preferredVelocityX = 0;
+            avoid.preferredVelocityY = 0;
+
+            // If has valid path, set preferred velocity towards next waypoint
+            if (agent.hasValidPath() && !agent.isPathComplete()) {
+                const waypoint = agent.getNextWaypoint();
+                if (waypoint) {
+                    // Calculate direction and multiply by maxSpeed directly
+                    // Don't use setPreferredVelocityTowards as it slows down based on distance
+                    const dx = waypoint.x - agent.x;
+                    const dy = waypoint.y - agent.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 0.001) {
+                        avoid.preferredVelocityX = (dx / dist) * avoid.maxSpeed;
+                        avoid.preferredVelocityY = (dy / dist) * avoid.maxSpeed;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================
+// Movement System
+// All coordinates use grid units (consistent with PathfindingSystem and LocalAvoidanceSystem)
+// ============================================
+
+@ECSSystem('Movement', { updateOrder: 60 })
+class MovementSystem extends EntitySystem {
+    constructor() {
+        super(Matcher.all(PathfindingAgentComponent));
+    }
+
+    process(entities) {
+        const dt = Time.deltaTime;
+
+        for (const entity of entities) {
+            const agent = entity.getComponent(PathfindingAgentComponent);
+            const avoid = entity.getComponent(AvoidanceAgentComponent);
+
+            // Wait for path calculation
+            if (!agent.hasValidPath() || agent.isPathComplete()) {
+                if (avoid) avoid.stop();
+                continue;
+            }
+
+            const waypoint = agent.getNextWaypoint();
+            if (!waypoint) continue;
+
+            // If avoidance enabled, use ORCA computed velocity (grid units/sec)
+            if (params.avoidance && avoid) {
+                agent.x += avoid.velocityX * dt;
+                agent.y += avoid.velocityY * dt;
+            } else {
+                // Direct movement to target (grid coords)
+                const dx = waypoint.x - agent.x;
+                const dy = waypoint.y - agent.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const moveSpeed = params.speed * dt;  // speed is grids/sec
+
+                if (dist < 0.1) {
+                    agent.x = waypoint.x;
+                    agent.y = waypoint.y;
+                } else {
+                    agent.x += (dx / dist) * Math.min(moveSpeed, dist);
+                    agent.y += (dy / dist) * Math.min(moveSpeed, dist);
+                }
+            }
+
+            // Check if reached waypoint (grid distance)
+            const dx = waypoint.x - agent.x;
+            const dy = waypoint.y - agent.y;
+            if (Math.sqrt(dx * dx + dy * dy) < 0.5) {
+                agent.advanceWaypoint();
+            }
+        }
+    }
+}
+
+// ============================================
+// Scene
+// ============================================
+
+class MultiAgentDemoScene extends Scene {
+    mapEntity: any = null;
+    worldEntity: any = null;
+    agents: any[] = [];
+
+    initialize() {
+        this.name = 'MultiAgentDemo';
+
+        // Create avoidance world entity first (must be before addSystem)
+        if (params.avoidance) {
+            this.worldEntity = this.createEntity('AvoidanceWorld');
+            worldComponent = this.worldEntity.addComponent(new AvoidanceWorldComponent());
+        }
+
+        this.addSystem(new PathfindingSystem());       // order 0: calculate paths
+        if (params.avoidance) {
+            this.addSystem(new PreferredVelocitySystem()); // order 45: set preferred velocity
+            this.addSystem(new LocalAvoidanceSystem());    // order 50: ORCA computation
+        }
+        this.addSystem(new MovementSystem());          // order 60: apply velocity
+        this.addSystem(new RenderSystem(ctx));         // order 100: render
+    }
+
+    onStart() {
+        this.loadScenario('swap');
+    }
+
+    loadScenario(type: string) {
+        console.log('loadScenario called:', type);
+
+        // Clear (use correct API)
+        if (this.mapEntity) {
+            this.mapEntity.destroy();
+            this.mapEntity = null;
+        }
+        for (const agent of this.agents) {
+            agent.destroy();
+        }
+        this.agents = [];
+
+        // Reset system's map reference
+        for (const system of this.systems) {
+            if (system.mapComp) system.mapComp = null;
+        }
+
+        const gridSize = params.gridSize;
+        const gridH = Math.floor(gridSize * HEIGHT / WIDTH);
+
+        // Create map
+        this.mapEntity = this.createEntity('Map');
+        const mapComp = this.mapEntity.addComponent(new PathfindingMapComponent());
+        mapComp.width = gridSize;
+        mapComp.height = gridH;
+        mapComp.allowDiagonal = true;
+        mapComp.avoidCorners = true;
+        mapComp.enableSmoothing = false;
+
+        setTimeout(() => {
+            if (!mapComp.map) return;
+
+            // Generate obstacles
+            this.generateObstacles(mapComp);
+
+            const cellW = WIDTH / mapComp.width;
+            const cellH = HEIGHT / mapComp.height;
+            const count = params.agentCount;
+            const colors = [
+                '#00d4ff', '#ff6b6b', '#4ecdc4', '#ffe66d',
+                '#a29bfe', '#fd79a8', '#55efc4', '#ffeaa7',
+                '#74b9ff', '#ff7675', '#00b894', '#e17055'
+            ];
+
+            const scenarios = {
+                swap: () => {
+                    // Left-right swap
+                    for (let i = 0; i < count; i++) {
+                        const isLeft = i % 2 === 0;
+                        const row = Math.floor(i / 2);
+                        const startX = isLeft ? 2 : mapComp.width - 3;
+                        const startY = 3 + row * 3;
+                        const endX = isLeft ? mapComp.width - 3 : 2;
+                        const endY = startY;
+                        this.createAgent(startX, startY, endX, endY, colors[i % colors.length], i);
+                    }
+                },
+                gather: () => {
+                    // Gather from edges to center
+                    const cx = Math.floor(mapComp.width / 2);
+                    const cy = Math.floor(mapComp.height / 2);
+                    for (let i = 0; i < count; i++) {
+                        const angle = (i / count) * Math.PI * 2;
+                        const radius = Math.min(mapComp.width, mapComp.height) / 2 - 3;
+                        const startX = Math.round(cx + Math.cos(angle) * radius);
+                        const startY = Math.round(cy + Math.sin(angle) * radius);
+                        this.createAgent(startX, startY, cx, cy, colors[i % colors.length], i);
+                    }
+                },
+                scatter: () => {
+                    // Scatter from center to edges
+                    const cx = Math.floor(mapComp.width / 2);
+                    const cy = Math.floor(mapComp.height / 2);
+                    for (let i = 0; i < count; i++) {
+                        const angle = (i / count) * Math.PI * 2;
+                        const radius = Math.min(mapComp.width, mapComp.height) / 2 - 3;
+                        const endX = Math.round(cx + Math.cos(angle) * radius);
+                        const endY = Math.round(cy + Math.sin(angle) * radius);
+                        this.createAgent(cx + (i % 3) - 1, cy + Math.floor(i / 3) - 1, endX, endY, colors[i % colors.length], i);
+                    }
+                },
+                patrol: () => {
+                    // Patrol routes
+                    for (let i = 0; i < count; i++) {
+                        const startX = 2 + (i % 4) * 7;
+                        const startY = 2 + Math.floor(i / 4) * 7;
+                        const endX = mapComp.width - 3 - (i % 4) * 5;
+                        const endY = mapComp.height - 3 - Math.floor(i / 4) * 5;
+                        this.createAgent(startX, startY, endX, endY, colors[i % colors.length], i);
+                    }
+                }
+            };
+
+            scenarios[type]?.();
+        }, 100);
+    }
+
+    generateObstacles(mapComp) {
+        const w = mapComp.width, h = mapComp.height;
+
+        // Clear old ORCA obstacles
+        if (worldComponent) {
+            worldComponent.clearObstacles();
+        }
+
+        // Add random obstacles
+        for (let i = 0; i < 15; i++) {
+            const ox = 5 + Math.floor(Math.random() * (w - 10));
+            const oy = 3 + Math.floor(Math.random() * (h - 6));
+            const ow = 1 + Math.floor(Math.random() * 3);
+            const oh = 1 + Math.floor(Math.random() * 3);
+
+            // Set pathfinding map obstacle
+            mapComp.setRectWalkable(ox, oy, ow, oh, false);
+
+            // Also add to ORCA avoidance system (grid coords, CW order = math CCW)
+            if (worldComponent) {
+                worldComponent.addObstacle({
+                    vertices: [
+                        { x: ox, y: oy },              // top-left
+                        { x: ox + ow, y: oy },         // top-right
+                        { x: ox + ow, y: oy + oh },    // bottom-right
+                        { x: ox, y: oy + oh }          // bottom-left
+                    ]
+                });
+            }
+        }
+    }
+
+    createAgent(sx, sy, ex, ey, color, index) {
+        const entity = this.createEntity('Agent' + index);
+
+        // agent.x/y use grid coordinates (consistent with PathfindingSystem and LocalAvoidanceSystem)
+        const agent = entity.addComponent(new PathfindingAgentComponent());
+        agent.x = sx;
+        agent.y = sy;
+        agent.requestPathTo(ex, ey);
+
+        if (params.avoidance) {
+            const avoid = entity.addComponent(new AvoidanceAgentComponent());
+            // All parameters use grid units!
+            // LocalAvoidanceSystem auto-syncs position from agent.x/y
+            avoid.radius = 0.4;              // grid units (about 0.4 cells radius)
+            avoid.maxSpeed = params.speed;   // grids/sec
+            avoid.neighborDist = 3;          // grid units (detect neighbors within 3 cells)
+            avoid.timeHorizon = 1.5;
+            avoid.autoApplyVelocity = true;  // auto-apply newVelocity to velocity
+        }
+
+        const visual = entity.addComponent(new AgentVisualComponent());
+        visual.color = color;
+        visual.index = index;
+
+        this.agents.push(entity);
+    }
+}
+
+// ============================================
+// Initialize
+// ============================================
+
+Core.create({ debug: false });
+const demoScene = new MultiAgentDemoScene();
+Core.setScene(demoScene);
+
+// Expose scene for DemoPlayground scene switching
+window.__demoScene = demoScene;
+
+let lastTime = performance.now();
+
+function gameLoop() {
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+    Core.update(dt);
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();`;
+
+This is an interactive multi-agent pathfinding and avoidance demo implemented with **ECS architecture**, combining **A* pathfinding** and **ORCA local avoidance**.
+
+Click **Run** to start the simulation, use toolbar to switch scenes, disable Avoidance parameter to observe collision effects without avoidance.
+
+<DemoPlayground
+    client:load
+    title="Multi-Agent Pathfinding - ECS Architecture"
+    code={multiAgentDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={multiAgentScenes}
+    params={multiAgentParams}
+/>
+
+<script is:inline src="/esengine/js/esengine.iife.js"></script>
+
+## Scene Descriptions
+
+- **Swap Positions** - Agents swap from left and right sides, tests head-on avoidance
+- **Gather** - Gather from edges to center, tests multi-agent convergence
+- **Scatter** - Scatter from center to edges, tests fan-shaped avoidance
+- **Patrol** - Multiple agents patrolling, tests random encounter avoidance
+
+## Related Documentation
+
+- [Pathfinding System API](/esengine/en/modules/pathfinding) - A* pathfinding documentation
+- [ORCA Local Avoidance](/esengine/en/modules/pathfinding/local-avoidance) - Multi-agent avoidance
+- [Getting Started](/esengine/en/guide/getting-started) - ECS framework introduction

@@ -22,11 +22,12 @@ export const orcaParams = [
 export const orcaDemoCode = `// ORCA Local Avoidance - ECS Architecture Demo
 // ============================================
 // Use toolbar buttons to switch scenes, use parameter panel to adjust settings
+// Left-click canvas to add agent, right-click to place obstacle
 
 const {
     Core, Scene, Component, EntitySystem, Matcher, Time,
     ECSComponent, ECSSystem,
-    AvoidanceAgentComponent, LocalAvoidanceSystem
+    AvoidanceAgentComponent, AvoidanceWorldComponent, LocalAvoidanceSystem
 } = ESEngine;
 
 const WIDTH = 580, HEIGHT = 380;
@@ -36,6 +37,9 @@ const CX = WIDTH / 2, CY = HEIGHT / 2;
 const params = window.__demoParams || {
     agentCount: 40, maxSpeed: 90, radius: 3, neighborDist: 70
 };
+
+// Avoidance world component reference (for adding obstacles)
+let worldComponent: any = null;
 
 // ============================================
 // Component Definitions
@@ -99,6 +103,24 @@ class RenderSystem extends EntitySystem {
         this.ctx.fillStyle = 'rgba(22, 33, 62, 0.3)';
         this.ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+        // Draw obstacles
+        this.ctx.fillStyle = '#2d4263';
+        if (worldComponent) {
+            for (const obs of worldComponent.obstacles) {
+                // Obstacles stored as vertex lists, draw as polygons
+                const v = obs.vertices;
+                if (v.length >= 3) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(v[0].x, v[0].y);
+                    for (let i = 1; i < v.length; i++) {
+                        this.ctx.lineTo(v[i].x, v[i].y);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                }
+            }
+        }
+
         // FPS calculation
         this.frameCount++;
         const now = performance.now();
@@ -150,11 +172,14 @@ class RenderSystem extends EntitySystem {
 
         // HUD
         this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        this.ctx.fillRect(5, 5, 120, 35);
+        this.ctx.fillRect(5, 5, 150, 58);
         this.ctx.fillStyle = '#00d4ff';
         this.ctx.font = '11px monospace';
         this.ctx.fillText(\`Agents: \${entities.length}\`, 10, 20);
-        this.ctx.fillText(\`FPS: \${this.fps}\`, 10, 32);
+        this.ctx.fillText(\`Obstacles: \${worldComponent?.obstacles.length || 0}\`, 10, 32);
+        this.ctx.fillText(\`FPS: \${this.fps}\`, 10, 44);
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText('Left:Add Right:Obstacle', 10, 55);
     }
 }
 
@@ -163,20 +188,36 @@ class RenderSystem extends EntitySystem {
 // ============================================
 
 class ORCADemoScene extends Scene {
+    worldEntity: any = null;
+
     initialize() {
         this.name = 'ORCADemo';
+
+        // Create avoidance world entity first (must be before addSystem so LocalAvoidanceSystem can find it)
+        this.worldEntity = this.createEntity('AvoidanceWorld');
+        worldComponent = this.worldEntity.addComponent(new AvoidanceWorldComponent());
+
         this.addSystem(new TargetFollowSystem());
         this.addSystem(new LocalAvoidanceSystem());
         this.addSystem(new MovementSystem());
         this.addSystem(new RenderSystem(ctx));
     }
 
-    onStart() { this.loadScenario('circle'); }
+    onStart() {
+        this.loadScenario('circle');
+    }
 
     loadScenario(type: string) {
-        // Clear existing entities
+        console.log('loadScenario called:', type);
+
+        // Clear existing agent entities
         const result = this.queryAll(AvoidanceAgentComponent);
         this.destroyEntities([...result.entities]);
+
+        // Clear obstacles
+        if (worldComponent) {
+            worldComponent.clearObstacles();
+        }
 
         const count = params.agentCount;
         const configs = {
@@ -247,6 +288,41 @@ Core.create({ debug: false });
 const demoScene = new ORCADemoScene();
 Core.setScene(demoScene);
 
+// Expose scene for DemoPlayground
+window.__demoScene = demoScene;
+
+// Mouse event handling
+canvas.addEventListener('click', (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    // Left click adds agent
+    const color = \`hsl(\${Math.random() * 360}, 80%, 60%)\`;
+    demoScene.createAgent(x, y, CX + (Math.random() - 0.5) * 200, CY + (Math.random() - 0.5) * 200, color);
+});
+
+canvas.addEventListener('contextmenu', (e: MouseEvent) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    // Right click adds obstacle to AvoidanceWorldComponent
+    // ORCA uses math coords (Y up), so screen CW order = math CCW
+    // Order: top-left → top-right → bottom-right → bottom-left
+    if (worldComponent) {
+        worldComponent.addObstacle({
+            vertices: [
+                { x: x - 15, y: y - 15 },  // top-left
+                { x: x + 15, y: y - 15 },  // top-right
+                { x: x + 15, y: y + 15 },  // bottom-right
+                { x: x - 15, y: y + 15 }   // bottom-left
+            ]
+        });
+    }
+});
+
 let lastTime = performance.now();
 let animationId: number;
 
@@ -263,6 +339,10 @@ gameLoop();`;
 This is an interactive demo showcasing the ORCA (Optimal Reciprocal Collision Avoidance) algorithm, implemented with **ECS architecture**.
 
 Click **Run** to start the simulation. Use toolbar buttons to switch scenes and adjust parameters to observe different behaviors.
+
+**Interactive Controls:**
+- **Left-click** on canvas to add new agent
+- **Right-click** on canvas to place obstacle
 
 <DemoPlayground
     client:load

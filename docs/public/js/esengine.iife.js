@@ -3901,24 +3901,255 @@ var ESEngine = (function (exports) {
 
   // src/core/HPAPathfinder.ts
   var DEFAULT_HPA_CONFIG = {
-    clusterSize: 10,
-    maxEntranceWidth: 6,
-    cacheInternalPaths: true
+    clusterSize: 64,
+    maxEntranceWidth: 16,
+    cacheInternalPaths: true,
+    entranceStrategy: "end",
+    lazyIntraEdges: true
   };
+  var _a3;
+  var SubMap = (_a3 = class {
+    constructor(parentMap, originX, originY, width, height) {
+      __publicField(this, "parentMap");
+      __publicField(this, "originX");
+      __publicField(this, "originY");
+      __publicField(this, "width");
+      __publicField(this, "height");
+      this.parentMap = parentMap;
+      this.originX = originX;
+      this.originY = originY;
+      this.width = width;
+      this.height = height;
+    }
+    /**
+     * @zh 局部坐标转全局坐标
+     * @en Convert local to global coordinates
+     */
+    localToGlobal(localX, localY) {
+      return {
+        x: this.originX + localX,
+        y: this.originY + localY
+      };
+    }
+    /**
+     * @zh 全局坐标转局部坐标
+     * @en Convert global to local coordinates
+     */
+    globalToLocal(globalX, globalY) {
+      return {
+        x: globalX - this.originX,
+        y: globalY - this.originY
+      };
+    }
+    isWalkable(x, y) {
+      if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+        return false;
+      }
+      return this.parentMap.isWalkable(this.originX + x, this.originY + y);
+    }
+    getNodeAt(x, y) {
+      if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+        return null;
+      }
+      const globalNode = this.parentMap.getNodeAt(this.originX + x, this.originY + y);
+      if (!globalNode) return null;
+      return {
+        id: y * this.width + x,
+        position: {
+          x,
+          y
+        },
+        cost: globalNode.cost,
+        walkable: globalNode.walkable
+      };
+    }
+    getNeighbors(node) {
+      const neighbors = [];
+      const { x, y } = node.position;
+      const directions = [
+        {
+          dx: 0,
+          dy: -1
+        },
+        {
+          dx: 1,
+          dy: -1
+        },
+        {
+          dx: 1,
+          dy: 0
+        },
+        {
+          dx: 1,
+          dy: 1
+        },
+        {
+          dx: 0,
+          dy: 1
+        },
+        {
+          dx: -1,
+          dy: 1
+        },
+        {
+          dx: -1,
+          dy: 0
+        },
+        {
+          dx: -1,
+          dy: -1
+        }
+        // NW
+      ];
+      for (const dir of directions) {
+        const nx = x + dir.dx;
+        const ny = y + dir.dy;
+        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
+          continue;
+        }
+        if (!this.isWalkable(nx, ny)) {
+          continue;
+        }
+        if (dir.dx !== 0 && dir.dy !== 0) {
+          if (!this.isWalkable(x + dir.dx, y) || !this.isWalkable(x, y + dir.dy)) {
+            continue;
+          }
+        }
+        const neighborNode = this.getNodeAt(nx, ny);
+        if (neighborNode) {
+          neighbors.push(neighborNode);
+        }
+      }
+      return neighbors;
+    }
+    heuristic(a, b) {
+      const dx = Math.abs(a.x - b.x);
+      const dy = Math.abs(a.y - b.y);
+      return dx + dy + (Math.SQRT2 - 2) * Math.min(dx, dy);
+    }
+    getMovementCost(from, to) {
+      const dx = Math.abs(to.position.x - from.position.x);
+      const dy = Math.abs(to.position.y - from.position.y);
+      const baseCost = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
+      return baseCost * to.cost;
+    }
+  }, __name(_a3, "SubMap"), _a3);
+  var _a4;
+  var Cluster = (_a4 = class {
+    constructor(id, originX, originY, width, height, parentMap) {
+      __publicField(this, "id");
+      __publicField(this, "originX");
+      __publicField(this, "originY");
+      __publicField(this, "width");
+      __publicField(this, "height");
+      __publicField(this, "subMap");
+      /** @zh 集群内的抽象节点 ID 列表 @en Abstract node IDs in this cluster */
+      __publicField(this, "nodeIds", []);
+      /** @zh 预计算的距离缓存 @en Precomputed distance cache */
+      __publicField(this, "distanceCache", /* @__PURE__ */ new Map());
+      /** @zh 预计算的路径缓存 @en Precomputed path cache */
+      __publicField(this, "pathCache", /* @__PURE__ */ new Map());
+      this.id = id;
+      this.originX = originX;
+      this.originY = originY;
+      this.width = width;
+      this.height = height;
+      this.subMap = new SubMap(parentMap, originX, originY, width, height);
+    }
+    /**
+     * @zh 检查点是否在集群内
+     * @en Check if point is in cluster
+     */
+    containsPoint(x, y) {
+      return x >= this.originX && x < this.originX + this.width && y >= this.originY && y < this.originY + this.height;
+    }
+    /**
+     * @zh 添加节点 ID
+     * @en Add node ID
+     */
+    addNodeId(nodeId) {
+      if (!this.nodeIds.includes(nodeId)) {
+        this.nodeIds.push(nodeId);
+      }
+    }
+    /**
+     * @zh 移除节点 ID
+     * @en Remove node ID
+     */
+    removeNodeId(nodeId) {
+      const idx = this.nodeIds.indexOf(nodeId);
+      if (idx !== -1) {
+        this.nodeIds.splice(idx, 1);
+      }
+    }
+    /**
+     * @zh 生成缓存键
+     * @en Generate cache key
+     */
+    getCacheKey(fromId, toId) {
+      return `${fromId}->${toId}`;
+    }
+    /**
+     * @zh 设置缓存
+     * @en Set cache
+     */
+    setCache(fromId, toId, cost, path) {
+      const key = this.getCacheKey(fromId, toId);
+      this.distanceCache.set(key, cost);
+      this.pathCache.set(key, path);
+    }
+    /**
+     * @zh 获取缓存的距离
+     * @en Get cached distance
+     */
+    getCachedDistance(fromId, toId) {
+      return this.distanceCache.get(this.getCacheKey(fromId, toId));
+    }
+    /**
+     * @zh 获取缓存的路径
+     * @en Get cached path
+     */
+    getCachedPath(fromId, toId) {
+      return this.pathCache.get(this.getCacheKey(fromId, toId));
+    }
+    /**
+     * @zh 清除缓存
+     * @en Clear cache
+     */
+    clearCache() {
+      this.distanceCache.clear();
+      this.pathCache.clear();
+    }
+    /**
+     * @zh 获取缓存大小
+     * @en Get cache size
+     */
+    getCacheSize() {
+      return this.distanceCache.size;
+    }
+  }, __name(_a4, "Cluster"), _a4);
   var _HPAPathfinder = class _HPAPathfinder {
     constructor(map, config) {
       __publicField(this, "map");
       __publicField(this, "config");
-      __publicField(this, "width");
-      __publicField(this, "height");
+      __publicField(this, "mapWidth");
+      __publicField(this, "mapHeight");
+      // 集群管理
       __publicField(this, "clusters", []);
-      __publicField(this, "entrances", []);
-      __publicField(this, "abstractNodes", /* @__PURE__ */ new Map());
       __publicField(this, "clusterGrid", []);
-      __publicField(this, "nextEntranceId", 0);
+      __publicField(this, "clustersX", 0);
+      __publicField(this, "clustersY", 0);
+      // 抽象图
+      __publicField(this, "abstractNodes", /* @__PURE__ */ new Map());
+      __publicField(this, "nodesByCluster", /* @__PURE__ */ new Map());
       __publicField(this, "nextNodeId", 0);
-      __publicField(this, "internalPathCache", /* @__PURE__ */ new Map());
+      // 入口统计
+      __publicField(this, "entranceCount", 0);
+      // 内部寻路器
       __publicField(this, "localPathfinder");
+      // 完整路径缓存
+      __publicField(this, "pathCache");
+      __publicField(this, "mapVersion", 0);
       __publicField(this, "preprocessed", false);
       this.map = map;
       this.config = {
@@ -3926,28 +4157,26 @@ var ESEngine = (function (exports) {
         ...config
       };
       const bounds = this.getMapBounds();
-      this.width = bounds.width;
-      this.height = bounds.height;
+      this.mapWidth = bounds.width;
+      this.mapHeight = bounds.height;
       this.localPathfinder = new AStarPathfinder(map);
+      this.pathCache = new PathCache({
+        maxEntries: 1e3,
+        ttlMs: 0
+      });
     }
+    // =========================================================================
+    // 公共 API | Public API
+    // =========================================================================
     /**
      * @zh 预处理地图（构建抽象图）
      * @en Preprocess map (build abstract graph)
-     *
-     * @zh 在地图变化后需要重新调用
-     * @en Need to call again after map changes
      */
     preprocess() {
-      this.clusters = [];
-      this.entrances = [];
-      this.abstractNodes.clear();
-      this.clusterGrid = [];
-      this.internalPathCache.clear();
-      this.nextEntranceId = 0;
-      this.nextNodeId = 0;
+      this.clear();
       this.buildClusters();
-      this.findEntrances();
-      this.buildAbstractGraph();
+      this.buildEntrances();
+      this.buildIntraEdges();
       this.preprocessed = true;
     }
     /**
@@ -3978,23 +4207,33 @@ var ESEngine = (function (exports) {
           nodesSearched: 1
         };
       }
+      const cached = this.pathCache.get(startX, startY, endX, endY, this.mapVersion);
+      if (cached) {
+        return cached;
+      }
       const startCluster = this.getClusterAt(startX, startY);
       const endCluster = this.getClusterAt(endX, endY);
       if (!startCluster || !endCluster) {
         return EMPTY_PATH_RESULT;
       }
+      let result;
       if (startCluster.id === endCluster.id) {
-        return this.findLocalPath(startX, startY, endX, endY, opts);
+        result = this.findLocalPath(startX, startY, endX, endY, opts);
+      } else {
+        const startTemp = this.insertTempNode(startX, startY, startCluster);
+        const endTemp = this.insertTempNode(endX, endY, endCluster);
+        const abstractPath = this.abstractSearch(startTemp, endTemp, opts);
+        this.removeTempNode(startTemp, startCluster);
+        this.removeTempNode(endTemp, endCluster);
+        if (!abstractPath || abstractPath.length === 0) {
+          return EMPTY_PATH_RESULT;
+        }
+        result = this.refinePath(abstractPath, startX, startY, endX, endY, opts);
       }
-      const startNodes = this.insertTemporaryNode(startX, startY, startCluster);
-      const endNodes = this.insertTemporaryNode(endX, endY, endCluster);
-      const abstractPath = this.searchAbstractGraph(startNodes, endNodes, opts);
-      this.removeTemporaryNodes(startNodes);
-      this.removeTemporaryNodes(endNodes);
-      if (!abstractPath || abstractPath.length === 0) {
-        return EMPTY_PATH_RESULT;
+      if (result.found) {
+        this.pathCache.set(startX, startY, endX, endY, result, this.mapVersion);
       }
-      return this.refinePath(abstractPath, startX, startY, endX, endY, opts);
+      return result;
     }
     /**
      * @zh 清理状态
@@ -4002,10 +4241,13 @@ var ESEngine = (function (exports) {
      */
     clear() {
       this.clusters = [];
-      this.entrances = [];
-      this.abstractNodes.clear();
       this.clusterGrid = [];
-      this.internalPathCache.clear();
+      this.abstractNodes.clear();
+      this.nodesByCluster.clear();
+      this.nextNodeId = 0;
+      this.entranceCount = 0;
+      this.pathCache.invalidateAll();
+      this.mapVersion++;
       this.preprocessed = false;
     }
     /**
@@ -4013,19 +4255,34 @@ var ESEngine = (function (exports) {
      * @en Notify map region change
      */
     notifyRegionChange(minX, minY, maxX, maxY) {
-      this.preprocessed = false;
-      this.internalPathCache.clear();
+      const affectedClusters = this.getAffectedClusters(minX, minY, maxX, maxY);
+      for (const cluster of affectedClusters) {
+        cluster.clearCache();
+        for (const nodeId of cluster.nodeIds) {
+          const node = this.abstractNodes.get(nodeId);
+          if (node) {
+            node.edges = node.edges.filter((e) => e.isInterEdge);
+          }
+        }
+        this.buildClusterIntraEdges(cluster);
+      }
+      this.pathCache.invalidateRegion(minX, minY, maxX, maxY);
+      this.mapVersion++;
     }
     /**
      * @zh 获取预处理统计信息
      * @en Get preprocessing statistics
      */
     getStats() {
+      let cacheSize = 0;
+      for (const cluster of this.clusters) {
+        cacheSize += cluster.getCacheSize();
+      }
       return {
         clusters: this.clusters.length,
-        entrances: this.entrances.length,
+        entrances: this.entranceCount,
         abstractNodes: this.abstractNodes.size,
-        cacheSize: this.internalPathCache.size
+        cacheSize
       };
     }
     // =========================================================================
@@ -4044,354 +4301,657 @@ var ESEngine = (function (exports) {
         height: 1e3
       };
     }
+    /**
+     * @zh 构建集群
+     * @en Build clusters
+     */
     buildClusters() {
       const clusterSize = this.config.clusterSize;
-      const clustersX = Math.ceil(this.width / clusterSize);
-      const clustersY = Math.ceil(this.height / clusterSize);
+      this.clustersX = Math.ceil(this.mapWidth / clusterSize);
+      this.clustersY = Math.ceil(this.mapHeight / clusterSize);
       this.clusterGrid = [];
-      for (let x = 0; x < clustersX; x++) {
-        this.clusterGrid[x] = [];
+      for (let cx = 0; cx < this.clustersX; cx++) {
+        this.clusterGrid[cx] = [];
+        for (let cy = 0; cy < this.clustersY; cy++) {
+          this.clusterGrid[cx][cy] = null;
+        }
       }
       let clusterId = 0;
-      for (let cy = 0; cy < clustersY; cy++) {
-        for (let cx = 0; cx < clustersX; cx++) {
-          const cluster = {
-            id: clusterId++,
-            x: cx * clusterSize,
-            y: cy * clusterSize,
-            width: Math.min(clusterSize, this.width - cx * clusterSize),
-            height: Math.min(clusterSize, this.height - cy * clusterSize),
-            entrances: []
-          };
+      for (let cy = 0; cy < this.clustersY; cy++) {
+        for (let cx = 0; cx < this.clustersX; cx++) {
+          const originX = cx * clusterSize;
+          const originY = cy * clusterSize;
+          const width = Math.min(clusterSize, this.mapWidth - originX);
+          const height = Math.min(clusterSize, this.mapHeight - originY);
+          const cluster = new Cluster(clusterId, originX, originY, width, height, this.map);
           this.clusters.push(cluster);
-          this.clusterGrid[cx][cy] = cluster;
+          this.clusterGrid[cx][cy] = clusterId;
+          this.nodesByCluster.set(clusterId, []);
+          clusterId++;
         }
       }
     }
-    findEntrances() {
-      const clusterSize = this.config.clusterSize;
-      const clustersX = Math.ceil(this.width / clusterSize);
-      const clustersY = Math.ceil(this.height / clusterSize);
-      for (let cy = 0; cy < clustersY; cy++) {
-        for (let cx = 0; cx < clustersX; cx++) {
-          const cluster = this.clusterGrid[cx][cy];
-          if (!cluster) continue;
-          if (cx < clustersX - 1) {
-            const rightCluster = this.clusterGrid[cx + 1]?.[cy];
-            if (rightCluster) {
-              this.findEntrancesBetween(cluster, rightCluster, "horizontal");
+    /**
+     * @zh 检测入口并创建抽象节点
+     * @en Detect entrances and create abstract nodes
+     */
+    buildEntrances() {
+      this.config.clusterSize;
+      for (let cy = 0; cy < this.clustersY; cy++) {
+        for (let cx = 0; cx < this.clustersX; cx++) {
+          const clusterId = this.clusterGrid[cx][cy];
+          if (clusterId === null) continue;
+          const cluster1 = this.clusters[clusterId];
+          if (cx < this.clustersX - 1) {
+            const cluster2Id = this.clusterGrid[cx + 1][cy];
+            if (cluster2Id !== null) {
+              const cluster2 = this.clusters[cluster2Id];
+              this.detectAndCreateEntrances(cluster1, cluster2, "vertical");
             }
           }
-          if (cy < clustersY - 1) {
-            const bottomCluster = this.clusterGrid[cx]?.[cy + 1];
-            if (bottomCluster) {
-              this.findEntrancesBetween(cluster, bottomCluster, "vertical");
+          if (cy < this.clustersY - 1) {
+            const cluster2Id = this.clusterGrid[cx][cy + 1];
+            if (cluster2Id !== null) {
+              const cluster2 = this.clusters[cluster2Id];
+              this.detectAndCreateEntrances(cluster1, cluster2, "horizontal");
             }
           }
         }
       }
     }
-    findEntrancesBetween(cluster1, cluster2, direction) {
-      const maxWidth = this.config.maxEntranceWidth;
-      let entranceStart = null;
-      let entranceLength = 0;
-      if (direction === "horizontal") {
-        const x1 = cluster1.x + cluster1.width - 1;
-        const x2 = cluster2.x;
-        const startY = Math.max(cluster1.y, cluster2.y);
-        const endY = Math.min(cluster1.y + cluster1.height, cluster2.y + cluster2.height);
+    /**
+     * @zh 检测并创建两个相邻集群之间的入口
+     * @en Detect and create entrances between two adjacent clusters
+     */
+    detectAndCreateEntrances(cluster1, cluster2, boundaryDirection) {
+      const spans = this.detectEntranceSpans(cluster1, cluster2, boundaryDirection);
+      for (const span of spans) {
+        this.createEntranceNodes(cluster1, cluster2, span, boundaryDirection);
+      }
+    }
+    /**
+     * @zh 检测边界上的连续可通行区间
+     * @en Detect continuous walkable spans on boundary
+     */
+    detectEntranceSpans(cluster1, cluster2, boundaryDirection) {
+      const spans = [];
+      if (boundaryDirection === "vertical") {
+        const x1 = cluster1.originX + cluster1.width - 1;
+        const x2 = cluster2.originX;
+        const startY = Math.max(cluster1.originY, cluster2.originY);
+        const endY = Math.min(cluster1.originY + cluster1.height, cluster2.originY + cluster2.height);
+        let spanStart = null;
         for (let y = startY; y < endY; y++) {
           const walkable1 = this.map.isWalkable(x1, y);
           const walkable2 = this.map.isWalkable(x2, y);
           if (walkable1 && walkable2) {
-            if (entranceStart === null) {
-              entranceStart = y;
-              entranceLength = 1;
-            } else {
-              entranceLength++;
+            if (spanStart === null) {
+              spanStart = y;
             }
-            if (entranceLength >= maxWidth || y === endY - 1) {
-              this.createEntrance(cluster1, cluster2, x1, x2, entranceStart, entranceStart + entranceLength - 1, "horizontal");
-              entranceStart = null;
-              entranceLength = 0;
+          } else {
+            if (spanStart !== null) {
+              spans.push({
+                start: spanStart,
+                end: y - 1
+              });
+              spanStart = null;
             }
-          } else if (entranceStart !== null) {
-            this.createEntrance(cluster1, cluster2, x1, x2, entranceStart, entranceStart + entranceLength - 1, "horizontal");
-            entranceStart = null;
-            entranceLength = 0;
           }
         }
+        if (spanStart !== null) {
+          spans.push({
+            start: spanStart,
+            end: endY - 1
+          });
+        }
       } else {
-        const y1 = cluster1.y + cluster1.height - 1;
-        const y2 = cluster2.y;
-        const startX = Math.max(cluster1.x, cluster2.x);
-        const endX = Math.min(cluster1.x + cluster1.width, cluster2.x + cluster2.width);
+        const y1 = cluster1.originY + cluster1.height - 1;
+        const y2 = cluster2.originY;
+        const startX = Math.max(cluster1.originX, cluster2.originX);
+        const endX = Math.min(cluster1.originX + cluster1.width, cluster2.originX + cluster2.width);
+        let spanStart = null;
         for (let x = startX; x < endX; x++) {
           const walkable1 = this.map.isWalkable(x, y1);
           const walkable2 = this.map.isWalkable(x, y2);
           if (walkable1 && walkable2) {
-            if (entranceStart === null) {
-              entranceStart = x;
-              entranceLength = 1;
-            } else {
-              entranceLength++;
+            if (spanStart === null) {
+              spanStart = x;
             }
-            if (entranceLength >= maxWidth || x === endX - 1) {
-              this.createEntrance(cluster1, cluster2, entranceStart, entranceStart + entranceLength - 1, y1, y2, "vertical");
-              entranceStart = null;
-              entranceLength = 0;
+          } else {
+            if (spanStart !== null) {
+              spans.push({
+                start: spanStart,
+                end: x - 1
+              });
+              spanStart = null;
             }
-          } else if (entranceStart !== null) {
-            this.createEntrance(cluster1, cluster2, entranceStart, entranceStart + entranceLength - 1, y1, y2, "vertical");
-            entranceStart = null;
-            entranceLength = 0;
+          }
+        }
+        if (spanStart !== null) {
+          spans.push({
+            start: spanStart,
+            end: endX - 1
+          });
+        }
+      }
+      return spans;
+    }
+    /**
+     * @zh 为入口区间创建抽象节点
+     * @en Create abstract nodes for entrance span
+     */
+    createEntranceNodes(cluster1, cluster2, span, boundaryDirection) {
+      const spanLength = span.end - span.start + 1;
+      const maxWidth = this.config.maxEntranceWidth;
+      const strategy = this.config.entranceStrategy;
+      const positions = [];
+      if (spanLength <= maxWidth) {
+        positions.push(Math.floor((span.start + span.end) / 2));
+      } else {
+        const numNodes = Math.ceil(spanLength / maxWidth);
+        const spacing = spanLength / numNodes;
+        for (let i = 0; i < numNodes; i++) {
+          const pos = Math.floor(span.start + spacing * (i + 0.5));
+          positions.push(Math.min(pos, span.end));
+        }
+        if (strategy === "end") {
+          if (!positions.includes(span.start)) {
+            positions.unshift(span.start);
+          }
+          if (!positions.includes(span.end)) {
+            positions.push(span.end);
+          }
+        }
+      }
+      for (const pos of positions) {
+        let p1, p2;
+        if (boundaryDirection === "vertical") {
+          p1 = {
+            x: cluster1.originX + cluster1.width - 1,
+            y: pos
+          };
+          p2 = {
+            x: cluster2.originX,
+            y: pos
+          };
+        } else {
+          p1 = {
+            x: pos,
+            y: cluster1.originY + cluster1.height - 1
+          };
+          p2 = {
+            x: pos,
+            y: cluster2.originY
+          };
+        }
+        const node1 = this.createAbstractNode(p1, cluster1);
+        const node2 = this.createAbstractNode(p2, cluster2);
+        const interCost = 1;
+        node1.edges.push({
+          targetNodeId: node2.id,
+          cost: interCost,
+          isInterEdge: true,
+          innerPath: null
+        });
+        node2.edges.push({
+          targetNodeId: node1.id,
+          cost: interCost,
+          isInterEdge: true,
+          innerPath: null
+        });
+        this.entranceCount++;
+      }
+    }
+    /**
+     * @zh 创建抽象节点
+     * @en Create abstract node
+     */
+    createAbstractNode(position, cluster) {
+      const concreteId = position.y * this.mapWidth + position.x;
+      for (const nodeId of cluster.nodeIds) {
+        const existing = this.abstractNodes.get(nodeId);
+        if (existing && existing.concreteNodeId === concreteId) {
+          return existing;
+        }
+      }
+      const node = {
+        id: this.nextNodeId++,
+        position: {
+          x: position.x,
+          y: position.y
+        },
+        clusterId: cluster.id,
+        concreteNodeId: concreteId,
+        edges: []
+      };
+      this.abstractNodes.set(node.id, node);
+      cluster.addNodeId(node.id);
+      const clusterNodes = this.nodesByCluster.get(cluster.id);
+      if (clusterNodes) {
+        clusterNodes.push(node.id);
+      }
+      return node;
+    }
+    /**
+     * @zh 构建所有集群的 intra-edges
+     * @en Build intra-edges for all clusters
+     */
+    buildIntraEdges() {
+      for (const cluster of this.clusters) {
+        this.buildClusterIntraEdges(cluster);
+      }
+    }
+    /**
+     * @zh 构建单个集群的 intra-edges
+     * @en Build intra-edges for single cluster
+     */
+    buildClusterIntraEdges(cluster) {
+      const nodeIds = cluster.nodeIds;
+      if (nodeIds.length < 2) return;
+      if (this.config.lazyIntraEdges) {
+        this.buildLazyIntraEdges(cluster);
+      } else {
+        this.buildEagerIntraEdges(cluster);
+      }
+    }
+    /**
+     * @zh 延迟构建 intra-edges（只用启发式距离）
+     * @en Build lazy intra-edges (using heuristic distance only)
+     */
+    buildLazyIntraEdges(cluster) {
+      const nodeIds = cluster.nodeIds;
+      for (let i = 0; i < nodeIds.length; i++) {
+        for (let j = i + 1; j < nodeIds.length; j++) {
+          const node1 = this.abstractNodes.get(nodeIds[i]);
+          const node2 = this.abstractNodes.get(nodeIds[j]);
+          const heuristicCost = this.heuristic(node1.position, node2.position);
+          node1.edges.push({
+            targetNodeId: node2.id,
+            cost: heuristicCost,
+            isInterEdge: false,
+            innerPath: null
+            // 标记为未计算
+          });
+          node2.edges.push({
+            targetNodeId: node1.id,
+            cost: heuristicCost,
+            isInterEdge: false,
+            innerPath: null
+          });
+        }
+      }
+    }
+    /**
+     * @zh 立即构建 intra-edges（计算真实路径）
+     * @en Build eager intra-edges (compute actual paths)
+     */
+    buildEagerIntraEdges(cluster) {
+      const nodeIds = cluster.nodeIds;
+      const subPathfinder = new AStarPathfinder(cluster.subMap);
+      for (let i = 0; i < nodeIds.length; i++) {
+        for (let j = i + 1; j < nodeIds.length; j++) {
+          const node1 = this.abstractNodes.get(nodeIds[i]);
+          const node2 = this.abstractNodes.get(nodeIds[j]);
+          const local1 = cluster.subMap.globalToLocal(node1.position.x, node1.position.y);
+          const local2 = cluster.subMap.globalToLocal(node2.position.x, node2.position.y);
+          const result = subPathfinder.findPath(local1.x, local1.y, local2.x, local2.y);
+          if (result.found && result.path.length > 0) {
+            const globalPath = result.path.map((p) => {
+              const global = cluster.subMap.localToGlobal(p.x, p.y);
+              return global.y * this.mapWidth + global.x;
+            });
+            if (this.config.cacheInternalPaths) {
+              cluster.setCache(node1.id, node2.id, result.cost, globalPath);
+              cluster.setCache(node2.id, node1.id, result.cost, [
+                ...globalPath
+              ].reverse());
+            }
+            node1.edges.push({
+              targetNodeId: node2.id,
+              cost: result.cost,
+              isInterEdge: false,
+              innerPath: this.config.cacheInternalPaths ? globalPath : null
+            });
+            node2.edges.push({
+              targetNodeId: node1.id,
+              cost: result.cost,
+              isInterEdge: false,
+              innerPath: this.config.cacheInternalPaths ? [
+                ...globalPath
+              ].reverse() : null
+            });
           }
         }
       }
     }
-    createEntrance(cluster1, cluster2, coord1Start, coord1End, coord2Start, coord2End, direction) {
-      let point1;
-      let point2;
-      let center;
-      if (direction === "horizontal") {
-        const midY = Math.floor((coord1Start + coord1End) / 2);
-        point1 = {
-          x: coord1Start,
-          y: midY
-        };
-        point2 = {
-          x: coord2Start,
-          y: midY
-        };
-        center = {
-          x: coord1Start,
-          y: midY
-        };
-      } else {
-        const midX = Math.floor((coord1Start + coord1End) / 2);
-        point1 = {
-          x: midX,
-          y: coord2Start
-        };
-        point2 = {
-          x: midX,
-          y: coord2End
-        };
-        center = {
-          x: midX,
-          y: coord2Start
+    /**
+     * @zh 按需计算 intra-edge 的真实路径
+     * @en Compute actual path for intra-edge on demand
+     */
+    computeIntraEdgePath(fromNode, toNode, edge) {
+      const cluster = this.clusters[fromNode.clusterId];
+      if (!cluster) return null;
+      const cachedPath = cluster.getCachedPath(fromNode.id, toNode.id);
+      const cachedCost = cluster.getCachedDistance(fromNode.id, toNode.id);
+      if (cachedPath && cachedCost !== void 0) {
+        edge.cost = cachedCost;
+        edge.innerPath = cachedPath;
+        return {
+          cost: cachedCost,
+          path: cachedPath
         };
       }
-      const entrance = {
-        id: this.nextEntranceId++,
-        cluster1Id: cluster1.id,
-        cluster2Id: cluster2.id,
-        point1,
-        point2,
-        center
-      };
-      this.entrances.push(entrance);
-      cluster1.entrances.push(entrance);
-      cluster2.entrances.push(entrance);
-    }
-    buildAbstractGraph() {
-      for (const entrance of this.entrances) {
-        const node1 = this.createAbstractNode(entrance.point1, entrance.cluster1Id, entrance.id);
-        const node2 = this.createAbstractNode(entrance.point2, entrance.cluster2Id, entrance.id);
-        node1.edges.push({
-          targetNodeId: node2.id,
-          cost: 1,
-          isInterEdge: true
+      const subPathfinder = new AStarPathfinder(cluster.subMap);
+      const local1 = cluster.subMap.globalToLocal(fromNode.position.x, fromNode.position.y);
+      const local2 = cluster.subMap.globalToLocal(toNode.position.x, toNode.position.y);
+      const result = subPathfinder.findPath(local1.x, local1.y, local2.x, local2.y);
+      if (result.found && result.path.length > 0) {
+        const globalPath = result.path.map((p) => {
+          const global = cluster.subMap.localToGlobal(p.x, p.y);
+          return global.y * this.mapWidth + global.x;
         });
-        node2.edges.push({
-          targetNodeId: node1.id,
-          cost: 1,
-          isInterEdge: true
-        });
-      }
-      for (const cluster of this.clusters) {
-        this.connectIntraClusterNodes(cluster);
-      }
-    }
-    createAbstractNode(position, clusterId, entranceId) {
-      const node = {
-        id: this.nextNodeId++,
-        position,
-        clusterId,
-        entranceId,
-        edges: []
-      };
-      this.abstractNodes.set(node.id, node);
-      return node;
-    }
-    connectIntraClusterNodes(cluster) {
-      const nodesInCluster = [];
-      for (const node of this.abstractNodes.values()) {
-        if (node.clusterId === cluster.id) {
-          nodesInCluster.push(node);
+        if (this.config.cacheInternalPaths) {
+          cluster.setCache(fromNode.id, toNode.id, result.cost, globalPath);
+          cluster.setCache(toNode.id, fromNode.id, result.cost, [
+            ...globalPath
+          ].reverse());
         }
-      }
-      for (let i = 0; i < nodesInCluster.length; i++) {
-        for (let j = i + 1; j < nodesInCluster.length; j++) {
-          const node1 = nodesInCluster[i];
-          const node2 = nodesInCluster[j];
-          const cost = this.heuristic(node1.position, node2.position);
-          node1.edges.push({
-            targetNodeId: node2.id,
-            cost,
-            isInterEdge: false
-          });
-          node2.edges.push({
-            targetNodeId: node1.id,
-            cost,
-            isInterEdge: false
-          });
+        edge.cost = result.cost;
+        edge.innerPath = globalPath;
+        const reverseEdge = toNode.edges.find((e) => e.targetNodeId === fromNode.id);
+        if (reverseEdge) {
+          reverseEdge.cost = result.cost;
+          reverseEdge.innerPath = [
+            ...globalPath
+          ].reverse();
         }
+        return {
+          cost: result.cost,
+          path: globalPath
+        };
       }
+      return null;
     }
     // =========================================================================
     // 搜索方法 | Search Methods
     // =========================================================================
+    /**
+     * @zh 获取指定位置的集群
+     * @en Get cluster at position
+     */
     getClusterAt(x, y) {
-      const clusterSize = this.config.clusterSize;
-      const cx = Math.floor(x / clusterSize);
-      const cy = Math.floor(y / clusterSize);
-      return this.clusterGrid[cx]?.[cy] ?? null;
-    }
-    insertTemporaryNode(x, y, cluster) {
-      const tempNodes = [];
-      const tempNode = this.createAbstractNode({
-        x,
-        y
-      }, cluster.id, -1);
-      tempNodes.push(tempNode);
-      for (const node of this.abstractNodes.values()) {
-        if (node.clusterId === cluster.id && node.id !== tempNode.id) {
-          const cost = this.heuristic({
-            x,
-            y
-          }, node.position);
-          tempNode.edges.push({
-            targetNodeId: node.id,
-            cost,
-            isInterEdge: false
-          });
-          node.edges.push({
-            targetNodeId: tempNode.id,
-            cost,
-            isInterEdge: false
-          });
-        }
-      }
-      return tempNodes;
-    }
-    removeTemporaryNodes(nodes) {
-      for (const node of nodes) {
-        for (const edge of node.edges) {
-          const targetNode = this.abstractNodes.get(edge.targetNodeId);
-          if (targetNode) {
-            targetNode.edges = targetNode.edges.filter((e) => e.targetNodeId !== node.id);
-          }
-        }
-        this.abstractNodes.delete(node.id);
-      }
-    }
-    searchAbstractGraph(startNodes, endNodes, opts) {
-      if (startNodes.length === 0 || endNodes.length === 0) {
+      const cx = Math.floor(x / this.config.clusterSize);
+      const cy = Math.floor(y / this.config.clusterSize);
+      if (cx < 0 || cx >= this.clustersX || cy < 0 || cy >= this.clustersY) {
         return null;
       }
-      const endNodeIds = new Set(endNodes.map((n) => n.id));
-      const openList = new BinaryHeap((a, b) => a.f - b.f);
-      const closedSet = /* @__PURE__ */ new Set();
-      for (const startNode of startNodes) {
-        const h = this.heuristic(startNode.position, endNodes[0].position);
-        openList.push({
-          abstractNode: startNode,
-          g: 0,
-          h: h * opts.heuristicWeight,
-          f: h * opts.heuristicWeight,
-          parent: null
-        });
+      const clusterId = this.clusterGrid[cx]?.[cy];
+      if (clusterId === null || clusterId === void 0) {
+        return null;
       }
+      return this.clusters[clusterId] || null;
+    }
+    /**
+     * @zh 获取受影响的集群
+     * @en Get affected clusters
+     */
+    getAffectedClusters(minX, minY, maxX, maxY) {
+      const affected = [];
+      const clusterSize = this.config.clusterSize;
+      const minCX = Math.floor(minX / clusterSize);
+      const maxCX = Math.floor(maxX / clusterSize);
+      const minCY = Math.floor(minY / clusterSize);
+      const maxCY = Math.floor(maxY / clusterSize);
+      for (let cy = minCY; cy <= maxCY; cy++) {
+        for (let cx = minCX; cx <= maxCX; cx++) {
+          if (cx >= 0 && cx < this.clustersX && cy >= 0 && cy < this.clustersY) {
+            const clusterId = this.clusterGrid[cx]?.[cy];
+            if (clusterId !== null && clusterId !== void 0) {
+              affected.push(this.clusters[clusterId]);
+            }
+          }
+        }
+      }
+      return affected;
+    }
+    /**
+     * @zh 插入临时节点
+     * @en Insert temporary node
+     */
+    insertTempNode(x, y, cluster) {
+      const concreteId = y * this.mapWidth + x;
+      for (const nodeId of cluster.nodeIds) {
+        const existing = this.abstractNodes.get(nodeId);
+        if (existing && existing.concreteNodeId === concreteId) {
+          return existing;
+        }
+      }
+      const tempNode = {
+        id: this.nextNodeId++,
+        position: {
+          x,
+          y
+        },
+        clusterId: cluster.id,
+        concreteNodeId: concreteId,
+        edges: []
+      };
+      this.abstractNodes.set(tempNode.id, tempNode);
+      cluster.addNodeId(tempNode.id);
+      const subPathfinder = new AStarPathfinder(cluster.subMap);
+      const localPos = cluster.subMap.globalToLocal(x, y);
+      for (const existingNodeId of cluster.nodeIds) {
+        if (existingNodeId === tempNode.id) continue;
+        const existingNode = this.abstractNodes.get(existingNodeId);
+        if (!existingNode) continue;
+        const targetLocalPos = cluster.subMap.globalToLocal(existingNode.position.x, existingNode.position.y);
+        const result = subPathfinder.findPath(localPos.x, localPos.y, targetLocalPos.x, targetLocalPos.y);
+        if (result.found && result.path.length > 0) {
+          const globalPath = result.path.map((p) => {
+            const global = cluster.subMap.localToGlobal(p.x, p.y);
+            return global.y * this.mapWidth + global.x;
+          });
+          tempNode.edges.push({
+            targetNodeId: existingNode.id,
+            cost: result.cost,
+            isInterEdge: false,
+            innerPath: globalPath
+          });
+          existingNode.edges.push({
+            targetNodeId: tempNode.id,
+            cost: result.cost,
+            isInterEdge: false,
+            innerPath: [
+              ...globalPath
+            ].reverse()
+          });
+        }
+      }
+      return tempNode;
+    }
+    /**
+     * @zh 移除临时节点
+     * @en Remove temporary node
+     */
+    removeTempNode(node, cluster) {
+      for (const existingNodeId of cluster.nodeIds) {
+        if (existingNodeId === node.id) continue;
+        const existingNode = this.abstractNodes.get(existingNodeId);
+        if (existingNode) {
+          existingNode.edges = existingNode.edges.filter((e) => e.targetNodeId !== node.id);
+        }
+      }
+      cluster.removeNodeId(node.id);
+      this.abstractNodes.delete(node.id);
+    }
+    /**
+     * @zh 在抽象图上进行 A* 搜索
+     * @en Perform A* search on abstract graph
+     */
+    abstractSearch(startNode, endNode, opts) {
+      const openList = new IndexedBinaryHeap((a, b) => a.f - b.f);
+      const nodeMap = /* @__PURE__ */ new Map();
+      const endPosition = endNode.position;
+      const h = this.heuristic(startNode.position, endPosition) * opts.heuristicWeight;
+      const startSearchNode = {
+        node: startNode,
+        g: 0,
+        h,
+        f: h,
+        parent: null,
+        closed: false,
+        opened: true,
+        heapIndex: -1
+      };
+      openList.push(startSearchNode);
+      nodeMap.set(startNode.id, startSearchNode);
       let nodesSearched = 0;
       while (!openList.isEmpty && nodesSearched < opts.maxNodes) {
         const current = openList.pop();
+        current.closed = true;
         nodesSearched++;
-        if (endNodeIds.has(current.abstractNode.id)) {
-          return this.reconstructAbstractPath(current);
+        if (current.node.id === endNode.id) {
+          return this.reconstructPath(current);
         }
-        if (closedSet.has(current.abstractNode.id)) {
-          continue;
-        }
-        closedSet.add(current.abstractNode.id);
-        for (const edge of current.abstractNode.edges) {
-          if (closedSet.has(edge.targetNodeId)) {
-            continue;
+        for (const edge of current.node.edges) {
+          let neighbor = nodeMap.get(edge.targetNodeId);
+          if (!neighbor) {
+            const neighborNode = this.abstractNodes.get(edge.targetNodeId);
+            if (!neighborNode) continue;
+            const nh = this.heuristic(neighborNode.position, endPosition) * opts.heuristicWeight;
+            neighbor = {
+              node: neighborNode,
+              g: Infinity,
+              h: nh,
+              f: Infinity,
+              parent: null,
+              closed: false,
+              opened: false,
+              heapIndex: -1
+            };
+            nodeMap.set(edge.targetNodeId, neighbor);
           }
-          const neighbor = this.abstractNodes.get(edge.targetNodeId);
-          if (!neighbor) continue;
+          if (neighbor.closed) continue;
           const tentativeG = current.g + edge.cost;
-          const h = this.heuristic(neighbor.position, endNodes[0].position) * opts.heuristicWeight;
-          openList.push({
-            abstractNode: neighbor,
-            g: tentativeG,
-            h,
-            f: tentativeG + h,
-            parent: current
-          });
+          if (!neighbor.opened) {
+            neighbor.g = tentativeG;
+            neighbor.f = tentativeG + neighbor.h;
+            neighbor.parent = current;
+            neighbor.opened = true;
+            openList.push(neighbor);
+          } else if (tentativeG < neighbor.g) {
+            neighbor.g = tentativeG;
+            neighbor.f = tentativeG + neighbor.h;
+            neighbor.parent = current;
+            openList.update(neighbor);
+          }
         }
       }
       return null;
     }
-    reconstructAbstractPath(endNode) {
+    /**
+     * @zh 重建抽象路径
+     * @en Reconstruct abstract path
+     */
+    reconstructPath(endNode) {
       const path = [];
       let current = endNode;
       while (current) {
-        path.unshift(current.abstractNode);
+        path.unshift(current.node);
         current = current.parent;
       }
       return path;
     }
+    /**
+     * @zh 细化抽象路径为具体路径
+     * @en Refine abstract path to concrete path
+     */
     refinePath(abstractPath, startX, startY, endX, endY, opts) {
+      if (abstractPath.length === 0) {
+        return EMPTY_PATH_RESULT;
+      }
       const fullPath = [];
       let totalCost = 0;
       let nodesSearched = abstractPath.length;
-      let currentX = startX;
-      let currentY = startY;
-      for (let i = 0; i < abstractPath.length; i++) {
-        const node = abstractPath[i];
-        const targetX = i === abstractPath.length - 1 ? endX : node.position.x;
-        const targetY = i === abstractPath.length - 1 ? endY : node.position.y;
-        if (currentX !== targetX || currentY !== targetY) {
-          const segment = this.localPathfinder.findPath(currentX, currentY, targetX, targetY, opts);
-          if (!segment.found) {
-            if (fullPath.length > 0) {
-              return {
-                found: true,
-                path: fullPath,
-                cost: totalCost,
-                nodesSearched
-              };
+      for (let i = 0; i < abstractPath.length - 1; i++) {
+        const fromNode = abstractPath[i];
+        const toNode = abstractPath[i + 1];
+        const edge = fromNode.edges.find((e) => e.targetNodeId === toNode.id);
+        if (!edge) {
+          const segResult = this.findLocalPath(fromNode.position.x, fromNode.position.y, toNode.position.x, toNode.position.y, opts);
+          if (segResult.found) {
+            this.appendPath(fullPath, segResult.path);
+            totalCost += segResult.cost;
+            nodesSearched += segResult.nodesSearched;
+          }
+        } else if (edge.isInterEdge) {
+          if (fullPath.length === 0 || fullPath[fullPath.length - 1].x !== fromNode.position.x || fullPath[fullPath.length - 1].y !== fromNode.position.y) {
+            fullPath.push({
+              x: fromNode.position.x,
+              y: fromNode.position.y
+            });
+          }
+          fullPath.push({
+            x: toNode.position.x,
+            y: toNode.position.y
+          });
+          totalCost += edge.cost;
+        } else if (edge.innerPath && edge.innerPath.length > 0) {
+          const concretePath = edge.innerPath.map((id) => ({
+            x: id % this.mapWidth,
+            y: Math.floor(id / this.mapWidth)
+          }));
+          this.appendPath(fullPath, concretePath);
+          totalCost += edge.cost;
+        } else {
+          const computed = this.computeIntraEdgePath(fromNode, toNode, edge);
+          if (computed && computed.path.length > 0) {
+            const concretePath = computed.path.map((id) => ({
+              x: id % this.mapWidth,
+              y: Math.floor(id / this.mapWidth)
+            }));
+            this.appendPath(fullPath, concretePath);
+            totalCost += computed.cost;
+          } else {
+            const segResult = this.findLocalPath(fromNode.position.x, fromNode.position.y, toNode.position.x, toNode.position.y, opts);
+            if (segResult.found) {
+              this.appendPath(fullPath, segResult.path);
+              totalCost += segResult.cost;
+              nodesSearched += segResult.nodesSearched;
             }
-            return EMPTY_PATH_RESULT;
           }
-          for (let j = fullPath.length === 0 ? 0 : 1; j < segment.path.length; j++) {
-            fullPath.push(segment.path[j]);
-          }
-          totalCost += segment.cost;
-          nodesSearched += segment.nodesSearched;
         }
-        currentX = targetX;
-        currentY = targetY;
       }
-      if (currentX !== endX || currentY !== endY) {
-        const finalSegment = this.localPathfinder.findPath(currentX, currentY, endX, endY, opts);
-        if (finalSegment.found) {
-          for (let j = 1; j < finalSegment.path.length; j++) {
-            fullPath.push(finalSegment.path[j]);
+      if (fullPath.length > 0 && (fullPath[0].x !== startX || fullPath[0].y !== startY)) {
+        const firstPoint = fullPath[0];
+        if (Math.abs(firstPoint.x - startX) <= 1 && Math.abs(firstPoint.y - startY) <= 1) {
+          fullPath.unshift({
+            x: startX,
+            y: startY
+          });
+        } else {
+          const segResult = this.findLocalPath(startX, startY, firstPoint.x, firstPoint.y, opts);
+          if (segResult.found) {
+            fullPath.splice(0, 0, ...segResult.path.slice(0, -1));
+            totalCost += segResult.cost;
           }
-          totalCost += finalSegment.cost;
-          nodesSearched += finalSegment.nodesSearched;
+        }
+      }
+      if (fullPath.length > 0) {
+        const lastPoint = fullPath[fullPath.length - 1];
+        if (lastPoint.x !== endX || lastPoint.y !== endY) {
+          if (Math.abs(lastPoint.x - endX) <= 1 && Math.abs(lastPoint.y - endY) <= 1) {
+            fullPath.push({
+              x: endX,
+              y: endY
+            });
+          } else {
+            const segResult = this.findLocalPath(lastPoint.x, lastPoint.y, endX, endY, opts);
+            if (segResult.found) {
+              fullPath.push(...segResult.path.slice(1));
+              totalCost += segResult.cost;
+            }
+          }
         }
       }
       return {
@@ -4401,39 +4961,37 @@ var ESEngine = (function (exports) {
         nodesSearched
       };
     }
-    // =========================================================================
-    // 辅助方法 | Helper Methods
-    // =========================================================================
+    /**
+     * @zh 追加路径（避免重复点）
+     * @en Append path (avoid duplicate points)
+     */
+    appendPath(fullPath, segment) {
+      if (segment.length === 0) return;
+      let startIdx = 0;
+      if (fullPath.length > 0) {
+        const last = fullPath[fullPath.length - 1];
+        if (last.x === segment[0].x && last.y === segment[0].y) {
+          startIdx = 1;
+        }
+      }
+      for (let i = startIdx; i < segment.length; i++) {
+        fullPath.push({
+          x: segment[i].x,
+          y: segment[i].y
+        });
+      }
+    }
+    /**
+     * @zh 局部寻路
+     * @en Local pathfinding
+     */
     findLocalPath(startX, startY, endX, endY, opts) {
       return this.localPathfinder.findPath(startX, startY, endX, endY, opts);
     }
-    findInternalPath(startX, startY, endX, endY, cluster) {
-      const cacheKey = `${cluster.id}:${startX},${startY}->${endX},${endY}`;
-      if (this.config.cacheInternalPaths) {
-        const cached = this.internalPathCache.get(cacheKey);
-        if (cached) {
-          return cached;
-        }
-      }
-      const result = this.localPathfinder.findPath(startX, startY, endX, endY);
-      if (result.found && this.config.cacheInternalPaths) {
-        this.internalPathCache.set(cacheKey, [
-          ...result.path
-        ]);
-      }
-      return result.found ? [
-        ...result.path
-      ] : null;
-    }
-    calculatePathCost(path) {
-      let cost = 0;
-      for (let i = 1; i < path.length; i++) {
-        const dx = Math.abs(path[i].x - path[i - 1].x);
-        const dy = Math.abs(path[i].y - path[i - 1].y);
-        cost += dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-      }
-      return cost;
-    }
+    /**
+     * @zh 启发式函数（Octile 距离）
+     * @en Heuristic function (Octile distance)
+     */
     heuristic(a, b) {
       const dx = Math.abs(a.x - b.x);
       const dy = Math.abs(a.y - b.y);
@@ -4448,8 +5006,8 @@ var ESEngine = (function (exports) {
   __name(createHPAPathfinder, "createHPAPathfinder");
 
   // src/navmesh/NavMesh.ts
-  var _a3;
-  var NavMeshNode = (_a3 = class {
+  var _a5;
+  var NavMeshNode = (_a5 = class {
     constructor(polygon) {
       __publicField(this, "id");
       __publicField(this, "position");
@@ -4462,7 +5020,7 @@ var ESEngine = (function (exports) {
       this.walkable = true;
       this.polygon = polygon;
     }
-  }, __name(_a3, "NavMeshNode"), _a3);
+  }, __name(_a5, "NavMeshNode"), _a5);
   var _NavMesh = class _NavMesh {
     constructor() {
       __publicField(this, "polygons", /* @__PURE__ */ new Map());

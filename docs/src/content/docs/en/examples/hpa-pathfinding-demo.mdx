@@ -1,0 +1,452 @@
+---
+title: "HPA* Hierarchical Pathfinding"
+description: "Hierarchical Pathfinding A* demo, optimized for very large maps"
+---
+
+import DemoPlayground from '../../../../components/DemoPlayground.vue';
+
+export const hpaScenes = [
+    { id: 'small', label: 'S', name: 'Small Map (100x65)' },
+    { id: 'medium', label: 'M', name: 'Medium Map (250x163)' },
+    { id: 'large', label: 'L', name: 'Large Map (500x325)' },
+    { id: 'huge', label: 'XL', name: 'Huge Map (1000x650)' }
+];
+
+export const hpaParams = [
+    { id: 'clusterSize', label: 'Cluster', desc: 'Cluster size (side length)', value: 64, min: 10, max: 100, step: 10 },
+    { id: 'obstacleRate', label: 'Obstacles', desc: 'Obstacle density (%)', value: 15, min: 0, max: 100, step: 1 },
+    { id: 'showClusters', label: 'Clusters', desc: 'Show cluster boundaries (0=no, 1=yes)', value: 1, min: 0, max: 1, step: 1 }
+];
+
+export const hpaDemoCode = `// HPA* Hierarchical Pathfinding Demo
+// ============================================
+// Compare HPA* vs standard A* performance on large maps
+
+const {
+    GridMap, createGridMap,
+    AStarPathfinder, HPAPathfinder,
+    octileDistance
+} = ESEngine;
+
+const WIDTH = 580, HEIGHT = 380;
+
+const params = window.__demoParams || {
+    clusterSize: 64, obstacleRate: 15, showClusters: 1
+};
+
+let gridMap = null;
+let mapWidth = 100, mapHeight = 65;
+let startPos = { x: 5, y: 5 };
+let endPos = { x: 0, y: 0 };
+
+// Performance results
+let results = {
+    astar: { time: 0, nodes: 0, pathLen: 0, path: [] },
+    hpa: { time: 0, nodes: 0, pathLen: 0, path: [], stats: null, preprocessTime: 0, cachedTime: 0 }
+};
+
+let hpaPathfinder = null;
+let isSearching = false;
+
+// ============================================
+// Rendering
+// ============================================
+
+function render(ctx) {
+    if (!gridMap) return;
+
+    const cellW = WIDTH / mapWidth;
+    const cellH = HEIGHT / mapHeight;
+    const drawCells = cellW >= 2;  // Only draw cells when they are large enough
+
+    // Clear screen
+    ctx.fillStyle = '#16213e';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // Draw cluster boundaries
+    if (params.showClusters === 1) {
+        ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
+        ctx.lineWidth = 1;
+        const cs = params.clusterSize;
+        for (let cx = 0; cx <= Math.ceil(mapWidth / cs); cx++) {
+            const x = cx * cs * cellW;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, HEIGHT);
+            ctx.stroke();
+        }
+        for (let cy = 0; cy <= Math.ceil(mapHeight / cs); cy++) {
+            const y = cy * cs * cellH;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(WIDTH, y);
+            ctx.stroke();
+        }
+    }
+
+    // Draw obstacles (only when cells are large enough)
+    if (drawCells) {
+        ctx.fillStyle = '#2d4263';
+        for (let y = 0; y < mapHeight; y++) {
+            for (let x = 0; x < mapWidth; x++) {
+                if (!gridMap.isWalkable(x, y)) {
+                    ctx.fillRect(x * cellW, y * cellH, cellW - 0.5, cellH - 0.5);
+                }
+            }
+        }
+    } else {
+        // Large map: use sampling
+        ctx.fillStyle = '#2d4263';
+        const sampleRate = Math.ceil(mapWidth / WIDTH * 2);
+        for (let sy = 0; sy < HEIGHT; sy += 2) {
+            for (let sx = 0; sx < WIDTH; sx += 2) {
+                const gx = Math.floor(sx / cellW);
+                const gy = Math.floor(sy / cellH);
+                if (gx < mapWidth && gy < mapHeight && !gridMap.isWalkable(gx, gy)) {
+                    ctx.fillRect(sx, sy, 2, 2);
+                }
+            }
+        }
+    }
+
+    // Draw A* path
+    if (results.astar.path.length > 1) {
+        ctx.strokeStyle = 'rgba(255, 107, 107, 0.7)';
+        ctx.lineWidth = drawCells ? 2 : 3;
+        ctx.beginPath();
+        ctx.moveTo(results.astar.path[0].x * cellW + cellW/2, results.astar.path[0].y * cellH + cellH/2);
+        for (let i = 1; i < results.astar.path.length; i++) {
+            ctx.lineTo(results.astar.path[i].x * cellW + cellW/2, results.astar.path[i].y * cellH + cellH/2);
+        }
+        ctx.stroke();
+    }
+
+    // Draw HPA* path
+    if (results.hpa.path.length > 1) {
+        ctx.strokeStyle = 'rgba(78, 205, 196, 0.9)';
+        ctx.lineWidth = drawCells ? 3 : 4;
+        ctx.beginPath();
+        ctx.moveTo(results.hpa.path[0].x * cellW + cellW/2, results.hpa.path[0].y * cellH + cellH/2);
+        for (let i = 1; i < results.hpa.path.length; i++) {
+            ctx.lineTo(results.hpa.path[i].x * cellW + cellW/2, results.hpa.path[i].y * cellH + cellH/2);
+        }
+        ctx.stroke();
+    }
+
+    // Draw start and end
+    const pointSize = Math.max(4, Math.min(cellW, cellH) * 0.5);
+    ctx.fillStyle = '#00d4ff';
+    ctx.beginPath();
+    ctx.arc(startPos.x * cellW + cellW/2, startPos.y * cellH + cellH/2, pointSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(endPos.x * cellW + cellW/2, endPos.y * cellH + cellH/2, pointSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // HUD - Performance comparison
+    const panelX = 5, panelY = 5;
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(panelX, panelY, 240, 155);
+
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('HPA* vs A* Performance', panelX + 5, panelY + 15);
+
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#888';
+    const totalCells = (mapWidth * mapHeight / 1000).toFixed(0);
+    ctx.fillText(\`Map: \${mapWidth}x\${mapHeight} (\${totalCells}K cells)\`, panelX + 5, panelY + 30);
+
+    // A* results
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText('Standard A*:', panelX + 5, panelY + 47);
+    ctx.fillStyle = '#ccc';
+    if (results.astar.time > 0) {
+        ctx.fillText(\`  Time: \${results.astar.time.toFixed(2)}ms\`, panelX + 5, panelY + 60);
+        ctx.fillText(\`  Nodes: \${results.astar.nodes.toLocaleString()}\`, panelX + 5, panelY + 72);
+    } else {
+        ctx.fillText('  (searching...)', panelX + 5, panelY + 60);
+    }
+
+    // HPA* results
+    ctx.fillStyle = '#4ecdc4';
+    ctx.fillText('HPA* (Lazy Intra-Edges):', panelX + 5, panelY + 87);
+    ctx.fillStyle = '#ccc';
+    if (results.hpa.time > 0) {
+        ctx.fillText(\`  Preprocess: \${results.hpa.preprocessTime.toFixed(1)}ms\`, panelX + 5, panelY + 100);
+        ctx.fillText(\`  1st Query: \${results.hpa.time.toFixed(2)}ms\`, panelX + 5, panelY + 112);
+        if (results.hpa.cachedTime > 0) {
+            ctx.fillText(\`  Cached: \${results.hpa.cachedTime.toFixed(2)}ms\`, panelX + 5, panelY + 124);
+        }
+        if (results.hpa.stats) {
+            ctx.fillText(\`  Clusters: \${results.hpa.stats.clusters}, Nodes: \${results.hpa.stats.abstractNodes}\`, panelX + 5, panelY + 136);
+        }
+    } else {
+        ctx.fillText('  (searching...)', panelX + 5, panelY + 100);
+    }
+
+    // Speedup indicator
+    if (results.astar.time > 0 && results.hpa.cachedTime > 0) {
+        const speedup = results.astar.time / results.hpa.cachedTime;
+        ctx.fillStyle = speedup > 1 ? '#4ecdc4' : '#ff6b6b';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(\`Speedup (cached): \${speedup.toFixed(0)}x\`, panelX + 5, panelY + 151);
+    }
+
+    // Legend
+    const legendX = WIDTH - 90, legendY = 5;
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(legendX, legendY, 85, 55);
+    ctx.font = '9px monospace';
+
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(legendX + 5, legendY + 10, 15, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('A*', legendX + 25, legendY + 15);
+
+    ctx.fillStyle = '#4ecdc4';
+    ctx.fillRect(legendX + 5, legendY + 25, 15, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('HPA*', legendX + 25, legendY + 30);
+
+    ctx.fillStyle = 'rgba(100, 200, 255, 0.5)';
+    ctx.fillRect(legendX + 5, legendY + 40, 15, 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Cluster', legendX + 25, legendY + 45);
+
+    // Large map hint
+    if (!drawCells) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(WIDTH/2 - 80, HEIGHT - 25, 160, 20);
+        ctx.fillStyle = '#888';
+        ctx.font = '10px monospace';
+        ctx.fillText('Large map: simplified view', WIDTH/2 - 70, HEIGHT - 10);
+    }
+}
+
+// ============================================
+// Pathfinding
+// ============================================
+
+async function runPathfinding() {
+    if (!gridMap || isSearching) return;
+    isSearching = true;
+
+    // Reset results
+    results.astar = { time: 0, nodes: 0, pathLen: 0, path: [] };
+    results.hpa = { time: 0, nodes: 0, pathLen: 0, path: [], stats: null, preprocessTime: 0, cachedTime: 0 };
+
+    // Adjust maxNodes based on map size to ensure complete search on large maps
+    const maxNodes = mapWidth * mapHeight;
+    const options = { allowDiagonal: true, heuristic: octileDistance, maxNodes };
+
+    // Delay to show UI update
+    await new Promise(r => setTimeout(r, 50));
+
+    // Standard A*
+    const astar = new AStarPathfinder(gridMap);
+    let t0 = performance.now();
+    let result = astar.findPath(startPos.x, startPos.y, endPos.x, endPos.y, options);
+    results.astar = {
+        time: performance.now() - t0,
+        nodes: result.nodesSearched,
+        pathLen: result.path.length,
+        path: result.path
+    };
+
+    await new Promise(r => setTimeout(r, 10));
+
+    // HPA* with lazy intra-edges (default)
+    hpaPathfinder = new HPAPathfinder(gridMap, {
+        clusterSize: params.clusterSize,
+        maxEntranceWidth: 16,
+        cacheInternalPaths: true,
+        lazyIntraEdges: true  // Lazy compute intra-edges
+    });
+
+    // Preprocess (now very fast because no real path computation)
+    t0 = performance.now();
+    hpaPathfinder.preprocess();
+    const preprocessTime = performance.now() - t0;
+
+    // First query (triggers lazy path computation)
+    t0 = performance.now();
+    result = hpaPathfinder.findPath(startPos.x, startPos.y, endPos.x, endPos.y, options);
+    const firstQueryTime = performance.now() - t0;
+
+    // Second query (uses cache, should be very fast)
+    t0 = performance.now();
+    hpaPathfinder.findPath(startPos.x, startPos.y, endPos.x, endPos.y, options);
+    const cachedTime = performance.now() - t0;
+
+    results.hpa = {
+        time: firstQueryTime,
+        nodes: result.nodesSearched,
+        pathLen: result.path.length,
+        path: result.path,
+        stats: hpaPathfinder.getStats(),
+        preprocessTime: preprocessTime,
+        cachedTime: cachedTime
+    };
+
+    isSearching = false;
+}
+
+// ============================================
+// Map Generation
+// ============================================
+
+function generateMap(size) {
+    const sizes = {
+        small: { w: 100, h: 65 },
+        medium: { w: 250, h: 163 },
+        large: { w: 500, h: 325 },
+        huge: { w: 1000, h: 650 }
+    };
+
+    const s = sizes[size] || sizes.small;
+    mapWidth = s.w;
+    mapHeight = s.h;
+
+    gridMap = createGridMap(mapWidth, mapHeight);
+    hpaPathfinder = null;
+
+    // Generate random obstacles
+    const rate = params.obstacleRate / 100;
+    for (let y = 0; y < mapHeight; y++) {
+        for (let x = 0; x < mapWidth; x++) {
+            if (Math.random() < rate) {
+                gridMap.setWalkable(x, y, false);
+            }
+        }
+    }
+
+    // Ensure start and end areas are clear
+    const clearRadius = Math.max(3, Math.floor(Math.min(mapWidth, mapHeight) / 20));
+    const clearArea = (cx, cy, r) => {
+        for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+                const x = cx + dx, y = cy + dy;
+                if (x >= 0 && x < mapWidth && y >= 0 && y < mapHeight) {
+                    gridMap.setWalkable(x, y, true);
+                }
+            }
+        }
+    };
+
+    startPos = { x: clearRadius + 2, y: clearRadius + 2 };
+    endPos = { x: mapWidth - clearRadius - 3, y: mapHeight - clearRadius - 3 };
+    clearArea(startPos.x, startPos.y, clearRadius);
+    clearArea(endPos.x, endPos.y, clearRadius);
+
+    // Reset results
+    results.astar = { time: 0, nodes: 0, pathLen: 0, path: [] };
+    results.hpa = { time: 0, nodes: 0, pathLen: 0, path: [], stats: null, preprocessTime: 0, cachedTime: 0 };
+
+    runPathfinding();
+}
+
+// ============================================
+// Initialize
+// ============================================
+
+generateMap('small');
+
+// Click to set start/end
+let clickMode = 'start';
+canvas.addEventListener('click', (e) => {
+    if (isSearching) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const cellW = WIDTH / mapWidth;
+    const cellH = HEIGHT / mapHeight;
+    const gx = Math.floor(mx / cellW);
+    const gy = Math.floor(my / cellH);
+
+    if (gx >= 0 && gx < mapWidth && gy >= 0 && gy < mapHeight && gridMap.isWalkable(gx, gy)) {
+        if (clickMode === 'start') {
+            startPos = { x: gx, y: gy };
+            clickMode = 'end';
+        } else {
+            endPos = { x: gx, y: gy };
+            clickMode = 'start';
+            runPathfinding();
+        }
+    }
+});
+
+// Scene switching
+window.__demoScene = {
+    loadScenario: (type) => {
+        generateMap(type);
+    }
+};
+
+// Game loop
+function gameLoop() {
+    render(ctx);
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();`;
+
+This is an **HPA* (Hierarchical Pathfinding A*)** demo showing performance advantages on **very large maps**.
+
+Click **Run** to start, use the toolbar to switch between different map sizes and observe the performance comparison between HPA* and standard A*.
+
+**How HPA* Works:**
+1. Divide the map into **Clusters**
+2. Detect **Entrances** at cluster boundaries
+3. Build an **Abstract Graph** connecting entrances
+4. First find path on abstract graph, then refine to detailed path
+
+**Lazy Intra-Edges Optimization:**
+- Preprocessing is now ~1000x faster (52ms vs 68s for 1000x650 map)
+- First query computes actual paths on demand
+- Subsequent queries use cached paths (extremely fast)
+
+<DemoPlayground
+    client:load
+    title="HPA* Hierarchical Pathfinding - Large Map Optimization"
+    code={hpaDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={hpaScenes}
+    params={hpaParams}
+/>
+
+<script is:inline src="/esengine/js/esengine.iife.js"></script>
+
+## Performance Comparison
+
+| Map Size | Cell Count | A* Suitability | HPA* Advantage |
+|----------|------------|----------------|----------------|
+| 100x65 | ~6,500 | ✅ Good | Slight |
+| 250x163 | ~40,000 | ⚠️ Slow | Noticeable |
+| 500x325 | ~162,500 | ❌ Very slow | **Significant** |
+| 1000x650 | ~650,000 | ❌ Extremely slow | **Huge** |
+
+## Use Cases
+
+- **Open World Games** - Large continuous maps (e.g., 1000x1000+)
+- **RTS Games** - Many units requiring frequent pathfinding
+- **City Simulation** - Complex road networks
+- **Server-side Pathfinding** - Backend requiring fast responses
+
+## Parameter Description
+
+| Parameter | Description |
+|-----------|-------------|
+| **Cluster** | Cluster size, larger = faster preprocessing but lower precision |
+| **Obstacles** | Obstacle density |
+| **Clusters** | Whether to show cluster boundary lines |
+
+## Related Documentation
+
+- [Algorithm Comparison Demo](/esengine/en/examples/algorithm-comparison-demo) - Compare A*, Bidirectional A*, JPS
+- [Search Visualization](/esengine/en/examples/search-visualization-demo) - A* search process visualization
+- [Pathfinding System API](/esengine/en/modules/pathfinding) - Complete documentation
