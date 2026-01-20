@@ -1,0 +1,1108 @@
+---
+title: "Network Sync Demo"
+description: "Demonstrates @esengine/network state synchronization and client prediction"
+---
+
+import DemoPlayground from '../../../../components/DemoPlayground.vue';
+
+export const networkScenes = [
+    { id: 'no-sync', label: '1', name: 'No Sync' },
+    { id: 'interpolation', label: '2', name: 'Interpolation' },
+    { id: 'prediction', label: '3', name: 'Client Prediction' },
+    { id: 'full', label: '4', name: 'Full Solution' }
+];
+
+export const networkParams = [
+    { id: 'latency', label: 'Latency', desc: 'Network latency (ms)', value: 150, min: 0, max: 500, step: 10 },
+    { id: 'jitter', label: 'Jitter', desc: 'Latency variation (ms)', value: 30, min: 0, max: 200, step: 5 },
+    { id: 'sendRate', label: 'Send Rate', desc: 'Server tick rate (Hz)', value: 20, min: 5, max: 60, step: 5 },
+    { id: 'interpDelay', label: 'Interp Delay', desc: 'Interpolation delay (ms)', value: 100, min: 50, max: 300, step: 10 }
+];
+
+export const networkDemoCode = `/**
+ * Network Sync Demo - Using @esengine/network Framework API
+ *
+ * Demonstrates four synchronization strategies:
+ * 1. No Sync - Client and server completely disconnected
+ * 2. Interpolation - Wait for server state, has input delay
+ * 3. Client Prediction - Immediate response, server correction
+ * 4. Full Solution - Prediction + Hermite interpolation + Smooth correction
+ *
+ * Left: Client view (player you control)
+ * Right: Server authoritative state (ground truth)
+ */
+
+const {
+    // Network sync tools - Framework core API
+    createSnapshotBuffer,
+    createTransformInterpolator,
+    createHermiteTransformInterpolator,
+    createClientPrediction,
+    lerp,
+    smoothDamp
+} = ESEngine;
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+/**
+ * @typedef {Object} PlayerState - Player state
+ * @property {number} id - Player ID
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ * @property {number} vx - X velocity
+ * @property {number} vy - Y velocity
+ */
+
+/**
+ * @typedef {Object} MovementInput - Movement input
+ * @property {number} dx - X direction (-1, 0, 1)
+ * @property {number} dy - Y direction (-1, 0, 1)
+ */
+
+/**
+ * @typedef {Object} Metrics - Performance metrics
+ * @property {number} rtt - Round-trip time
+ * @property {number} pendingInputs - Pending input count
+ * @property {number} correctionMag - Correction magnitude
+ * @property {number} bufferSize - Snapshot buffer size
+ */
+
+// ============================================================================
+// Configuration Constants (No hardcoding)
+// ============================================================================
+
+const CONFIG = {
+    // Canvas dimensions
+    WIDTH: 580,
+    HEIGHT: 380,
+    get HALF_WIDTH() { return this.WIDTH / 2 - 5; },
+
+    // Player properties
+    PLAYER_SIZE: 15,
+    PLAYER_SPEED: 150,
+
+    // Sync parameters
+    SNAPSHOT_BUFFER_SIZE: 30,
+    MAX_PENDING_INPUTS: 60,
+    CORRECTION_THRESHOLD: 0.5,
+    SNAP_THRESHOLD: 100,
+
+    // AI waypoints (figure-8 pattern)
+    AI_WAYPOINTS: null,
+    AI_MOVE_SPEED: 0.7,
+    AI_WAIT_TIME: 500
+};
+
+CONFIG.AI_WAYPOINTS = [
+    { x: CONFIG.HALF_WIDTH * 0.25, y: CONFIG.HEIGHT * 0.3 },
+    { x: CONFIG.HALF_WIDTH * 0.75, y: CONFIG.HEIGHT * 0.7 },
+    { x: CONFIG.HALF_WIDTH * 0.25, y: CONFIG.HEIGHT * 0.7 },
+    { x: CONFIG.HALF_WIDTH * 0.75, y: CONFIG.HEIGHT * 0.3 }
+];
+
+const COLORS = {
+    background: '#0d1117',
+    grid: 'rgba(255, 255, 255, 0.03)',
+    localPlayer: '#3b82f6',
+    remotePlayer: '#f97316',
+    serverGhost: 'rgba(100, 255, 100, 0.5)',
+    correctionArrow: '#ff4444',
+    divider: '#30363d',
+    panelBg: 'rgba(0, 0, 0, 0.85)',
+    textPrimary: '#e6edf3',
+    textSecondary: '#8b949e',
+    good: '#10b981',
+    warning: '#f59e0b',
+    bad: '#ef4444'
+};
+
+function getParams() {
+    return window.__demoParams || { latency: 150, jitter: 30, sendRate: 20, interpDelay: 100 };
+}
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+// ============================================================================
+// Mock Network Layer
+// ============================================================================
+
+class MockNetwork {
+    constructor() {
+        this.clientToServer = [];
+        this.serverToClient = [];
+        this.rttHistory = [];
+        this.lastRtt = 0;
+    }
+
+    sendToServer(data) {
+        const p = getParams();
+        const delay = Math.max(0, p.latency + (Math.random() - 0.5) * p.jitter * 2);
+        const sendTime = performance.now();
+        this.clientToServer.push({
+            data: { ...data, _sendTime: sendTime },
+            deliverAt: sendTime + delay
+        });
+    }
+
+    sendToClient(data) {
+        const p = getParams();
+        const delay = Math.max(0, p.latency + (Math.random() - 0.5) * p.jitter * 2);
+        this.serverToClient.push({
+            data,
+            deliverAt: performance.now() + delay
+        });
+    }
+
+    receiveOnServer() {
+        const now = performance.now();
+        const ready = [];
+        while (this.clientToServer.length > 0 && this.clientToServer[0].deliverAt <= now) {
+            ready.push(this.clientToServer.shift().data);
+        }
+        return ready;
+    }
+
+    receiveOnClient() {
+        const now = performance.now();
+        const ready = [];
+        while (this.serverToClient.length > 0 && this.serverToClient[0].deliverAt <= now) {
+            const msg = this.serverToClient.shift();
+            if (msg.data._clientSendTime) {
+                this.lastRtt = now - msg.data._clientSendTime;
+                this.rttHistory.push(this.lastRtt);
+                if (this.rttHistory.length > 60) this.rttHistory.shift();
+            }
+            ready.push(msg.data);
+        }
+        return ready;
+    }
+
+    getAvgRtt() {
+        if (this.rttHistory.length === 0) return 0;
+        return this.rttHistory.reduce((a, b) => a + b, 0) / this.rttHistory.length;
+    }
+
+    clear() {
+        this.clientToServer = [];
+        this.serverToClient = [];
+        this.rttHistory = [];
+        this.lastRtt = 0;
+    }
+}
+
+// ============================================================================
+// Deterministic AI Controller
+// ============================================================================
+
+class DeterministicAI {
+    constructor() {
+        this.waypointIndex = 0;
+        this.waitTimer = 0;
+        this.isWaiting = false;
+    }
+
+    update(currentPos, dt) {
+        if (this.isWaiting) {
+            this.waitTimer -= dt * 1000;
+            if (this.waitTimer <= 0) {
+                this.isWaiting = false;
+                this.waypointIndex = (this.waypointIndex + 1) % CONFIG.AI_WAYPOINTS.length;
+            }
+            return { dx: 0, dy: 0 };
+        }
+
+        const target = CONFIG.AI_WAYPOINTS[this.waypointIndex];
+        const dx = target.x - currentPos.x;
+        const dy = target.y - currentPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 10) {
+            this.isWaiting = true;
+            this.waitTimer = CONFIG.AI_WAIT_TIME;
+            return { dx: 0, dy: 0 };
+        }
+
+        return { dx: dx / dist, dy: dy / dist };
+    }
+
+    reset() {
+        this.waypointIndex = 0;
+        this.waitTimer = 0;
+        this.isWaiting = false;
+    }
+}
+
+// ============================================================================
+// Server (Authoritative State)
+// ============================================================================
+
+class GameServer {
+    constructor(network) {
+        this.network = network;
+        this.players = new Map();
+        this.ai = new DeterministicAI();
+        this.lastSendTime = 0;
+        this.lastAckSequence = 0;
+        this.lastClientSendTime = 0;
+
+        this.players.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2, vx: 0, vy: 0 });
+        this.players.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2, vx: 0, vy: 0 });
+    }
+
+    update(dt) {
+        for (const msg of this.network.receiveOnServer()) {
+            if (msg.type === 'input') {
+                this.applyInput(msg.playerId, msg.input, dt);
+                this.lastAckSequence = msg.sequence;
+                this.lastClientSendTime = msg._sendTime;
+            }
+        }
+
+        for (const [id, player] of this.players) {
+            player.x += player.vx * dt;
+            player.y += player.vy * dt;
+            player.x = clamp(player.x, CONFIG.PLAYER_SIZE, CONFIG.HALF_WIDTH - CONFIG.PLAYER_SIZE);
+            player.y = clamp(player.y, CONFIG.PLAYER_SIZE, CONFIG.HEIGHT - CONFIG.PLAYER_SIZE);
+            player.vx *= 0.9;
+            player.vy *= 0.9;
+            if (Math.abs(player.vx) < 1) player.vx = 0;
+            if (Math.abs(player.vy) < 1) player.vy = 0;
+        }
+
+        this.updateAI(dt);
+
+        const p = getParams();
+        const sendInterval = 1000 / p.sendRate;
+        const now = performance.now();
+        if (now - this.lastSendTime >= sendInterval) {
+            this.lastSendTime = now;
+            this.broadcastState();
+        }
+    }
+
+    applyInput(playerId, input, dt) {
+        const player = this.players.get(playerId);
+        if (!player) return;
+        if (input.dx !== 0 || input.dy !== 0) {
+            const len = Math.sqrt(input.dx * input.dx + input.dy * input.dy);
+            player.vx = (input.dx / len) * CONFIG.PLAYER_SPEED;
+            player.vy = (input.dy / len) * CONFIG.PLAYER_SPEED;
+        }
+    }
+
+    updateAI(dt) {
+        const ai = this.players.get(1);
+        if (!ai) return;
+        const input = this.ai.update(ai, dt);
+        if (input.dx !== 0 || input.dy !== 0) {
+            ai.vx = input.dx * CONFIG.PLAYER_SPEED * CONFIG.AI_MOVE_SPEED;
+            ai.vy = input.dy * CONFIG.PLAYER_SPEED * CONFIG.AI_MOVE_SPEED;
+        }
+    }
+
+    broadcastState() {
+        const states = [];
+        for (const [id, player] of this.players) {
+            states.push({ id, x: player.x, y: player.y, vx: player.vx, vy: player.vy });
+        }
+        this.network.sendToClient({
+            type: 'state',
+            timestamp: performance.now(),
+            ackSequence: this.lastAckSequence,
+            _clientSendTime: this.lastClientSendTime,
+            states
+        });
+    }
+
+    reset() {
+        this.players.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2, vx: 0, vy: 0 });
+        this.players.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2, vx: 0, vy: 0 });
+        this.lastAckSequence = 0;
+        this.ai.reset();
+    }
+
+    getState(id) { return this.players.get(id); }
+}
+
+// ============================================================================
+// Client (Using Framework API)
+// ============================================================================
+
+class GameClient {
+    constructor(network) {
+        this.network = network;
+        this.mode = 'no-sync';
+        this.localInput = { dx: 0, dy: 0 };
+        this.inputSequence = 0;
+
+        const p = getParams();
+        this.snapshotBuffer = createSnapshotBuffer(CONFIG.SNAPSHOT_BUFFER_SIZE, p.interpDelay);
+        this.linearInterpolator = createTransformInterpolator();
+        this.hermiteInterpolator = createHermiteTransformInterpolator();
+
+        this.predictor = {
+            predict: (state, input, dt) => {
+                let vx = state.vx || 0, vy = state.vy || 0;
+                if (input.dx !== 0 || input.dy !== 0) {
+                    const len = Math.sqrt(input.dx * input.dx + input.dy * input.dy);
+                    vx = (input.dx / len) * CONFIG.PLAYER_SPEED;
+                    vy = (input.dy / len) * CONFIG.PLAYER_SPEED;
+                }
+                return {
+                    x: clamp(state.x + vx * dt, CONFIG.PLAYER_SIZE, CONFIG.HALF_WIDTH - CONFIG.PLAYER_SIZE),
+                    y: clamp(state.y + vy * dt, CONFIG.PLAYER_SIZE, CONFIG.HEIGHT - CONFIG.PLAYER_SIZE),
+                    vx: vx * 0.9, vy: vy * 0.9
+                };
+            }
+        };
+
+        this.prediction = createClientPrediction(this.predictor, {
+            maxUnacknowledgedInputs: CONFIG.MAX_PENDING_INPUTS,
+            reconciliationThreshold: CONFIG.CORRECTION_THRESHOLD,
+            reconciliationSpeed: 10
+        });
+
+        this.localState = { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2, vx: 0, vy: 0 };
+        this.visualOffset = { x: 0, y: 0 };
+        this.smoothVelocity = { x: 0, y: 0 };
+        this.renderStates = new Map();
+        this.renderStates.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.renderStates.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState = new Map();
+        this.lastServerState.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+        this.metrics = { rtt: 0, pendingInputs: 0, correctionMag: 0, bufferSize: 0, divergence: 0 };
+        this.trail = [];
+    }
+
+    setInput(dx, dy) { this.localInput = { dx, dy }; }
+
+    update(dt) {
+        const now = performance.now();
+
+        if (this.localInput.dx !== 0 || this.localInput.dy !== 0) {
+            this.inputSequence++;
+            this.network.sendToServer({ type: 'input', playerId: 0, input: { ...this.localInput }, sequence: this.inputSequence });
+
+            if (this.mode === 'prediction' || this.mode === 'full') {
+                const predicted = this.prediction.recordInput(this.localInput, this.localState, dt);
+                if (predicted) this.localState = { ...predicted };
+            }
+        } else if (this.mode === 'prediction' || this.mode === 'full') {
+            this.localState = this.predictor.predict(this.localState, { dx: 0, dy: 0 }, dt);
+        }
+
+        for (const msg of this.network.receiveOnClient()) {
+            if (msg.type === 'state') {
+                const p = getParams();
+                this.snapshotBuffer._interpolationDelay = p.interpDelay;
+
+                const playerStates = {};
+                for (const s of msg.states) {
+                    playerStates[s.id] = { x: s.x, y: s.y, rotation: 0, velocityX: s.vx, velocityY: s.vy, angularVelocity: 0 };
+                }
+                this.snapshotBuffer.push({ timestamp: msg.timestamp, state: playerStates });
+
+                // Store latest server state for no-sync mode
+                for (const s of msg.states) {
+                    this.lastServerState.set(s.id, { x: s.x, y: s.y });
+                }
+
+                if (this.mode === 'prediction' || this.mode === 'full') {
+                    const serverState = playerStates[0];
+                    if (serverState) {
+                        const reconciled = this.prediction.reconcile(
+                            { x: serverState.x, y: serverState.y, vx: serverState.velocityX, vy: serverState.velocityY },
+                            msg.ackSequence, s => ({ x: s.x, y: s.y }), dt
+                        );
+                        if (reconciled) {
+                            const errorX = reconciled.x - this.localState.x;
+                            const errorY = reconciled.y - this.localState.y;
+                            const errorMag = Math.sqrt(errorX * errorX + errorY * errorY);
+                            this.metrics.correctionMag = errorMag;
+                            if (errorMag > CONFIG.SNAP_THRESHOLD) {
+                                this.localState.x = reconciled.x;
+                                this.localState.y = reconciled.y;
+                                this.visualOffset = { x: 0, y: 0 };
+                            } else if (errorMag > CONFIG.CORRECTION_THRESHOLD) {
+                                // Update state, use offset to compensate visual jump
+                                this.visualOffset.x += this.localState.x - reconciled.x;
+                                this.visualOffset.y += this.localState.y - reconciled.y;
+                                this.localState.x = reconciled.x;
+                                this.localState.y = reconciled.y;
+                            }
+                            this.localState.vx = reconciled.vx;
+                            this.localState.vy = reconciled.vy;
+                        }
+                    }
+                }
+
+                const serverLocal = playerStates[0];
+                if (serverLocal && this.mode === 'no-sync') {
+                    const renderPos = this.renderStates.get(0);
+                    this.metrics.divergence = Math.sqrt((renderPos.x - serverLocal.x) ** 2 + (renderPos.y - serverLocal.y) ** 2);
+                }
+            }
+        }
+
+        if (this.mode === 'full') {
+            const result = smoothDamp(this.visualOffset.x, 0, this.smoothVelocity.x, 0.1, dt, Infinity);
+            this.visualOffset.x = result[0]; this.smoothVelocity.x = result[1];
+            const resultY = smoothDamp(this.visualOffset.y, 0, this.smoothVelocity.y, 0.1, dt, Infinity);
+            this.visualOffset.y = resultY[0]; this.smoothVelocity.y = resultY[1];
+        }
+
+        this.updateRenderStates(now, dt);
+        this.metrics.rtt = this.network.getAvgRtt();
+        this.metrics.pendingInputs = this.prediction.pendingInputCount || 0;
+        this.metrics.bufferSize = this.snapshotBuffer.size;
+
+        const pos = this.renderStates.get(0);
+        this.trail.push({ x: pos.x, y: pos.y });
+        if (this.trail.length > 20) this.trail.shift();
+    }
+
+    updateRenderStates(now, dt) {
+        const p = getParams();
+        const renderTime = now - p.interpDelay;
+        const interpResult = this.snapshotBuffer.getInterpolationSnapshots(renderTime);
+
+        for (const playerId of [0, 1]) {
+            let targetPos;
+            if (playerId === 0) {
+                switch (this.mode) {
+                    case 'no-sync':
+                        // Directly use latest server state, no interpolation or prediction
+                        // Synced when latency is 0, noticeable input delay when latency exists
+                        const serverPos = this.lastServerState.get(0);
+                        if (serverPos) {
+                            targetPos = { x: serverPos.x, y: serverPos.y };
+                        }
+                        break;
+                    case 'interpolation':
+                        if (interpResult) {
+                            const [prev, next, t] = interpResult;
+                            const p0 = prev.state[0], n0 = next.state[0];
+                            if (p0 && n0) {
+                                targetPos = this.linearInterpolator.interpolate({ x: p0.x, y: p0.y, rotation: 0 }, { x: n0.x, y: n0.y, rotation: 0 }, t);
+                            }
+                        }
+                        break;
+                    case 'prediction':
+                        targetPos = { x: this.localState.x, y: this.localState.y };
+                        break;
+                    case 'full':
+                        targetPos = { x: this.localState.x + this.visualOffset.x, y: this.localState.y + this.visualOffset.y };
+                        break;
+                }
+            } else {
+                if (interpResult) {
+                    const [prev, next, t] = interpResult;
+                    const p1 = prev.state[1], n1 = next.state[1];
+                    if (p1 && n1) {
+                        if (this.mode === 'full') {
+                            const result = this.hermiteInterpolator.interpolate(p1, n1, t);
+                            targetPos = { x: result.x, y: result.y };
+                        } else {
+                            targetPos = { x: lerp(p1.x, n1.x, t), y: lerp(p1.y, n1.y, t) };
+                        }
+                    }
+                }
+            }
+
+            if (targetPos) {
+                const currentRender = this.renderStates.get(playerId);
+                if (playerId === 0 && (this.mode === 'prediction' || this.mode === 'full')) {
+                    this.renderStates.set(playerId, targetPos);
+                } else {
+                    const smoothing = 0.25;
+                    this.renderStates.set(playerId, {
+                        x: currentRender.x + (targetPos.x - currentRender.x) * smoothing,
+                        y: currentRender.y + (targetPos.y - currentRender.y) * smoothing
+                    });
+                }
+            }
+        }
+    }
+
+    setMode(mode) { this.mode = mode; this.metrics.divergence = 0; }
+
+    reset() {
+        const p = getParams();
+        this.snapshotBuffer = createSnapshotBuffer(CONFIG.SNAPSHOT_BUFFER_SIZE, p.interpDelay);
+        this.prediction = createClientPrediction(this.predictor, {
+            maxUnacknowledgedInputs: CONFIG.MAX_PENDING_INPUTS,
+            reconciliationThreshold: CONFIG.CORRECTION_THRESHOLD,
+            reconciliationSpeed: 10
+        });
+        this.localState = { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2, vx: 0, vy: 0 };
+        this.visualOffset = { x: 0, y: 0 };
+        this.smoothVelocity = { x: 0, y: 0 };
+        this.renderStates.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.renderStates.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+        this.inputSequence = 0;
+        this.trail = [];
+        this.metrics = { rtt: 0, pendingInputs: 0, correctionMag: 0, bufferSize: 0, divergence: 0 };
+    }
+
+    getRenderPos(playerId) { return this.renderStates.get(playerId) || { x: 0, y: 0 }; }
+    getMetrics() { return this.metrics; }
+}
+
+// ============================================================================
+// Global Instances
+// ============================================================================
+
+const network = new MockNetwork();
+const server = new GameServer(network);
+const client = new GameClient(network);
+
+// ============================================================================
+// Rendering
+// ============================================================================
+
+function render() {
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, CONFIG.HALF_WIDTH, CONFIG.HEIGHT);
+    ctx.clip();
+    drawClientView();
+    ctx.restore();
+
+    ctx.strokeStyle = COLORS.divider;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(CONFIG.HALF_WIDTH + 2.5, 0);
+    ctx.lineTo(CONFIG.HALF_WIDTH + 2.5, CONFIG.HEIGHT);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(CONFIG.HALF_WIDTH + 5, 0);
+    ctx.beginPath();
+    ctx.rect(0, 0, CONFIG.HALF_WIDTH, CONFIG.HEIGHT);
+    ctx.clip();
+    drawServerView();
+    ctx.restore();
+
+    drawMetricsPanel();
+    drawModeInfo();
+    drawJoystick();
+}
+
+function drawGrid() {
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    for (let x = 0; x < CONFIG.HALF_WIDTH; x += 30) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CONFIG.HEIGHT); ctx.stroke();
+    }
+    for (let y = 0; y < CONFIG.HEIGHT; y += 30) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CONFIG.HALF_WIDTH, y); ctx.stroke();
+    }
+}
+
+function drawPlayer(x, y, color, highlight, showGlow = true) {
+    if (showGlow) {
+        let glowColor;
+        if (color.startsWith('#')) {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            glowColor = 'rgba(' + r + ',' + g + ',' + b + ',0.4)';
+        } else {
+            glowColor = color.replace('rgb', 'rgba').replace(')', ', 0.4)');
+        }
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, CONFIG.PLAYER_SIZE + 10);
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.arc(x, y, CONFIG.PLAYER_SIZE + 10, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, CONFIG.PLAYER_SIZE, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = highlight ? '#fff' : 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = highlight ? 3 : 1;
+    ctx.stroke();
+}
+
+function drawGhostCircle(x, y, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(x, y, CONFIG.PLAYER_SIZE + 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawCorrectionArrow(fromX, fromY, toX, toY) {
+    const dx = toX - fromX, dy = toY - fromY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 2) return;
+    ctx.strokeStyle = COLORS.correctionArrow;
+    ctx.fillStyle = COLORS.correctionArrow;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+    const angle = Math.atan2(dy, dx);
+    const arrowSize = 8;
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - arrowSize * Math.cos(angle - Math.PI / 6), toY - arrowSize * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(toX - arrowSize * Math.cos(angle + Math.PI / 6), toY - arrowSize * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawTrail(trail, color) {
+    if (trail.length < 2) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x, trail[0].y);
+    for (let i = 1; i < trail.length; i++) {
+        ctx.globalAlpha = (i / trail.length) * 0.3;
+        ctx.lineTo(trail[i].x, trail[i].y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+}
+
+function drawClientView() {
+    drawGrid();
+    drawTrail(client.trail, COLORS.localPlayer);
+
+    if (client.mode === 'full') {
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(CONFIG.AI_WAYPOINTS[0].x, CONFIG.AI_WAYPOINTS[0].y);
+        for (let i = 1; i < CONFIG.AI_WAYPOINTS.length; i++) {
+            ctx.lineTo(CONFIG.AI_WAYPOINTS[i].x, CONFIG.AI_WAYPOINTS[i].y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    for (const playerId of [0, 1]) {
+        const pos = client.getRenderPos(playerId);
+        const isLocal = playerId === 0;
+        drawPlayer(pos.x, pos.y, isLocal ? COLORS.localPlayer : COLORS.remotePlayer, isLocal);
+
+        if (isLocal && (client.mode === 'prediction' || client.mode === 'full')) {
+            const serverPos = server.getState(0);
+            if (serverPos) {
+                drawGhostCircle(serverPos.x, serverPos.y, COLORS.serverGhost);
+                if (client.mode === 'full') {
+                    const dist = Math.sqrt((pos.x - serverPos.x) ** 2 + (pos.y - serverPos.y) ** 2);
+                    if (dist > 5) drawCorrectionArrow(pos.x, pos.y, serverPos.x, serverPos.y);
+                }
+            }
+        }
+
+        if (isLocal && client.mode === 'no-sync' && client.metrics.divergence > 20) {
+            ctx.strokeStyle = COLORS.bad;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, CONFIG.PLAYER_SIZE + 8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = COLORS.bad;
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(client.metrics.divergence.toFixed(0) + 'px', pos.x, pos.y - CONFIG.PLAYER_SIZE - 12);
+        }
+    }
+
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(5, 5, 90, 20);
+    ctx.fillStyle = COLORS.localPlayer;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Client View', 10, 18);
+}
+
+function drawServerView() {
+    drawGrid();
+
+    ctx.strokeStyle = 'rgba(249, 115, 22, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(CONFIG.AI_WAYPOINTS[0].x, CONFIG.AI_WAYPOINTS[0].y);
+    for (let i = 1; i < CONFIG.AI_WAYPOINTS.length; i++) {
+        ctx.lineTo(CONFIG.AI_WAYPOINTS[i].x, CONFIG.AI_WAYPOINTS[i].y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const playerId of [0, 1]) {
+        const state = server.getState(playerId);
+        if (state) {
+            drawPlayer(state.x, state.y, playerId === 0 ? COLORS.localPlayer : COLORS.remotePlayer, false);
+        }
+    }
+
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(5, 5, 130, 20);
+    ctx.fillStyle = COLORS.good;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Server (Authority)', 10, 18);
+}
+
+function drawMetricsPanel() {
+    const metrics = client.getMetrics();
+    const x = 10, y = CONFIG.HEIGHT - 55;
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(x, y, 200, 50);
+    ctx.strokeStyle = COLORS.divider;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, 200, 50);
+
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+
+    const rttColor = metrics.rtt < 100 ? COLORS.good : metrics.rtt < 200 ? COLORS.warning : COLORS.bad;
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('RTT:', x + 8, y + 15);
+    ctx.fillStyle = rttColor;
+    ctx.fillText(metrics.rtt.toFixed(0) + 'ms', x + 35, y + 15);
+
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Pending:', x + 75, y + 15);
+    ctx.fillStyle = metrics.pendingInputs > 30 ? COLORS.warning : COLORS.textPrimary;
+    ctx.fillText(metrics.pendingInputs.toString(), x + 125, y + 15);
+
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Buffer:', x + 8, y + 30);
+    ctx.fillStyle = COLORS.textPrimary;
+    ctx.fillText(metrics.bufferSize + '/' + CONFIG.SNAPSHOT_BUFFER_SIZE, x + 50, y + 30);
+
+    const corrColor = metrics.correctionMag < 5 ? COLORS.good : metrics.correctionMag < 20 ? COLORS.warning : COLORS.bad;
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Correction:', x + 100, y + 30);
+    ctx.fillStyle = corrColor;
+    ctx.fillText(metrics.correctionMag.toFixed(1) + 'px', x + 160, y + 30);
+
+    const p = getParams();
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Interp Delay: ' + p.interpDelay + 'ms', x + 8, y + 45);
+}
+
+function drawModeInfo() {
+    const modeNames = { 'no-sync': 'No Compensation', 'interpolation': 'Interpolation Only', 'prediction': 'Client Prediction', 'full': 'Full Solution' };
+    const modeDescs = { 'no-sync': 'Uses server state directly, noticeable input delay', 'interpolation': 'Waits for server state with interpDelay', 'prediction': 'Immediate response + server correction', 'full': 'Prediction + Hermite + Smooth correction' };
+
+    const x = CONFIG.WIDTH / 2 - 90, y = 5;
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(x, y, 180, 35);
+    ctx.fillStyle = '#58a6ff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(modeNames[client.mode] || 'Unknown', CONFIG.WIDTH / 2, y + 14);
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.font = '9px monospace';
+    ctx.fillText(modeDescs[client.mode] || '', CONFIG.WIDTH / 2, y + 28);
+}
+
+// ============================================================================
+// Joystick
+// ============================================================================
+
+const joystick = { x: 70, y: CONFIG.HEIGHT - 80, r: 40, dx: 0, dy: 0, active: false, touchId: null };
+
+function drawJoystick() {
+    ctx.beginPath();
+    ctx.arc(joystick.x, joystick.y, joystick.r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const hx = joystick.x + joystick.dx * joystick.r * 0.6;
+    const hy = joystick.y + joystick.dy * joystick.r * 0.6;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+    ctx.fillStyle = joystick.active ? 'rgba(59,130,246,0.8)' : 'rgba(255,255,255,0.4)';
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('WASD / Drag', joystick.x, joystick.y + joystick.r + 15);
+}
+
+function getCanvasPos(cx, cy) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (cx - rect.left) * (CONFIG.WIDTH / rect.width), y: (cy - rect.top) * (CONFIG.HEIGHT / rect.height) };
+}
+
+function inJoystick(x, y) { return Math.hypot(x - joystick.x, y - joystick.y) <= joystick.r * 1.5; }
+
+function updateJoystick(x, y) {
+    const dx = x - joystick.x, dy = y - joystick.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+        const clamped = Math.min(dist, joystick.r);
+        joystick.dx = (dx / dist) * (clamped / joystick.r);
+        joystick.dy = (dy / dist) * (clamped / joystick.r);
+    }
+    const threshold = 0.3;
+    client.setInput(Math.abs(joystick.dx) > threshold ? Math.sign(joystick.dx) : 0, Math.abs(joystick.dy) > threshold ? Math.sign(joystick.dy) : 0);
+}
+
+function resetJoystick() { joystick.dx = 0; joystick.dy = 0; joystick.active = false; joystick.touchId = null; client.setInput(0, 0); }
+
+canvas.addEventListener('mousedown', e => { const pos = getCanvasPos(e.clientX, e.clientY); if (inJoystick(pos.x, pos.y)) { joystick.active = true; updateJoystick(pos.x, pos.y); } });
+canvas.addEventListener('mousemove', e => { if (joystick.active) { const pos = getCanvasPos(e.clientX, e.clientY); updateJoystick(pos.x, pos.y); } });
+canvas.addEventListener('mouseup', () => joystick.active && resetJoystick());
+canvas.addEventListener('mouseleave', () => joystick.active && resetJoystick());
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); const touch = e.changedTouches[0]; const pos = getCanvasPos(touch.clientX, touch.clientY); if (inJoystick(pos.x, pos.y)) { joystick.active = true; joystick.touchId = touch.identifier; updateJoystick(pos.x, pos.y); } }, { passive: false });
+canvas.addEventListener('touchmove', e => { e.preventDefault(); for (const touch of e.changedTouches) { if (touch.identifier === joystick.touchId) { const pos = getCanvasPos(touch.clientX, touch.clientY); updateJoystick(pos.x, pos.y); } } }, { passive: false });
+canvas.addEventListener('touchend', e => { for (const touch of e.changedTouches) { if (touch.identifier === joystick.touchId) resetJoystick(); } });
+
+// ============================================================================
+// Keyboard Input
+// ============================================================================
+
+const keys = new Set();
+window.addEventListener('keydown', e => { const key = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) { keys.add(key); e.preventDefault(); updateKeyboardInput(); } });
+window.addEventListener('keyup', e => { keys.delete(e.key.toLowerCase()); updateKeyboardInput(); });
+
+function updateKeyboardInput() {
+    if (joystick.active) return;
+    let dx = 0, dy = 0;
+    if (keys.has('w') || keys.has('arrowup')) dy = -1;
+    if (keys.has('s') || keys.has('arrowdown')) dy = 1;
+    if (keys.has('a') || keys.has('arrowleft')) dx = -1;
+    if (keys.has('d') || keys.has('arrowright')) dx = 1;
+    if (dx !== 0 && dy !== 0) { const len = Math.sqrt(dx * dx + dy * dy); dx /= len; dy /= len; }
+    client.setInput(dx, dy);
+}
+
+// ============================================================================
+// Scene Switching
+// ============================================================================
+
+function loadScenario(type) { client.setMode(type); network.clear(); server.reset(); client.reset(); resetJoystick(); keys.clear(); }
+window.__demoScene = { loadScenario };
+
+// ============================================================================
+// Main Loop
+// ============================================================================
+
+let lastTime = performance.now();
+function gameLoop() {
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+    server.update(dt);
+    client.update(dt);
+    render();
+    requestAnimationFrame(gameLoop);
+}
+gameLoop();`;
+
+This is an interactive demo showcasing **@esengine/network** network synchronization tools.
+
+**Left side** is the client view (the player you control), **right side** is the server authoritative state. Switch between different modes to observe the effects of various synchronization strategies.
+
+**Controls:**
+- **Keyboard**: WASD or arrow keys to move
+- **Touch/Mouse**: Virtual joystick in the bottom-left corner
+
+<DemoPlayground
+    client:load
+    title="Network Sync - State Synchronization & Client Prediction"
+    code={networkDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={networkScenes}
+    params={networkParams}
+/>
+
+<script is:inline src="/esengine/js/esengine.iife.js"></script>
+
+## Four Sync Mode Comparison
+
+### 1. No Sync
+Client directly responds to input without considering server state.
+
+**Problem**: Client and server states gradually diverge, red warning ring shows divergence distance.
+
+### 2. Interpolation
+Client waits for server state, uses `SnapshotBuffer` for interpolation display.
+
+**Problem**: Noticeable input delay (feels "sluggish") because it waits for server confirmation.
+
+### 3. Client Prediction
+Uses framework `ClientPrediction` API for immediate response, corrects when receiving server state.
+
+**Feature**: Green dashed circle shows server's actual position, may have slight position snapping.
+
+### 4. Full Solution
+Combines prediction + `HermiteTransformInterpolator` + `smoothDamp` smooth correction.
+
+**Features**:
+- Green dashed line: Server's actual position
+- Red arrow: Correction vector (from predicted to server position)
+- Remote players use Hermite curve interpolation for smoother movement
+- AI player follows a fixed figure-8 path for easier observation of sync effects
+
+---
+
+## Framework APIs Used
+
+### 1. SnapshotBuffer - Snapshot Buffer
+
+```typescript
+import { createSnapshotBuffer } from '@esengine/network';
+
+// Create snapshot buffer
+const buffer = createSnapshotBuffer<PlayerState>(
+    30,   // maxSize: Maximum snapshot count
+    100   // interpolationDelay: Interpolation delay (ms)
+);
+
+// Store server state when received
+buffer.push({
+    timestamp: serverTimestamp,
+    state: playerState
+});
+
+// Get snapshots for interpolation
+const renderTime = Date.now() - 100;
+const result = buffer.getInterpolationSnapshots(renderTime);
+
+if (result) {
+    const [prevSnapshot, nextSnapshot, t] = result;
+    // t is the interpolation factor between 0~1
+}
+```
+
+### 2. ClientPrediction - Client Prediction
+
+```typescript
+import { createClientPrediction } from '@esengine/network';
+
+// Define predictor
+const predictor = {
+    predict(state, input, deltaTime) {
+        return {
+            x: state.x + input.dx * SPEED * deltaTime,
+            y: state.y + input.dy * SPEED * deltaTime,
+            vx: input.dx * SPEED,
+            vy: input.dy * SPEED
+        };
+    }
+};
+
+// Create prediction manager
+const prediction = createClientPrediction(predictor, {
+    maxUnacknowledgedInputs: 60,
+    reconciliationThreshold: 0.5,
+    reconciliationSpeed: 10
+});
+
+// Each frame: record input and predict
+const predictedState = prediction.recordInput(input, currentState, deltaTime);
+
+// When receiving server state: reconcile
+const reconciledState = prediction.reconcile(
+    serverState,
+    acknowledgedSequence,
+    state => ({ x: state.x, y: state.y }),
+    deltaTime
+);
+```
+
+### 3. HermiteTransformInterpolator - Hermite Curve Interpolation
+
+```typescript
+import { createHermiteTransformInterpolator } from '@esengine/network';
+
+// Create Hermite interpolator (smoother than linear interpolation)
+const hermiteInterpolator = createHermiteTransformInterpolator();
+
+// Use velocity information for smooth interpolation
+const result = hermiteInterpolator.interpolate(
+    { x: 0, y: 0, rotation: 0, velocityX: 10, velocityY: 0, angularVelocity: 0 },
+    { x: 100, y: 50, rotation: 0, velocityX: 5, velocityY: 5, angularVelocity: 0 },
+    0.5  // t = 0.5
+);
+```
+
+### 4. smoothDamp - Smooth Damping
+
+```typescript
+import { smoothDamp } from '@esengine/network';
+
+// Smoothly transition to target value (used for correction offset)
+const [newValue, newVelocity] = smoothDamp(
+    currentValue,   // Current value
+    targetValue,    // Target value
+    velocity,       // Current velocity (will be updated)
+    smoothTime,     // Smooth time
+    deltaTime,      // Frame time
+    maxSpeed        // Maximum speed (optional)
+);
+```
+
+---
+
+## Network Sync Best Practices
+
+### 1. Server Authority
+```
+Server is the single "source of truth"
+Client only "predicts" and "displays"
+Server can detect any cheating attempts
+```
+
+### 2. Interpolation Delay
+```
+renderTime = currentTime - interpolationDelay
+
+Higher delay → Smoother, but more latency
+Lower delay → More responsive, but may stutter
+Recommended: 100-150ms (adjustable via parameter panel)
+```
+
+### 3. Prediction and Correction
+```
+Prediction: Respond immediately, better feel
+Correction: Smooth fix when receiving server state
+Key: Use smoothDamp to avoid "jumping"
+```
+
+### 4. Hermite vs Linear Interpolation
+```
+Linear: Simple, but not smooth when turning
+Hermite: Uses velocity info, more natural curves
+Recommended: Use Hermite for remote players
+```
+
+---
+
+## Related Documentation
+
+- [Network Module API](/esengine/modules/network) - Complete API documentation
+- [Lockstep Guide](/esengine/modules/network/lockstep) - Lockstep implementation
+- [State Sync Guide](/esengine/modules/network/state-sync) - State synchronization details
