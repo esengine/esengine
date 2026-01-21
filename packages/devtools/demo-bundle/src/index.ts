@@ -156,13 +156,116 @@ export type {
 // =============================================================================
 
 export {
-    // 寻路组件
-    PathfindingAgentComponent,
-    PathfindingMapComponent,
-    PathfindingSystem,
+    // 统一导航系统
+    NavigationAgentComponent,
+    NavigationSystem,
+    NavigationState,
+    ORCAConfigComponent,
 
-    // 避让组件
-    AvoidanceAgentComponent,
-    AvoidanceWorldComponent,
-    LocalAvoidanceSystem
+    // 适配器工厂（便捷导出）
+    createNavMeshPathPlanner,
+    createAStarPlanner,
+    createJPSPlanner,
+    createHPAPlanner,
+    createORCAAvoidance,
+    createDefaultCollisionResolver,
+    createFlowController
 } from '@esengine/pathfinding/ecs';
+
+export type {
+    INavigationSystemConfig
+} from '@esengine/pathfinding/ecs';
+
+// =============================================================================
+// Pathfinding Adapters - 导航适配器类（可插拔架构）
+// =============================================================================
+
+export {
+    // 适配器类
+    NavMeshPathPlannerAdapter,
+    GridPathfinderAdapter,
+    ORCALocalAvoidanceAdapter,
+    CollisionResolverAdapter,
+    FlowController,
+
+    // 常量
+    DEFAULT_ORCA_PARAMS,
+    PassPermission,
+    DEFAULT_FLOW_CONTROLLER_CONFIG
+} from '@esengine/pathfinding';
+
+export type {
+    IORCAParams,
+    IPathPlanner,
+    IPathPlanResult,
+    ILocalAvoidance,
+    IAvoidanceAgentData,
+    IAvoidanceResult,
+    ICollisionResolver,
+    IFlowController,
+    IFlowAgentData,
+    IFlowControlResult,
+    IFlowControllerConfig,
+    ICongestionZone
+} from '@esengine/pathfinding';
+
+// =============================================================================
+// Network - 网络同步
+// =============================================================================
+
+export {
+    // 组件
+    NetworkIdentity,
+    NetworkTransform,
+
+    // 插值和预测工具（状态同步）
+    lerp,
+    lerpAngle,
+    smoothDamp,
+    SnapshotBuffer,
+    createSnapshotBuffer,
+    TransformInterpolator,
+    HermiteTransformInterpolator,
+    createTransformInterpolator,
+    createHermiteTransformInterpolator,
+    ClientPrediction,
+    createClientPrediction,
+
+    // 定点数同步（帧同步 / Lockstep）
+    FixedTransformState,
+    FixedTransformStateWithVelocity,
+    createZeroFixedTransformState,
+    createZeroFixedTransformStateWithVelocity,
+    FixedTransformInterpolator,
+    FixedHermiteTransformInterpolator,
+    createFixedTransformInterpolator,
+    createFixedHermiteTransformInterpolator,
+    // 定点数快照缓冲区和预测
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer,
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
+} from '@esengine/network';
+
+export type {
+    IStateSnapshot,
+    ITransformState,
+    ITransformStateWithVelocity,
+    ISnapshotBuffer,
+    ISnapshotBufferConfig,
+    IInterpolator,
+    IExtrapolator,
+    ClientPredictionConfig,
+    // 定点数帧同步类型
+    IFixedStateSnapshot,
+    IFixedSnapshotBufferConfig,
+    IFixedInterpolationResult,
+    IFixedInputSnapshot,
+    IFixedPredictedState,
+    IFixedPredictor,
+    FixedClientPredictionConfig,
+    IFixedMovementInput,
+    IFixedMovementState,
+} from '@esengine/network';

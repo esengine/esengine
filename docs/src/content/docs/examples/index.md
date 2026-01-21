@@ -6,22 +6,20 @@ title: "示例"
 
 ## 🎮 互动演示
 
-### 寻路系统
+### 导航系统
 
-#### [A* 寻路演示](./astar-pathfinding-demo)
-- **功能**: 网格寻路可视化
-- **特性**: 迷宫生成、随机障碍、房间布局、螺旋地图
-- **技术点**: A* 算法、增量寻路、ECS 架构
+#### [NavigationSystem 导航演示](./navigation-system-demo)
+- **功能**: 可插拔导航架构的完整演示
+- **场景**: NavMesh、A*、JPS、圆形交换、漏斗通道、压力测试
+- **特性**: 运行时切换寻路算法、ORCA 多代理避让、碰撞检测
+- **技术点**: NavigationSystem、IPathPlanner、ILocalAvoidance 接口
 
-#### [多代理寻路演示](./multi-agent-pathfinding-demo)
-- **功能**: 多代理同时寻路与避让
-- **特性**: A* 寻路 + ORCA 避让结合、多种场景预设
-- **技术点**: PathfindingSystem、LocalAvoidanceSystem 协作
+### 网络同步
 
-#### [ORCA 局部避让演示](./orca-avoidance-demo)
-- **功能**: 多代理碰撞避让 (ORCA 算法)
-- **特性**: 50-500 代理实时避让、多种场景预设、参数调节
-- **技术点**: KDTree 空间索引、线性规划求解、ECS 架构
+#### [网络同步演示](./network-sync-demo)
+- **功能**: 客户端-服务器状态同步
+- **特性**: 插值、预测、延迟补偿
+- **技术点**: NetworkIdentity、NetworkTransform、SnapshotBuffer
 
 ### 系统演示
 

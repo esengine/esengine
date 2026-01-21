@@ -27,6 +27,1287 @@ var ESEngine = (function (exports) {
   var __name$2 = (target, value) => __defProp$2(target, "name", { value, configurable: true });
   var __publicField$2 = (obj, key, value) => __defNormalProp$2(obj, typeof key !== "symbol" ? key + "" : key, value);
 
+  // src/avoidance/ILocalAvoidance.ts
+  var DEFAULT_ORCA_CONFIG = {
+    defaultTimeHorizon: 2,
+    defaultTimeHorizonObst: 1,
+    timeStep: 1 / 60,
+    epsilon: 1e-5,
+    yAxisDown: false
+  };
+  var DEFAULT_AGENT_PARAMS = {
+    radius: 0.5,
+    maxSpeed: 5,
+    neighborDist: 15,
+    maxNeighbors: 10,
+    timeHorizon: 2,
+    timeHorizonObst: 1
+  };
+  var EPSILON = 1e-5;
+  var { dot, det, lengthSq } = t;
+  function linearProgram1(lines, lineNo, radius, optVelocity, directionOpt, result) {
+    const line = lines[lineNo];
+    const dotProduct = dot(line.point, line.direction);
+    const discriminant = dotProduct * dotProduct + radius * radius - lengthSq(line.point);
+    if (discriminant < 0) {
+      return false;
+    }
+    const sqrtDiscriminant = Math.sqrt(discriminant);
+    let tLeft = -dotProduct - sqrtDiscriminant;
+    let tRight = -dotProduct + sqrtDiscriminant;
+    for (let i = 0; i < lineNo; i++) {
+      const constraint = lines[i];
+      const denominator = det(line.direction, constraint.direction);
+      const numerator = det(constraint.direction, {
+        x: line.point.x - constraint.point.x,
+        y: line.point.y - constraint.point.y
+      });
+      if (Math.abs(denominator) <= EPSILON) {
+        if (numerator < 0) {
+          return false;
+        }
+        continue;
+      }
+      const t2 = numerator / denominator;
+      if (denominator >= 0) {
+        tRight = Math.min(tRight, t2);
+      } else {
+        tLeft = Math.max(tLeft, t2);
+      }
+      if (tLeft > tRight) {
+        return false;
+      }
+    }
+    let t;
+    if (directionOpt) {
+      if (dot(optVelocity, line.direction) > 0) {
+        t = tRight;
+      } else {
+        t = tLeft;
+      }
+    } else {
+      t = dot(line.direction, {
+        x: optVelocity.x - line.point.x,
+        y: optVelocity.y - line.point.y
+      });
+      if (t < tLeft) {
+        t = tLeft;
+      } else if (t > tRight) {
+        t = tRight;
+      }
+    }
+    result.x = line.point.x + t * line.direction.x;
+    result.y = line.point.y + t * line.direction.y;
+    return true;
+  }
+  __name$2(linearProgram1, "linearProgram1");
+  function linearProgram2(lines, radius, optVelocity, directionOpt, result) {
+    if (directionOpt) {
+      result.x = optVelocity.x * radius;
+      result.y = optVelocity.y * radius;
+    } else if (lengthSq(optVelocity) > radius * radius) {
+      const len2 = Math.sqrt(lengthSq(optVelocity));
+      result.x = optVelocity.x / len2 * radius;
+      result.y = optVelocity.y / len2 * radius;
+    } else {
+      result.x = optVelocity.x;
+      result.y = optVelocity.y;
+    }
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const detVal = det(line.direction, {
+        x: line.point.x - result.x,
+        y: line.point.y - result.y
+      });
+      if (detVal > 0) {
+        const tempResult = result.clone();
+        if (!linearProgram1(lines, i, radius, optVelocity, directionOpt, result)) {
+          result.copy(tempResult);
+          return i;
+        }
+      }
+    }
+    return lines.length;
+  }
+  __name$2(linearProgram2, "linearProgram2");
+  function linearProgram3(lines, numObstLines, beginLine, radius, result) {
+    let distance = 0;
+    for (let i = beginLine; i < lines.length; i++) {
+      const line = lines[i];
+      if (det(line.direction, {
+        x: line.point.x - result.x,
+        y: line.point.y - result.y
+      }) > distance) {
+        const projLines = [];
+        for (let j = 0; j < numObstLines; j++) {
+          projLines.push(lines[j]);
+        }
+        for (let j = numObstLines; j < i; j++) {
+          const line1 = lines[j];
+          const line2 = lines[i];
+          let newLine;
+          const determinant = det(line1.direction, line2.direction);
+          if (Math.abs(determinant) <= EPSILON) {
+            if (dot(line1.direction, line2.direction) > 0) {
+              continue;
+            }
+            newLine = {
+              point: {
+                x: 0.5 * (line1.point.x + line2.point.x),
+                y: 0.5 * (line1.point.y + line2.point.y)
+              },
+              direction: {
+                x: 0,
+                y: 0
+              }
+            };
+          } else {
+            const diff = {
+              x: line1.point.x - line2.point.x,
+              y: line1.point.y - line2.point.y
+            };
+            const t = det(line2.direction, diff) / determinant;
+            newLine = {
+              point: {
+                x: line1.point.x + t * line1.direction.x,
+                y: line1.point.y + t * line1.direction.y
+              },
+              direction: {
+                x: 0,
+                y: 0
+              }
+            };
+          }
+          const dirDiff = {
+            x: line1.direction.x - line2.direction.x,
+            y: line1.direction.y - line2.direction.y
+          };
+          const dirLen = Math.sqrt(lengthSq(dirDiff));
+          if (dirLen > EPSILON) {
+            newLine.direction.x = dirDiff.x / dirLen;
+            newLine.direction.y = dirDiff.y / dirLen;
+          }
+          projLines.push(newLine);
+        }
+        const tempResult = result.clone();
+        const optVelocity = {
+          x: -lines[i].direction.y,
+          y: lines[i].direction.x
+        };
+        if (linearProgram2(projLines, radius, optVelocity, true, result) < projLines.length) {
+          result.copy(tempResult);
+        }
+        if (!verifyObstacleConstraints(lines, numObstLines, result)) {
+          result.copy(tempResult);
+        }
+        distance = det(lines[i].direction, {
+          x: lines[i].point.x - result.x,
+          y: lines[i].point.y - result.y
+        });
+      }
+    }
+  }
+  __name$2(linearProgram3, "linearProgram3");
+  function verifyObstacleConstraints(lines, numObstLines, velocity) {
+    for (let i = 0; i < numObstLines; i++) {
+      const line = lines[i];
+      const detVal = det(line.direction, {
+        x: line.point.x - velocity.x,
+        y: line.point.y - velocity.y
+      });
+      if (detVal > EPSILON) {
+        return false;
+      }
+    }
+    return true;
+  }
+  __name$2(verifyObstacleConstraints, "verifyObstacleConstraints");
+  function solveORCALinearProgram(lines, numObstLines, maxSpeed, preferredVelocity) {
+    const result = new t();
+    const lineFail = linearProgram2(lines, maxSpeed, preferredVelocity, false, result);
+    let feasible = lineFail >= lines.length;
+    let violatedConstraints = 0;
+    if (!feasible) {
+      linearProgram3(lines, numObstLines, lineFail, maxSpeed, result);
+      violatedConstraints = lines.length - lineFail;
+    }
+    if (numObstLines > 0 && !verifyObstacleConstraints(lines, numObstLines, result)) {
+      feasible = false;
+      violatedConstraints = Math.max(violatedConstraints, 1);
+    }
+    return {
+      velocity: result,
+      feasible,
+      violatedConstraints
+    };
+  }
+  __name$2(solveORCALinearProgram, "solveORCALinearProgram");
+
+  // src/avoidance/ObstacleBuilder.ts
+  var EPSILON2 = 1e-5;
+  function leftOf(p1, p2, p3) {
+    return (p1.x - p3.x) * (p2.y - p1.y) - (p1.y - p3.y) * (p2.x - p1.x);
+  }
+  __name$2(leftOf, "leftOf");
+  function createObstacleVertices(vertices, startId = 0) {
+    const n = vertices.length;
+    if (n < 2) {
+      return [];
+    }
+    const obstacleVertices = [];
+    for (let i = 0; i < n; i++) {
+      obstacleVertices.push({
+        point: {
+          x: vertices[i].x,
+          y: vertices[i].y
+        },
+        direction: {
+          x: 0,
+          y: 0
+        },
+        next: null,
+        previous: null,
+        isConvex: false,
+        id: startId + i
+      });
+    }
+    for (let i = 0; i < n; i++) {
+      const curr = obstacleVertices[i];
+      const next = obstacleVertices[(i + 1) % n];
+      const prev = obstacleVertices[(i + n - 1) % n];
+      curr.next = next;
+      curr.previous = prev;
+      const dx = next.point.x - curr.point.x;
+      const dy = next.point.y - curr.point.y;
+      const edgeLen = Math.sqrt(dx * dx + dy * dy);
+      if (edgeLen > EPSILON2) {
+        curr.direction = {
+          x: dx / edgeLen,
+          y: dy / edgeLen
+        };
+      } else {
+        curr.direction = {
+          x: 1,
+          y: 0
+        };
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      const curr = obstacleVertices[i];
+      const prev = curr.previous;
+      const next = curr.next;
+      curr.isConvex = leftOf(prev.point, curr.point, next.point) >= 0;
+    }
+    return obstacleVertices;
+  }
+  __name$2(createObstacleVertices, "createObstacleVertices");
+  function buildObstacleVertices(obstacles, options = {}) {
+    const { yAxisDown = false } = options;
+    const allVertices = [];
+    let nextId = 0;
+    for (const obstacle of obstacles) {
+      const ccwVertices = ensureCCW([
+        ...obstacle.vertices
+      ], yAxisDown);
+      const vertices = createObstacleVertices(ccwVertices, nextId);
+      allVertices.push(...vertices);
+      nextId += vertices.length;
+    }
+    return allVertices;
+  }
+  __name$2(buildObstacleVertices, "buildObstacleVertices");
+  function ensureCCW(vertices, yAxisDown = false) {
+    if (vertices.length < 3) {
+      return vertices;
+    }
+    let signedArea = 0;
+    for (let i = 0; i < vertices.length; i++) {
+      const curr = vertices[i];
+      const next = vertices[(i + 1) % vertices.length];
+      signedArea += curr.x * next.y - next.x * curr.y;
+    }
+    signedArea *= 0.5;
+    const isCCW = yAxisDown ? signedArea < 0 : signedArea > 0;
+    if (isCCW) {
+      return vertices;
+    }
+    return [
+      ...vertices
+    ].reverse();
+  }
+  __name$2(ensureCCW, "ensureCCW");
+  var EPSILON3 = 1e-5;
+  var { det: det2, dot: dot2, lengthSq: lengthSq2, len } = t;
+  function normalize(v) {
+    const length = len(v);
+    if (length < EPSILON3) {
+      return {
+        x: 0,
+        y: 0
+      };
+    }
+    return {
+      x: v.x / length,
+      y: v.y / length
+    };
+  }
+  __name$2(normalize, "normalize");
+  var _ORCASolver = class _ORCASolver {
+    constructor(config = {}) {
+      __publicField$2(this, "config");
+      this.config = {
+        ...DEFAULT_ORCA_CONFIG,
+        ...config
+      };
+    }
+    /**
+     * @zh 计算代理的新速度
+     * @en Compute new velocity for agent
+     *
+     * @param agent - @zh 当前代理 @en Current agent
+     * @param neighbors - @zh 邻近代理列表 @en List of neighboring agents
+     * @param obstacles - @zh 障碍物列表 @en List of obstacles
+     * @param deltaTime - @zh 时间步长 @en Time step
+     * @returns @zh 计算得到的新速度 @en Computed new velocity
+     */
+    computeNewVelocity(agent, neighbors, obstacles, deltaTime) {
+      const result = this.computeNewVelocityWithResult(agent, neighbors, obstacles, deltaTime);
+      return result.velocity;
+    }
+    /**
+     * @zh 计算代理的新速度（带完整结果）
+     * @en Compute new velocity for agent (with full result)
+     *
+     * @param agent - @zh 当前代理 @en Current agent
+     * @param neighbors - @zh 邻近代理列表 @en List of neighboring agents
+     * @param obstacles - @zh 障碍物列表 @en List of obstacles
+     * @param deltaTime - @zh 时间步长 @en Time step
+     * @returns @zh 完整求解结果 @en Full solve result
+     */
+    computeNewVelocityWithResult(agent, neighbors, obstacles, deltaTime) {
+      const orcaLines = [];
+      const obstacleVertices = buildObstacleVertices(obstacles, {
+        yAxisDown: this.config.yAxisDown
+      });
+      const numObstLines = this.createObstacleORCALines(agent, obstacleVertices, orcaLines);
+      this.createAgentORCALines(agent, neighbors, deltaTime, orcaLines);
+      const result = solveORCALinearProgram(orcaLines, numObstLines, agent.maxSpeed, agent.preferredVelocity);
+      return {
+        ...result,
+        numLines: orcaLines.length
+      };
+    }
+    /**
+     * @zh 创建代理间的 ORCA 约束线
+     * @en Create ORCA constraint lines for agent-agent avoidance
+     */
+    createAgentORCALines(agent, neighbors, deltaTime, orcaLines) {
+      const invTimeHorizon = 1 / agent.timeHorizon;
+      for (const other of neighbors) {
+        if (other.id === agent.id) continue;
+        const relativePosition = {
+          x: other.position.x - agent.position.x,
+          y: other.position.y - agent.position.y
+        };
+        const relativeVelocity = {
+          x: agent.velocity.x - other.velocity.x,
+          y: agent.velocity.y - other.velocity.y
+        };
+        const distSq = lengthSq2(relativePosition);
+        const combinedRadius = agent.radius + other.radius;
+        const combinedRadiusSq = combinedRadius * combinedRadius;
+        const line = {
+          point: {
+            x: 0,
+            y: 0
+          },
+          direction: {
+            x: 0,
+            y: 0
+          }
+        };
+        let u;
+        if (distSq > combinedRadiusSq) {
+          const w = {
+            x: relativeVelocity.x - invTimeHorizon * relativePosition.x,
+            y: relativeVelocity.y - invTimeHorizon * relativePosition.y
+          };
+          const wLengthSq = lengthSq2(w);
+          const dotProduct1 = dot2(w, relativePosition);
+          if (dotProduct1 < 0 && dotProduct1 * dotProduct1 > combinedRadiusSq * wLengthSq) {
+            const wLength = Math.sqrt(wLengthSq);
+            const unitW = normalize(w);
+            line.direction = {
+              x: unitW.y,
+              y: -unitW.x
+            };
+            u = {
+              x: (combinedRadius * invTimeHorizon - wLength) * unitW.x,
+              y: (combinedRadius * invTimeHorizon - wLength) * unitW.y
+            };
+          } else {
+            const leg = Math.sqrt(distSq - combinedRadiusSq);
+            if (det2(relativePosition, w) > 0) {
+              line.direction = {
+                x: (relativePosition.x * leg - relativePosition.y * combinedRadius) / distSq,
+                y: (relativePosition.x * combinedRadius + relativePosition.y * leg) / distSq
+              };
+            } else {
+              line.direction = {
+                x: -(relativePosition.x * leg + relativePosition.y * combinedRadius) / distSq,
+                y: -(-relativePosition.x * combinedRadius + relativePosition.y * leg) / distSq
+              };
+            }
+            const dotProduct2 = dot2(relativeVelocity, line.direction);
+            u = {
+              x: dotProduct2 * line.direction.x - relativeVelocity.x,
+              y: dotProduct2 * line.direction.y - relativeVelocity.y
+            };
+          }
+        } else {
+          const invTimeStep = 1 / deltaTime;
+          const w = {
+            x: relativeVelocity.x - invTimeStep * relativePosition.x,
+            y: relativeVelocity.y - invTimeStep * relativePosition.y
+          };
+          const wLength = len(w);
+          const unitW = wLength > EPSILON3 ? {
+            x: w.x / wLength,
+            y: w.y / wLength
+          } : {
+            x: 1,
+            y: 0
+          };
+          line.direction = {
+            x: unitW.y,
+            y: -unitW.x
+          };
+          u = {
+            x: (combinedRadius * invTimeStep - wLength) * unitW.x,
+            y: (combinedRadius * invTimeStep - wLength) * unitW.y
+          };
+        }
+        line.point = {
+          x: agent.velocity.x + 0.5 * u.x,
+          y: agent.velocity.y + 0.5 * u.y
+        };
+        orcaLines.push(line);
+      }
+    }
+    /**
+     * @zh 创建障碍物的 ORCA 约束线
+     * @en Create ORCA constraint lines for obstacle avoidance
+     */
+    createObstacleORCALines(agent, obstacleVertices, orcaLines) {
+      const invTimeHorizonObst = 1 / agent.timeHorizonObst;
+      const radiusSq = agent.radius * agent.radius;
+      let numObstLines = 0;
+      for (const obstacle1 of obstacleVertices) {
+        const obstacle2 = obstacle1.next;
+        const relativePosition1 = {
+          x: obstacle1.point.x - agent.position.x,
+          y: obstacle1.point.y - agent.position.y
+        };
+        const relativePosition2 = {
+          x: obstacle2.point.x - agent.position.x,
+          y: obstacle2.point.y - agent.position.y
+        };
+        const obstacleVector = {
+          x: obstacle2.point.x - obstacle1.point.x,
+          y: obstacle2.point.y - obstacle1.point.y
+        };
+        const signedDistToEdge = det2(obstacleVector, relativePosition1);
+        if (signedDistToEdge < -EPSILON3) {
+          continue;
+        }
+        let alreadyCovered = false;
+        for (const existingLine of orcaLines) {
+          const scaledRelPos1 = {
+            x: invTimeHorizonObst * relativePosition1.x - existingLine.point.x,
+            y: invTimeHorizonObst * relativePosition1.y - existingLine.point.y
+          };
+          const scaledRelPos2 = {
+            x: invTimeHorizonObst * relativePosition2.x - existingLine.point.x,
+            y: invTimeHorizonObst * relativePosition2.y - existingLine.point.y
+          };
+          if (det2(scaledRelPos1, existingLine.direction) - invTimeHorizonObst * agent.radius >= -EPSILON3 && det2(scaledRelPos2, existingLine.direction) - invTimeHorizonObst * agent.radius >= -EPSILON3) {
+            alreadyCovered = true;
+            break;
+          }
+        }
+        if (alreadyCovered) {
+          continue;
+        }
+        const distSq1 = lengthSq2(relativePosition1);
+        const distSq2 = lengthSq2(relativePosition2);
+        const obstacleVectorSq = lengthSq2(obstacleVector);
+        const s = obstacleVectorSq > EPSILON3 ? -dot2(relativePosition1, obstacleVector) / obstacleVectorSq : 0;
+        const distSqLineToEdge = lengthSq2({
+          x: -relativePosition1.x - s * obstacleVector.x,
+          y: -relativePosition1.y - s * obstacleVector.y
+        });
+        const line = {
+          point: {
+            x: 0,
+            y: 0
+          },
+          direction: {
+            x: 0,
+            y: 0
+          }
+        };
+        if (s < 0 && distSq1 <= radiusSq) {
+          if (obstacle1.isConvex) {
+            line.point = {
+              x: 0,
+              y: 0
+            };
+            line.direction = normalize({
+              x: -relativePosition1.y,
+              y: relativePosition1.x
+            });
+            orcaLines.push(line);
+            numObstLines++;
+          }
+          continue;
+        }
+        if (s > 1 && distSq2 <= radiusSq) {
+          if (obstacle2.isConvex && det2(relativePosition2, obstacle2.direction) >= 0) {
+            line.point = {
+              x: 0,
+              y: 0
+            };
+            line.direction = normalize({
+              x: -relativePosition2.y,
+              y: relativePosition2.x
+            });
+            orcaLines.push(line);
+            numObstLines++;
+          }
+          continue;
+        }
+        if (s >= 0 && s <= 1 && distSqLineToEdge <= radiusSq) {
+          line.point = {
+            x: 0,
+            y: 0
+          };
+          line.direction = {
+            x: -obstacle1.direction.x,
+            y: -obstacle1.direction.y
+          };
+          orcaLines.push(line);
+          numObstLines++;
+          continue;
+        }
+        let obs1 = obstacle1;
+        let obs2 = obstacle2;
+        let leftLegDirection;
+        let rightLegDirection;
+        if (s < 0 && distSqLineToEdge <= radiusSq) {
+          if (!obstacle1.isConvex) continue;
+          obs2 = obstacle1;
+          const leg1 = Math.sqrt(Math.max(0, distSq1 - radiusSq));
+          leftLegDirection = {
+            x: (relativePosition1.x * leg1 - relativePosition1.y * agent.radius) / distSq1,
+            y: (relativePosition1.x * agent.radius + relativePosition1.y * leg1) / distSq1
+          };
+          rightLegDirection = {
+            x: (relativePosition1.x * leg1 + relativePosition1.y * agent.radius) / distSq1,
+            y: (-relativePosition1.x * agent.radius + relativePosition1.y * leg1) / distSq1
+          };
+        } else if (s > 1 && distSqLineToEdge <= radiusSq) {
+          if (!obstacle2.isConvex) continue;
+          obs1 = obstacle2;
+          const leg2 = Math.sqrt(Math.max(0, distSq2 - radiusSq));
+          leftLegDirection = {
+            x: (relativePosition2.x * leg2 - relativePosition2.y * agent.radius) / distSq2,
+            y: (relativePosition2.x * agent.radius + relativePosition2.y * leg2) / distSq2
+          };
+          rightLegDirection = {
+            x: (relativePosition2.x * leg2 + relativePosition2.y * agent.radius) / distSq2,
+            y: (-relativePosition2.x * agent.radius + relativePosition2.y * leg2) / distSq2
+          };
+        } else {
+          if (obstacle1.isConvex) {
+            const leg1 = Math.sqrt(Math.max(0, distSq1 - radiusSq));
+            leftLegDirection = {
+              x: (relativePosition1.x * leg1 - relativePosition1.y * agent.radius) / distSq1,
+              y: (relativePosition1.x * agent.radius + relativePosition1.y * leg1) / distSq1
+            };
+          } else {
+            leftLegDirection = {
+              x: -obstacle1.direction.x,
+              y: -obstacle1.direction.y
+            };
+          }
+          if (obstacle2.isConvex) {
+            const leg2 = Math.sqrt(Math.max(0, distSq2 - radiusSq));
+            rightLegDirection = {
+              x: (relativePosition2.x * leg2 + relativePosition2.y * agent.radius) / distSq2,
+              y: (-relativePosition2.x * agent.radius + relativePosition2.y * leg2) / distSq2
+            };
+          } else {
+            rightLegDirection = {
+              x: obstacle1.direction.x,
+              y: obstacle1.direction.y
+            };
+          }
+        }
+        const leftNeighbor = obs1.previous;
+        let isLeftLegForeign = false;
+        let isRightLegForeign = false;
+        if (obs1.isConvex) {
+          const negLeftNeighborDir = {
+            x: -leftNeighbor.direction.x,
+            y: -leftNeighbor.direction.y
+          };
+          if (det2(leftLegDirection, negLeftNeighborDir) >= 0) {
+            leftLegDirection = negLeftNeighborDir;
+            isLeftLegForeign = true;
+          }
+        }
+        if (obs2.isConvex) {
+          if (det2(rightLegDirection, obs2.direction) <= 0) {
+            rightLegDirection = {
+              x: obs2.direction.x,
+              y: obs2.direction.y
+            };
+            isRightLegForeign = true;
+          }
+        }
+        const leftCutoff = {
+          x: invTimeHorizonObst * (obs1.point.x - agent.position.x),
+          y: invTimeHorizonObst * (obs1.point.y - agent.position.y)
+        };
+        const rightCutoff = {
+          x: invTimeHorizonObst * (obs2.point.x - agent.position.x),
+          y: invTimeHorizonObst * (obs2.point.y - agent.position.y)
+        };
+        const cutoffVector = {
+          x: rightCutoff.x - leftCutoff.x,
+          y: rightCutoff.y - leftCutoff.y
+        };
+        const sameVertex = obs1 === obs2;
+        const cutoffVectorSq = lengthSq2(cutoffVector);
+        const t = sameVertex ? 0.5 : cutoffVectorSq > EPSILON3 ? dot2({
+          x: agent.velocity.x - leftCutoff.x,
+          y: agent.velocity.y - leftCutoff.y
+        }, cutoffVector) / cutoffVectorSq : 0.5;
+        const tLeft = dot2({
+          x: agent.velocity.x - leftCutoff.x,
+          y: agent.velocity.y - leftCutoff.y
+        }, leftLegDirection);
+        const tRight = dot2({
+          x: agent.velocity.x - rightCutoff.x,
+          y: agent.velocity.y - rightCutoff.y
+        }, rightLegDirection);
+        if (t < 0 && tLeft < 0 || sameVertex && tLeft < 0 && tRight < 0) {
+          const unitW = normalize({
+            x: agent.velocity.x - leftCutoff.x,
+            y: agent.velocity.y - leftCutoff.y
+          });
+          line.direction = {
+            x: unitW.y,
+            y: -unitW.x
+          };
+          line.point = {
+            x: leftCutoff.x + agent.radius * invTimeHorizonObst * unitW.x,
+            y: leftCutoff.y + agent.radius * invTimeHorizonObst * unitW.y
+          };
+          orcaLines.push(line);
+          numObstLines++;
+          continue;
+        }
+        if (t > 1 && tRight < 0) {
+          const unitW = normalize({
+            x: agent.velocity.x - rightCutoff.x,
+            y: agent.velocity.y - rightCutoff.y
+          });
+          line.direction = {
+            x: unitW.y,
+            y: -unitW.x
+          };
+          line.point = {
+            x: rightCutoff.x + agent.radius * invTimeHorizonObst * unitW.x,
+            y: rightCutoff.y + agent.radius * invTimeHorizonObst * unitW.y
+          };
+          orcaLines.push(line);
+          numObstLines++;
+          continue;
+        }
+        const distSqCutoff = t < 0 || t > 1 || sameVertex ? Infinity : lengthSq2({
+          x: agent.velocity.x - (leftCutoff.x + t * cutoffVector.x),
+          y: agent.velocity.y - (leftCutoff.y + t * cutoffVector.y)
+        });
+        const distSqLeft = tLeft < 0 ? Infinity : lengthSq2({
+          x: agent.velocity.x - (leftCutoff.x + tLeft * leftLegDirection.x),
+          y: agent.velocity.y - (leftCutoff.y + tLeft * leftLegDirection.y)
+        });
+        const distSqRight = tRight < 0 ? Infinity : lengthSq2({
+          x: agent.velocity.x - (rightCutoff.x + tRight * rightLegDirection.x),
+          y: agent.velocity.y - (rightCutoff.y + tRight * rightLegDirection.y)
+        });
+        if (distSqCutoff <= distSqLeft && distSqCutoff <= distSqRight) {
+          line.direction = {
+            x: -obs1.direction.x,
+            y: -obs1.direction.y
+          };
+          line.point = {
+            x: leftCutoff.x + agent.radius * invTimeHorizonObst * -line.direction.y,
+            y: leftCutoff.y + agent.radius * invTimeHorizonObst * line.direction.x
+          };
+          orcaLines.push(line);
+          numObstLines++;
+          continue;
+        }
+        if (distSqLeft <= distSqRight) {
+          if (isLeftLegForeign) {
+            continue;
+          }
+          line.direction = {
+            x: leftLegDirection.x,
+            y: leftLegDirection.y
+          };
+          line.point = {
+            x: leftCutoff.x + agent.radius * invTimeHorizonObst * -line.direction.y,
+            y: leftCutoff.y + agent.radius * invTimeHorizonObst * line.direction.x
+          };
+          orcaLines.push(line);
+          numObstLines++;
+          continue;
+        }
+        if (isRightLegForeign) {
+          continue;
+        }
+        line.direction = {
+          x: -rightLegDirection.x,
+          y: -rightLegDirection.y
+        };
+        line.point = {
+          x: rightCutoff.x + agent.radius * invTimeHorizonObst * -line.direction.y,
+          y: rightCutoff.y + agent.radius * invTimeHorizonObst * line.direction.x
+        };
+        orcaLines.push(line);
+        numObstLines++;
+      }
+      return numObstLines;
+    }
+  };
+  __name$2(_ORCASolver, "ORCASolver");
+  var ORCASolver = _ORCASolver;
+  function createORCASolver(config) {
+    return new ORCASolver(config);
+  }
+  __name$2(createORCASolver, "createORCASolver");
+
+  // src/avoidance/KDTree.ts
+  var _KDTree = class _KDTree {
+    constructor() {
+      __publicField$2(this, "agents", []);
+      __publicField$2(this, "agentIndices", []);
+      __publicField$2(this, "nodes", []);
+      /**
+       * @zh 最大叶节点大小
+       * @en Maximum leaf size
+       */
+      __publicField$2(this, "maxLeafSize", 10);
+    }
+    /**
+     * @zh 构建 KD-Tree
+     * @en Build KD-Tree
+     */
+    build(agents) {
+      this.agents = agents;
+      this.agentIndices = [];
+      this.nodes = [];
+      if (agents.length === 0) {
+        return;
+      }
+      for (let i = 0; i < agents.length; i++) {
+        this.agentIndices.push(i);
+      }
+      this.buildRecursive(0, agents.length, 0);
+    }
+    /**
+     * @zh 递归构建 KD-Tree
+     * @en Recursively build KD-Tree
+     */
+    buildRecursive(begin, end, depth) {
+      const nodeIndex = this.nodes.length;
+      const node = {
+        agentIndex: -1,
+        splitValue: 0,
+        left: -1,
+        right: -1,
+        begin,
+        end,
+        minX: Infinity,
+        minY: Infinity,
+        maxX: -Infinity,
+        maxY: -Infinity
+      };
+      this.nodes.push(node);
+      for (let i = begin; i < end; i++) {
+        const agent = this.agents[this.agentIndices[i]];
+        node.minX = Math.min(node.minX, agent.position.x);
+        node.minY = Math.min(node.minY, agent.position.y);
+        node.maxX = Math.max(node.maxX, agent.position.x);
+        node.maxY = Math.max(node.maxY, agent.position.y);
+      }
+      const count = end - begin;
+      if (count <= this.maxLeafSize) {
+        return nodeIndex;
+      }
+      const splitDim = depth % 2;
+      if (splitDim === 0) {
+        this.sortByX(begin, end);
+      } else {
+        this.sortByY(begin, end);
+      }
+      const mid = Math.floor((begin + end) / 2);
+      const midAgent = this.agents[this.agentIndices[mid]];
+      node.splitValue = splitDim === 0 ? midAgent.position.x : midAgent.position.y;
+      node.left = this.buildRecursive(begin, mid, depth + 1);
+      node.right = this.buildRecursive(mid, end, depth + 1);
+      return nodeIndex;
+    }
+    /**
+     * @zh 按 X 坐标排序
+     * @en Sort by X coordinate
+     */
+    sortByX(begin, end) {
+      const indices = this.agentIndices;
+      const agents = this.agents;
+      for (let i = begin + 1; i < end; i++) {
+        const key = indices[i];
+        const keyX = agents[key].position.x;
+        let j = i - 1;
+        while (j >= begin && agents[indices[j]].position.x > keyX) {
+          indices[j + 1] = indices[j];
+          j--;
+        }
+        indices[j + 1] = key;
+      }
+    }
+    /**
+     * @zh 按 Y 坐标排序
+     * @en Sort by Y coordinate
+     */
+    sortByY(begin, end) {
+      const indices = this.agentIndices;
+      const agents = this.agents;
+      for (let i = begin + 1; i < end; i++) {
+        const key = indices[i];
+        const keyY = agents[key].position.y;
+        let j = i - 1;
+        while (j >= begin && agents[indices[j]].position.y > keyY) {
+          indices[j + 1] = indices[j];
+          j--;
+        }
+        indices[j + 1] = key;
+      }
+    }
+    /**
+     * @zh 查询邻居
+     * @en Query neighbors
+     */
+    queryNeighbors(position, radius, maxResults, excludeId) {
+      const results = [];
+      const radiusSq = radius * radius;
+      if (this.nodes.length === 0) {
+        return results;
+      }
+      this.queryRecursive(0, position, radiusSq, maxResults, excludeId, results);
+      results.sort((a, b) => a.distanceSq - b.distanceSq);
+      if (results.length > maxResults) {
+        results.length = maxResults;
+      }
+      return results;
+    }
+    /**
+     * @zh 递归查询
+     * @en Recursive query
+     */
+    queryRecursive(nodeIndex, position, radiusSq, maxResults, excludeId, results) {
+      const node = this.nodes[nodeIndex];
+      if (!node) return;
+      const closestX = Math.max(node.minX, Math.min(position.x, node.maxX));
+      const closestY = Math.max(node.minY, Math.min(position.y, node.maxY));
+      const dx = position.x - closestX;
+      const dy = position.y - closestY;
+      const distSqToBBox = dx * dx + dy * dy;
+      if (distSqToBBox > radiusSq) {
+        return;
+      }
+      if (node.left === -1 && node.right === -1) {
+        for (let i = node.begin; i < node.end; i++) {
+          const agentIndex = this.agentIndices[i];
+          const agent = this.agents[agentIndex];
+          if (excludeId !== void 0 && agent.id === excludeId) {
+            continue;
+          }
+          const adx = position.x - agent.position.x;
+          const ady = position.y - agent.position.y;
+          const distSq = adx * adx + ady * ady;
+          if (distSq < radiusSq) {
+            results.push({
+              agent,
+              distanceSq: distSq
+            });
+          }
+        }
+        return;
+      }
+      if (node.left !== -1) {
+        this.queryRecursive(node.left, position, radiusSq, maxResults, excludeId, results);
+      }
+      if (node.right !== -1) {
+        this.queryRecursive(node.right, position, radiusSq, maxResults, excludeId, results);
+      }
+    }
+    /**
+     * @zh 清空索引
+     * @en Clear the index
+     */
+    clear() {
+      this.agents = [];
+      this.agentIndices = [];
+      this.nodes = [];
+    }
+    /**
+     * @zh 获取代理数量
+     * @en Get agent count
+     */
+    get agentCount() {
+      return this.agents.length;
+    }
+  };
+  __name$2(_KDTree, "KDTree");
+  var KDTree = _KDTree;
+  function createKDTree() {
+    return new KDTree();
+  }
+  __name$2(createKDTree, "createKDTree");
+
+  // src/avoidance/CollisionResolver.ts
+  var EPSILON4 = 1e-5;
+  var EMPTY_COLLISION = {
+    collided: false,
+    penetration: 0,
+    normal: {
+      x: 0,
+      y: 0
+    },
+    closestPoint: {
+      x: 0,
+      y: 0
+    }
+  };
+  function closestPointOnSegment(point, segStart, segEnd) {
+    const dx = segEnd.x - segStart.x;
+    const dy = segEnd.y - segStart.y;
+    const lengthSq3 = dx * dx + dy * dy;
+    if (lengthSq3 < EPSILON4) {
+      return {
+        x: segStart.x,
+        y: segStart.y
+      };
+    }
+    const t = Math.max(0, Math.min(1, ((point.x - segStart.x) * dx + (point.y - segStart.y) * dy) / lengthSq3));
+    return {
+      x: segStart.x + t * dx,
+      y: segStart.y + t * dy
+    };
+  }
+  __name$2(closestPointOnSegment, "closestPointOnSegment");
+  function isPointInPolygon(point, vertices) {
+    let inside = false;
+    const n = vertices.length;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = vertices[i].x;
+      const yi = vertices[i].y;
+      const xj = vertices[j].x;
+      const yj = vertices[j].y;
+      if (yi > point.y !== yj > point.y && point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }
+  __name$2(isPointInPolygon, "isPointInPolygon");
+  function closestPointOnPolygon(point, vertices) {
+    let minDistSq = Infinity;
+    let closestPt = {
+      x: 0,
+      y: 0
+    };
+    let closestEdge = 0;
+    for (let i = 0; i < vertices.length; i++) {
+      const j = (i + 1) % vertices.length;
+      const closest = closestPointOnSegment(point, vertices[i], vertices[j]);
+      const dx = point.x - closest.x;
+      const dy = point.y - closest.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < minDistSq) {
+        minDistSq = distSq;
+        closestPt = closest;
+        closestEdge = i;
+      }
+    }
+    return {
+      point: closestPt,
+      distanceSq: minDistSq,
+      edgeIndex: closestEdge
+    };
+  }
+  __name$2(closestPointOnPolygon, "closestPointOnPolygon");
+  var DEFAULT_COLLISION_CONFIG = {
+    responseFactor: 1,
+    safetyMargin: 0.01
+  };
+  var _CollisionResolver = class _CollisionResolver {
+    constructor(config = {}) {
+      __publicField$2(this, "config");
+      this.config = {
+        ...DEFAULT_COLLISION_CONFIG,
+        ...config
+      };
+    }
+    /**
+     * @zh 检测圆与单个障碍物的碰撞
+     * @en Detect collision between circle and single obstacle
+     *
+     * @param position - @zh 圆心位置 @en Circle center position
+     * @param radius - @zh 圆半径 @en Circle radius
+     * @param obstacle - @zh 障碍物 @en Obstacle
+     * @returns @zh 碰撞结果 @en Collision result
+     */
+    detectCollision(position, radius, obstacle) {
+      const vertices = obstacle.vertices;
+      if (vertices.length < 3) {
+        return EMPTY_COLLISION;
+      }
+      const isInside = isPointInPolygon(position, vertices);
+      const closest = closestPointOnPolygon(position, vertices);
+      const distance = Math.sqrt(closest.distanceSq);
+      let penetration;
+      let normalX;
+      let normalY;
+      if (isInside) {
+        penetration = radius + distance;
+        const dx = closest.point.x - position.x;
+        const dy = closest.point.y - position.y;
+        const len2 = Math.sqrt(dx * dx + dy * dy);
+        if (len2 > EPSILON4) {
+          normalX = dx / len2;
+          normalY = dy / len2;
+        } else {
+          normalX = 1;
+          normalY = 0;
+        }
+      } else if (distance < radius) {
+        penetration = radius - distance;
+        const dx = position.x - closest.point.x;
+        const dy = position.y - closest.point.y;
+        const len2 = Math.sqrt(dx * dx + dy * dy);
+        if (len2 > EPSILON4) {
+          normalX = dx / len2;
+          normalY = dy / len2;
+        } else {
+          normalX = 1;
+          normalY = 0;
+        }
+      } else {
+        return EMPTY_COLLISION;
+      }
+      return {
+        collided: true,
+        penetration,
+        normal: {
+          x: normalX,
+          y: normalY
+        },
+        closestPoint: closest.point
+      };
+    }
+    /**
+     * @zh 检测圆与所有障碍物的碰撞
+     * @en Detect collision between circle and all obstacles
+     *
+     * @param position - @zh 圆心位置 @en Circle center position
+     * @param radius - @zh 圆半径 @en Circle radius
+     * @param obstacles - @zh 障碍物列表 @en List of obstacles
+     * @returns @zh 最严重的碰撞结果 @en Most severe collision result
+     */
+    detectCollisions(position, radius, obstacles) {
+      let worstCollision = EMPTY_COLLISION;
+      let maxPenetration = 0;
+      for (const obstacle of obstacles) {
+        const collision = this.detectCollision(position, radius, obstacle);
+        if (collision.collided && collision.penetration > maxPenetration) {
+          maxPenetration = collision.penetration;
+          worstCollision = collision;
+        }
+      }
+      return worstCollision;
+    }
+    /**
+     * @zh 解决碰撞，返回修正后的位置
+     * @en Resolve collision, return corrected position
+     *
+     * @param position - @zh 当前位置 @en Current position
+     * @param radius - @zh 半径 @en Radius
+     * @param obstacles - @zh 障碍物列表 @en List of obstacles
+     * @returns @zh 修正后的位置 @en Corrected position
+     */
+    resolveCollision(position, radius, obstacles) {
+      const result = {
+        x: position.x,
+        y: position.y
+      };
+      const maxIterations = 4;
+      for (let iter = 0; iter < maxIterations; iter++) {
+        const collision = this.detectCollisions(result, radius, obstacles);
+        if (!collision.collided) {
+          break;
+        }
+        const pushDistance = (collision.penetration + this.config.safetyMargin) * this.config.responseFactor;
+        result.x += collision.normal.x * pushDistance;
+        result.y += collision.normal.y * pushDistance;
+      }
+      return result;
+    }
+    /**
+     * @zh 验证速度是否会导致碰撞，返回安全速度
+     * @en Validate velocity won't cause collision, return safe velocity
+     *
+     * @param position - @zh 当前位置 @en Current position
+     * @param velocity - @zh 目标速度 @en Target velocity
+     * @param radius - @zh 半径 @en Radius
+     * @param obstacles - @zh 障碍物列表 @en List of obstacles
+     * @param deltaTime - @zh 时间步长 @en Time step
+     * @returns @zh 安全速度 @en Safe velocity
+     */
+    validateVelocity(position, velocity, radius, obstacles, deltaTime) {
+      const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+      if (speed < EPSILON4) {
+        return velocity;
+      }
+      const newPos = {
+        x: position.x + velocity.x * deltaTime,
+        y: position.y + velocity.y * deltaTime
+      };
+      const collision = this.detectCollisions(newPos, radius, obstacles);
+      if (!collision.collided) {
+        return velocity;
+      }
+      const dotProduct = velocity.x * collision.normal.x + velocity.y * collision.normal.y;
+      if (dotProduct >= 0) {
+        return velocity;
+      }
+      const slideVelocity = {
+        x: velocity.x - dotProduct * collision.normal.x,
+        y: velocity.y - dotProduct * collision.normal.y
+      };
+      const slideSpeed = Math.sqrt(slideVelocity.x * slideVelocity.x + slideVelocity.y * slideVelocity.y);
+      if (slideSpeed < speed * 0.1) {
+        const perpDir1 = {
+          x: -collision.normal.y,
+          y: collision.normal.x
+        };
+        const perpDir2 = {
+          x: collision.normal.y,
+          y: -collision.normal.x
+        };
+        const dot1 = velocity.x * perpDir1.x + velocity.y * perpDir1.y;
+        const dot22 = velocity.x * perpDir2.x + velocity.y * perpDir2.y;
+        const chosenDir = dot1 >= dot22 ? perpDir1 : perpDir2;
+        return {
+          x: chosenDir.x * speed,
+          y: chosenDir.y * speed
+        };
+      }
+      return slideVelocity;
+    }
+    /**
+     * @zh 检测两个代理之间的碰撞
+     * @en Detect collision between two agents
+     *
+     * @param posA - @zh 代理 A 位置 @en Agent A position
+     * @param radiusA - @zh 代理 A 半径 @en Agent A radius
+     * @param posB - @zh 代理 B 位置 @en Agent B position
+     * @param radiusB - @zh 代理 B 半径 @en Agent B radius
+     * @returns @zh 碰撞结果 @en Collision result
+     */
+    detectAgentCollision(posA, radiusA, posB, radiusB) {
+      const dx = posB.x - posA.x;
+      const dy = posB.y - posA.y;
+      const distSq = dx * dx + dy * dy;
+      const combinedRadius = radiusA + radiusB;
+      if (distSq >= combinedRadius * combinedRadius) {
+        return EMPTY_COLLISION;
+      }
+      const distance = Math.sqrt(distSq);
+      const penetration = combinedRadius - distance;
+      let normalX, normalY;
+      if (distance > EPSILON4) {
+        normalX = -dx / distance;
+        normalY = -dy / distance;
+      } else {
+        normalX = 1;
+        normalY = 0;
+      }
+      return {
+        collided: true,
+        penetration,
+        normal: {
+          x: normalX,
+          y: normalY
+        },
+        closestPoint: {
+          x: posA.x + normalX * radiusA,
+          y: posA.y + normalY * radiusA
+        }
+      };
+    }
+    /**
+     * @zh 解决代理之间的碰撞
+     * @en Resolve collision between agents
+     *
+     * @param posA - @zh 代理 A 位置 @en Agent A position
+     * @param radiusA - @zh 代理 A 半径 @en Agent A radius
+     * @param posB - @zh 代理 B 位置 @en Agent B position
+     * @param radiusB - @zh 代理 B 半径 @en Agent B radius
+     * @returns @zh 修正后的位置 [A, B] @en Corrected positions [A, B]
+     */
+    resolveAgentCollision(posA, radiusA, posB, radiusB) {
+      const collision = this.detectAgentCollision(posA, radiusA, posB, radiusB);
+      if (!collision.collided) {
+        return [
+          posA,
+          posB
+        ];
+      }
+      const halfPush = (collision.penetration + this.config.safetyMargin) * 0.5 * this.config.responseFactor;
+      return [
+        {
+          x: posA.x + collision.normal.x * halfPush,
+          y: posA.y + collision.normal.y * halfPush
+        },
+        {
+          x: posB.x - collision.normal.x * halfPush,
+          y: posB.y - collision.normal.y * halfPush
+        }
+      ];
+    }
+  };
+  __name$2(_CollisionResolver, "CollisionResolver");
+  var CollisionResolver = _CollisionResolver;
+  function createCollisionResolver(config) {
+    return new CollisionResolver(config);
+  }
+  __name$2(createCollisionResolver, "createCollisionResolver");
+
   // src/core/IPathfinding.ts
   function createPoint(x, y) {
     return {
@@ -67,8 +1348,138 @@ var ESEngine = (function (exports) {
     maxNodes: 1e4,
     heuristicWeight: 1,
     allowDiagonal: true,
-    avoidCorners: true
+    avoidCorners: true,
+    agentRadius: 0
   };
+
+  // src/core/BinaryHeap.ts
+  var _BinaryHeap = class _BinaryHeap {
+    /**
+     * @zh 创建二叉堆
+     * @en Create binary heap
+     *
+     * @param compare - @zh 比较函数，返回负数表示 a < b @en Compare function, returns negative if a < b
+     */
+    constructor(compare) {
+      __publicField$2(this, "heap", []);
+      __publicField$2(this, "compare");
+      this.compare = compare;
+    }
+    /**
+     * @zh 堆大小
+     * @en Heap size
+     */
+    get size() {
+      return this.heap.length;
+    }
+    /**
+     * @zh 是否为空
+     * @en Is empty
+     */
+    get isEmpty() {
+      return this.heap.length === 0;
+    }
+    /**
+     * @zh 插入元素
+     * @en Push element
+     */
+    push(item) {
+      this.heap.push(item);
+      this.bubbleUp(this.heap.length - 1);
+    }
+    /**
+     * @zh 弹出最小元素
+     * @en Pop minimum element
+     */
+    pop() {
+      if (this.heap.length === 0) {
+        return void 0;
+      }
+      const result = this.heap[0];
+      const last = this.heap.pop();
+      if (this.heap.length > 0) {
+        this.heap[0] = last;
+        this.sinkDown(0);
+      }
+      return result;
+    }
+    /**
+     * @zh 查看最小元素（不移除）
+     * @en Peek minimum element (without removing)
+     */
+    peek() {
+      return this.heap[0];
+    }
+    /**
+     * @zh 更新元素（重新排序）
+     * @en Update element (re-sort)
+     */
+    update(item) {
+      const index = this.heap.indexOf(item);
+      if (index !== -1) {
+        this.bubbleUp(index);
+        this.sinkDown(index);
+      }
+    }
+    /**
+     * @zh 检查是否包含元素
+     * @en Check if contains element
+     */
+    contains(item) {
+      return this.heap.indexOf(item) !== -1;
+    }
+    /**
+     * @zh 清空堆
+     * @en Clear heap
+     */
+    clear() {
+      this.heap.length = 0;
+    }
+    /**
+     * @zh 上浮操作
+     * @en Bubble up operation
+     */
+    bubbleUp(index) {
+      const item = this.heap[index];
+      while (index > 0) {
+        const parentIndex = Math.floor((index - 1) / 2);
+        const parent = this.heap[parentIndex];
+        if (this.compare(item, parent) >= 0) {
+          break;
+        }
+        this.heap[index] = parent;
+        index = parentIndex;
+      }
+      this.heap[index] = item;
+    }
+    /**
+     * @zh 下沉操作
+     * @en Sink down operation
+     */
+    sinkDown(index) {
+      const length = this.heap.length;
+      const item = this.heap[index];
+      while (true) {
+        const leftIndex = 2 * index + 1;
+        const rightIndex = 2 * index + 2;
+        let smallest = index;
+        if (leftIndex < length && this.compare(this.heap[leftIndex], this.heap[smallest]) < 0) {
+          smallest = leftIndex;
+        }
+        if (rightIndex < length && this.compare(this.heap[rightIndex], this.heap[smallest]) < 0) {
+          smallest = rightIndex;
+        }
+        if (smallest === index) {
+          break;
+        }
+        this.heap[index] = this.heap[smallest];
+        this.heap[smallest] = item;
+        index = smallest;
+      }
+    }
+  };
+  __name$2(_BinaryHeap, "BinaryHeap");
+  var BinaryHeap = _BinaryHeap;
 
   // src/core/IndexedBinaryHeap.ts
   var _IndexedBinaryHeap = class _IndexedBinaryHeap {
@@ -238,6 +1649,147 @@ var ESEngine = (function (exports) {
   };
   __name$2(_IndexedBinaryHeap, "IndexedBinaryHeap");
   var IndexedBinaryHeap = _IndexedBinaryHeap;
+
+  // src/core/AStarPathfinder.ts
+  var _AStarPathfinder = class _AStarPathfinder {
+    constructor(map) {
+      __publicField$2(this, "map");
+      __publicField$2(this, "nodeCache", /* @__PURE__ */ new Map());
+      __publicField$2(this, "openList");
+      this.map = map;
+      this.openList = new IndexedBinaryHeap((a, b) => a.f - b.f);
+    }
+    /**
+     * @zh 查找路径
+     * @en Find path
+     */
+    findPath(startX, startY, endX, endY, options) {
+      const opts = {
+        ...DEFAULT_PATHFINDING_OPTIONS,
+        ...options
+      };
+      this.clear();
+      const startNode = this.map.getNodeAt(startX, startY);
+      const endNode = this.map.getNodeAt(endX, endY);
+      if (!startNode || !endNode) {
+        return EMPTY_PATH_RESULT;
+      }
+      if (!startNode.walkable || !endNode.walkable) {
+        return EMPTY_PATH_RESULT;
+      }
+      if (startNode.id === endNode.id) {
+        return {
+          found: true,
+          path: [
+            startNode.position
+          ],
+          cost: 0,
+          nodesSearched: 1
+        };
+      }
+      const start = this.getOrCreateAStarNode(startNode);
+      start.g = 0;
+      start.h = this.map.heuristic(startNode.position, endNode.position) * opts.heuristicWeight;
+      start.f = start.h;
+      start.opened = true;
+      this.openList.push(start);
+      let nodesSearched = 0;
+      const endPosition = endNode.position;
+      while (!this.openList.isEmpty && nodesSearched < opts.maxNodes) {
+        const current = this.openList.pop();
+        current.closed = true;
+        nodesSearched++;
+        if (current.node.id === endNode.id) {
+          return this.buildPath(current, nodesSearched);
+        }
+        const neighbors = this.map.getNeighbors(current.node);
+        for (const neighborNode of neighbors) {
+          if (!neighborNode.walkable) {
+            continue;
+          }
+          const neighbor = this.getOrCreateAStarNode(neighborNode);
+          if (neighbor.closed) {
+            continue;
+          }
+          const movementCost = this.map.getMovementCost(current.node, neighborNode);
+          const tentativeG = current.g + movementCost;
+          if (!neighbor.opened) {
+            neighbor.g = tentativeG;
+            neighbor.h = this.map.heuristic(neighborNode.position, endPosition) * opts.heuristicWeight;
+            neighbor.f = neighbor.g + neighbor.h;
+            neighbor.parent = current;
+            neighbor.opened = true;
+            this.openList.push(neighbor);
+          } else if (tentativeG < neighbor.g) {
+            neighbor.g = tentativeG;
+            neighbor.f = neighbor.g + neighbor.h;
+            neighbor.parent = current;
+            this.openList.update(neighbor);
+          }
+        }
+      }
+      return {
+        found: false,
+        path: [],
+        cost: 0,
+        nodesSearched
+      };
+    }
+    /**
+     * @zh 清理状态
+     * @en Clear state
+     */
+    clear() {
+      this.nodeCache.clear();
+      this.openList.clear();
+    }
+    /**
+     * @zh 获取或创建 A* 节点
+     * @en Get or create A* node
+     */
+    getOrCreateAStarNode(node) {
+      let astarNode = this.nodeCache.get(node.id);
+      if (!astarNode) {
+        astarNode = {
+          node,
+          g: Infinity,
+          h: 0,
+          f: Infinity,
+          parent: null,
+          closed: false,
+          opened: false,
+          heapIndex: -1
+        };
+        this.nodeCache.set(node.id, astarNode);
+      }
+      return astarNode;
+    }
+    /**
+     * @zh 构建路径结果
+     * @en Build path result
+     */
+    buildPath(endNode, nodesSearched) {
+      const path = [];
+      let current = endNode;
+      while (current) {
+        path.push(current.node.position);
+        current = current.parent;
+      }
+      path.reverse();
+      return {
+        found: true,
+        path,
+        cost: endNode.g,
+        nodesSearched
+      };
+    }
+  };
+  __name$2(_AStarPathfinder, "AStarPathfinder");
+  var AStarPathfinder = _AStarPathfinder;
+  function createAStarPathfinder(map) {
+    return new AStarPathfinder(map);
+  }
+  __name$2(createAStarPathfinder, "createAStarPathfinder");
 
   // src/core/PathCache.ts
   var DEFAULT_PATH_CACHE_CONFIG = {
@@ -970,2495 +2522,6 @@ var ESEngine = (function (exports) {
   }
   __name$2(createIncrementalAStarPathfinder, "createIncrementalAStarPathfinder");
 
-  // src/core/PathValidator.ts
-  var _PathValidator = class _PathValidator {
-    /**
-     * @zh 验证路径段的有效性
-     * @en Validate path segment validity
-     *
-     * @param path - @zh 要验证的路径 @en Path to validate
-     * @param fromIndex - @zh 起始索引 @en Start index
-     * @param toIndex - @zh 结束索引 @en End index
-     * @param map - @zh 地图实例 @en Map instance
-     * @returns @zh 验证结果 @en Validation result
-     */
-    validatePath(path, fromIndex, toIndex, map) {
-      const end = Math.min(toIndex, path.length);
-      for (let i = fromIndex; i < end; i++) {
-        const point = path[i];
-        const x = Math.floor(point.x);
-        const y = Math.floor(point.y);
-        if (!map.isWalkable(x, y)) {
-          return {
-            valid: false,
-            invalidIndex: i
-          };
-        }
-        if (i > fromIndex) {
-          const prev = path[i - 1];
-          if (!this.checkLineOfSight(prev.x, prev.y, point.x, point.y, map)) {
-            return {
-              valid: false,
-              invalidIndex: i
-            };
-          }
-        }
-      }
-      return {
-        valid: true,
-        invalidIndex: -1
-      };
-    }
-    /**
-     * @zh 检查两点之间的视线（使用 Bresenham 算法）
-     * @en Check line of sight between two points (using Bresenham algorithm)
-     *
-     * @param x1 - @zh 起点 X @en Start X
-     * @param y1 - @zh 起点 Y @en Start Y
-     * @param x2 - @zh 终点 X @en End X
-     * @param y2 - @zh 终点 Y @en End Y
-     * @param map - @zh 地图实例 @en Map instance
-     * @returns @zh 是否有视线 @en Whether there is line of sight
-     */
-    checkLineOfSight(x1, y1, x2, y2, map) {
-      const ix1 = Math.floor(x1);
-      const iy1 = Math.floor(y1);
-      const ix2 = Math.floor(x2);
-      const iy2 = Math.floor(y2);
-      let dx = Math.abs(ix2 - ix1);
-      let dy = Math.abs(iy2 - iy1);
-      let x = ix1;
-      let y = iy1;
-      const sx = ix1 < ix2 ? 1 : -1;
-      const sy = iy1 < iy2 ? 1 : -1;
-      if (dx > dy) {
-        let err = dx / 2;
-        while (x !== ix2) {
-          if (!map.isWalkable(x, y)) {
-            return false;
-          }
-          err -= dy;
-          if (err < 0) {
-            y += sy;
-            err += dx;
-          }
-          x += sx;
-        }
-      } else {
-        let err = dy / 2;
-        while (y !== iy2) {
-          if (!map.isWalkable(x, y)) {
-            return false;
-          }
-          err -= dx;
-          if (err < 0) {
-            x += sx;
-            err += dy;
-          }
-          y += sy;
-        }
-      }
-      return map.isWalkable(ix2, iy2);
-    }
-  };
-  __name$2(_PathValidator, "PathValidator");
-  var PathValidator = _PathValidator;
-  var _ObstacleChangeManager = class _ObstacleChangeManager {
-    constructor() {
-      __publicField$2(this, "changes", /* @__PURE__ */ new Map());
-      __publicField$2(this, "epoch", 0);
-    }
-    /**
-     * @zh 记录障碍物变化
-     * @en Record obstacle change
-     *
-     * @param x - @zh X 坐标 @en X coordinate
-     * @param y - @zh Y 坐标 @en Y coordinate
-     * @param wasWalkable - @zh 变化前是否可通行 @en Was walkable before change
-     */
-    recordChange(x, y, wasWalkable) {
-      const key = `${x},${y}`;
-      this.changes.set(key, {
-        x,
-        y,
-        wasWalkable,
-        timestamp: Date.now()
-      });
-    }
-    /**
-     * @zh 获取影响区域
-     * @en Get affected region
-     *
-     * @returns @zh 影响区域或 null（如果没有变化）@en Affected region or null if no changes
-     */
-    getAffectedRegion() {
-      if (this.changes.size === 0) {
-        return null;
-      }
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      for (const change of this.changes.values()) {
-        minX = Math.min(minX, change.x);
-        minY = Math.min(minY, change.y);
-        maxX = Math.max(maxX, change.x);
-        maxY = Math.max(maxY, change.y);
-      }
-      return {
-        minX,
-        minY,
-        maxX,
-        maxY
-      };
-    }
-    /**
-     * @zh 获取所有变化
-     * @en Get all changes
-     *
-     * @returns @zh 变化列表 @en List of changes
-     */
-    getChanges() {
-      return Array.from(this.changes.values());
-    }
-    /**
-     * @zh 检查是否有变化
-     * @en Check if there are changes
-     *
-     * @returns @zh 是否有变化 @en Whether there are changes
-     */
-    hasChanges() {
-      return this.changes.size > 0;
-    }
-    /**
-     * @zh 获取当前 epoch
-     * @en Get current epoch
-     *
-     * @returns @zh 当前 epoch @en Current epoch
-     */
-    getEpoch() {
-      return this.epoch;
-    }
-    /**
-     * @zh 清空变化记录并推进 epoch
-     * @en Clear changes and advance epoch
-     */
-    flush() {
-      this.changes.clear();
-      this.epoch++;
-    }
-    /**
-     * @zh 清空所有状态
-     * @en Clear all state
-     */
-    clear() {
-      this.changes.clear();
-      this.epoch = 0;
-    }
-  };
-  __name$2(_ObstacleChangeManager, "ObstacleChangeManager");
-  var ObstacleChangeManager = _ObstacleChangeManager;
-  function createPathValidator() {
-    return new PathValidator();
-  }
-  __name$2(createPathValidator, "createPathValidator");
-  function createObstacleChangeManager() {
-    return new ObstacleChangeManager();
-  }
-  __name$2(createObstacleChangeManager, "createObstacleChangeManager");
-
-  // src/grid/GridMap.ts
-  var _GridNode = class _GridNode {
-    constructor(x, y, width, walkable = true, cost = 1) {
-      __publicField$2(this, "id");
-      __publicField$2(this, "position");
-      __publicField$2(this, "x");
-      __publicField$2(this, "y");
-      __publicField$2(this, "cost");
-      __publicField$2(this, "walkable");
-      this.x = x;
-      this.y = y;
-      this.id = y * width + x;
-      this.position = createPoint(x, y);
-      this.walkable = walkable;
-      this.cost = cost;
-    }
-  };
-  __name$2(_GridNode, "GridNode");
-  var GridNode = _GridNode;
-  var DIRECTIONS_4 = [
-    {
-      dx: 0,
-      dy: -1
-    },
-    {
-      dx: 1,
-      dy: 0
-    },
-    {
-      dx: 0,
-      dy: 1
-    },
-    {
-      dx: -1,
-      dy: 0
-    }
-    // Left
-  ];
-  var DIRECTIONS_8 = [
-    {
-      dx: 0,
-      dy: -1
-    },
-    {
-      dx: 1,
-      dy: -1
-    },
-    {
-      dx: 1,
-      dy: 0
-    },
-    {
-      dx: 1,
-      dy: 1
-    },
-    {
-      dx: 0,
-      dy: 1
-    },
-    {
-      dx: -1,
-      dy: 1
-    },
-    {
-      dx: -1,
-      dy: 0
-    },
-    {
-      dx: -1,
-      dy: -1
-    }
-    // Up-Left
-  ];
-  var DEFAULT_GRID_OPTIONS = {
-    allowDiagonal: true,
-    diagonalCost: Math.SQRT2,
-    avoidCorners: true,
-    heuristic: octileDistance
-  };
-  var _GridMap = class _GridMap {
-    constructor(width, height, options) {
-      __publicField$2(this, "width");
-      __publicField$2(this, "height");
-      __publicField$2(this, "nodes");
-      __publicField$2(this, "options");
-      this.width = width;
-      this.height = height;
-      this.options = {
-        ...DEFAULT_GRID_OPTIONS,
-        ...options
-      };
-      this.nodes = this.createNodes();
-    }
-    /**
-     * @zh 创建网格节点
-     * @en Create grid nodes
-     */
-    createNodes() {
-      const nodes = [];
-      for (let y = 0; y < this.height; y++) {
-        nodes[y] = [];
-        for (let x = 0; x < this.width; x++) {
-          nodes[y][x] = new GridNode(x, y, this.width, true, 1);
-        }
-      }
-      return nodes;
-    }
-    /**
-     * @zh 获取指定位置的节点
-     * @en Get node at position
-     */
-    getNodeAt(x, y) {
-      if (!this.isInBounds(x, y)) {
-        return null;
-      }
-      return this.nodes[y][x];
-    }
-    /**
-     * @zh 检查坐标是否在边界内
-     * @en Check if coordinates are within bounds
-     */
-    isInBounds(x, y) {
-      return x >= 0 && x < this.width && y >= 0 && y < this.height;
-    }
-    /**
-     * @zh 检查位置是否可通行
-     * @en Check if position is walkable
-     */
-    isWalkable(x, y) {
-      const node = this.getNodeAt(x, y);
-      return node !== null && node.walkable;
-    }
-    /**
-     * @zh 设置位置是否可通行
-     * @en Set position walkability
-     */
-    setWalkable(x, y, walkable) {
-      const node = this.getNodeAt(x, y);
-      if (node) {
-        node.walkable = walkable;
-      }
-    }
-    /**
-     * @zh 设置位置的移动代价
-     * @en Set movement cost at position
-     */
-    setCost(x, y, cost) {
-      const node = this.getNodeAt(x, y);
-      if (node) {
-        node.cost = cost;
-      }
-    }
-    /**
-     * @zh 获取节点的邻居
-     * @en Get neighbors of a node
-     */
-    getNeighbors(node) {
-      const neighbors = [];
-      const { x, y } = node.position;
-      const directions = this.options.allowDiagonal ? DIRECTIONS_8 : DIRECTIONS_4;
-      for (let i = 0; i < directions.length; i++) {
-        const dir = directions[i];
-        const nx = x + dir.dx;
-        const ny = y + dir.dy;
-        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
-          continue;
-        }
-        const neighbor = this.nodes[ny][nx];
-        if (!neighbor.walkable) {
-          continue;
-        }
-        if (this.options.avoidCorners && dir.dx !== 0 && dir.dy !== 0) {
-          const hNode = this.nodes[y][x + dir.dx];
-          const vNode = this.nodes[y + dir.dy][x];
-          if (!hNode.walkable || !vNode.walkable) {
-            continue;
-          }
-        }
-        neighbors.push(neighbor);
-      }
-      return neighbors;
-    }
-    /**
-     * @zh 遍历节点的邻居（零分配）
-     * @en Iterate over neighbors (zero allocation)
-     */
-    forEachNeighbor(node, callback) {
-      const { x, y } = node.position;
-      const directions = this.options.allowDiagonal ? DIRECTIONS_8 : DIRECTIONS_4;
-      for (let i = 0; i < directions.length; i++) {
-        const dir = directions[i];
-        const nx = x + dir.dx;
-        const ny = y + dir.dy;
-        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
-          continue;
-        }
-        const neighbor = this.nodes[ny][nx];
-        if (!neighbor.walkable) {
-          continue;
-        }
-        if (this.options.avoidCorners && dir.dx !== 0 && dir.dy !== 0) {
-          const hNode = this.nodes[y][x + dir.dx];
-          const vNode = this.nodes[y + dir.dy][x];
-          if (!hNode.walkable || !vNode.walkable) {
-            continue;
-          }
-        }
-        if (callback(neighbor) === false) {
-          return;
-        }
-      }
-    }
-    /**
-     * @zh 计算启发式距离
-     * @en Calculate heuristic distance
-     */
-    heuristic(a, b) {
-      return this.options.heuristic(a, b);
-    }
-    /**
-     * @zh 计算移动代价
-     * @en Calculate movement cost
-     */
-    getMovementCost(from, to) {
-      const dx = Math.abs(from.position.x - to.position.x);
-      const dy = Math.abs(from.position.y - to.position.y);
-      if (dx !== 0 && dy !== 0) {
-        return to.cost * this.options.diagonalCost;
-      }
-      return to.cost;
-    }
-    /**
-     * @zh 从二维数组加载地图
-     * @en Load map from 2D array
-     *
-     * @param data - @zh 0=可通行，非0=不可通行 @en 0=walkable, non-0=blocked
-     */
-    loadFromArray(data) {
-      for (let y = 0; y < Math.min(data.length, this.height); y++) {
-        for (let x = 0; x < Math.min(data[y].length, this.width); x++) {
-          this.nodes[y][x].walkable = data[y][x] === 0;
-        }
-      }
-    }
-    /**
-     * @zh 从字符串加载地图
-     * @en Load map from string
-     *
-     * @param str - @zh 地图字符串，'.'=可通行，'#'=障碍 @en Map string, '.'=walkable, '#'=blocked
-     */
-    loadFromString(str) {
-      const lines = str.trim().split("\n");
-      for (let y = 0; y < Math.min(lines.length, this.height); y++) {
-        const line = lines[y];
-        for (let x = 0; x < Math.min(line.length, this.width); x++) {
-          this.nodes[y][x].walkable = line[x] !== "#";
-        }
-      }
-    }
-    /**
-     * @zh 导出为字符串
-     * @en Export to string
-     */
-    toString() {
-      let result = "";
-      for (let y = 0; y < this.height; y++) {
-        for (let x = 0; x < this.width; x++) {
-          result += this.nodes[y][x].walkable ? "." : "#";
-        }
-        result += "\n";
-      }
-      return result;
-    }
-    /**
-     * @zh 重置所有节点为可通行
-     * @en Reset all nodes to walkable
-     */
-    reset() {
-      for (let y = 0; y < this.height; y++) {
-        for (let x = 0; x < this.width; x++) {
-          this.nodes[y][x].walkable = true;
-          this.nodes[y][x].cost = 1;
-        }
-      }
-    }
-    /**
-     * @zh 设置矩形区域的通行性
-     * @en Set walkability for a rectangle region
-     */
-    setRectWalkable(x, y, width, height, walkable) {
-      for (let dy = 0; dy < height; dy++) {
-        for (let dx = 0; dx < width; dx++) {
-          this.setWalkable(x + dx, y + dy, walkable);
-        }
-      }
-    }
-  };
-  __name$2(_GridMap, "GridMap");
-  var GridMap = _GridMap;
-  function createGridMap(width, height, options) {
-    return new GridMap(width, height, options);
-  }
-  __name$2(createGridMap, "createGridMap");
-
-  // src/smoothing/PathSmoother.ts
-  function bresenhamLineOfSight(x1, y1, x2, y2, map) {
-    let ix1 = Math.floor(x1);
-    let iy1 = Math.floor(y1);
-    const ix2 = Math.floor(x2);
-    const iy2 = Math.floor(y2);
-    const dx = Math.abs(ix2 - ix1);
-    const dy = Math.abs(iy2 - iy1);
-    const sx = ix1 < ix2 ? 1 : -1;
-    const sy = iy1 < iy2 ? 1 : -1;
-    let err = dx - dy;
-    while (true) {
-      if (!map.isWalkable(ix1, iy1)) {
-        return false;
-      }
-      if (ix1 === ix2 && iy1 === iy2) {
-        break;
-      }
-      const e2 = 2 * err;
-      if (e2 > -dy) {
-        err -= dy;
-        ix1 += sx;
-      }
-      if (e2 < dx) {
-        err += dx;
-        iy1 += sy;
-      }
-    }
-    return true;
-  }
-  __name$2(bresenhamLineOfSight, "bresenhamLineOfSight");
-  function raycastLineOfSight(x1, y1, x2, y2, map, stepSize = 0.5) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance === 0) {
-      return map.isWalkable(Math.floor(x1), Math.floor(y1));
-    }
-    const steps = Math.ceil(distance / stepSize);
-    const stepX = dx / steps;
-    const stepY = dy / steps;
-    let x = x1;
-    let y = y1;
-    for (let i = 0; i <= steps; i++) {
-      if (!map.isWalkable(Math.floor(x), Math.floor(y))) {
-        return false;
-      }
-      x += stepX;
-      y += stepY;
-    }
-    return true;
-  }
-  __name$2(raycastLineOfSight, "raycastLineOfSight");
-  var _LineOfSightSmoother = class _LineOfSightSmoother {
-    constructor(lineOfSight = bresenhamLineOfSight) {
-      __publicField$2(this, "lineOfSight");
-      this.lineOfSight = lineOfSight;
-    }
-    smooth(path, map) {
-      if (path.length <= 2) {
-        return [
-          ...path
-        ];
-      }
-      const result = [
-        path[0]
-      ];
-      let current = 0;
-      while (current < path.length - 1) {
-        let furthest = current + 1;
-        for (let i = path.length - 1; i > current + 1; i--) {
-          if (this.lineOfSight(path[current].x, path[current].y, path[i].x, path[i].y, map)) {
-            furthest = i;
-            break;
-          }
-        }
-        result.push(path[furthest]);
-        current = furthest;
-      }
-      return result;
-    }
-  };
-  __name$2(_LineOfSightSmoother, "LineOfSightSmoother");
-  var LineOfSightSmoother = _LineOfSightSmoother;
-  var _CatmullRomSmoother = class _CatmullRomSmoother {
-    /**
-     * @param segments - @zh 每段之间的插值点数 @en Number of interpolation points per segment
-     * @param tension - @zh 张力 (0-1) @en Tension (0-1)
-     */
-    constructor(segments = 5, tension = 0.5) {
-      __publicField$2(this, "segments");
-      __publicField$2(this, "tension");
-      this.segments = segments;
-      this.tension = tension;
-    }
-    smooth(path, _map) {
-      if (path.length <= 2) {
-        return [
-          ...path
-        ];
-      }
-      const result = [];
-      const points = [
-        path[0],
-        ...path,
-        path[path.length - 1]
-      ];
-      for (let i = 1; i < points.length - 2; i++) {
-        const p0 = points[i - 1];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2];
-        for (let j = 0; j < this.segments; j++) {
-          const t = j / this.segments;
-          const point = this.interpolate(p0, p1, p2, p3, t);
-          result.push(point);
-        }
-      }
-      result.push(path[path.length - 1]);
-      return result;
-    }
-    /**
-     * @zh Catmull-Rom 插值
-     * @en Catmull-Rom interpolation
-     */
-    interpolate(p0, p1, p2, p3, t) {
-      const t2 = t * t;
-      const t3 = t2 * t;
-      const tension = this.tension;
-      const x = 0.5 * (2 * p1.x + (-p0.x + p2.x) * t * tension + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 * tension + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3 * tension);
-      const y = 0.5 * (2 * p1.y + (-p0.y + p2.y) * t * tension + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 * tension + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3 * tension);
-      return createPoint(x, y);
-    }
-  };
-  __name$2(_CatmullRomSmoother, "CatmullRomSmoother");
-  var CatmullRomSmoother = _CatmullRomSmoother;
-  var _CombinedSmoother = class _CombinedSmoother {
-    constructor(curveSegments = 5, tension = 0.5) {
-      __publicField$2(this, "simplifier");
-      __publicField$2(this, "curveSmoother");
-      this.simplifier = new LineOfSightSmoother();
-      this.curveSmoother = new CatmullRomSmoother(curveSegments, tension);
-    }
-    smooth(path, map) {
-      const simplified = this.simplifier.smooth(path, map);
-      return this.curveSmoother.smooth(simplified, map);
-    }
-  };
-  __name$2(_CombinedSmoother, "CombinedSmoother");
-  var CombinedSmoother = _CombinedSmoother;
-  function createLineOfSightSmoother(lineOfSight) {
-    return new LineOfSightSmoother(lineOfSight);
-  }
-  __name$2(createLineOfSightSmoother, "createLineOfSightSmoother");
-  function createCatmullRomSmoother(segments, tension) {
-    return new CatmullRomSmoother(segments, tension);
-  }
-  __name$2(createCatmullRomSmoother, "createCatmullRomSmoother");
-  function createCombinedSmoother(curveSegments, tension) {
-    return new CombinedSmoother(curveSegments, tension);
-  }
-  __name$2(createCombinedSmoother, "createCombinedSmoother");
-
-  // src/avoidance/ILocalAvoidance.ts
-  var DEFAULT_ORCA_CONFIG = {
-    defaultTimeHorizon: 2,
-    defaultTimeHorizonObst: 1,
-    timeStep: 1 / 60,
-    epsilon: 1e-5
-  };
-  var DEFAULT_AGENT_PARAMS = {
-    radius: 0.5,
-    maxSpeed: 5,
-    neighborDist: 15,
-    maxNeighbors: 10,
-    timeHorizon: 2,
-    timeHorizonObst: 1
-  };
-  var EPSILON = 1e-5;
-  var { dot, det, lengthSq } = t;
-  function linearProgram1(lines, lineNo, radius, optVelocity, directionOpt, result) {
-    const line = lines[lineNo];
-    const dotProduct = dot(line.point, line.direction);
-    const discriminant = dotProduct * dotProduct + radius * radius - lengthSq(line.point);
-    if (discriminant < 0) {
-      return false;
-    }
-    const sqrtDiscriminant = Math.sqrt(discriminant);
-    let tLeft = -dotProduct - sqrtDiscriminant;
-    let tRight = -dotProduct + sqrtDiscriminant;
-    for (let i = 0; i < lineNo; i++) {
-      const constraint = lines[i];
-      const denominator = det(line.direction, constraint.direction);
-      const numerator = det(constraint.direction, {
-        x: line.point.x - constraint.point.x,
-        y: line.point.y - constraint.point.y
-      });
-      if (Math.abs(denominator) <= EPSILON) {
-        if (numerator < 0) {
-          return false;
-        }
-        continue;
-      }
-      const t2 = numerator / denominator;
-      if (denominator >= 0) {
-        tRight = Math.min(tRight, t2);
-      } else {
-        tLeft = Math.max(tLeft, t2);
-      }
-      if (tLeft > tRight) {
-        return false;
-      }
-    }
-    let t;
-    if (directionOpt) {
-      if (dot(optVelocity, line.direction) > 0) {
-        t = tRight;
-      } else {
-        t = tLeft;
-      }
-    } else {
-      t = dot(line.direction, {
-        x: optVelocity.x - line.point.x,
-        y: optVelocity.y - line.point.y
-      });
-      if (t < tLeft) {
-        t = tLeft;
-      } else if (t > tRight) {
-        t = tRight;
-      }
-    }
-    result.x = line.point.x + t * line.direction.x;
-    result.y = line.point.y + t * line.direction.y;
-    return true;
-  }
-  __name$2(linearProgram1, "linearProgram1");
-  function linearProgram2(lines, radius, optVelocity, directionOpt, result) {
-    if (directionOpt) {
-      result.x = optVelocity.x * radius;
-      result.y = optVelocity.y * radius;
-    } else if (lengthSq(optVelocity) > radius * radius) {
-      const len2 = Math.sqrt(lengthSq(optVelocity));
-      result.x = optVelocity.x / len2 * radius;
-      result.y = optVelocity.y / len2 * radius;
-    } else {
-      result.x = optVelocity.x;
-      result.y = optVelocity.y;
-    }
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const detVal = det(line.direction, {
-        x: line.point.x - result.x,
-        y: line.point.y - result.y
-      });
-      if (detVal > 0) {
-        const tempResult = result.clone();
-        if (!linearProgram1(lines, i, radius, optVelocity, directionOpt, result)) {
-          result.copy(tempResult);
-          return i;
-        }
-      }
-    }
-    return lines.length;
-  }
-  __name$2(linearProgram2, "linearProgram2");
-  function linearProgram3(lines, numObstLines, beginLine, radius, result) {
-    let distance = 0;
-    for (let i = beginLine; i < lines.length; i++) {
-      const line = lines[i];
-      if (det(line.direction, {
-        x: line.point.x - result.x,
-        y: line.point.y - result.y
-      }) > distance) {
-        const projLines = [];
-        for (let j = 0; j < numObstLines; j++) {
-          projLines.push(lines[j]);
-        }
-        for (let j = numObstLines; j < i; j++) {
-          const line1 = lines[j];
-          const line2 = lines[i];
-          let newLine;
-          const determinant = det(line1.direction, line2.direction);
-          if (Math.abs(determinant) <= EPSILON) {
-            if (dot(line1.direction, line2.direction) > 0) {
-              continue;
-            }
-            newLine = {
-              point: {
-                x: 0.5 * (line1.point.x + line2.point.x),
-                y: 0.5 * (line1.point.y + line2.point.y)
-              },
-              direction: {
-                x: 0,
-                y: 0
-              }
-            };
-          } else {
-            const diff = {
-              x: line1.point.x - line2.point.x,
-              y: line1.point.y - line2.point.y
-            };
-            const t = det(line2.direction, diff) / determinant;
-            newLine = {
-              point: {
-                x: line1.point.x + t * line1.direction.x,
-                y: line1.point.y + t * line1.direction.y
-              },
-              direction: {
-                x: 0,
-                y: 0
-              }
-            };
-          }
-          const dirDiff = {
-            x: line1.direction.x - line2.direction.x,
-            y: line1.direction.y - line2.direction.y
-          };
-          const dirLen = Math.sqrt(lengthSq(dirDiff));
-          if (dirLen > EPSILON) {
-            newLine.direction.x = dirDiff.x / dirLen;
-            newLine.direction.y = dirDiff.y / dirLen;
-          }
-          projLines.push(newLine);
-        }
-        const tempResult = result.clone();
-        const optVelocity = {
-          x: -lines[i].direction.y,
-          y: lines[i].direction.x
-        };
-        if (linearProgram2(projLines, radius, optVelocity, true, result) < projLines.length) {
-          result.copy(tempResult);
-        }
-        distance = det(lines[i].direction, {
-          x: lines[i].point.x - result.x,
-          y: lines[i].point.y - result.y
-        });
-      }
-    }
-  }
-  __name$2(linearProgram3, "linearProgram3");
-  function solveORCALinearProgram(lines, numObstLines, maxSpeed, preferredVelocity) {
-    const result = new t();
-    const lineFail = linearProgram2(lines, maxSpeed, preferredVelocity, false, result);
-    if (lineFail < lines.length) {
-      linearProgram3(lines, numObstLines, lineFail, maxSpeed, result);
-    }
-    return result;
-  }
-  __name$2(solveORCALinearProgram, "solveORCALinearProgram");
-
-  // src/avoidance/ObstacleBuilder.ts
-  var EPSILON2 = 1e-5;
-  function leftOf(p1, p2, p3) {
-    return (p1.x - p3.x) * (p2.y - p1.y) - (p1.y - p3.y) * (p2.x - p1.x);
-  }
-  __name$2(leftOf, "leftOf");
-  function createObstacleVertices(vertices, startId = 0) {
-    const n = vertices.length;
-    if (n < 2) {
-      return [];
-    }
-    const obstacleVertices = [];
-    for (let i = 0; i < n; i++) {
-      obstacleVertices.push({
-        point: {
-          x: vertices[i].x,
-          y: vertices[i].y
-        },
-        direction: {
-          x: 0,
-          y: 0
-        },
-        next: null,
-        previous: null,
-        isConvex: false,
-        id: startId + i
-      });
-    }
-    for (let i = 0; i < n; i++) {
-      const curr = obstacleVertices[i];
-      const next = obstacleVertices[(i + 1) % n];
-      const prev = obstacleVertices[(i + n - 1) % n];
-      curr.next = next;
-      curr.previous = prev;
-      const dx = next.point.x - curr.point.x;
-      const dy = next.point.y - curr.point.y;
-      const edgeLen = Math.sqrt(dx * dx + dy * dy);
-      if (edgeLen > EPSILON2) {
-        curr.direction = {
-          x: dx / edgeLen,
-          y: dy / edgeLen
-        };
-      } else {
-        curr.direction = {
-          x: 1,
-          y: 0
-        };
-      }
-    }
-    for (let i = 0; i < n; i++) {
-      const curr = obstacleVertices[i];
-      const prev = curr.previous;
-      const next = curr.next;
-      curr.isConvex = leftOf(prev.point, curr.point, next.point) >= 0;
-    }
-    return obstacleVertices;
-  }
-  __name$2(createObstacleVertices, "createObstacleVertices");
-  function buildObstacleVertices(obstacles) {
-    const allVertices = [];
-    let nextId = 0;
-    for (const obstacle of obstacles) {
-      const vertices = createObstacleVertices(obstacle.vertices, nextId);
-      allVertices.push(...vertices);
-      nextId += vertices.length;
-    }
-    return allVertices;
-  }
-  __name$2(buildObstacleVertices, "buildObstacleVertices");
-  function ensureCCW(vertices, yAxisDown = false) {
-    if (vertices.length < 3) {
-      return vertices;
-    }
-    let signedArea = 0;
-    for (let i = 0; i < vertices.length; i++) {
-      const curr = vertices[i];
-      const next = vertices[(i + 1) % vertices.length];
-      signedArea += curr.x * next.y - next.x * curr.y;
-    }
-    signedArea *= 0.5;
-    const isCCW = yAxisDown ? signedArea < 0 : signedArea > 0;
-    if (isCCW) {
-      return vertices;
-    }
-    return [
-      ...vertices
-    ].reverse();
-  }
-  __name$2(ensureCCW, "ensureCCW");
-  var EPSILON3 = 1e-5;
-  var { det: det2, dot: dot2, lengthSq: lengthSq2, len } = t;
-  function normalize(v) {
-    const length = len(v);
-    if (length < EPSILON3) {
-      return {
-        x: 0,
-        y: 0
-      };
-    }
-    return {
-      x: v.x / length,
-      y: v.y / length
-    };
-  }
-  __name$2(normalize, "normalize");
-  var _ORCASolver = class _ORCASolver {
-    constructor(config = {}) {
-      __publicField$2(this, "config");
-      this.config = {
-        ...DEFAULT_ORCA_CONFIG,
-        ...config
-      };
-    }
-    /**
-     * @zh 计算代理的新速度
-     * @en Compute new velocity for agent
-     *
-     * @param agent - @zh 当前代理 @en Current agent
-     * @param neighbors - @zh 邻近代理列表 @en List of neighboring agents
-     * @param obstacles - @zh 障碍物列表 @en List of obstacles
-     * @param deltaTime - @zh 时间步长 @en Time step
-     * @returns @zh 计算得到的新速度 @en Computed new velocity
-     */
-    computeNewVelocity(agent, neighbors, obstacles, deltaTime) {
-      const orcaLines = [];
-      const obstacleVertices = buildObstacleVertices(obstacles);
-      const numObstLines = this.createObstacleORCALines(agent, obstacleVertices, orcaLines);
-      this.createAgentORCALines(agent, neighbors, deltaTime, orcaLines);
-      return solveORCALinearProgram(orcaLines, numObstLines, agent.maxSpeed, agent.preferredVelocity);
-    }
-    /**
-     * @zh 创建代理间的 ORCA 约束线
-     * @en Create ORCA constraint lines for agent-agent avoidance
-     */
-    createAgentORCALines(agent, neighbors, deltaTime, orcaLines) {
-      const invTimeHorizon = 1 / agent.timeHorizon;
-      for (const other of neighbors) {
-        if (other.id === agent.id) continue;
-        const relativePosition = {
-          x: other.position.x - agent.position.x,
-          y: other.position.y - agent.position.y
-        };
-        const relativeVelocity = {
-          x: agent.velocity.x - other.velocity.x,
-          y: agent.velocity.y - other.velocity.y
-        };
-        const distSq = lengthSq2(relativePosition);
-        const combinedRadius = agent.radius + other.radius;
-        const combinedRadiusSq = combinedRadius * combinedRadius;
-        const line = {
-          point: {
-            x: 0,
-            y: 0
-          },
-          direction: {
-            x: 0,
-            y: 0
-          }
-        };
-        let u;
-        if (distSq > combinedRadiusSq) {
-          const w = {
-            x: relativeVelocity.x - invTimeHorizon * relativePosition.x,
-            y: relativeVelocity.y - invTimeHorizon * relativePosition.y
-          };
-          const wLengthSq = lengthSq2(w);
-          const dotProduct1 = dot2(w, relativePosition);
-          if (dotProduct1 < 0 && dotProduct1 * dotProduct1 > combinedRadiusSq * wLengthSq) {
-            const wLength = Math.sqrt(wLengthSq);
-            const unitW = normalize(w);
-            line.direction = {
-              x: unitW.y,
-              y: -unitW.x
-            };
-            u = {
-              x: (combinedRadius * invTimeHorizon - wLength) * unitW.x,
-              y: (combinedRadius * invTimeHorizon - wLength) * unitW.y
-            };
-          } else {
-            const leg = Math.sqrt(distSq - combinedRadiusSq);
-            if (det2(relativePosition, w) > 0) {
-              line.direction = {
-                x: (relativePosition.x * leg - relativePosition.y * combinedRadius) / distSq,
-                y: (relativePosition.x * combinedRadius + relativePosition.y * leg) / distSq
-              };
-            } else {
-              line.direction = {
-                x: -(relativePosition.x * leg + relativePosition.y * combinedRadius) / distSq,
-                y: -(-relativePosition.x * combinedRadius + relativePosition.y * leg) / distSq
-              };
-            }
-            const dotProduct2 = dot2(relativeVelocity, line.direction);
-            u = {
-              x: dotProduct2 * line.direction.x - relativeVelocity.x,
-              y: dotProduct2 * line.direction.y - relativeVelocity.y
-            };
-          }
-        } else {
-          const invTimeStep = 1 / deltaTime;
-          const w = {
-            x: relativeVelocity.x - invTimeStep * relativePosition.x,
-            y: relativeVelocity.y - invTimeStep * relativePosition.y
-          };
-          const wLength = len(w);
-          const unitW = wLength > EPSILON3 ? {
-            x: w.x / wLength,
-            y: w.y / wLength
-          } : {
-            x: 1,
-            y: 0
-          };
-          line.direction = {
-            x: unitW.y,
-            y: -unitW.x
-          };
-          u = {
-            x: (combinedRadius * invTimeStep - wLength) * unitW.x,
-            y: (combinedRadius * invTimeStep - wLength) * unitW.y
-          };
-        }
-        line.point = {
-          x: agent.velocity.x + 0.5 * u.x,
-          y: agent.velocity.y + 0.5 * u.y
-        };
-        orcaLines.push(line);
-      }
-    }
-    /**
-     * @zh 创建障碍物的 ORCA 约束线
-     * @en Create ORCA constraint lines for obstacle avoidance
-     */
-    createObstacleORCALines(agent, obstacleVertices, orcaLines) {
-      const invTimeHorizonObst = 1 / agent.timeHorizonObst;
-      const radiusSq = agent.radius * agent.radius;
-      let numObstLines = 0;
-      for (const obstacle1 of obstacleVertices) {
-        const obstacle2 = obstacle1.next;
-        const relativePosition1 = {
-          x: obstacle1.point.x - agent.position.x,
-          y: obstacle1.point.y - agent.position.y
-        };
-        const relativePosition2 = {
-          x: obstacle2.point.x - agent.position.x,
-          y: obstacle2.point.y - agent.position.y
-        };
-        const obstacleVector = {
-          x: obstacle2.point.x - obstacle1.point.x,
-          y: obstacle2.point.y - obstacle1.point.y
-        };
-        const signedDistToEdge = det2(obstacleVector, relativePosition1);
-        if (signedDistToEdge < -EPSILON3) {
-          continue;
-        }
-        let alreadyCovered = false;
-        for (const existingLine of orcaLines) {
-          const scaledRelPos1 = {
-            x: invTimeHorizonObst * relativePosition1.x - existingLine.point.x,
-            y: invTimeHorizonObst * relativePosition1.y - existingLine.point.y
-          };
-          const scaledRelPos2 = {
-            x: invTimeHorizonObst * relativePosition2.x - existingLine.point.x,
-            y: invTimeHorizonObst * relativePosition2.y - existingLine.point.y
-          };
-          if (det2(scaledRelPos1, existingLine.direction) - invTimeHorizonObst * agent.radius >= -EPSILON3 && det2(scaledRelPos2, existingLine.direction) - invTimeHorizonObst * agent.radius >= -EPSILON3) {
-            alreadyCovered = true;
-            break;
-          }
-        }
-        if (alreadyCovered) {
-          continue;
-        }
-        const distSq1 = lengthSq2(relativePosition1);
-        const distSq2 = lengthSq2(relativePosition2);
-        const obstacleVectorSq = lengthSq2(obstacleVector);
-        const s = obstacleVectorSq > EPSILON3 ? -dot2(relativePosition1, obstacleVector) / obstacleVectorSq : 0;
-        const distSqLineToEdge = lengthSq2({
-          x: -relativePosition1.x - s * obstacleVector.x,
-          y: -relativePosition1.y - s * obstacleVector.y
-        });
-        const line = {
-          point: {
-            x: 0,
-            y: 0
-          },
-          direction: {
-            x: 0,
-            y: 0
-          }
-        };
-        if (s < 0 && distSq1 <= radiusSq) {
-          if (obstacle1.isConvex) {
-            line.point = {
-              x: 0,
-              y: 0
-            };
-            line.direction = normalize({
-              x: -relativePosition1.y,
-              y: relativePosition1.x
-            });
-            orcaLines.push(line);
-            numObstLines++;
-          }
-          continue;
-        }
-        if (s > 1 && distSq2 <= radiusSq) {
-          if (obstacle2.isConvex && det2(relativePosition2, obstacle2.direction) >= 0) {
-            line.point = {
-              x: 0,
-              y: 0
-            };
-            line.direction = normalize({
-              x: -relativePosition2.y,
-              y: relativePosition2.x
-            });
-            orcaLines.push(line);
-            numObstLines++;
-          }
-          continue;
-        }
-        if (s >= 0 && s <= 1 && distSqLineToEdge <= radiusSq) {
-          line.point = {
-            x: 0,
-            y: 0
-          };
-          line.direction = {
-            x: -obstacle1.direction.x,
-            y: -obstacle1.direction.y
-          };
-          orcaLines.push(line);
-          numObstLines++;
-          continue;
-        }
-        let obs1 = obstacle1;
-        let obs2 = obstacle2;
-        let leftLegDirection;
-        let rightLegDirection;
-        if (s < 0 && distSqLineToEdge <= radiusSq) {
-          if (!obstacle1.isConvex) continue;
-          obs2 = obstacle1;
-          const leg1 = Math.sqrt(Math.max(0, distSq1 - radiusSq));
-          leftLegDirection = {
-            x: (relativePosition1.x * leg1 - relativePosition1.y * agent.radius) / distSq1,
-            y: (relativePosition1.x * agent.radius + relativePosition1.y * leg1) / distSq1
-          };
-          rightLegDirection = {
-            x: (relativePosition1.x * leg1 + relativePosition1.y * agent.radius) / distSq1,
-            y: (-relativePosition1.x * agent.radius + relativePosition1.y * leg1) / distSq1
-          };
-        } else if (s > 1 && distSqLineToEdge <= radiusSq) {
-          if (!obstacle2.isConvex) continue;
-          obs1 = obstacle2;
-          const leg2 = Math.sqrt(Math.max(0, distSq2 - radiusSq));
-          leftLegDirection = {
-            x: (relativePosition2.x * leg2 - relativePosition2.y * agent.radius) / distSq2,
-            y: (relativePosition2.x * agent.radius + relativePosition2.y * leg2) / distSq2
-          };
-          rightLegDirection = {
-            x: (relativePosition2.x * leg2 + relativePosition2.y * agent.radius) / distSq2,
-            y: (-relativePosition2.x * agent.radius + relativePosition2.y * leg2) / distSq2
-          };
-        } else {
-          if (obstacle1.isConvex) {
-            const leg1 = Math.sqrt(Math.max(0, distSq1 - radiusSq));
-            leftLegDirection = {
-              x: (relativePosition1.x * leg1 - relativePosition1.y * agent.radius) / distSq1,
-              y: (relativePosition1.x * agent.radius + relativePosition1.y * leg1) / distSq1
-            };
-          } else {
-            leftLegDirection = {
-              x: -obstacle1.direction.x,
-              y: -obstacle1.direction.y
-            };
-          }
-          if (obstacle2.isConvex) {
-            const leg2 = Math.sqrt(Math.max(0, distSq2 - radiusSq));
-            rightLegDirection = {
-              x: (relativePosition2.x * leg2 + relativePosition2.y * agent.radius) / distSq2,
-              y: (-relativePosition2.x * agent.radius + relativePosition2.y * leg2) / distSq2
-            };
-          } else {
-            rightLegDirection = {
-              x: obstacle1.direction.x,
-              y: obstacle1.direction.y
-            };
-          }
-        }
-        const leftNeighbor = obs1.previous;
-        let isLeftLegForeign = false;
-        let isRightLegForeign = false;
-        if (obs1.isConvex) {
-          const negLeftNeighborDir = {
-            x: -leftNeighbor.direction.x,
-            y: -leftNeighbor.direction.y
-          };
-          if (det2(leftLegDirection, negLeftNeighborDir) >= 0) {
-            leftLegDirection = negLeftNeighborDir;
-            isLeftLegForeign = true;
-          }
-        }
-        if (obs2.isConvex) {
-          if (det2(rightLegDirection, obs2.direction) <= 0) {
-            rightLegDirection = {
-              x: obs2.direction.x,
-              y: obs2.direction.y
-            };
-            isRightLegForeign = true;
-          }
-        }
-        const leftCutoff = {
-          x: invTimeHorizonObst * (obs1.point.x - agent.position.x),
-          y: invTimeHorizonObst * (obs1.point.y - agent.position.y)
-        };
-        const rightCutoff = {
-          x: invTimeHorizonObst * (obs2.point.x - agent.position.x),
-          y: invTimeHorizonObst * (obs2.point.y - agent.position.y)
-        };
-        const cutoffVector = {
-          x: rightCutoff.x - leftCutoff.x,
-          y: rightCutoff.y - leftCutoff.y
-        };
-        const sameVertex = obs1 === obs2;
-        const cutoffVectorSq = lengthSq2(cutoffVector);
-        const t = sameVertex ? 0.5 : cutoffVectorSq > EPSILON3 ? dot2({
-          x: agent.velocity.x - leftCutoff.x,
-          y: agent.velocity.y - leftCutoff.y
-        }, cutoffVector) / cutoffVectorSq : 0.5;
-        const tLeft = dot2({
-          x: agent.velocity.x - leftCutoff.x,
-          y: agent.velocity.y - leftCutoff.y
-        }, leftLegDirection);
-        const tRight = dot2({
-          x: agent.velocity.x - rightCutoff.x,
-          y: agent.velocity.y - rightCutoff.y
-        }, rightLegDirection);
-        if (t < 0 && tLeft < 0 || sameVertex && tLeft < 0 && tRight < 0) {
-          const unitW = normalize({
-            x: agent.velocity.x - leftCutoff.x,
-            y: agent.velocity.y - leftCutoff.y
-          });
-          line.direction = {
-            x: unitW.y,
-            y: -unitW.x
-          };
-          line.point = {
-            x: leftCutoff.x + agent.radius * invTimeHorizonObst * unitW.x,
-            y: leftCutoff.y + agent.radius * invTimeHorizonObst * unitW.y
-          };
-          orcaLines.push(line);
-          numObstLines++;
-          continue;
-        }
-        if (t > 1 && tRight < 0) {
-          const unitW = normalize({
-            x: agent.velocity.x - rightCutoff.x,
-            y: agent.velocity.y - rightCutoff.y
-          });
-          line.direction = {
-            x: unitW.y,
-            y: -unitW.x
-          };
-          line.point = {
-            x: rightCutoff.x + agent.radius * invTimeHorizonObst * unitW.x,
-            y: rightCutoff.y + agent.radius * invTimeHorizonObst * unitW.y
-          };
-          orcaLines.push(line);
-          numObstLines++;
-          continue;
-        }
-        const distSqCutoff = t < 0 || t > 1 || sameVertex ? Infinity : lengthSq2({
-          x: agent.velocity.x - (leftCutoff.x + t * cutoffVector.x),
-          y: agent.velocity.y - (leftCutoff.y + t * cutoffVector.y)
-        });
-        const distSqLeft = tLeft < 0 ? Infinity : lengthSq2({
-          x: agent.velocity.x - (leftCutoff.x + tLeft * leftLegDirection.x),
-          y: agent.velocity.y - (leftCutoff.y + tLeft * leftLegDirection.y)
-        });
-        const distSqRight = tRight < 0 ? Infinity : lengthSq2({
-          x: agent.velocity.x - (rightCutoff.x + tRight * rightLegDirection.x),
-          y: agent.velocity.y - (rightCutoff.y + tRight * rightLegDirection.y)
-        });
-        if (distSqCutoff <= distSqLeft && distSqCutoff <= distSqRight) {
-          line.direction = {
-            x: -obs1.direction.x,
-            y: -obs1.direction.y
-          };
-          line.point = {
-            x: leftCutoff.x + agent.radius * invTimeHorizonObst * -line.direction.y,
-            y: leftCutoff.y + agent.radius * invTimeHorizonObst * line.direction.x
-          };
-          orcaLines.push(line);
-          numObstLines++;
-          continue;
-        }
-        if (distSqLeft <= distSqRight) {
-          if (isLeftLegForeign) {
-            continue;
-          }
-          line.direction = {
-            x: leftLegDirection.x,
-            y: leftLegDirection.y
-          };
-          line.point = {
-            x: leftCutoff.x + agent.radius * invTimeHorizonObst * -line.direction.y,
-            y: leftCutoff.y + agent.radius * invTimeHorizonObst * line.direction.x
-          };
-          orcaLines.push(line);
-          numObstLines++;
-          continue;
-        }
-        if (isRightLegForeign) {
-          continue;
-        }
-        line.direction = {
-          x: -rightLegDirection.x,
-          y: -rightLegDirection.y
-        };
-        line.point = {
-          x: rightCutoff.x + agent.radius * invTimeHorizonObst * -line.direction.y,
-          y: rightCutoff.y + agent.radius * invTimeHorizonObst * line.direction.x
-        };
-        orcaLines.push(line);
-        numObstLines++;
-      }
-      return numObstLines;
-    }
-  };
-  __name$2(_ORCASolver, "ORCASolver");
-  var ORCASolver = _ORCASolver;
-  function createORCASolver(config) {
-    return new ORCASolver(config);
-  }
-  __name$2(createORCASolver, "createORCASolver");
-
-  // src/avoidance/KDTree.ts
-  var _KDTree = class _KDTree {
-    constructor() {
-      __publicField$2(this, "agents", []);
-      __publicField$2(this, "agentIndices", []);
-      __publicField$2(this, "nodes", []);
-      /**
-       * @zh 最大叶节点大小
-       * @en Maximum leaf size
-       */
-      __publicField$2(this, "maxLeafSize", 10);
-    }
-    /**
-     * @zh 构建 KD-Tree
-     * @en Build KD-Tree
-     */
-    build(agents) {
-      this.agents = agents;
-      this.agentIndices = [];
-      this.nodes = [];
-      if (agents.length === 0) {
-        return;
-      }
-      for (let i = 0; i < agents.length; i++) {
-        this.agentIndices.push(i);
-      }
-      this.buildRecursive(0, agents.length, 0);
-    }
-    /**
-     * @zh 递归构建 KD-Tree
-     * @en Recursively build KD-Tree
-     */
-    buildRecursive(begin, end, depth) {
-      const nodeIndex = this.nodes.length;
-      const node = {
-        agentIndex: -1,
-        splitValue: 0,
-        left: -1,
-        right: -1,
-        begin,
-        end,
-        minX: Infinity,
-        minY: Infinity,
-        maxX: -Infinity,
-        maxY: -Infinity
-      };
-      this.nodes.push(node);
-      for (let i = begin; i < end; i++) {
-        const agent = this.agents[this.agentIndices[i]];
-        node.minX = Math.min(node.minX, agent.position.x);
-        node.minY = Math.min(node.minY, agent.position.y);
-        node.maxX = Math.max(node.maxX, agent.position.x);
-        node.maxY = Math.max(node.maxY, agent.position.y);
-      }
-      const count = end - begin;
-      if (count <= this.maxLeafSize) {
-        return nodeIndex;
-      }
-      const splitDim = depth % 2;
-      if (splitDim === 0) {
-        this.sortByX(begin, end);
-      } else {
-        this.sortByY(begin, end);
-      }
-      const mid = Math.floor((begin + end) / 2);
-      const midAgent = this.agents[this.agentIndices[mid]];
-      node.splitValue = splitDim === 0 ? midAgent.position.x : midAgent.position.y;
-      node.left = this.buildRecursive(begin, mid, depth + 1);
-      node.right = this.buildRecursive(mid, end, depth + 1);
-      return nodeIndex;
-    }
-    /**
-     * @zh 按 X 坐标排序
-     * @en Sort by X coordinate
-     */
-    sortByX(begin, end) {
-      const indices = this.agentIndices;
-      const agents = this.agents;
-      for (let i = begin + 1; i < end; i++) {
-        const key = indices[i];
-        const keyX = agents[key].position.x;
-        let j = i - 1;
-        while (j >= begin && agents[indices[j]].position.x > keyX) {
-          indices[j + 1] = indices[j];
-          j--;
-        }
-        indices[j + 1] = key;
-      }
-    }
-    /**
-     * @zh 按 Y 坐标排序
-     * @en Sort by Y coordinate
-     */
-    sortByY(begin, end) {
-      const indices = this.agentIndices;
-      const agents = this.agents;
-      for (let i = begin + 1; i < end; i++) {
-        const key = indices[i];
-        const keyY = agents[key].position.y;
-        let j = i - 1;
-        while (j >= begin && agents[indices[j]].position.y > keyY) {
-          indices[j + 1] = indices[j];
-          j--;
-        }
-        indices[j + 1] = key;
-      }
-    }
-    /**
-     * @zh 查询邻居
-     * @en Query neighbors
-     */
-    queryNeighbors(position, radius, maxResults, excludeId) {
-      const results = [];
-      const radiusSq = radius * radius;
-      if (this.nodes.length === 0) {
-        return results;
-      }
-      this.queryRecursive(0, position, radiusSq, maxResults, excludeId, results);
-      results.sort((a, b) => a.distanceSq - b.distanceSq);
-      if (results.length > maxResults) {
-        results.length = maxResults;
-      }
-      return results;
-    }
-    /**
-     * @zh 递归查询
-     * @en Recursive query
-     */
-    queryRecursive(nodeIndex, position, radiusSq, maxResults, excludeId, results) {
-      const node = this.nodes[nodeIndex];
-      if (!node) return;
-      const closestX = Math.max(node.minX, Math.min(position.x, node.maxX));
-      const closestY = Math.max(node.minY, Math.min(position.y, node.maxY));
-      const dx = position.x - closestX;
-      const dy = position.y - closestY;
-      const distSqToBBox = dx * dx + dy * dy;
-      if (distSqToBBox > radiusSq) {
-        return;
-      }
-      if (node.left === -1 && node.right === -1) {
-        for (let i = node.begin; i < node.end; i++) {
-          const agentIndex = this.agentIndices[i];
-          const agent = this.agents[agentIndex];
-          if (excludeId !== void 0 && agent.id === excludeId) {
-            continue;
-          }
-          const adx = position.x - agent.position.x;
-          const ady = position.y - agent.position.y;
-          const distSq = adx * adx + ady * ady;
-          if (distSq < radiusSq) {
-            results.push({
-              agent,
-              distanceSq: distSq
-            });
-          }
-        }
-        return;
-      }
-      if (node.left !== -1) {
-        this.queryRecursive(node.left, position, radiusSq, maxResults, excludeId, results);
-      }
-      if (node.right !== -1) {
-        this.queryRecursive(node.right, position, radiusSq, maxResults, excludeId, results);
-      }
-    }
-    /**
-     * @zh 清空索引
-     * @en Clear the index
-     */
-    clear() {
-      this.agents = [];
-      this.agentIndices = [];
-      this.nodes = [];
-    }
-    /**
-     * @zh 获取代理数量
-     * @en Get agent count
-     */
-    get agentCount() {
-      return this.agents.length;
-    }
-  };
-  __name$2(_KDTree, "KDTree");
-  var KDTree = _KDTree;
-  function createKDTree() {
-    return new KDTree();
-  }
-  __name$2(createKDTree, "createKDTree");
-
-  // src/core/BinaryHeap.ts
-  var _BinaryHeap = class _BinaryHeap {
-    /**
-     * @zh 创建二叉堆
-     * @en Create binary heap
-     *
-     * @param compare - @zh 比较函数，返回负数表示 a < b @en Compare function, returns negative if a < b
-     */
-    constructor(compare) {
-      __publicField$2(this, "heap", []);
-      __publicField$2(this, "compare");
-      this.compare = compare;
-    }
-    /**
-     * @zh 堆大小
-     * @en Heap size
-     */
-    get size() {
-      return this.heap.length;
-    }
-    /**
-     * @zh 是否为空
-     * @en Is empty
-     */
-    get isEmpty() {
-      return this.heap.length === 0;
-    }
-    /**
-     * @zh 插入元素
-     * @en Push element
-     */
-    push(item) {
-      this.heap.push(item);
-      this.bubbleUp(this.heap.length - 1);
-    }
-    /**
-     * @zh 弹出最小元素
-     * @en Pop minimum element
-     */
-    pop() {
-      if (this.heap.length === 0) {
-        return void 0;
-      }
-      const result = this.heap[0];
-      const last = this.heap.pop();
-      if (this.heap.length > 0) {
-        this.heap[0] = last;
-        this.sinkDown(0);
-      }
-      return result;
-    }
-    /**
-     * @zh 查看最小元素（不移除）
-     * @en Peek minimum element (without removing)
-     */
-    peek() {
-      return this.heap[0];
-    }
-    /**
-     * @zh 更新元素（重新排序）
-     * @en Update element (re-sort)
-     */
-    update(item) {
-      const index = this.heap.indexOf(item);
-      if (index !== -1) {
-        this.bubbleUp(index);
-        this.sinkDown(index);
-      }
-    }
-    /**
-     * @zh 检查是否包含元素
-     * @en Check if contains element
-     */
-    contains(item) {
-      return this.heap.indexOf(item) !== -1;
-    }
-    /**
-     * @zh 清空堆
-     * @en Clear heap
-     */
-    clear() {
-      this.heap.length = 0;
-    }
-    /**
-     * @zh 上浮操作
-     * @en Bubble up operation
-     */
-    bubbleUp(index) {
-      const item = this.heap[index];
-      while (index > 0) {
-        const parentIndex = Math.floor((index - 1) / 2);
-        const parent = this.heap[parentIndex];
-        if (this.compare(item, parent) >= 0) {
-          break;
-        }
-        this.heap[index] = parent;
-        index = parentIndex;
-      }
-      this.heap[index] = item;
-    }
-    /**
-     * @zh 下沉操作
-     * @en Sink down operation
-     */
-    sinkDown(index) {
-      const length = this.heap.length;
-      const item = this.heap[index];
-      while (true) {
-        const leftIndex = 2 * index + 1;
-        const rightIndex = 2 * index + 2;
-        let smallest = index;
-        if (leftIndex < length && this.compare(this.heap[leftIndex], this.heap[smallest]) < 0) {
-          smallest = leftIndex;
-        }
-        if (rightIndex < length && this.compare(this.heap[rightIndex], this.heap[smallest]) < 0) {
-          smallest = rightIndex;
-        }
-        if (smallest === index) {
-          break;
-        }
-        this.heap[index] = this.heap[smallest];
-        this.heap[smallest] = item;
-        index = smallest;
-      }
-    }
-  };
-  __name$2(_BinaryHeap, "BinaryHeap");
-  var BinaryHeap = _BinaryHeap;
-
-  // src/core/AStarPathfinder.ts
-  var _AStarPathfinder = class _AStarPathfinder {
-    constructor(map) {
-      __publicField$2(this, "map");
-      __publicField$2(this, "nodeCache", /* @__PURE__ */ new Map());
-      __publicField$2(this, "openList");
-      this.map = map;
-      this.openList = new IndexedBinaryHeap((a, b) => a.f - b.f);
-    }
-    /**
-     * @zh 查找路径
-     * @en Find path
-     */
-    findPath(startX, startY, endX, endY, options) {
-      const opts = {
-        ...DEFAULT_PATHFINDING_OPTIONS,
-        ...options
-      };
-      this.clear();
-      const startNode = this.map.getNodeAt(startX, startY);
-      const endNode = this.map.getNodeAt(endX, endY);
-      if (!startNode || !endNode) {
-        return EMPTY_PATH_RESULT;
-      }
-      if (!startNode.walkable || !endNode.walkable) {
-        return EMPTY_PATH_RESULT;
-      }
-      if (startNode.id === endNode.id) {
-        return {
-          found: true,
-          path: [
-            startNode.position
-          ],
-          cost: 0,
-          nodesSearched: 1
-        };
-      }
-      const start = this.getOrCreateAStarNode(startNode);
-      start.g = 0;
-      start.h = this.map.heuristic(startNode.position, endNode.position) * opts.heuristicWeight;
-      start.f = start.h;
-      start.opened = true;
-      this.openList.push(start);
-      let nodesSearched = 0;
-      const endPosition = endNode.position;
-      while (!this.openList.isEmpty && nodesSearched < opts.maxNodes) {
-        const current = this.openList.pop();
-        current.closed = true;
-        nodesSearched++;
-        if (current.node.id === endNode.id) {
-          return this.buildPath(current, nodesSearched);
-        }
-        const neighbors = this.map.getNeighbors(current.node);
-        for (const neighborNode of neighbors) {
-          if (!neighborNode.walkable) {
-            continue;
-          }
-          const neighbor = this.getOrCreateAStarNode(neighborNode);
-          if (neighbor.closed) {
-            continue;
-          }
-          const movementCost = this.map.getMovementCost(current.node, neighborNode);
-          const tentativeG = current.g + movementCost;
-          if (!neighbor.opened) {
-            neighbor.g = tentativeG;
-            neighbor.h = this.map.heuristic(neighborNode.position, endPosition) * opts.heuristicWeight;
-            neighbor.f = neighbor.g + neighbor.h;
-            neighbor.parent = current;
-            neighbor.opened = true;
-            this.openList.push(neighbor);
-          } else if (tentativeG < neighbor.g) {
-            neighbor.g = tentativeG;
-            neighbor.f = neighbor.g + neighbor.h;
-            neighbor.parent = current;
-            this.openList.update(neighbor);
-          }
-        }
-      }
-      return {
-        found: false,
-        path: [],
-        cost: 0,
-        nodesSearched
-      };
-    }
-    /**
-     * @zh 清理状态
-     * @en Clear state
-     */
-    clear() {
-      this.nodeCache.clear();
-      this.openList.clear();
-    }
-    /**
-     * @zh 获取或创建 A* 节点
-     * @en Get or create A* node
-     */
-    getOrCreateAStarNode(node) {
-      let astarNode = this.nodeCache.get(node.id);
-      if (!astarNode) {
-        astarNode = {
-          node,
-          g: Infinity,
-          h: 0,
-          f: Infinity,
-          parent: null,
-          closed: false,
-          opened: false,
-          heapIndex: -1
-        };
-        this.nodeCache.set(node.id, astarNode);
-      }
-      return astarNode;
-    }
-    /**
-     * @zh 构建路径结果
-     * @en Build path result
-     */
-    buildPath(endNode, nodesSearched) {
-      const path = [];
-      let current = endNode;
-      while (current) {
-        path.push(current.node.position);
-        current = current.parent;
-      }
-      path.reverse();
-      return {
-        found: true,
-        path,
-        cost: endNode.g,
-        nodesSearched
-      };
-    }
-  };
-  __name$2(_AStarPathfinder, "AStarPathfinder");
-  var AStarPathfinder = _AStarPathfinder;
-  function createAStarPathfinder(map) {
-    return new AStarPathfinder(map);
-  }
-  __name$2(createAStarPathfinder, "createAStarPathfinder");
-
-  // src/core/GridPathfinder.ts
-  var CLOSED_FLAG = 1;
-  var OPENED_FLAG = 2;
-  var BACKWARD_CLOSED = 4;
-  var BACKWARD_OPENED = 8;
-  var _a$1;
-  var GridState = (_a$1 = class {
-    constructor(width, height, bidirectional = false) {
-      __publicField$2(this, "size");
-      __publicField$2(this, "width");
-      __publicField$2(this, "g");
-      __publicField$2(this, "f");
-      __publicField$2(this, "flags");
-      __publicField$2(this, "parent");
-      __publicField$2(this, "heapIndex");
-      __publicField$2(this, "version");
-      __publicField$2(this, "currentVersion", 1);
-      // 双向搜索额外状态
-      __publicField$2(this, "gBack", null);
-      __publicField$2(this, "fBack", null);
-      __publicField$2(this, "parentBack", null);
-      __publicField$2(this, "heapIndexBack", null);
-      this.width = width;
-      this.size = width * height;
-      this.g = new Float32Array(this.size);
-      this.f = new Float32Array(this.size);
-      this.flags = new Uint8Array(this.size);
-      this.parent = new Int32Array(this.size);
-      this.heapIndex = new Int32Array(this.size);
-      this.version = new Uint32Array(this.size);
-      if (bidirectional) {
-        this.gBack = new Float32Array(this.size);
-        this.fBack = new Float32Array(this.size);
-        this.parentBack = new Int32Array(this.size);
-        this.heapIndexBack = new Int32Array(this.size);
-      }
-    }
-    reset() {
-      this.currentVersion++;
-      if (this.currentVersion > 4294967295) {
-        this.version.fill(0);
-        this.currentVersion = 1;
-      }
-    }
-    isInit(i) {
-      return this.version[i] === this.currentVersion;
-    }
-    init(i) {
-      if (!this.isInit(i)) {
-        this.g[i] = Infinity;
-        this.f[i] = Infinity;
-        this.flags[i] = 0;
-        this.parent[i] = -1;
-        this.heapIndex[i] = -1;
-        if (this.gBack) {
-          this.gBack[i] = Infinity;
-          this.fBack[i] = Infinity;
-          this.parentBack[i] = -1;
-          this.heapIndexBack[i] = -1;
-        }
-        this.version[i] = this.currentVersion;
-      }
-    }
-    // Forward
-    getG(i) {
-      return this.isInit(i) ? this.g[i] : Infinity;
-    }
-    setG(i, v) {
-      this.init(i);
-      this.g[i] = v;
-    }
-    getF(i) {
-      return this.isInit(i) ? this.f[i] : Infinity;
-    }
-    setF(i, v) {
-      this.init(i);
-      this.f[i] = v;
-    }
-    getParent(i) {
-      return this.isInit(i) ? this.parent[i] : -1;
-    }
-    setParent(i, v) {
-      this.init(i);
-      this.parent[i] = v;
-    }
-    getHeapIndex(i) {
-      return this.isInit(i) ? this.heapIndex[i] : -1;
-    }
-    setHeapIndex(i, v) {
-      this.init(i);
-      this.heapIndex[i] = v;
-    }
-    isClosed(i) {
-      return this.isInit(i) && (this.flags[i] & CLOSED_FLAG) !== 0;
-    }
-    setClosed(i) {
-      this.init(i);
-      this.flags[i] |= CLOSED_FLAG;
-    }
-    isOpened(i) {
-      return this.isInit(i) && (this.flags[i] & OPENED_FLAG) !== 0;
-    }
-    setOpened(i) {
-      this.init(i);
-      this.flags[i] |= OPENED_FLAG;
-    }
-    // Backward
-    getGBack(i) {
-      return this.isInit(i) ? this.gBack[i] : Infinity;
-    }
-    setGBack(i, v) {
-      this.init(i);
-      this.gBack[i] = v;
-    }
-    getFBack(i) {
-      return this.isInit(i) ? this.fBack[i] : Infinity;
-    }
-    setFBack(i, v) {
-      this.init(i);
-      this.fBack[i] = v;
-    }
-    getParentBack(i) {
-      return this.isInit(i) ? this.parentBack[i] : -1;
-    }
-    setParentBack(i, v) {
-      this.init(i);
-      this.parentBack[i] = v;
-    }
-    getHeapIndexBack(i) {
-      return this.isInit(i) ? this.heapIndexBack[i] : -1;
-    }
-    setHeapIndexBack(i, v) {
-      this.init(i);
-      this.heapIndexBack[i] = v;
-    }
-    isClosedBack(i) {
-      return this.isInit(i) && (this.flags[i] & BACKWARD_CLOSED) !== 0;
-    }
-    setClosedBack(i) {
-      this.init(i);
-      this.flags[i] |= BACKWARD_CLOSED;
-    }
-    isOpenedBack(i) {
-      return this.isInit(i) && (this.flags[i] & BACKWARD_OPENED) !== 0;
-    }
-    setOpenedBack(i) {
-      this.init(i);
-      this.flags[i] |= BACKWARD_OPENED;
-    }
-  }, __name$2(_a$1, "GridState"), _a$1);
-  var _a2;
-  var GridHeap = (_a2 = class {
-    constructor(state, isBack = false) {
-      __publicField$2(this, "heap", []);
-      __publicField$2(this, "state");
-      __publicField$2(this, "isBack");
-      this.state = state;
-      this.isBack = isBack;
-    }
-    get size() {
-      return this.heap.length;
-    }
-    get isEmpty() {
-      return this.heap.length === 0;
-    }
-    getF(i) {
-      return this.isBack ? this.state.getFBack(i) : this.state.getF(i);
-    }
-    getHeapIndex(i) {
-      return this.isBack ? this.state.getHeapIndexBack(i) : this.state.getHeapIndex(i);
-    }
-    setHeapIndex(i, v) {
-      if (this.isBack) this.state.setHeapIndexBack(i, v);
-      else this.state.setHeapIndex(i, v);
-    }
-    push(i) {
-      this.setHeapIndex(i, this.heap.length);
-      this.heap.push(i);
-      this.bubbleUp(this.heap.length - 1);
-    }
-    pop() {
-      if (this.heap.length === 0) return -1;
-      const result = this.heap[0];
-      this.setHeapIndex(result, -1);
-      const last = this.heap.pop();
-      if (this.heap.length > 0) {
-        this.heap[0] = last;
-        this.setHeapIndex(last, 0);
-        this.sinkDown(0);
-      }
-      return result;
-    }
-    update(i) {
-      const pos = this.getHeapIndex(i);
-      if (pos >= 0 && pos < this.heap.length) {
-        this.bubbleUp(pos);
-        this.sinkDown(this.getHeapIndex(i));
-      }
-    }
-    clear() {
-      this.heap.length = 0;
-    }
-    bubbleUp(pos) {
-      const idx = this.heap[pos];
-      const f = this.getF(idx);
-      while (pos > 0) {
-        const pp = pos - 1 >> 1;
-        const pi = this.heap[pp];
-        if (f >= this.getF(pi)) break;
-        this.heap[pos] = pi;
-        this.setHeapIndex(pi, pos);
-        pos = pp;
-      }
-      this.heap[pos] = idx;
-      this.setHeapIndex(idx, pos);
-    }
-    sinkDown(pos) {
-      const len = this.heap.length;
-      const idx = this.heap[pos];
-      const f = this.getF(idx);
-      const half = len >> 1;
-      while (pos < half) {
-        const left = (pos << 1) + 1;
-        const right = left + 1;
-        let smallest = pos, smallestF = f;
-        const lf = this.getF(this.heap[left]);
-        if (lf < smallestF) {
-          smallest = left;
-          smallestF = lf;
-        }
-        if (right < len) {
-          const rf = this.getF(this.heap[right]);
-          if (rf < smallestF) smallest = right;
-        }
-        if (smallest === pos) break;
-        const si = this.heap[smallest];
-        this.heap[pos] = si;
-        this.setHeapIndex(si, pos);
-        pos = smallest;
-      }
-      this.heap[pos] = idx;
-      this.setHeapIndex(idx, pos);
-    }
-  }, __name$2(_a2, "GridHeap"), _a2);
-  var _GridPathfinder = class _GridPathfinder {
-    constructor(map, config) {
-      __publicField$2(this, "map");
-      __publicField$2(this, "mode");
-      __publicField$2(this, "state");
-      __publicField$2(this, "openList");
-      __publicField$2(this, "openListBack");
-      this.map = map;
-      this.mode = config?.mode ?? "fast";
-      const isBidir = this.mode === "bidirectional";
-      this.state = new GridState(map.width, map.height, isBidir);
-      this.openList = new GridHeap(this.state, false);
-      this.openListBack = isBidir ? new GridHeap(this.state, true) : null;
-    }
-    findPath(startX, startY, endX, endY, options) {
-      if (this.mode === "bidirectional") {
-        return this.findPathBidirectional(startX, startY, endX, endY, options);
-      }
-      return this.findPathUnidirectional(startX, startY, endX, endY, options);
-    }
-    findPathUnidirectional(startX, startY, endX, endY, options) {
-      const opts = options ? {
-        ...DEFAULT_PATHFINDING_OPTIONS,
-        ...options
-      } : DEFAULT_PATHFINDING_OPTIONS;
-      const { width, height } = this.map;
-      this.state.reset();
-      this.openList.clear();
-      if (!this.validate(startX, startY, endX, endY)) return EMPTY_PATH_RESULT;
-      const startIdx = startY * width + startX;
-      const endIdx = endY * width + endX;
-      if (startIdx === endIdx) {
-        return {
-          found: true,
-          path: [
-            {
-              x: startX,
-              y: startY
-            }
-          ],
-          cost: 0,
-          nodesSearched: 1
-        };
-      }
-      const hw = opts.heuristicWeight;
-      const h0 = this.map.heuristic({
-        x: startX,
-        y: startY
-      }, {
-        x: endX,
-        y: endY
-      }) * hw;
-      this.state.setG(startIdx, 0);
-      this.state.setF(startIdx, h0);
-      this.state.setOpened(startIdx);
-      this.openList.push(startIdx);
-      let searched = 0;
-      const maxNodes = opts.maxNodes;
-      const { allowDiagonal, avoidCorners, diagonalCost } = this.map["options"];
-      const nodes = this.map["nodes"];
-      const dx = allowDiagonal ? [
-        0,
-        1,
-        1,
-        1,
-        0,
-        -1,
-        -1,
-        -1
-      ] : [
-        0,
-        1,
-        0,
-        -1
-      ];
-      const dy = allowDiagonal ? [
-        -1,
-        -1,
-        0,
-        1,
-        1,
-        1,
-        0,
-        -1
-      ] : [
-        -1,
-        0,
-        1,
-        0
-      ];
-      const dirCount = dx.length;
-      while (!this.openList.isEmpty && searched < maxNodes) {
-        const cur = this.openList.pop();
-        this.state.setClosed(cur);
-        searched++;
-        if (cur === endIdx) {
-          return this.buildPath(startIdx, endIdx, searched);
-        }
-        const cx = cur % width, cy = cur / width | 0;
-        const curG = this.state.getG(cur);
-        for (let d = 0; d < dirCount; d++) {
-          const nx = cx + dx[d], ny = cy + dy[d];
-          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-          const neighbor = nodes[ny][nx];
-          if (!neighbor.walkable) continue;
-          if (avoidCorners && dx[d] !== 0 && dy[d] !== 0) {
-            if (!nodes[cy][cx + dx[d]].walkable || !nodes[cy + dy[d]][cx].walkable) continue;
-          }
-          const ni = ny * width + nx;
-          if (this.state.isClosed(ni)) continue;
-          const isDiag = dx[d] !== 0 && dy[d] !== 0;
-          const cost = isDiag ? neighbor.cost * diagonalCost : neighbor.cost;
-          const tentG = curG + cost;
-          if (!this.state.isOpened(ni)) {
-            const h = this.map.heuristic({
-              x: nx,
-              y: ny
-            }, {
-              x: endX,
-              y: endY
-            }) * hw;
-            this.state.setG(ni, tentG);
-            this.state.setF(ni, tentG + h);
-            this.state.setParent(ni, cur);
-            this.state.setOpened(ni);
-            this.openList.push(ni);
-          } else if (tentG < this.state.getG(ni)) {
-            const h = this.state.getF(ni) - this.state.getG(ni);
-            this.state.setG(ni, tentG);
-            this.state.setF(ni, tentG + h);
-            this.state.setParent(ni, cur);
-            this.openList.update(ni);
-          }
-        }
-      }
-      return {
-        found: false,
-        path: [],
-        cost: 0,
-        nodesSearched: searched
-      };
-    }
-    findPathBidirectional(startX, startY, endX, endY, options) {
-      const opts = options ? {
-        ...DEFAULT_PATHFINDING_OPTIONS,
-        ...options
-      } : DEFAULT_PATHFINDING_OPTIONS;
-      const { width, height } = this.map;
-      this.state.reset();
-      this.openList.clear();
-      this.openListBack.clear();
-      if (!this.validate(startX, startY, endX, endY)) return EMPTY_PATH_RESULT;
-      const startIdx = startY * width + startX;
-      const endIdx = endY * width + endX;
-      if (startIdx === endIdx) {
-        return {
-          found: true,
-          path: [
-            {
-              x: startX,
-              y: startY
-            }
-          ],
-          cost: 0,
-          nodesSearched: 1
-        };
-      }
-      const hw = opts.heuristicWeight;
-      const startPos = {
-        x: startX,
-        y: startY
-      };
-      const endPos = {
-        x: endX,
-        y: endY
-      };
-      const hf = this.map.heuristic(startPos, endPos) * hw;
-      this.state.setG(startIdx, 0);
-      this.state.setF(startIdx, hf);
-      this.state.setOpened(startIdx);
-      this.openList.push(startIdx);
-      const hb = this.map.heuristic(endPos, startPos) * hw;
-      this.state.setGBack(endIdx, 0);
-      this.state.setFBack(endIdx, hb);
-      this.state.setOpenedBack(endIdx);
-      this.openListBack.push(endIdx);
-      let searched = 0;
-      const maxNodes = opts.maxNodes;
-      let meetIdx = -1, bestCost = Infinity;
-      const { allowDiagonal, avoidCorners, diagonalCost } = this.map["options"];
-      const nodes = this.map["nodes"];
-      const dx = allowDiagonal ? [
-        0,
-        1,
-        1,
-        1,
-        0,
-        -1,
-        -1,
-        -1
-      ] : [
-        0,
-        1,
-        0,
-        -1
-      ];
-      const dy = allowDiagonal ? [
-        -1,
-        -1,
-        0,
-        1,
-        1,
-        1,
-        0,
-        -1
-      ] : [
-        -1,
-        0,
-        1,
-        0
-      ];
-      const dirCount = dx.length;
-      while ((!this.openList.isEmpty || !this.openListBack.isEmpty) && searched < maxNodes) {
-        if (!this.openList.isEmpty) {
-          const cur = this.openList.pop();
-          this.state.setClosed(cur);
-          searched++;
-          const curG = this.state.getG(cur);
-          if (this.state.isClosedBack(cur)) {
-            const total = curG + this.state.getGBack(cur);
-            if (total < bestCost) {
-              bestCost = total;
-              meetIdx = cur;
-            }
-          }
-          if (meetIdx !== -1 && curG >= bestCost) break;
-          const cx = cur % width, cy = cur / width | 0;
-          for (let d = 0; d < dirCount; d++) {
-            const nx = cx + dx[d], ny = cy + dy[d];
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            const neighbor = nodes[ny][nx];
-            if (!neighbor.walkable) continue;
-            if (avoidCorners && dx[d] !== 0 && dy[d] !== 0) {
-              if (!nodes[cy][cx + dx[d]].walkable || !nodes[cy + dy[d]][cx].walkable) continue;
-            }
-            const ni = ny * width + nx;
-            if (this.state.isClosed(ni)) continue;
-            const isDiag = dx[d] !== 0 && dy[d] !== 0;
-            const cost = isDiag ? neighbor.cost * diagonalCost : neighbor.cost;
-            const tentG = curG + cost;
-            if (!this.state.isOpened(ni)) {
-              const h = this.map.heuristic({
-                x: nx,
-                y: ny
-              }, endPos) * hw;
-              this.state.setG(ni, tentG);
-              this.state.setF(ni, tentG + h);
-              this.state.setParent(ni, cur);
-              this.state.setOpened(ni);
-              this.openList.push(ni);
-            } else if (tentG < this.state.getG(ni)) {
-              const h = this.state.getF(ni) - this.state.getG(ni);
-              this.state.setG(ni, tentG);
-              this.state.setF(ni, tentG + h);
-              this.state.setParent(ni, cur);
-              this.openList.update(ni);
-            }
-          }
-        }
-        if (!this.openListBack.isEmpty) {
-          const cur = this.openListBack.pop();
-          this.state.setClosedBack(cur);
-          searched++;
-          const curG = this.state.getGBack(cur);
-          if (this.state.isClosed(cur)) {
-            const total = curG + this.state.getG(cur);
-            if (total < bestCost) {
-              bestCost = total;
-              meetIdx = cur;
-            }
-          }
-          if (meetIdx !== -1 && curG >= bestCost) break;
-          const cx = cur % width, cy = cur / width | 0;
-          for (let d = 0; d < dirCount; d++) {
-            const nx = cx + dx[d], ny = cy + dy[d];
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            const neighbor = nodes[ny][nx];
-            if (!neighbor.walkable) continue;
-            if (avoidCorners && dx[d] !== 0 && dy[d] !== 0) {
-              if (!nodes[cy][cx + dx[d]].walkable || !nodes[cy + dy[d]][cx].walkable) continue;
-            }
-            const ni = ny * width + nx;
-            if (this.state.isClosedBack(ni)) continue;
-            const isDiag = dx[d] !== 0 && dy[d] !== 0;
-            const cost = isDiag ? neighbor.cost * diagonalCost : neighbor.cost;
-            const tentG = curG + cost;
-            if (!this.state.isOpenedBack(ni)) {
-              const h = this.map.heuristic({
-                x: nx,
-                y: ny
-              }, startPos) * hw;
-              this.state.setGBack(ni, tentG);
-              this.state.setFBack(ni, tentG + h);
-              this.state.setParentBack(ni, cur);
-              this.state.setOpenedBack(ni);
-              this.openListBack.push(ni);
-            } else if (tentG < this.state.getGBack(ni)) {
-              const h = this.state.getFBack(ni) - this.state.getGBack(ni);
-              this.state.setGBack(ni, tentG);
-              this.state.setFBack(ni, tentG + h);
-              this.state.setParentBack(ni, cur);
-              this.openListBack.update(ni);
-            }
-          }
-        }
-      }
-      if (meetIdx === -1) {
-        return {
-          found: false,
-          path: [],
-          cost: 0,
-          nodesSearched: searched
-        };
-      }
-      return this.buildPathBidirectional(startIdx, endIdx, meetIdx, searched);
-    }
-    validate(startX, startY, endX, endY) {
-      const { width, height } = this.map;
-      if (startX < 0 || startX >= width || startY < 0 || startY >= height) return false;
-      if (endX < 0 || endX >= width || endY < 0 || endY >= height) return false;
-      return this.map.isWalkable(startX, startY) && this.map.isWalkable(endX, endY);
-    }
-    buildPath(startIdx, endIdx, searched) {
-      const w = this.state.width;
-      const path = [];
-      let cur = endIdx;
-      while (cur !== -1) {
-        path.push({
-          x: cur % w,
-          y: cur / w | 0
-        });
-        cur = cur === startIdx ? -1 : this.state.getParent(cur);
-      }
-      path.reverse();
-      return {
-        found: true,
-        path,
-        cost: this.state.getG(endIdx),
-        nodesSearched: searched
-      };
-    }
-    buildPathBidirectional(startIdx, endIdx, meetIdx, searched) {
-      const w = this.state.width;
-      const path = [];
-      let cur = meetIdx;
-      while (cur !== -1 && cur !== startIdx) {
-        path.push({
-          x: cur % w,
-          y: cur / w | 0
-        });
-        cur = this.state.getParent(cur);
-      }
-      path.push({
-        x: startIdx % w,
-        y: startIdx / w | 0
-      });
-      path.reverse();
-      cur = this.state.getParentBack(meetIdx);
-      while (cur !== -1 && cur !== endIdx) {
-        path.push({
-          x: cur % w,
-          y: cur / w | 0
-        });
-        cur = this.state.getParentBack(cur);
-      }
-      if (meetIdx !== endIdx) {
-        path.push({
-          x: endIdx % w,
-          y: endIdx / w | 0
-        });
-      }
-      const cost = this.state.getG(meetIdx) + this.state.getGBack(meetIdx);
-      return {
-        found: true,
-        path,
-        cost,
-        nodesSearched: searched
-      };
-    }
-    clear() {
-      this.state.reset();
-      this.openList.clear();
-      this.openListBack?.clear();
-    }
-  };
-  __name$2(_GridPathfinder, "GridPathfinder");
-  var GridPathfinder = _GridPathfinder;
-  function createGridPathfinder(map, config) {
-    return new GridPathfinder(map, config);
-  }
-  __name$2(createGridPathfinder, "createGridPathfinder");
-
   // src/core/JPSPathfinder.ts
   var _JPSPathfinder = class _JPSPathfinder {
     constructor(map) {
@@ -3907,8 +2970,8 @@ var ESEngine = (function (exports) {
     entranceStrategy: "end",
     lazyIntraEdges: true
   };
-  var _a3;
-  var SubMap = (_a3 = class {
+  var _a$2;
+  var SubMap = (_a$2 = class {
     constructor(parentMap, originX, originY, width, height) {
       __publicField$2(this, "parentMap");
       __publicField$2(this, "originX");
@@ -4033,9 +3096,9 @@ var ESEngine = (function (exports) {
       const baseCost = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
       return baseCost * to.cost;
     }
-  }, __name$2(_a3, "SubMap"), _a3);
-  var _a4;
-  var Cluster = (_a4 = class {
+  }, __name$2(_a$2, "SubMap"), _a$2);
+  var _a2$1;
+  var Cluster = (_a2$1 = class {
     constructor(id, originX, originY, width, height, parentMap) {
       __publicField$2(this, "id");
       __publicField$2(this, "originX");
@@ -4127,7 +3190,7 @@ var ESEngine = (function (exports) {
     getCacheSize() {
       return this.distanceCache.size;
     }
-  }, __name$2(_a4, "Cluster"), _a4);
+  }, __name$2(_a2$1, "Cluster"), _a2$1);
   var _HPAPathfinder = class _HPAPathfinder {
     constructor(map, config) {
       __publicField$2(this, "map");
@@ -5005,9 +4068,2148 @@ var ESEngine = (function (exports) {
   }
   __name$2(createHPAPathfinder, "createHPAPathfinder");
 
+  // src/interfaces/IPathPlanner.ts
+  var EMPTY_PLAN_RESULT = {
+    found: false,
+    path: [],
+    cost: 0,
+    nodesSearched: 0
+  };
+  var PathPlanState = /* @__PURE__ */ (function(PathPlanState2) {
+    PathPlanState2["Idle"] = "idle";
+    PathPlanState2["InProgress"] = "in_progress";
+    PathPlanState2["Completed"] = "completed";
+    PathPlanState2["Failed"] = "failed";
+    PathPlanState2["Cancelled"] = "cancelled";
+    return PathPlanState2;
+  })({});
+  function isIncrementalPlanner(planner) {
+    return "supportsIncremental" in planner && planner.supportsIncremental === true;
+  }
+  __name$2(isIncrementalPlanner, "isIncrementalPlanner");
+
+  // src/interfaces/ICollisionResolver.ts
+  var EMPTY_COLLISION_RESULT = {
+    collided: false,
+    penetration: 0,
+    normal: {
+      x: 0,
+      y: 0
+    },
+    closestPoint: {
+      x: 0,
+      y: 0
+    }
+  };
+
+  // src/interfaces/IFlowController.ts
+  var PassPermission = /* @__PURE__ */ (function(PassPermission2) {
+    PassPermission2["Proceed"] = "proceed";
+    PassPermission2["Wait"] = "wait";
+    PassPermission2["Yield"] = "yield";
+    return PassPermission2;
+  })({});
+  var DEFAULT_FLOW_CONTROLLER_CONFIG = {
+    detectionRadius: 3,
+    minAgentsForCongestion: 3,
+    defaultCapacity: 2,
+    waitPointDistance: 1.5,
+    yieldSpeedMultiplier: 0.3
+  };
+
+  // src/adapters/NavMeshPathPlannerAdapter.ts
+  var _NavMeshPathPlannerAdapter = class _NavMeshPathPlannerAdapter {
+    constructor(navMesh) {
+      __publicField$2(this, "navMesh");
+      __publicField$2(this, "type", "navmesh");
+      this.navMesh = navMesh;
+    }
+    findPath(start, end, options) {
+      const result = this.navMesh.findPathWithObstacles(start.x, start.y, end.x, end.y, options ? {
+        agentRadius: options.agentRadius
+      } : void 0);
+      if (!result.found) {
+        return EMPTY_PLAN_RESULT;
+      }
+      return {
+        found: true,
+        path: result.path.map((p) => ({
+          x: p.x,
+          y: p.y
+        })),
+        cost: result.cost,
+        nodesSearched: result.nodesSearched
+      };
+    }
+    isWalkable(position) {
+      return this.navMesh.isWalkable(position.x, position.y);
+    }
+    getNearestWalkable(position) {
+      const polygon = this.navMesh.findPolygonAt(position.x, position.y);
+      if (polygon) {
+        return {
+          x: position.x,
+          y: position.y
+        };
+      }
+      const polygons = this.navMesh.getPolygons();
+      if (polygons.length === 0) {
+        return null;
+      }
+      let nearestDist = Infinity;
+      let nearestPoint = null;
+      for (const poly of polygons) {
+        const dx = poly.center.x - position.x;
+        const dy = poly.center.y - position.y;
+        const dist = dx * dx + dy * dy;
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestPoint = {
+            x: poly.center.x,
+            y: poly.center.y
+          };
+        }
+      }
+      return nearestPoint;
+    }
+    clear() {
+    }
+    dispose() {
+    }
+  };
+  __name$2(_NavMeshPathPlannerAdapter, "NavMeshPathPlannerAdapter");
+  var NavMeshPathPlannerAdapter = _NavMeshPathPlannerAdapter;
+  function createNavMeshPathPlanner(navMesh) {
+    return new NavMeshPathPlannerAdapter(navMesh);
+  }
+  __name$2(createNavMeshPathPlanner, "createNavMeshPathPlanner");
+
+  // src/adapters/GridPathfinderAdapter.ts
+  var _GridPathfinderAdapter = class _GridPathfinderAdapter {
+    constructor(pathfinder, map, options, type = "grid", config) {
+      __publicField$2(this, "pathfinder");
+      __publicField$2(this, "map");
+      __publicField$2(this, "options");
+      __publicField$2(this, "type");
+      __publicField$2(this, "cellSize");
+      this.pathfinder = pathfinder;
+      this.map = map;
+      this.options = options;
+      this.type = type;
+      this.cellSize = config?.cellSize ?? 1;
+    }
+    /**
+     * @zh 像素坐标转网格坐标
+     * @en Convert pixel coordinate to grid coordinate
+     */
+    toGridCoord(pixel) {
+      return Math.floor(pixel / this.cellSize);
+    }
+    /**
+     * @zh 网格坐标转像素坐标（单元格中心）
+     * @en Convert grid coordinate to pixel coordinate (cell center)
+     */
+    toPixelCoord(grid) {
+      return grid * this.cellSize + this.cellSize * 0.5;
+    }
+    findPath(start, end) {
+      const startGridX = this.toGridCoord(start.x);
+      const startGridY = this.toGridCoord(start.y);
+      const endGridX = this.toGridCoord(end.x);
+      const endGridY = this.toGridCoord(end.y);
+      const result = this.pathfinder.findPath(startGridX, startGridY, endGridX, endGridY, this.options);
+      if (!result.found) {
+        return EMPTY_PLAN_RESULT;
+      }
+      return {
+        found: true,
+        path: result.path.map((p) => ({
+          x: this.toPixelCoord(p.x),
+          y: this.toPixelCoord(p.y)
+        })),
+        cost: result.cost,
+        nodesSearched: result.nodesSearched
+      };
+    }
+    isWalkable(position) {
+      return this.map.isWalkable(this.toGridCoord(position.x), this.toGridCoord(position.y));
+    }
+    getNearestWalkable(position) {
+      const x = this.toGridCoord(position.x);
+      const y = this.toGridCoord(position.y);
+      if (this.map.isWalkable(x, y)) {
+        return {
+          x: this.toPixelCoord(x),
+          y: this.toPixelCoord(y)
+        };
+      }
+      for (let radius = 1; radius <= 10; radius++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dy = -radius; dy <= radius; dy++) {
+            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
+              if (this.map.isWalkable(x + dx, y + dy)) {
+                return {
+                  x: this.toPixelCoord(x + dx),
+                  y: this.toPixelCoord(y + dy)
+                };
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+    clear() {
+      this.pathfinder.clear();
+    }
+    dispose() {
+      this.pathfinder.clear();
+    }
+  };
+  __name$2(_GridPathfinderAdapter, "GridPathfinderAdapter");
+  var GridPathfinderAdapter = _GridPathfinderAdapter;
+  function createAStarPlanner(map, options, config) {
+    return new GridPathfinderAdapter(new AStarPathfinder(map), map, options, "astar", config);
+  }
+  __name$2(createAStarPlanner, "createAStarPlanner");
+  function createJPSPlanner(map, options, config) {
+    return new GridPathfinderAdapter(new JPSPathfinder(map), map, options, "jps", config);
+  }
+  __name$2(createJPSPlanner, "createJPSPlanner");
+  function createHPAPlanner(map, hpaConfig, options, adapterConfig) {
+    return new GridPathfinderAdapter(new HPAPathfinder(map, hpaConfig), map, options, "hpa", adapterConfig);
+  }
+  __name$2(createHPAPlanner, "createHPAPlanner");
+
+  // src/adapters/IncrementalGridPathPlannerAdapter.ts
+  function toPathPlanState(state) {
+    switch (state) {
+      case PathfindingState.Idle:
+        return PathPlanState.Idle;
+      case PathfindingState.InProgress:
+        return PathPlanState.InProgress;
+      case PathfindingState.Completed:
+        return PathPlanState.Completed;
+      case PathfindingState.Failed:
+        return PathPlanState.Failed;
+      case PathfindingState.Cancelled:
+        return PathPlanState.Cancelled;
+      default:
+        return PathPlanState.Idle;
+    }
+  }
+  __name$2(toPathPlanState, "toPathPlanState");
+  var _IncrementalGridPathPlannerAdapter = class _IncrementalGridPathPlannerAdapter {
+    constructor(map, options, config) {
+      __publicField$2(this, "type", "incremental-astar");
+      __publicField$2(this, "supportsIncremental", true);
+      __publicField$2(this, "pathfinder");
+      __publicField$2(this, "map");
+      __publicField$2(this, "options");
+      __publicField$2(this, "cellSize");
+      /**
+       * @zh 活跃请求 ID 集合（用于跟踪）
+       * @en Active request IDs set (for tracking)
+       */
+      __publicField$2(this, "activeRequests", /* @__PURE__ */ new Set());
+      /**
+       * @zh 每个请求的累计搜索节点数
+       * @en Accumulated searched nodes per request
+       */
+      __publicField$2(this, "requestTotalNodes", /* @__PURE__ */ new Map());
+      this.map = map;
+      this.options = options;
+      this.cellSize = config?.cellSize ?? 1;
+      this.pathfinder = new IncrementalAStarPathfinder(map, config);
+    }
+    /**
+     * @zh 像素坐标转网格坐标
+     * @en Convert pixel coordinate to grid coordinate
+     */
+    toGridCoord(pixel) {
+      return Math.floor(pixel / this.cellSize);
+    }
+    /**
+     * @zh 网格坐标转像素坐标（单元格中心）
+     * @en Convert grid coordinate to pixel coordinate (cell center)
+     */
+    toPixelCoord(grid) {
+      return grid * this.cellSize + this.cellSize * 0.5;
+    }
+    // =========================================================================
+    // IPathPlanner 基础接口 | IPathPlanner Base Interface
+    // =========================================================================
+    findPath(start, end, options) {
+      const startGridX = this.toGridCoord(start.x);
+      const startGridY = this.toGridCoord(start.y);
+      const endGridX = this.toGridCoord(end.x);
+      const endGridY = this.toGridCoord(end.y);
+      const request = this.pathfinder.requestPath(startGridX, startGridY, endGridX, endGridY, this.options);
+      let progress = this.pathfinder.step(request.id, 1e5);
+      while (progress.state === PathfindingState.InProgress) {
+        progress = this.pathfinder.step(request.id, 1e5);
+      }
+      const result = this.pathfinder.getResult(request.id);
+      this.pathfinder.cleanup(request.id);
+      if (!result || !result.found) {
+        return EMPTY_PLAN_RESULT;
+      }
+      return {
+        found: true,
+        path: result.path.map((p) => ({
+          x: this.toPixelCoord(p.x),
+          y: this.toPixelCoord(p.y)
+        })),
+        cost: result.cost,
+        nodesSearched: result.nodesSearched
+      };
+    }
+    isWalkable(position) {
+      return this.map.isWalkable(this.toGridCoord(position.x), this.toGridCoord(position.y));
+    }
+    getNearestWalkable(position) {
+      const x = this.toGridCoord(position.x);
+      const y = this.toGridCoord(position.y);
+      if (this.map.isWalkable(x, y)) {
+        return {
+          x: this.toPixelCoord(x),
+          y: this.toPixelCoord(y)
+        };
+      }
+      for (let radius = 1; radius <= 10; radius++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dy = -radius; dy <= radius; dy++) {
+            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
+              if (this.map.isWalkable(x + dx, y + dy)) {
+                return {
+                  x: this.toPixelCoord(x + dx),
+                  y: this.toPixelCoord(y + dy)
+                };
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+    clear() {
+      this.pathfinder.clear();
+      this.activeRequests.clear();
+      this.requestTotalNodes.clear();
+    }
+    dispose() {
+      this.pathfinder.clear();
+      this.activeRequests.clear();
+      this.requestTotalNodes.clear();
+    }
+    // =========================================================================
+    // IIncrementalPathPlanner 增量接口 | IIncrementalPathPlanner Incremental Interface
+    // =========================================================================
+    requestPath(start, end, options) {
+      const startGridX = this.toGridCoord(start.x);
+      const startGridY = this.toGridCoord(start.y);
+      const endGridX = this.toGridCoord(end.x);
+      const endGridY = this.toGridCoord(end.y);
+      const request = this.pathfinder.requestPath(startGridX, startGridY, endGridX, endGridY, this.options);
+      this.activeRequests.add(request.id);
+      this.requestTotalNodes.set(request.id, 0);
+      return {
+        id: request.id,
+        state: PathPlanState.InProgress
+      };
+    }
+    step(requestId, iterations) {
+      const progress = this.pathfinder.step(requestId, iterations);
+      const prevTotal = this.requestTotalNodes.get(requestId) ?? 0;
+      const newTotal = prevTotal + progress.nodesSearched;
+      this.requestTotalNodes.set(requestId, newTotal);
+      return {
+        state: toPathPlanState(progress.state),
+        estimatedProgress: progress.estimatedProgress,
+        nodesSearched: progress.nodesSearched,
+        totalNodesSearched: newTotal
+      };
+    }
+    getResult(requestId) {
+      const result = this.pathfinder.getResult(requestId);
+      if (!result) {
+        return null;
+      }
+      if (!result.found) {
+        return EMPTY_PLAN_RESULT;
+      }
+      return {
+        found: true,
+        path: result.path.map((p) => ({
+          x: this.toPixelCoord(p.x),
+          y: this.toPixelCoord(p.y)
+        })),
+        cost: result.cost,
+        nodesSearched: result.nodesSearched
+      };
+    }
+    cancel(requestId) {
+      this.pathfinder.cancel(requestId);
+    }
+    cleanup(requestId) {
+      this.pathfinder.cleanup(requestId);
+      this.activeRequests.delete(requestId);
+      this.requestTotalNodes.delete(requestId);
+    }
+    getActiveRequestCount() {
+      return this.activeRequests.size;
+    }
+  };
+  __name$2(_IncrementalGridPathPlannerAdapter, "IncrementalGridPathPlannerAdapter");
+  var IncrementalGridPathPlannerAdapter = _IncrementalGridPathPlannerAdapter;
+  function createIncrementalAStarPlanner(map, options, config) {
+    return new IncrementalGridPathPlannerAdapter(map, options, config);
+  }
+  __name$2(createIncrementalAStarPlanner, "createIncrementalAStarPlanner");
+
+  // src/adapters/ORCALocalAvoidanceAdapter.ts
+  var DEFAULT_ORCA_PARAMS = {
+    neighborDist: 15,
+    maxNeighbors: 10,
+    timeHorizon: 2,
+    timeHorizonObst: 1
+  };
+  var _ORCALocalAvoidanceAdapter = class _ORCALocalAvoidanceAdapter {
+    constructor(config) {
+      __publicField$2(this, "type", "orca");
+      __publicField$2(this, "solver");
+      __publicField$2(this, "kdTree");
+      __publicField$2(this, "defaultParams");
+      this.solver = createORCASolver(config);
+      this.kdTree = createKDTree();
+      this.defaultParams = {
+        ...DEFAULT_ORCA_PARAMS
+      };
+    }
+    /**
+     * @zh 设置默认 ORCA 参数
+     * @en Set default ORCA parameters
+     *
+     * @param params - @zh 参数 @en Parameters
+     */
+    setDefaultParams(params) {
+      Object.assign(this.defaultParams, params);
+    }
+    /**
+     * @zh 获取默认 ORCA 参数
+     * @en Get default ORCA parameters
+     */
+    getDefaultParams() {
+      return this.defaultParams;
+    }
+    computeAvoidanceVelocity(agent, neighbors, obstacles, deltaTime) {
+      const orcaAgent = this.toORCAAgent(agent);
+      const orcaNeighbors = neighbors.map((n) => this.toORCAAgent(n));
+      const orcaObstacles = obstacles.map((o) => this.toORCAObstacle(o));
+      const result = this.solver.computeNewVelocityWithResult(orcaAgent, orcaNeighbors, orcaObstacles, deltaTime);
+      return {
+        velocity: result.velocity,
+        feasible: result.feasible
+      };
+    }
+    computeBatchAvoidance(agents, obstacles, deltaTime) {
+      const results = /* @__PURE__ */ new Map();
+      const orcaAgents = agents.map((a) => this.toORCAAgent(a));
+      const orcaObstacles = obstacles.map((o) => this.toORCAObstacle(o));
+      this.kdTree.build(orcaAgents);
+      for (let i = 0; i < agents.length; i++) {
+        const agent = orcaAgents[i];
+        const neighborResults = this.kdTree.queryNeighbors(agent.position, agent.neighborDist, agent.maxNeighbors, agent.id);
+        const result = this.solver.computeNewVelocityWithResult(agent, neighborResults.map((r) => r.agent), orcaObstacles, deltaTime);
+        results.set(agents[i].id, {
+          velocity: result.velocity,
+          feasible: result.feasible
+        });
+      }
+      return results;
+    }
+    dispose() {
+      this.kdTree.clear();
+    }
+    toORCAAgent(agent) {
+      return {
+        id: agent.id,
+        position: {
+          x: agent.position.x,
+          y: agent.position.y
+        },
+        velocity: {
+          x: agent.velocity.x,
+          y: agent.velocity.y
+        },
+        preferredVelocity: {
+          x: agent.preferredVelocity.x,
+          y: agent.preferredVelocity.y
+        },
+        radius: agent.radius,
+        maxSpeed: agent.maxSpeed,
+        neighborDist: this.defaultParams.neighborDist,
+        maxNeighbors: this.defaultParams.maxNeighbors,
+        timeHorizon: this.defaultParams.timeHorizon,
+        timeHorizonObst: this.defaultParams.timeHorizonObst
+      };
+    }
+    toORCAObstacle(obstacle) {
+      return {
+        vertices: obstacle.vertices.map((v) => ({
+          x: v.x,
+          y: v.y
+        }))
+      };
+    }
+  };
+  __name$2(_ORCALocalAvoidanceAdapter, "ORCALocalAvoidanceAdapter");
+  var ORCALocalAvoidanceAdapter = _ORCALocalAvoidanceAdapter;
+  function createORCAAvoidance(config) {
+    return new ORCALocalAvoidanceAdapter(config);
+  }
+  __name$2(createORCAAvoidance, "createORCAAvoidance");
+
+  // src/adapters/CollisionResolverAdapter.ts
+  var _CollisionResolverAdapter = class _CollisionResolverAdapter {
+    constructor(config) {
+      __publicField$2(this, "type", "default");
+      __publicField$2(this, "resolver");
+      this.resolver = createCollisionResolver(config);
+    }
+    detectCollision(position, radius, obstacles) {
+      if (obstacles.length === 0) {
+        return EMPTY_COLLISION_RESULT;
+      }
+      const result = this.resolver.detectCollisions(position, radius, obstacles.map((o) => ({
+        vertices: o.vertices.map((v) => ({
+          x: v.x,
+          y: v.y
+        }))
+      })));
+      return {
+        collided: result.collided,
+        penetration: result.penetration,
+        normal: {
+          x: result.normal.x,
+          y: result.normal.y
+        },
+        closestPoint: {
+          x: result.closestPoint.x,
+          y: result.closestPoint.y
+        }
+      };
+    }
+    resolveCollision(position, radius, obstacles) {
+      if (obstacles.length === 0) {
+        return {
+          x: position.x,
+          y: position.y
+        };
+      }
+      const resolved = this.resolver.resolveCollision(position, radius, obstacles.map((o) => ({
+        vertices: o.vertices.map((v) => ({
+          x: v.x,
+          y: v.y
+        }))
+      })));
+      return {
+        x: resolved.x,
+        y: resolved.y
+      };
+    }
+    validateVelocity(position, velocity, radius, obstacles, deltaTime) {
+      if (obstacles.length === 0) {
+        return {
+          x: velocity.x,
+          y: velocity.y
+        };
+      }
+      const result = this.resolver.validateVelocity(position, velocity, radius, obstacles.map((o) => ({
+        vertices: o.vertices.map((v) => ({
+          x: v.x,
+          y: v.y
+        }))
+      })), deltaTime);
+      return {
+        x: result.x,
+        y: result.y
+      };
+    }
+    detectAgentCollision(posA, radiusA, posB, radiusB) {
+      const result = this.resolver.detectAgentCollision(posA, radiusA, posB, radiusB);
+      return {
+        collided: result.collided,
+        penetration: result.penetration,
+        normal: {
+          x: result.normal.x,
+          y: result.normal.y
+        },
+        closestPoint: {
+          x: result.closestPoint.x,
+          y: result.closestPoint.y
+        }
+      };
+    }
+    dispose() {
+    }
+  };
+  __name$2(_CollisionResolverAdapter, "CollisionResolverAdapter");
+  var CollisionResolverAdapter = _CollisionResolverAdapter;
+  function createDefaultCollisionResolver(config) {
+    return new CollisionResolverAdapter(config);
+  }
+  __name$2(createDefaultCollisionResolver, "createDefaultCollisionResolver");
+
+  // src/adapters/FlowController.ts
+  var _FlowController = class _FlowController {
+    constructor(config = {}) {
+      __publicField$2(this, "type", "fifo-priority");
+      __publicField$2(this, "config");
+      __publicField$2(this, "zoneStates", /* @__PURE__ */ new Map());
+      __publicField$2(this, "agentZoneMap", /* @__PURE__ */ new Map());
+      __publicField$2(this, "agentResults", /* @__PURE__ */ new Map());
+      __publicField$2(this, "nextZoneId", 1);
+      __publicField$2(this, "currentTime", 0);
+      this.config = {
+        ...DEFAULT_FLOW_CONTROLLER_CONFIG,
+        ...config
+      };
+    }
+    /**
+     * @zh 更新流量控制状态
+     * @en Update flow control state
+     */
+    update(agents, deltaTime) {
+      this.currentTime += deltaTime;
+      this.agentResults.clear();
+      this.detectDynamicCongestion(agents);
+      this.updateZoneQueues(agents);
+      this.computeFlowControlResults(agents);
+      this.cleanupEmptyZones();
+    }
+    /**
+     * @zh 获取代理的流量控制结果
+     * @en Get flow control result for an agent
+     */
+    getFlowControl(agentId) {
+      return this.agentResults.get(agentId) ?? {
+        permission: PassPermission.Proceed,
+        waitPosition: null,
+        speedMultiplier: 1,
+        zone: null,
+        queuePosition: 0
+      };
+    }
+    /**
+     * @zh 获取所有拥堵区域
+     * @en Get all congestion zones
+     */
+    getCongestionZones() {
+      return Array.from(this.zoneStates.values()).map((s) => s.zone);
+    }
+    /**
+     * @zh 添加静态拥堵区域
+     * @en Add static congestion zone
+     */
+    addStaticZone(center, radius, capacity) {
+      const zoneId = this.nextZoneId++;
+      const zone = {
+        id: zoneId,
+        center: {
+          x: center.x,
+          y: center.y
+        },
+        radius,
+        agentIds: [],
+        capacity,
+        congestionLevel: 0
+      };
+      this.zoneStates.set(zoneId, {
+        zone,
+        queue: [],
+        passingAgents: /* @__PURE__ */ new Set(),
+        isStatic: true
+      });
+      return zoneId;
+    }
+    /**
+     * @zh 移除静态拥堵区域
+     * @en Remove static congestion zone
+     */
+    removeStaticZone(zoneId) {
+      const state = this.zoneStates.get(zoneId);
+      if (state?.isStatic) {
+        for (const agentId of state.zone.agentIds) {
+          this.agentZoneMap.delete(agentId);
+        }
+        this.zoneStates.delete(zoneId);
+      }
+    }
+    /**
+     * @zh 清除所有状态
+     * @en Clear all state
+     */
+    clear() {
+      this.zoneStates.clear();
+      this.agentZoneMap.clear();
+      this.agentResults.clear();
+      this.currentTime = 0;
+    }
+    /**
+     * @zh 释放资源
+     * @en Dispose resources
+     */
+    dispose() {
+      this.clear();
+    }
+    // =========================================================================
+    // 私有方法 | Private Methods
+    // =========================================================================
+    /**
+     * @zh 检测动态拥堵区域
+     * @en Detect dynamic congestion zones
+     */
+    detectDynamicCongestion(agents) {
+      const clusters = this.clusterAgents(agents);
+      for (const cluster of clusters) {
+        if (cluster.length < this.config.minAgentsForCongestion) {
+          continue;
+        }
+        const center = this.computeClusterCenter(cluster);
+        const radius = this.computeClusterRadius(cluster, center);
+        const existingZone = this.findZoneContaining(center);
+        if (existingZone && !existingZone.isStatic) {
+          this.updateDynamicZone(existingZone, cluster, center, radius);
+        } else if (!existingZone) {
+          this.createDynamicZone(cluster, center, radius);
+        }
+      }
+    }
+    /**
+     * @zh 聚类代理
+     * @en Cluster agents
+     */
+    clusterAgents(agents) {
+      const clusters = [];
+      const visited = /* @__PURE__ */ new Set();
+      const detectionRadiusSq = this.config.detectionRadius * this.config.detectionRadius;
+      for (const agent of agents) {
+        if (visited.has(agent.id) || !agent.destination) {
+          continue;
+        }
+        const cluster = [
+          agent
+        ];
+        visited.add(agent.id);
+        const queue = [
+          agent
+        ];
+        while (queue.length > 0) {
+          const current = queue.shift();
+          for (const other of agents) {
+            if (visited.has(other.id) || !other.destination) {
+              continue;
+            }
+            const dx = other.position.x - current.position.x;
+            const dy = other.position.y - current.position.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq <= detectionRadiusSq) {
+              visited.add(other.id);
+              cluster.push(other);
+              queue.push(other);
+            }
+          }
+        }
+        if (cluster.length >= this.config.minAgentsForCongestion) {
+          clusters.push(cluster);
+        }
+      }
+      return clusters;
+    }
+    /**
+     * @zh 计算聚类中心
+     * @en Compute cluster center
+     */
+    computeClusterCenter(cluster) {
+      let sumX = 0, sumY = 0;
+      for (const agent of cluster) {
+        sumX += agent.position.x;
+        sumY += agent.position.y;
+      }
+      return {
+        x: sumX / cluster.length,
+        y: sumY / cluster.length
+      };
+    }
+    /**
+     * @zh 计算聚类半径
+     * @en Compute cluster radius
+     */
+    computeClusterRadius(cluster, center) {
+      let maxDistSq = 0;
+      for (const agent of cluster) {
+        const dx = agent.position.x - center.x;
+        const dy = agent.position.y - center.y;
+        const distSq = dx * dx + dy * dy;
+        maxDistSq = Math.max(maxDistSq, distSq);
+      }
+      return Math.sqrt(maxDistSq) + this.config.detectionRadius * 0.5;
+    }
+    /**
+     * @zh 查找包含点的区域
+     * @en Find zone containing point
+     */
+    findZoneContaining(point) {
+      for (const state of this.zoneStates.values()) {
+        const dx = point.x - state.zone.center.x;
+        const dy = point.y - state.zone.center.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq <= state.zone.radius * state.zone.radius) {
+          return state;
+        }
+      }
+      return null;
+    }
+    /**
+     * @zh 更新动态区域
+     * @en Update dynamic zone
+     */
+    updateDynamicZone(state, cluster, center, radius) {
+      state.zone.center = center;
+      state.zone.radius = Math.max(state.zone.radius, radius);
+      state.zone.agentIds = cluster.map((a) => a.id);
+      state.zone.congestionLevel = Math.min(1, cluster.length / (state.zone.capacity * 2));
+    }
+    /**
+     * @zh 创建动态区域
+     * @en Create dynamic zone
+     */
+    createDynamicZone(cluster, center, radius) {
+      const zoneId = this.nextZoneId++;
+      const capacityEstimate = Math.max(this.config.defaultCapacity, Math.floor(Math.PI * radius * radius / (Math.PI * 0.5 * 0.5 * 4)));
+      const zone = {
+        id: zoneId,
+        center,
+        radius,
+        agentIds: cluster.map((a) => a.id),
+        capacity: capacityEstimate,
+        congestionLevel: Math.min(1, cluster.length / (capacityEstimate * 2))
+      };
+      this.zoneStates.set(zoneId, {
+        zone,
+        queue: [],
+        passingAgents: /* @__PURE__ */ new Set(),
+        isStatic: false
+      });
+    }
+    /**
+     * @zh 更新区域队列
+     * @en Update zone queues
+     */
+    updateZoneQueues(agents) {
+      const agentMap = new Map(agents.map((a) => [
+        a.id,
+        a
+      ]));
+      for (const state of this.zoneStates.values()) {
+        const zone = state.zone;
+        const newAgentIds = [];
+        for (const agent of agents) {
+          if (!agent.destination) continue;
+          const dx = agent.position.x - zone.center.x;
+          const dy = agent.position.y - zone.center.y;
+          const distSq = dx * dx + dy * dy;
+          const expandedRadius = zone.radius + this.config.waitPointDistance;
+          if (distSq <= expandedRadius * expandedRadius) {
+            newAgentIds.push(agent.id);
+            const existingEntry = state.queue.find((e) => e.agentId === agent.id);
+            if (!existingEntry) {
+              state.queue.push({
+                agentId: agent.id,
+                enterTime: agent.enterTime ?? this.currentTime,
+                priority: agent.priority
+              });
+              this.agentZoneMap.set(agent.id, zone.id);
+            }
+          }
+        }
+        state.queue = state.queue.filter((entry) => {
+          const agent = agentMap.get(entry.agentId);
+          if (!agent || !agent.destination) {
+            state.passingAgents.delete(entry.agentId);
+            this.agentZoneMap.delete(entry.agentId);
+            return false;
+          }
+          const dx = agent.position.x - zone.center.x;
+          const dy = agent.position.y - zone.center.y;
+          const distSq = dx * dx + dy * dy;
+          const expandedRadius = zone.radius + this.config.waitPointDistance * 2;
+          if (distSq > expandedRadius * expandedRadius) {
+            state.passingAgents.delete(entry.agentId);
+            this.agentZoneMap.delete(entry.agentId);
+            return false;
+          }
+          return true;
+        });
+        state.queue.sort((a, b) => {
+          if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+          }
+          return a.enterTime - b.enterTime;
+        });
+        zone.agentIds = state.queue.map((e) => e.agentId);
+        zone.congestionLevel = Math.min(1, zone.agentIds.length / (zone.capacity * 2));
+      }
+    }
+    /**
+     * @zh 计算流量控制结果
+     * @en Compute flow control results
+     */
+    computeFlowControlResults(agents) {
+      const agentMap = new Map(agents.map((a) => [
+        a.id,
+        a
+      ]));
+      for (const state of this.zoneStates.values()) {
+        const zone = state.zone;
+        const capacity = zone.capacity;
+        let passingCount = 0;
+        for (const entry of state.queue) {
+          const agent = agentMap.get(entry.agentId);
+          if (!agent) continue;
+          const dx = agent.position.x - zone.center.x;
+          const dy = agent.position.y - zone.center.y;
+          const distSq = dx * dx + dy * dy;
+          const isInsideZone = distSq <= zone.radius * zone.radius;
+          const queuePosition = state.queue.findIndex((e) => e.agentId === entry.agentId);
+          if (passingCount < capacity) {
+            state.passingAgents.add(entry.agentId);
+            passingCount++;
+            const speedMult = isInsideZone && zone.congestionLevel > 0.5 ? 1 - (zone.congestionLevel - 0.5) : 1;
+            this.agentResults.set(entry.agentId, {
+              permission: PassPermission.Proceed,
+              waitPosition: null,
+              speedMultiplier: speedMult,
+              zone,
+              queuePosition
+            });
+          } else if (state.passingAgents.has(entry.agentId) && isInsideZone) {
+            this.agentResults.set(entry.agentId, {
+              permission: PassPermission.Yield,
+              waitPosition: null,
+              speedMultiplier: this.config.yieldSpeedMultiplier,
+              zone,
+              queuePosition
+            });
+          } else {
+            const waitPos = this.computeWaitPosition(agent, zone);
+            this.agentResults.set(entry.agentId, {
+              permission: PassPermission.Wait,
+              waitPosition: waitPos,
+              speedMultiplier: 0,
+              zone,
+              queuePosition
+            });
+          }
+        }
+      }
+    }
+    /**
+     * @zh 计算等待位置
+     * @en Compute wait position
+     */
+    computeWaitPosition(agent, zone) {
+      const dx = agent.position.x - zone.center.x;
+      const dy = agent.position.y - zone.center.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 1e-3) {
+        return {
+          x: zone.center.x + zone.radius + this.config.waitPointDistance,
+          y: zone.center.y
+        };
+      }
+      const dirX = dx / dist;
+      const dirY = dy / dist;
+      const waitDist = zone.radius + this.config.waitPointDistance;
+      return {
+        x: zone.center.x + dirX * waitDist,
+        y: zone.center.y + dirY * waitDist
+      };
+    }
+    /**
+     * @zh 清理空的动态区域
+     * @en Cleanup empty dynamic zones
+     */
+    cleanupEmptyZones() {
+      const toRemove = [];
+      for (const [zoneId, state] of this.zoneStates) {
+        if (!state.isStatic && state.queue.length === 0) {
+          toRemove.push(zoneId);
+        }
+      }
+      for (const zoneId of toRemove) {
+        this.zoneStates.delete(zoneId);
+      }
+    }
+  };
+  __name$2(_FlowController, "FlowController");
+  var FlowController = _FlowController;
+  function createFlowController(config) {
+    return new FlowController(config);
+  }
+  __name$2(createFlowController, "createFlowController");
+
+  // src/core/GridPathfinder.ts
+  var CLOSED_FLAG = 1;
+  var OPENED_FLAG = 2;
+  var BACKWARD_CLOSED = 4;
+  var BACKWARD_OPENED = 8;
+  var _a$1;
+  var GridState = (_a$1 = class {
+    constructor(width, height, bidirectional = false) {
+      __publicField$2(this, "size");
+      __publicField$2(this, "width");
+      __publicField$2(this, "g");
+      __publicField$2(this, "f");
+      __publicField$2(this, "flags");
+      __publicField$2(this, "parent");
+      __publicField$2(this, "heapIndex");
+      __publicField$2(this, "version");
+      __publicField$2(this, "currentVersion", 1);
+      // 双向搜索额外状态
+      __publicField$2(this, "gBack", null);
+      __publicField$2(this, "fBack", null);
+      __publicField$2(this, "parentBack", null);
+      __publicField$2(this, "heapIndexBack", null);
+      this.width = width;
+      this.size = width * height;
+      this.g = new Float32Array(this.size);
+      this.f = new Float32Array(this.size);
+      this.flags = new Uint8Array(this.size);
+      this.parent = new Int32Array(this.size);
+      this.heapIndex = new Int32Array(this.size);
+      this.version = new Uint32Array(this.size);
+      if (bidirectional) {
+        this.gBack = new Float32Array(this.size);
+        this.fBack = new Float32Array(this.size);
+        this.parentBack = new Int32Array(this.size);
+        this.heapIndexBack = new Int32Array(this.size);
+      }
+    }
+    reset() {
+      this.currentVersion++;
+      if (this.currentVersion > 4294967295) {
+        this.version.fill(0);
+        this.currentVersion = 1;
+      }
+    }
+    isInit(i) {
+      return this.version[i] === this.currentVersion;
+    }
+    init(i) {
+      if (!this.isInit(i)) {
+        this.g[i] = Infinity;
+        this.f[i] = Infinity;
+        this.flags[i] = 0;
+        this.parent[i] = -1;
+        this.heapIndex[i] = -1;
+        if (this.gBack) {
+          this.gBack[i] = Infinity;
+          this.fBack[i] = Infinity;
+          this.parentBack[i] = -1;
+          this.heapIndexBack[i] = -1;
+        }
+        this.version[i] = this.currentVersion;
+      }
+    }
+    // Forward
+    getG(i) {
+      return this.isInit(i) ? this.g[i] : Infinity;
+    }
+    setG(i, v) {
+      this.init(i);
+      this.g[i] = v;
+    }
+    getF(i) {
+      return this.isInit(i) ? this.f[i] : Infinity;
+    }
+    setF(i, v) {
+      this.init(i);
+      this.f[i] = v;
+    }
+    getParent(i) {
+      return this.isInit(i) ? this.parent[i] : -1;
+    }
+    setParent(i, v) {
+      this.init(i);
+      this.parent[i] = v;
+    }
+    getHeapIndex(i) {
+      return this.isInit(i) ? this.heapIndex[i] : -1;
+    }
+    setHeapIndex(i, v) {
+      this.init(i);
+      this.heapIndex[i] = v;
+    }
+    isClosed(i) {
+      return this.isInit(i) && (this.flags[i] & CLOSED_FLAG) !== 0;
+    }
+    setClosed(i) {
+      this.init(i);
+      this.flags[i] |= CLOSED_FLAG;
+    }
+    isOpened(i) {
+      return this.isInit(i) && (this.flags[i] & OPENED_FLAG) !== 0;
+    }
+    setOpened(i) {
+      this.init(i);
+      this.flags[i] |= OPENED_FLAG;
+    }
+    // Backward
+    getGBack(i) {
+      return this.isInit(i) ? this.gBack[i] : Infinity;
+    }
+    setGBack(i, v) {
+      this.init(i);
+      this.gBack[i] = v;
+    }
+    getFBack(i) {
+      return this.isInit(i) ? this.fBack[i] : Infinity;
+    }
+    setFBack(i, v) {
+      this.init(i);
+      this.fBack[i] = v;
+    }
+    getParentBack(i) {
+      return this.isInit(i) ? this.parentBack[i] : -1;
+    }
+    setParentBack(i, v) {
+      this.init(i);
+      this.parentBack[i] = v;
+    }
+    getHeapIndexBack(i) {
+      return this.isInit(i) ? this.heapIndexBack[i] : -1;
+    }
+    setHeapIndexBack(i, v) {
+      this.init(i);
+      this.heapIndexBack[i] = v;
+    }
+    isClosedBack(i) {
+      return this.isInit(i) && (this.flags[i] & BACKWARD_CLOSED) !== 0;
+    }
+    setClosedBack(i) {
+      this.init(i);
+      this.flags[i] |= BACKWARD_CLOSED;
+    }
+    isOpenedBack(i) {
+      return this.isInit(i) && (this.flags[i] & BACKWARD_OPENED) !== 0;
+    }
+    setOpenedBack(i) {
+      this.init(i);
+      this.flags[i] |= BACKWARD_OPENED;
+    }
+  }, __name$2(_a$1, "GridState"), _a$1);
+  var _a2;
+  var GridHeap = (_a2 = class {
+    constructor(state, isBack = false) {
+      __publicField$2(this, "heap", []);
+      __publicField$2(this, "state");
+      __publicField$2(this, "isBack");
+      this.state = state;
+      this.isBack = isBack;
+    }
+    get size() {
+      return this.heap.length;
+    }
+    get isEmpty() {
+      return this.heap.length === 0;
+    }
+    getF(i) {
+      return this.isBack ? this.state.getFBack(i) : this.state.getF(i);
+    }
+    getHeapIndex(i) {
+      return this.isBack ? this.state.getHeapIndexBack(i) : this.state.getHeapIndex(i);
+    }
+    setHeapIndex(i, v) {
+      if (this.isBack) this.state.setHeapIndexBack(i, v);
+      else this.state.setHeapIndex(i, v);
+    }
+    push(i) {
+      this.setHeapIndex(i, this.heap.length);
+      this.heap.push(i);
+      this.bubbleUp(this.heap.length - 1);
+    }
+    pop() {
+      if (this.heap.length === 0) return -1;
+      const result = this.heap[0];
+      this.setHeapIndex(result, -1);
+      const last = this.heap.pop();
+      if (this.heap.length > 0) {
+        this.heap[0] = last;
+        this.setHeapIndex(last, 0);
+        this.sinkDown(0);
+      }
+      return result;
+    }
+    update(i) {
+      const pos = this.getHeapIndex(i);
+      if (pos >= 0 && pos < this.heap.length) {
+        this.bubbleUp(pos);
+        this.sinkDown(this.getHeapIndex(i));
+      }
+    }
+    clear() {
+      this.heap.length = 0;
+    }
+    bubbleUp(pos) {
+      const idx = this.heap[pos];
+      const f = this.getF(idx);
+      while (pos > 0) {
+        const pp = pos - 1 >> 1;
+        const pi = this.heap[pp];
+        if (f >= this.getF(pi)) break;
+        this.heap[pos] = pi;
+        this.setHeapIndex(pi, pos);
+        pos = pp;
+      }
+      this.heap[pos] = idx;
+      this.setHeapIndex(idx, pos);
+    }
+    sinkDown(pos) {
+      const len = this.heap.length;
+      const idx = this.heap[pos];
+      const f = this.getF(idx);
+      const half = len >> 1;
+      while (pos < half) {
+        const left = (pos << 1) + 1;
+        const right = left + 1;
+        let smallest = pos, smallestF = f;
+        const lf = this.getF(this.heap[left]);
+        if (lf < smallestF) {
+          smallest = left;
+          smallestF = lf;
+        }
+        if (right < len) {
+          const rf = this.getF(this.heap[right]);
+          if (rf < smallestF) smallest = right;
+        }
+        if (smallest === pos) break;
+        const si = this.heap[smallest];
+        this.heap[pos] = si;
+        this.setHeapIndex(si, pos);
+        pos = smallest;
+      }
+      this.heap[pos] = idx;
+      this.setHeapIndex(idx, pos);
+    }
+  }, __name$2(_a2, "GridHeap"), _a2);
+  var _GridPathfinder = class _GridPathfinder {
+    constructor(map, config) {
+      __publicField$2(this, "map");
+      __publicField$2(this, "mode");
+      __publicField$2(this, "state");
+      __publicField$2(this, "openList");
+      __publicField$2(this, "openListBack");
+      this.map = map;
+      this.mode = config?.mode ?? "fast";
+      const isBidir = this.mode === "bidirectional";
+      this.state = new GridState(map.width, map.height, isBidir);
+      this.openList = new GridHeap(this.state, false);
+      this.openListBack = isBidir ? new GridHeap(this.state, true) : null;
+    }
+    findPath(startX, startY, endX, endY, options) {
+      if (this.mode === "bidirectional") {
+        return this.findPathBidirectional(startX, startY, endX, endY, options);
+      }
+      return this.findPathUnidirectional(startX, startY, endX, endY, options);
+    }
+    findPathUnidirectional(startX, startY, endX, endY, options) {
+      const opts = options ? {
+        ...DEFAULT_PATHFINDING_OPTIONS,
+        ...options
+      } : DEFAULT_PATHFINDING_OPTIONS;
+      const { width, height } = this.map;
+      this.state.reset();
+      this.openList.clear();
+      if (!this.validate(startX, startY, endX, endY)) return EMPTY_PATH_RESULT;
+      const startIdx = startY * width + startX;
+      const endIdx = endY * width + endX;
+      if (startIdx === endIdx) {
+        return {
+          found: true,
+          path: [
+            {
+              x: startX,
+              y: startY
+            }
+          ],
+          cost: 0,
+          nodesSearched: 1
+        };
+      }
+      const hw = opts.heuristicWeight;
+      const h0 = this.map.heuristic({
+        x: startX,
+        y: startY
+      }, {
+        x: endX,
+        y: endY
+      }) * hw;
+      this.state.setG(startIdx, 0);
+      this.state.setF(startIdx, h0);
+      this.state.setOpened(startIdx);
+      this.openList.push(startIdx);
+      let searched = 0;
+      const maxNodes = opts.maxNodes;
+      const { allowDiagonal, avoidCorners, diagonalCost } = this.map["options"];
+      const nodes = this.map["nodes"];
+      const dx = allowDiagonal ? [
+        0,
+        1,
+        1,
+        1,
+        0,
+        -1,
+        -1,
+        -1
+      ] : [
+        0,
+        1,
+        0,
+        -1
+      ];
+      const dy = allowDiagonal ? [
+        -1,
+        -1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        -1
+      ] : [
+        -1,
+        0,
+        1,
+        0
+      ];
+      const dirCount = dx.length;
+      while (!this.openList.isEmpty && searched < maxNodes) {
+        const cur = this.openList.pop();
+        this.state.setClosed(cur);
+        searched++;
+        if (cur === endIdx) {
+          return this.buildPath(startIdx, endIdx, searched);
+        }
+        const cx = cur % width, cy = cur / width | 0;
+        const curG = this.state.getG(cur);
+        for (let d = 0; d < dirCount; d++) {
+          const nx = cx + dx[d], ny = cy + dy[d];
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+          const neighbor = nodes[ny][nx];
+          if (!neighbor.walkable) continue;
+          if (avoidCorners && dx[d] !== 0 && dy[d] !== 0) {
+            if (!nodes[cy][cx + dx[d]].walkable || !nodes[cy + dy[d]][cx].walkable) continue;
+          }
+          const ni = ny * width + nx;
+          if (this.state.isClosed(ni)) continue;
+          const isDiag = dx[d] !== 0 && dy[d] !== 0;
+          const cost = isDiag ? neighbor.cost * diagonalCost : neighbor.cost;
+          const tentG = curG + cost;
+          if (!this.state.isOpened(ni)) {
+            const h = this.map.heuristic({
+              x: nx,
+              y: ny
+            }, {
+              x: endX,
+              y: endY
+            }) * hw;
+            this.state.setG(ni, tentG);
+            this.state.setF(ni, tentG + h);
+            this.state.setParent(ni, cur);
+            this.state.setOpened(ni);
+            this.openList.push(ni);
+          } else if (tentG < this.state.getG(ni)) {
+            const h = this.state.getF(ni) - this.state.getG(ni);
+            this.state.setG(ni, tentG);
+            this.state.setF(ni, tentG + h);
+            this.state.setParent(ni, cur);
+            this.openList.update(ni);
+          }
+        }
+      }
+      return {
+        found: false,
+        path: [],
+        cost: 0,
+        nodesSearched: searched
+      };
+    }
+    findPathBidirectional(startX, startY, endX, endY, options) {
+      const opts = options ? {
+        ...DEFAULT_PATHFINDING_OPTIONS,
+        ...options
+      } : DEFAULT_PATHFINDING_OPTIONS;
+      const { width, height } = this.map;
+      this.state.reset();
+      this.openList.clear();
+      this.openListBack.clear();
+      if (!this.validate(startX, startY, endX, endY)) return EMPTY_PATH_RESULT;
+      const startIdx = startY * width + startX;
+      const endIdx = endY * width + endX;
+      if (startIdx === endIdx) {
+        return {
+          found: true,
+          path: [
+            {
+              x: startX,
+              y: startY
+            }
+          ],
+          cost: 0,
+          nodesSearched: 1
+        };
+      }
+      const hw = opts.heuristicWeight;
+      const startPos = {
+        x: startX,
+        y: startY
+      };
+      const endPos = {
+        x: endX,
+        y: endY
+      };
+      const hf = this.map.heuristic(startPos, endPos) * hw;
+      this.state.setG(startIdx, 0);
+      this.state.setF(startIdx, hf);
+      this.state.setOpened(startIdx);
+      this.openList.push(startIdx);
+      const hb = this.map.heuristic(endPos, startPos) * hw;
+      this.state.setGBack(endIdx, 0);
+      this.state.setFBack(endIdx, hb);
+      this.state.setOpenedBack(endIdx);
+      this.openListBack.push(endIdx);
+      let searched = 0;
+      const maxNodes = opts.maxNodes;
+      let meetIdx = -1, bestCost = Infinity;
+      const { allowDiagonal, avoidCorners, diagonalCost } = this.map["options"];
+      const nodes = this.map["nodes"];
+      const dx = allowDiagonal ? [
+        0,
+        1,
+        1,
+        1,
+        0,
+        -1,
+        -1,
+        -1
+      ] : [
+        0,
+        1,
+        0,
+        -1
+      ];
+      const dy = allowDiagonal ? [
+        -1,
+        -1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        -1
+      ] : [
+        -1,
+        0,
+        1,
+        0
+      ];
+      const dirCount = dx.length;
+      while ((!this.openList.isEmpty || !this.openListBack.isEmpty) && searched < maxNodes) {
+        if (!this.openList.isEmpty) {
+          const cur = this.openList.pop();
+          this.state.setClosed(cur);
+          searched++;
+          const curG = this.state.getG(cur);
+          if (this.state.isClosedBack(cur)) {
+            const total = curG + this.state.getGBack(cur);
+            if (total < bestCost) {
+              bestCost = total;
+              meetIdx = cur;
+            }
+          }
+          if (meetIdx !== -1 && curG >= bestCost) break;
+          const cx = cur % width, cy = cur / width | 0;
+          for (let d = 0; d < dirCount; d++) {
+            const nx = cx + dx[d], ny = cy + dy[d];
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+            const neighbor = nodes[ny][nx];
+            if (!neighbor.walkable) continue;
+            if (avoidCorners && dx[d] !== 0 && dy[d] !== 0) {
+              if (!nodes[cy][cx + dx[d]].walkable || !nodes[cy + dy[d]][cx].walkable) continue;
+            }
+            const ni = ny * width + nx;
+            if (this.state.isClosed(ni)) continue;
+            const isDiag = dx[d] !== 0 && dy[d] !== 0;
+            const cost = isDiag ? neighbor.cost * diagonalCost : neighbor.cost;
+            const tentG = curG + cost;
+            if (!this.state.isOpened(ni)) {
+              const h = this.map.heuristic({
+                x: nx,
+                y: ny
+              }, endPos) * hw;
+              this.state.setG(ni, tentG);
+              this.state.setF(ni, tentG + h);
+              this.state.setParent(ni, cur);
+              this.state.setOpened(ni);
+              this.openList.push(ni);
+            } else if (tentG < this.state.getG(ni)) {
+              const h = this.state.getF(ni) - this.state.getG(ni);
+              this.state.setG(ni, tentG);
+              this.state.setF(ni, tentG + h);
+              this.state.setParent(ni, cur);
+              this.openList.update(ni);
+            }
+          }
+        }
+        if (!this.openListBack.isEmpty) {
+          const cur = this.openListBack.pop();
+          this.state.setClosedBack(cur);
+          searched++;
+          const curG = this.state.getGBack(cur);
+          if (this.state.isClosed(cur)) {
+            const total = curG + this.state.getG(cur);
+            if (total < bestCost) {
+              bestCost = total;
+              meetIdx = cur;
+            }
+          }
+          if (meetIdx !== -1 && curG >= bestCost) break;
+          const cx = cur % width, cy = cur / width | 0;
+          for (let d = 0; d < dirCount; d++) {
+            const nx = cx + dx[d], ny = cy + dy[d];
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+            const neighbor = nodes[ny][nx];
+            if (!neighbor.walkable) continue;
+            if (avoidCorners && dx[d] !== 0 && dy[d] !== 0) {
+              if (!nodes[cy][cx + dx[d]].walkable || !nodes[cy + dy[d]][cx].walkable) continue;
+            }
+            const ni = ny * width + nx;
+            if (this.state.isClosedBack(ni)) continue;
+            const isDiag = dx[d] !== 0 && dy[d] !== 0;
+            const cost = isDiag ? neighbor.cost * diagonalCost : neighbor.cost;
+            const tentG = curG + cost;
+            if (!this.state.isOpenedBack(ni)) {
+              const h = this.map.heuristic({
+                x: nx,
+                y: ny
+              }, startPos) * hw;
+              this.state.setGBack(ni, tentG);
+              this.state.setFBack(ni, tentG + h);
+              this.state.setParentBack(ni, cur);
+              this.state.setOpenedBack(ni);
+              this.openListBack.push(ni);
+            } else if (tentG < this.state.getGBack(ni)) {
+              const h = this.state.getFBack(ni) - this.state.getGBack(ni);
+              this.state.setGBack(ni, tentG);
+              this.state.setFBack(ni, tentG + h);
+              this.state.setParentBack(ni, cur);
+              this.openListBack.update(ni);
+            }
+          }
+        }
+      }
+      if (meetIdx === -1) {
+        return {
+          found: false,
+          path: [],
+          cost: 0,
+          nodesSearched: searched
+        };
+      }
+      return this.buildPathBidirectional(startIdx, endIdx, meetIdx, searched);
+    }
+    validate(startX, startY, endX, endY) {
+      const { width, height } = this.map;
+      if (startX < 0 || startX >= width || startY < 0 || startY >= height) return false;
+      if (endX < 0 || endX >= width || endY < 0 || endY >= height) return false;
+      return this.map.isWalkable(startX, startY) && this.map.isWalkable(endX, endY);
+    }
+    buildPath(startIdx, endIdx, searched) {
+      const w = this.state.width;
+      const path = [];
+      let cur = endIdx;
+      while (cur !== -1) {
+        path.push({
+          x: cur % w,
+          y: cur / w | 0
+        });
+        cur = cur === startIdx ? -1 : this.state.getParent(cur);
+      }
+      path.reverse();
+      return {
+        found: true,
+        path,
+        cost: this.state.getG(endIdx),
+        nodesSearched: searched
+      };
+    }
+    buildPathBidirectional(startIdx, endIdx, meetIdx, searched) {
+      const w = this.state.width;
+      const path = [];
+      let cur = meetIdx;
+      while (cur !== -1 && cur !== startIdx) {
+        path.push({
+          x: cur % w,
+          y: cur / w | 0
+        });
+        cur = this.state.getParent(cur);
+      }
+      path.push({
+        x: startIdx % w,
+        y: startIdx / w | 0
+      });
+      path.reverse();
+      cur = this.state.getParentBack(meetIdx);
+      while (cur !== -1 && cur !== endIdx) {
+        path.push({
+          x: cur % w,
+          y: cur / w | 0
+        });
+        cur = this.state.getParentBack(cur);
+      }
+      if (meetIdx !== endIdx) {
+        path.push({
+          x: endIdx % w,
+          y: endIdx / w | 0
+        });
+      }
+      const cost = this.state.getG(meetIdx) + this.state.getGBack(meetIdx);
+      return {
+        found: true,
+        path,
+        cost,
+        nodesSearched: searched
+      };
+    }
+    clear() {
+      this.state.reset();
+      this.openList.clear();
+      this.openListBack?.clear();
+    }
+  };
+  __name$2(_GridPathfinder, "GridPathfinder");
+  var GridPathfinder = _GridPathfinder;
+  function createGridPathfinder(map, config) {
+    return new GridPathfinder(map, config);
+  }
+  __name$2(createGridPathfinder, "createGridPathfinder");
+
+  // src/core/PathValidator.ts
+  var _PathValidator = class _PathValidator {
+    /**
+     * @zh 验证路径段的有效性
+     * @en Validate path segment validity
+     *
+     * @param path - @zh 要验证的路径 @en Path to validate
+     * @param fromIndex - @zh 起始索引 @en Start index
+     * @param toIndex - @zh 结束索引 @en End index
+     * @param map - @zh 地图实例 @en Map instance
+     * @returns @zh 验证结果 @en Validation result
+     */
+    validatePath(path, fromIndex, toIndex, map) {
+      const end = Math.min(toIndex, path.length);
+      for (let i = fromIndex; i < end; i++) {
+        const point = path[i];
+        const x = Math.floor(point.x);
+        const y = Math.floor(point.y);
+        if (!map.isWalkable(x, y)) {
+          return {
+            valid: false,
+            invalidIndex: i
+          };
+        }
+        if (i > fromIndex) {
+          const prev = path[i - 1];
+          if (!this.checkLineOfSight(prev.x, prev.y, point.x, point.y, map)) {
+            return {
+              valid: false,
+              invalidIndex: i
+            };
+          }
+        }
+      }
+      return {
+        valid: true,
+        invalidIndex: -1
+      };
+    }
+    /**
+     * @zh 检查两点之间的视线（使用 Bresenham 算法）
+     * @en Check line of sight between two points (using Bresenham algorithm)
+     *
+     * @param x1 - @zh 起点 X @en Start X
+     * @param y1 - @zh 起点 Y @en Start Y
+     * @param x2 - @zh 终点 X @en End X
+     * @param y2 - @zh 终点 Y @en End Y
+     * @param map - @zh 地图实例 @en Map instance
+     * @returns @zh 是否有视线 @en Whether there is line of sight
+     */
+    checkLineOfSight(x1, y1, x2, y2, map) {
+      const ix1 = Math.floor(x1);
+      const iy1 = Math.floor(y1);
+      const ix2 = Math.floor(x2);
+      const iy2 = Math.floor(y2);
+      let dx = Math.abs(ix2 - ix1);
+      let dy = Math.abs(iy2 - iy1);
+      let x = ix1;
+      let y = iy1;
+      const sx = ix1 < ix2 ? 1 : -1;
+      const sy = iy1 < iy2 ? 1 : -1;
+      if (dx > dy) {
+        let err = dx / 2;
+        while (x !== ix2) {
+          if (!map.isWalkable(x, y)) {
+            return false;
+          }
+          err -= dy;
+          if (err < 0) {
+            y += sy;
+            err += dx;
+          }
+          x += sx;
+        }
+      } else {
+        let err = dy / 2;
+        while (y !== iy2) {
+          if (!map.isWalkable(x, y)) {
+            return false;
+          }
+          err -= dx;
+          if (err < 0) {
+            x += sx;
+            err += dy;
+          }
+          y += sy;
+        }
+      }
+      return map.isWalkable(ix2, iy2);
+    }
+  };
+  __name$2(_PathValidator, "PathValidator");
+  var PathValidator = _PathValidator;
+  var _ObstacleChangeManager = class _ObstacleChangeManager {
+    constructor() {
+      __publicField$2(this, "changes", /* @__PURE__ */ new Map());
+      __publicField$2(this, "epoch", 0);
+    }
+    /**
+     * @zh 记录障碍物变化
+     * @en Record obstacle change
+     *
+     * @param x - @zh X 坐标 @en X coordinate
+     * @param y - @zh Y 坐标 @en Y coordinate
+     * @param wasWalkable - @zh 变化前是否可通行 @en Was walkable before change
+     */
+    recordChange(x, y, wasWalkable) {
+      const key = `${x},${y}`;
+      this.changes.set(key, {
+        x,
+        y,
+        wasWalkable,
+        timestamp: Date.now()
+      });
+    }
+    /**
+     * @zh 获取影响区域
+     * @en Get affected region
+     *
+     * @returns @zh 影响区域或 null（如果没有变化）@en Affected region or null if no changes
+     */
+    getAffectedRegion() {
+      if (this.changes.size === 0) {
+        return null;
+      }
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const change of this.changes.values()) {
+        minX = Math.min(minX, change.x);
+        minY = Math.min(minY, change.y);
+        maxX = Math.max(maxX, change.x);
+        maxY = Math.max(maxY, change.y);
+      }
+      return {
+        minX,
+        minY,
+        maxX,
+        maxY
+      };
+    }
+    /**
+     * @zh 获取所有变化
+     * @en Get all changes
+     *
+     * @returns @zh 变化列表 @en List of changes
+     */
+    getChanges() {
+      return Array.from(this.changes.values());
+    }
+    /**
+     * @zh 检查是否有变化
+     * @en Check if there are changes
+     *
+     * @returns @zh 是否有变化 @en Whether there are changes
+     */
+    hasChanges() {
+      return this.changes.size > 0;
+    }
+    /**
+     * @zh 获取当前 epoch
+     * @en Get current epoch
+     *
+     * @returns @zh 当前 epoch @en Current epoch
+     */
+    getEpoch() {
+      return this.epoch;
+    }
+    /**
+     * @zh 清空变化记录并推进 epoch
+     * @en Clear changes and advance epoch
+     */
+    flush() {
+      this.changes.clear();
+      this.epoch++;
+    }
+    /**
+     * @zh 清空所有状态
+     * @en Clear all state
+     */
+    clear() {
+      this.changes.clear();
+      this.epoch = 0;
+    }
+  };
+  __name$2(_ObstacleChangeManager, "ObstacleChangeManager");
+  var ObstacleChangeManager = _ObstacleChangeManager;
+  function createPathValidator() {
+    return new PathValidator();
+  }
+  __name$2(createPathValidator, "createPathValidator");
+  function createObstacleChangeManager() {
+    return new ObstacleChangeManager();
+  }
+  __name$2(createObstacleChangeManager, "createObstacleChangeManager");
+
+  // src/grid/GridMap.ts
+  var _GridNode = class _GridNode {
+    constructor(x, y, width, walkable = true, cost = 1) {
+      __publicField$2(this, "id");
+      __publicField$2(this, "position");
+      __publicField$2(this, "x");
+      __publicField$2(this, "y");
+      __publicField$2(this, "cost");
+      __publicField$2(this, "walkable");
+      this.x = x;
+      this.y = y;
+      this.id = y * width + x;
+      this.position = createPoint(x, y);
+      this.walkable = walkable;
+      this.cost = cost;
+    }
+  };
+  __name$2(_GridNode, "GridNode");
+  var GridNode = _GridNode;
+  var DIRECTIONS_4 = [
+    {
+      dx: 0,
+      dy: -1
+    },
+    {
+      dx: 1,
+      dy: 0
+    },
+    {
+      dx: 0,
+      dy: 1
+    },
+    {
+      dx: -1,
+      dy: 0
+    }
+    // Left
+  ];
+  var DIRECTIONS_8 = [
+    {
+      dx: 0,
+      dy: -1
+    },
+    {
+      dx: 1,
+      dy: -1
+    },
+    {
+      dx: 1,
+      dy: 0
+    },
+    {
+      dx: 1,
+      dy: 1
+    },
+    {
+      dx: 0,
+      dy: 1
+    },
+    {
+      dx: -1,
+      dy: 1
+    },
+    {
+      dx: -1,
+      dy: 0
+    },
+    {
+      dx: -1,
+      dy: -1
+    }
+    // Up-Left
+  ];
+  var DEFAULT_GRID_OPTIONS = {
+    allowDiagonal: true,
+    diagonalCost: Math.SQRT2,
+    avoidCorners: true,
+    heuristic: octileDistance
+  };
+  var _GridMap = class _GridMap {
+    constructor(width, height, options) {
+      __publicField$2(this, "width");
+      __publicField$2(this, "height");
+      __publicField$2(this, "nodes");
+      __publicField$2(this, "options");
+      this.width = width;
+      this.height = height;
+      this.options = {
+        ...DEFAULT_GRID_OPTIONS,
+        ...options
+      };
+      this.nodes = this.createNodes();
+    }
+    /**
+     * @zh 创建网格节点
+     * @en Create grid nodes
+     */
+    createNodes() {
+      const nodes = [];
+      for (let y = 0; y < this.height; y++) {
+        nodes[y] = [];
+        for (let x = 0; x < this.width; x++) {
+          nodes[y][x] = new GridNode(x, y, this.width, true, 1);
+        }
+      }
+      return nodes;
+    }
+    /**
+     * @zh 获取指定位置的节点
+     * @en Get node at position
+     */
+    getNodeAt(x, y) {
+      if (!this.isInBounds(x, y)) {
+        return null;
+      }
+      return this.nodes[y][x];
+    }
+    /**
+     * @zh 检查坐标是否在边界内
+     * @en Check if coordinates are within bounds
+     */
+    isInBounds(x, y) {
+      return x >= 0 && x < this.width && y >= 0 && y < this.height;
+    }
+    /**
+     * @zh 检查位置是否可通行
+     * @en Check if position is walkable
+     */
+    isWalkable(x, y) {
+      const node = this.getNodeAt(x, y);
+      return node !== null && node.walkable;
+    }
+    /**
+     * @zh 设置位置是否可通行
+     * @en Set position walkability
+     */
+    setWalkable(x, y, walkable) {
+      const node = this.getNodeAt(x, y);
+      if (node) {
+        node.walkable = walkable;
+      }
+    }
+    /**
+     * @zh 设置位置的移动代价
+     * @en Set movement cost at position
+     */
+    setCost(x, y, cost) {
+      const node = this.getNodeAt(x, y);
+      if (node) {
+        node.cost = cost;
+      }
+    }
+    /**
+     * @zh 获取节点的邻居
+     * @en Get neighbors of a node
+     */
+    getNeighbors(node) {
+      const neighbors = [];
+      const { x, y } = node.position;
+      const directions = this.options.allowDiagonal ? DIRECTIONS_8 : DIRECTIONS_4;
+      for (let i = 0; i < directions.length; i++) {
+        const dir = directions[i];
+        const nx = x + dir.dx;
+        const ny = y + dir.dy;
+        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
+          continue;
+        }
+        const neighbor = this.nodes[ny][nx];
+        if (!neighbor.walkable) {
+          continue;
+        }
+        if (this.options.avoidCorners && dir.dx !== 0 && dir.dy !== 0) {
+          const hNode = this.nodes[y][x + dir.dx];
+          const vNode = this.nodes[y + dir.dy][x];
+          if (!hNode.walkable || !vNode.walkable) {
+            continue;
+          }
+        }
+        neighbors.push(neighbor);
+      }
+      return neighbors;
+    }
+    /**
+     * @zh 遍历节点的邻居（零分配）
+     * @en Iterate over neighbors (zero allocation)
+     */
+    forEachNeighbor(node, callback) {
+      const { x, y } = node.position;
+      const directions = this.options.allowDiagonal ? DIRECTIONS_8 : DIRECTIONS_4;
+      for (let i = 0; i < directions.length; i++) {
+        const dir = directions[i];
+        const nx = x + dir.dx;
+        const ny = y + dir.dy;
+        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
+          continue;
+        }
+        const neighbor = this.nodes[ny][nx];
+        if (!neighbor.walkable) {
+          continue;
+        }
+        if (this.options.avoidCorners && dir.dx !== 0 && dir.dy !== 0) {
+          const hNode = this.nodes[y][x + dir.dx];
+          const vNode = this.nodes[y + dir.dy][x];
+          if (!hNode.walkable || !vNode.walkable) {
+            continue;
+          }
+        }
+        if (callback(neighbor) === false) {
+          return;
+        }
+      }
+    }
+    /**
+     * @zh 计算启发式距离
+     * @en Calculate heuristic distance
+     */
+    heuristic(a, b) {
+      return this.options.heuristic(a, b);
+    }
+    /**
+     * @zh 计算移动代价
+     * @en Calculate movement cost
+     */
+    getMovementCost(from, to) {
+      const dx = Math.abs(from.position.x - to.position.x);
+      const dy = Math.abs(from.position.y - to.position.y);
+      if (dx !== 0 && dy !== 0) {
+        return to.cost * this.options.diagonalCost;
+      }
+      return to.cost;
+    }
+    /**
+     * @zh 从二维数组加载地图
+     * @en Load map from 2D array
+     *
+     * @param data - @zh 0=可通行，非0=不可通行 @en 0=walkable, non-0=blocked
+     */
+    loadFromArray(data) {
+      for (let y = 0; y < Math.min(data.length, this.height); y++) {
+        for (let x = 0; x < Math.min(data[y].length, this.width); x++) {
+          this.nodes[y][x].walkable = data[y][x] === 0;
+        }
+      }
+    }
+    /**
+     * @zh 从字符串加载地图
+     * @en Load map from string
+     *
+     * @param str - @zh 地图字符串，'.'=可通行，'#'=障碍 @en Map string, '.'=walkable, '#'=blocked
+     */
+    loadFromString(str) {
+      const lines = str.trim().split("\n");
+      for (let y = 0; y < Math.min(lines.length, this.height); y++) {
+        const line = lines[y];
+        for (let x = 0; x < Math.min(line.length, this.width); x++) {
+          this.nodes[y][x].walkable = line[x] !== "#";
+        }
+      }
+    }
+    /**
+     * @zh 导出为字符串
+     * @en Export to string
+     */
+    toString() {
+      let result = "";
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          result += this.nodes[y][x].walkable ? "." : "#";
+        }
+        result += "\n";
+      }
+      return result;
+    }
+    /**
+     * @zh 重置所有节点为可通行
+     * @en Reset all nodes to walkable
+     */
+    reset() {
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          this.nodes[y][x].walkable = true;
+          this.nodes[y][x].cost = 1;
+        }
+      }
+    }
+    /**
+     * @zh 设置矩形区域的通行性
+     * @en Set walkability for a rectangle region
+     */
+    setRectWalkable(x, y, width, height, walkable) {
+      for (let dy = 0; dy < height; dy++) {
+        for (let dx = 0; dx < width; dx++) {
+          this.setWalkable(x + dx, y + dy, walkable);
+        }
+      }
+    }
+  };
+  __name$2(_GridMap, "GridMap");
+  var GridMap = _GridMap;
+  function createGridMap(width, height, options) {
+    return new GridMap(width, height, options);
+  }
+  __name$2(createGridMap, "createGridMap");
+
   // src/navmesh/NavMesh.ts
-  var _a5;
-  var NavMeshNode = (_a5 = class {
+  var _a3;
+  var NavMeshNode = (_a3 = class {
     constructor(polygon) {
       __publicField$2(this, "id");
       __publicField$2(this, "position");
@@ -5020,12 +6222,17 @@ var ESEngine = (function (exports) {
       this.walkable = true;
       this.polygon = polygon;
     }
-  }, __name$2(_a5, "NavMeshNode"), _a5);
+  }, __name$2(_a3, "NavMeshNode"), _a3);
   var _NavMesh = class _NavMesh {
     constructor() {
       __publicField$2(this, "polygons", /* @__PURE__ */ new Map());
       __publicField$2(this, "nodes", /* @__PURE__ */ new Map());
       __publicField$2(this, "nextId", 0);
+      // @zh 动态障碍物支持
+      // @en Dynamic obstacle support
+      __publicField$2(this, "obstacles", /* @__PURE__ */ new Map());
+      __publicField$2(this, "nextObstacleId", 0);
+      __publicField$2(this, "disabledPolygons", /* @__PURE__ */ new Set());
     }
     /**
      * @zh 添加导航多边形
@@ -5233,7 +6440,7 @@ var ESEngine = (function (exports) {
       }
       const start = createPoint(startX, startY);
       const end = createPoint(endX, endY);
-      const pointPath = this.funnelPath(start, end, polygonPath.polygons);
+      const pointPath = this.funnelPath(start, end, polygonPath.polygons, opts.agentRadius);
       return {
         found: true,
         path: pointPath,
@@ -5244,8 +6451,13 @@ var ESEngine = (function (exports) {
     /**
      * @zh 在多边形图上寻路
      * @en Find path on polygon graph
+     *
+     * @param start - @zh 起始多边形 @en Start polygon
+     * @param end - @zh 目标多边形 @en End polygon
+     * @param opts - @zh 寻路选项 @en Pathfinding options
+     * @param checkObstacles - @zh 是否检查障碍物 @en Whether to check obstacles
      */
-    findPolygonPath(start, end, opts) {
+    findPolygonPath(start, end, opts, checkObstacles = false) {
       const openList = new BinaryHeap((a, b) => a.f - b.f);
       const closed = /* @__PURE__ */ new Set();
       const states = /* @__PURE__ */ new Map();
@@ -5279,6 +6491,9 @@ var ESEngine = (function (exports) {
           if (closed.has(neighborId)) {
             continue;
           }
+          if (checkObstacles && this.isPolygonBlocked(neighborId)) {
+            continue;
+          }
           const neighborPolygon = this.polygons.get(neighborId);
           if (!neighborPolygon) {
             continue;
@@ -5309,10 +6524,15 @@ var ESEngine = (function (exports) {
       };
     }
     /**
-     * @zh 使用漏斗算法优化路径
-     * @en Optimize path using funnel algorithm
+     * @zh 使用漏斗算法优化路径（支持代理半径）
+     * @en Optimize path using funnel algorithm (supports agent radius)
+     *
+     * @param start - @zh 起点 @en Start point
+     * @param end - @zh 终点 @en End point
+     * @param polygons - @zh 多边形路径 @en Polygon path
+     * @param agentRadius - @zh 代理半径 @en Agent radius
      */
-    funnelPath(start, end, polygons) {
+    funnelPath(start, end, polygons, agentRadius = 0) {
       if (polygons.length <= 1) {
         return [
           start,
@@ -5323,7 +6543,22 @@ var ESEngine = (function (exports) {
       for (let i = 0; i < polygons.length - 1; i++) {
         const portal = polygons[i].portals.get(polygons[i + 1].id);
         if (portal) {
-          portals.push(portal);
+          if (agentRadius > 0) {
+            const shrunk = this.shrinkPortal(portal.left, portal.right, agentRadius);
+            portals.push({
+              left: shrunk.left,
+              right: shrunk.right,
+              originalLeft: portal.left,
+              originalRight: portal.right
+            });
+          } else {
+            portals.push({
+              left: portal.left,
+              right: portal.right,
+              originalLeft: portal.left,
+              originalRight: portal.right
+            });
+          }
         }
       }
       if (portals.length === 0) {
@@ -5336,35 +6571,50 @@ var ESEngine = (function (exports) {
         start
       ];
       let apex = start;
+      let apexOriginal = start;
       let leftIndex = 0;
       let rightIndex = 0;
       let left = portals[0].left;
       let right = portals[0].right;
+      let leftOriginal = portals[0].originalLeft;
+      let rightOriginal = portals[0].originalRight;
       for (let i = 1; i <= portals.length; i++) {
         const nextLeft = i < portals.length ? portals[i].left : end;
         const nextRight = i < portals.length ? portals[i].right : end;
         if (this.triArea2(apex, right, nextRight) <= 0) {
-          if (apex === right || this.triArea2(apex, left, nextRight) > 0) {
+          if (this.pointsEqual(apex, right) || this.triArea2(apex, left, nextRight) > 0) {
             right = nextRight;
             rightIndex = i;
+            if (i < portals.length) {
+              rightOriginal = portals[i].originalRight;
+            }
           } else {
-            path.push(left);
+            const turnPoint = agentRadius > 0 ? this.offsetTurningPoint(apexOriginal, leftOriginal, left, agentRadius, "left") : left;
+            path.push(turnPoint);
             apex = left;
+            apexOriginal = leftOriginal;
             leftIndex = rightIndex = leftIndex;
             left = right = apex;
+            leftOriginal = rightOriginal = apexOriginal;
             i = leftIndex;
             continue;
           }
         }
         if (this.triArea2(apex, left, nextLeft) >= 0) {
-          if (apex === left || this.triArea2(apex, right, nextLeft) < 0) {
+          if (this.pointsEqual(apex, left) || this.triArea2(apex, right, nextLeft) < 0) {
             left = nextLeft;
             leftIndex = i;
+            if (i < portals.length) {
+              leftOriginal = portals[i].originalLeft;
+            }
           } else {
-            path.push(right);
+            const turnPoint = agentRadius > 0 ? this.offsetTurningPoint(apexOriginal, rightOriginal, right, agentRadius, "right") : right;
+            path.push(turnPoint);
             apex = right;
+            apexOriginal = rightOriginal;
             leftIndex = rightIndex = rightIndex;
             left = right = apex;
+            leftOriginal = rightOriginal = apexOriginal;
             i = rightIndex;
             continue;
           }
@@ -5372,6 +6622,63 @@ var ESEngine = (function (exports) {
       }
       path.push(end);
       return path;
+    }
+    /**
+     * @zh 收缩 portal（将两端点向内移动 agentRadius）
+     * @en Shrink portal (move endpoints inward by agentRadius)
+     */
+    shrinkPortal(left, right, radius) {
+      const dx = right.x - left.x;
+      const dy = right.y - left.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len <= radius * 2) {
+        const cx = (left.x + right.x) / 2;
+        const cy = (left.y + right.y) / 2;
+        return {
+          left: createPoint(cx, cy),
+          right: createPoint(cx, cy)
+        };
+      }
+      const nx = dx / len;
+      const ny = dy / len;
+      return {
+        left: createPoint(left.x + nx * radius, left.y + ny * radius),
+        right: createPoint(right.x - nx * radius, right.y - ny * radius)
+      };
+    }
+    /**
+     * @zh 偏移拐点以保持与角落的距离
+     * @en Offset turning point to maintain distance from corner
+     *
+     * @param prevApex - @zh 上一个顶点 @en Previous apex
+     * @param cornerOriginal - @zh 原始角落位置 @en Original corner position
+     * @param cornerShrunk - @zh 收缩后的角落位置 @en Shrunk corner position
+     * @param radius - @zh 代理半径 @en Agent radius
+     * @param side - @zh 转向侧 ('left' 或 'right') @en Turn side ('left' or 'right')
+     */
+    offsetTurningPoint(prevApex, cornerOriginal, cornerShrunk, radius, side) {
+      const dx = cornerOriginal.x - prevApex.x;
+      const dy = cornerOriginal.y - prevApex.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1e-4) {
+        return cornerShrunk;
+      }
+      let perpX, perpY;
+      if (side === "left") {
+        perpX = dy / len;
+        perpY = -dx / len;
+      } else {
+        perpX = -dy / len;
+        perpY = dx / len;
+      }
+      return createPoint(cornerShrunk.x + perpX * radius, cornerShrunk.y + perpY * radius);
+    }
+    /**
+     * @zh 检查两点是否相等
+     * @en Check if two points are equal
+     */
+    pointsEqual(a, b) {
+      return Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4;
     }
     /**
      * @zh 计算三角形面积的两倍（用于判断点的相对位置）
@@ -5391,6 +6698,416 @@ var ESEngine = (function (exports) {
       }
       return length;
     }
+    // =========================================================================
+    // 动态障碍物管理 | Dynamic Obstacle Management
+    // =========================================================================
+    /**
+     * @zh 添加圆形障碍物
+     * @en Add circular obstacle
+     *
+     * @param x - @zh 中心 X @en Center X
+     * @param y - @zh 中心 Y @en Center Y
+     * @param radius - @zh 半径 @en Radius
+     * @returns @zh 障碍物 ID @en Obstacle ID
+     */
+    addCircleObstacle(x, y, radius) {
+      const id = this.nextObstacleId++;
+      this.obstacles.set(id, {
+        id,
+        type: "circle",
+        enabled: true,
+        position: createPoint(x, y),
+        radius
+      });
+      return id;
+    }
+    /**
+     * @zh 添加矩形障碍物
+     * @en Add rectangular obstacle
+     *
+     * @param x - @zh 中心 X @en Center X
+     * @param y - @zh 中心 Y @en Center Y
+     * @param halfWidth - @zh 半宽 @en Half width
+     * @param halfHeight - @zh 半高 @en Half height
+     * @returns @zh 障碍物 ID @en Obstacle ID
+     */
+    addRectObstacle(x, y, halfWidth, halfHeight) {
+      const id = this.nextObstacleId++;
+      this.obstacles.set(id, {
+        id,
+        type: "rect",
+        enabled: true,
+        position: createPoint(x, y),
+        halfWidth,
+        halfHeight
+      });
+      return id;
+    }
+    /**
+     * @zh 添加多边形障碍物
+     * @en Add polygon obstacle
+     *
+     * @param vertices - @zh 顶点列表 @en Vertex list
+     * @returns @zh 障碍物 ID @en Obstacle ID
+     */
+    addPolygonObstacle(vertices) {
+      const id = this.nextObstacleId++;
+      const center = this.calculateCenter(vertices);
+      this.obstacles.set(id, {
+        id,
+        type: "polygon",
+        enabled: true,
+        position: center,
+        vertices
+      });
+      return id;
+    }
+    /**
+     * @zh 移除障碍物
+     * @en Remove obstacle
+     */
+    removeObstacle(obstacleId) {
+      return this.obstacles.delete(obstacleId);
+    }
+    /**
+     * @zh 启用/禁用障碍物
+     * @en Enable/disable obstacle
+     */
+    setObstacleEnabled(obstacleId, enabled) {
+      const obstacle = this.obstacles.get(obstacleId);
+      if (obstacle) {
+        obstacle.enabled = enabled;
+      }
+    }
+    /**
+     * @zh 更新障碍物位置
+     * @en Update obstacle position
+     */
+    updateObstaclePosition(obstacleId, x, y) {
+      const obstacle = this.obstacles.get(obstacleId);
+      if (obstacle) {
+        obstacle.position = createPoint(x, y);
+      }
+    }
+    /**
+     * @zh 获取所有障碍物
+     * @en Get all obstacles
+     */
+    getObstacles() {
+      return Array.from(this.obstacles.values());
+    }
+    /**
+     * @zh 获取启用的障碍物
+     * @en Get enabled obstacles
+     */
+    getEnabledObstacles() {
+      return Array.from(this.obstacles.values()).filter((o) => o.enabled);
+    }
+    /**
+     * @zh 清除所有障碍物
+     * @en Clear all obstacles
+     */
+    clearObstacles() {
+      this.obstacles.clear();
+      this.nextObstacleId = 0;
+    }
+    // =========================================================================
+    // 多边形禁用管理 | Polygon Disable Management
+    // =========================================================================
+    /**
+     * @zh 禁用多边形
+     * @en Disable polygon
+     */
+    disablePolygon(polygonId) {
+      this.disabledPolygons.add(polygonId);
+    }
+    /**
+     * @zh 启用多边形
+     * @en Enable polygon
+     */
+    enablePolygon(polygonId) {
+      this.disabledPolygons.delete(polygonId);
+    }
+    /**
+     * @zh 检查多边形是否被禁用
+     * @en Check if polygon is disabled
+     */
+    isPolygonDisabled(polygonId) {
+      return this.disabledPolygons.has(polygonId);
+    }
+    /**
+     * @zh 禁用包含指定点的多边形
+     * @en Disable polygon containing specified point
+     */
+    disablePolygonAt(x, y) {
+      const polygon = this.findPolygonAt(x, y);
+      if (polygon) {
+        this.disablePolygon(polygon.id);
+        return polygon.id;
+      }
+      return null;
+    }
+    /**
+     * @zh 清除所有禁用的多边形
+     * @en Clear all disabled polygons
+     */
+    clearDisabledPolygons() {
+      this.disabledPolygons.clear();
+    }
+    /**
+     * @zh 获取被禁用的多边形 ID 列表
+     * @en Get list of disabled polygon IDs
+     */
+    getDisabledPolygons() {
+      return Array.from(this.disabledPolygons);
+    }
+    // =========================================================================
+    // 障碍物碰撞检测 | Obstacle Collision Detection
+    // =========================================================================
+    /**
+     * @zh 检查点是否在任何障碍物内
+     * @en Check if point is inside any obstacle
+     */
+    isPointInObstacle(x, y) {
+      for (const obstacle of this.obstacles.values()) {
+        if (!obstacle.enabled) continue;
+        if (this.isPointInSingleObstacle(x, y, obstacle)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    /**
+     * @zh 检查点是否在单个障碍物内
+     * @en Check if point is inside single obstacle
+     */
+    isPointInSingleObstacle(x, y, obstacle) {
+      switch (obstacle.type) {
+        case "circle": {
+          const dx = x - obstacle.position.x;
+          const dy = y - obstacle.position.y;
+          return dx * dx + dy * dy <= (obstacle.radius ?? 0) ** 2;
+        }
+        case "rect": {
+          const hw = obstacle.halfWidth ?? 0;
+          const hh = obstacle.halfHeight ?? 0;
+          return Math.abs(x - obstacle.position.x) <= hw && Math.abs(y - obstacle.position.y) <= hh;
+        }
+        case "polygon": {
+          if (!obstacle.vertices) return false;
+          return this.isPointInPolygon(x, y, obstacle.vertices);
+        }
+        default:
+          return false;
+      }
+    }
+    /**
+     * @zh 检查线段是否与任何障碍物相交
+     * @en Check if line segment intersects any obstacle
+     */
+    doesLineIntersectObstacle(x1, y1, x2, y2) {
+      for (const obstacle of this.obstacles.values()) {
+        if (!obstacle.enabled) continue;
+        if (this.doesLineIntersectSingleObstacle(x1, y1, x2, y2, obstacle)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    /**
+     * @zh 检查线段是否与单个障碍物相交
+     * @en Check if line segment intersects single obstacle
+     */
+    doesLineIntersectSingleObstacle(x1, y1, x2, y2, obstacle) {
+      switch (obstacle.type) {
+        case "circle": {
+          return this.lineIntersectsCircle(x1, y1, x2, y2, obstacle.position.x, obstacle.position.y, obstacle.radius ?? 0);
+        }
+        case "rect": {
+          const hw = obstacle.halfWidth ?? 0;
+          const hh = obstacle.halfHeight ?? 0;
+          const minX = obstacle.position.x - hw;
+          const maxX = obstacle.position.x + hw;
+          const minY = obstacle.position.y - hh;
+          const maxY = obstacle.position.y + hh;
+          return this.lineIntersectsRect(x1, y1, x2, y2, minX, minY, maxX, maxY);
+        }
+        case "polygon": {
+          if (!obstacle.vertices) return false;
+          return this.lineIntersectsPolygon(x1, y1, x2, y2, obstacle.vertices);
+        }
+        default:
+          return false;
+      }
+    }
+    /**
+     * @zh 线段与圆相交检测
+     * @en Line segment circle intersection
+     */
+    lineIntersectsCircle(x1, y1, x2, y2, cx, cy, r) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const fx = x1 - cx;
+      const fy = y1 - cy;
+      const a = dx * dx + dy * dy;
+      const b = 2 * (fx * dx + fy * dy);
+      const c = fx * fx + fy * fy - r * r;
+      let discriminant = b * b - 4 * a * c;
+      if (discriminant < 0) return false;
+      discriminant = Math.sqrt(discriminant);
+      const t1 = (-b - discriminant) / (2 * a);
+      const t2 = (-b + discriminant) / (2 * a);
+      return t1 >= 0 && t1 <= 1 || t2 >= 0 && t2 <= 1 || t1 < 0 && t2 > 1;
+    }
+    /**
+     * @zh 线段与矩形相交检测
+     * @en Line segment rectangle intersection
+     */
+    lineIntersectsRect(x1, y1, x2, y2, minX, minY, maxX, maxY) {
+      if (x1 >= minX && x1 <= maxX && y1 >= minY && y1 <= maxY || x2 >= minX && x2 <= maxX && y2 >= minY && y2 <= maxY) {
+        return true;
+      }
+      return this.lineSegmentsIntersect(x1, y1, x2, y2, minX, minY, maxX, minY) || this.lineSegmentsIntersect(x1, y1, x2, y2, maxX, minY, maxX, maxY) || this.lineSegmentsIntersect(x1, y1, x2, y2, maxX, maxY, minX, maxY) || this.lineSegmentsIntersect(x1, y1, x2, y2, minX, maxY, minX, minY);
+    }
+    /**
+     * @zh 线段与多边形相交检测
+     * @en Line segment polygon intersection
+     */
+    lineIntersectsPolygon(x1, y1, x2, y2, vertices) {
+      if (this.isPointInPolygon(x1, y1, vertices) || this.isPointInPolygon(x2, y2, vertices)) {
+        return true;
+      }
+      for (let i = 0; i < vertices.length; i++) {
+        const j = (i + 1) % vertices.length;
+        if (this.lineSegmentsIntersect(x1, y1, x2, y2, vertices[i].x, vertices[i].y, vertices[j].x, vertices[j].y)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    /**
+     * @zh 两线段相交检测
+     * @en Two line segments intersection
+     */
+    lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+      const d1 = this.direction(x3, y3, x4, y4, x1, y1);
+      const d2 = this.direction(x3, y3, x4, y4, x2, y2);
+      const d3 = this.direction(x1, y1, x2, y2, x3, y3);
+      const d4 = this.direction(x1, y1, x2, y2, x4, y4);
+      if ((d1 > 0 && d2 < 0 || d1 < 0 && d2 > 0) && (d3 > 0 && d4 < 0 || d3 < 0 && d4 > 0)) {
+        return true;
+      }
+      const epsilon = 1e-4;
+      if (Math.abs(d1) < epsilon && this.onSegment(x3, y3, x4, y4, x1, y1)) return true;
+      if (Math.abs(d2) < epsilon && this.onSegment(x3, y3, x4, y4, x2, y2)) return true;
+      if (Math.abs(d3) < epsilon && this.onSegment(x1, y1, x2, y2, x3, y3)) return true;
+      if (Math.abs(d4) < epsilon && this.onSegment(x1, y1, x2, y2, x4, y4)) return true;
+      return false;
+    }
+    direction(x1, y1, x2, y2, x3, y3) {
+      return (x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1);
+    }
+    onSegment(x1, y1, x2, y2, x3, y3) {
+      return Math.min(x1, x2) <= x3 && x3 <= Math.max(x1, x2) && Math.min(y1, y2) <= y3 && y3 <= Math.max(y1, y2);
+    }
+    // =========================================================================
+    // 障碍物感知寻路 | Obstacle-Aware Pathfinding
+    // =========================================================================
+    /**
+     * @zh 检查多边形是否被障碍物阻挡
+     * @en Check if polygon is blocked by obstacle
+     *
+     * @zh 检查以下条件：
+     * @en Checks the following conditions:
+     * - @zh 多边形是否被禁用 @en Whether polygon is disabled
+     * - @zh 多边形中心是否在障碍物内 @en Whether polygon center is inside obstacle
+     * - @zh 多边形任意顶点是否在障碍物内 @en Whether any polygon vertex is inside obstacle
+     * - @zh 多边形任意边是否与障碍物相交 @en Whether any polygon edge intersects obstacle
+     */
+    isPolygonBlocked(polygonId) {
+      if (this.disabledPolygons.has(polygonId)) {
+        return true;
+      }
+      const polygon = this.polygons.get(polygonId);
+      if (!polygon) return false;
+      if (this.isPointInObstacle(polygon.center.x, polygon.center.y)) {
+        return true;
+      }
+      for (const vertex of polygon.vertices) {
+        if (this.isPointInObstacle(vertex.x, vertex.y)) {
+          return true;
+        }
+      }
+      const vertices = polygon.vertices;
+      for (let i = 0; i < vertices.length; i++) {
+        const v1 = vertices[i];
+        const v2 = vertices[(i + 1) % vertices.length];
+        if (this.doesLineIntersectObstacle(v1.x, v1.y, v2.x, v2.y)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    /**
+     * @zh 在导航网格上寻路（考虑障碍物）
+     * @en Find path on navigation mesh (considering obstacles)
+     *
+     * @zh 此方法在规划阶段就考虑障碍物，自动绕过被阻挡的多边形
+     * @en This method considers obstacles during planning, automatically avoiding blocked polygons
+     *
+     * @zh 与 findPath 不同，此方法会：
+     * @en Unlike findPath, this method will:
+     * - @zh 在 A* 搜索中跳过被障碍物阻挡的多边形
+     * - @en Skip obstacle-blocked polygons during A* search
+     * - @zh 验证起点和终点不在障碍物内
+     * - @en Verify start and end points are not inside obstacles
+     */
+    findPathWithObstacles(startX, startY, endX, endY, options) {
+      const opts = {
+        ...DEFAULT_PATHFINDING_OPTIONS,
+        ...options
+      };
+      if (this.isPointInObstacle(startX, startY) || this.isPointInObstacle(endX, endY)) {
+        return EMPTY_PATH_RESULT;
+      }
+      const startPolygon = this.findPolygonAt(startX, startY);
+      const endPolygon = this.findPolygonAt(endX, endY);
+      if (!startPolygon || !endPolygon) {
+        return EMPTY_PATH_RESULT;
+      }
+      if (this.isPolygonBlocked(startPolygon.id) || this.isPolygonBlocked(endPolygon.id)) {
+        return EMPTY_PATH_RESULT;
+      }
+      if (startPolygon.id === endPolygon.id) {
+        const start2 = createPoint(startX, startY);
+        const end2 = createPoint(endX, endY);
+        if (this.doesLineIntersectObstacle(startX, startY, endX, endY)) {
+          return EMPTY_PATH_RESULT;
+        }
+        return {
+          found: true,
+          path: [
+            start2,
+            end2
+          ],
+          cost: euclideanDistance(start2, end2),
+          nodesSearched: 1
+        };
+      }
+      const polygonPath = this.findPolygonPath(startPolygon, endPolygon, opts, true);
+      if (!polygonPath.found) {
+        return EMPTY_PATH_RESULT;
+      }
+      const start = createPoint(startX, startY);
+      const end = createPoint(endX, endY);
+      const pointPath = this.funnelPath(start, end, polygonPath.polygons, opts.agentRadius);
+      return {
+        found: true,
+        path: pointPath,
+        cost: this.calculatePathLength(pointPath),
+        nodesSearched: polygonPath.nodesSearched
+      };
+    }
     /**
      * @zh 清空导航网格
      * @en Clear navigation mesh
@@ -5398,7 +7115,10 @@ var ESEngine = (function (exports) {
     clear() {
       this.polygons.clear();
       this.nodes.clear();
+      this.obstacles.clear();
+      this.disabledPolygons.clear();
       this.nextId = 0;
+      this.nextObstacleId = 0;
     }
     /**
      * @zh 获取所有多边形
@@ -5414,6 +7134,13 @@ var ESEngine = (function (exports) {
     get polygonCount() {
       return this.polygons.size;
     }
+    /**
+     * @zh 获取障碍物数量
+     * @en Get obstacle count
+     */
+    get obstacleCount() {
+      return this.obstacles.size;
+    }
   };
   __name$2(_NavMesh, "NavMesh");
   var NavMesh = _NavMesh;
@@ -5421,6 +7148,352 @@ var ESEngine = (function (exports) {
     return new NavMesh();
   }
   __name$2(createNavMesh, "createNavMesh");
+
+  // src/smoothing/PathSmoother.ts
+  function bresenhamLineOfSight(x1, y1, x2, y2, map) {
+    let ix1 = Math.floor(x1);
+    let iy1 = Math.floor(y1);
+    const ix2 = Math.floor(x2);
+    const iy2 = Math.floor(y2);
+    const dx = Math.abs(ix2 - ix1);
+    const dy = Math.abs(iy2 - iy1);
+    const sx = ix1 < ix2 ? 1 : -1;
+    const sy = iy1 < iy2 ? 1 : -1;
+    let err = dx - dy;
+    while (true) {
+      if (!map.isWalkable(ix1, iy1)) {
+        return false;
+      }
+      if (ix1 === ix2 && iy1 === iy2) {
+        break;
+      }
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        ix1 += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        iy1 += sy;
+      }
+    }
+    return true;
+  }
+  __name$2(bresenhamLineOfSight, "bresenhamLineOfSight");
+  function raycastLineOfSight(x1, y1, x2, y2, map, stepSize = 0.5) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance === 0) {
+      return map.isWalkable(Math.floor(x1), Math.floor(y1));
+    }
+    const steps = Math.ceil(distance / stepSize);
+    const stepX = dx / steps;
+    const stepY = dy / steps;
+    let x = x1;
+    let y = y1;
+    for (let i = 0; i <= steps; i++) {
+      if (!map.isWalkable(Math.floor(x), Math.floor(y))) {
+        return false;
+      }
+      x += stepX;
+      y += stepY;
+    }
+    return true;
+  }
+  __name$2(raycastLineOfSight, "raycastLineOfSight");
+  var _LineOfSightSmoother = class _LineOfSightSmoother {
+    constructor(lineOfSight = bresenhamLineOfSight) {
+      __publicField$2(this, "lineOfSight");
+      this.lineOfSight = lineOfSight;
+    }
+    smooth(path, map) {
+      if (path.length <= 2) {
+        return [
+          ...path
+        ];
+      }
+      const result = [
+        path[0]
+      ];
+      let current = 0;
+      while (current < path.length - 1) {
+        let furthest = current + 1;
+        for (let i = path.length - 1; i > current + 1; i--) {
+          if (this.lineOfSight(path[current].x, path[current].y, path[i].x, path[i].y, map)) {
+            furthest = i;
+            break;
+          }
+        }
+        result.push(path[furthest]);
+        current = furthest;
+      }
+      return result;
+    }
+  };
+  __name$2(_LineOfSightSmoother, "LineOfSightSmoother");
+  var LineOfSightSmoother = _LineOfSightSmoother;
+  var _CatmullRomSmoother = class _CatmullRomSmoother {
+    /**
+     * @param segments - @zh 每段之间的插值点数 @en Number of interpolation points per segment
+     * @param tension - @zh 张力 (0-1) @en Tension (0-1)
+     */
+    constructor(segments = 5, tension = 0.5) {
+      __publicField$2(this, "segments");
+      __publicField$2(this, "tension");
+      this.segments = segments;
+      this.tension = tension;
+    }
+    smooth(path, _map) {
+      if (path.length <= 2) {
+        return [
+          ...path
+        ];
+      }
+      const result = [];
+      const points = [
+        path[0],
+        ...path,
+        path[path.length - 1]
+      ];
+      for (let i = 1; i < points.length - 2; i++) {
+        const p0 = points[i - 1];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[i + 2];
+        for (let j = 0; j < this.segments; j++) {
+          const t = j / this.segments;
+          const point = this.interpolate(p0, p1, p2, p3, t);
+          result.push(point);
+        }
+      }
+      result.push(path[path.length - 1]);
+      return result;
+    }
+    /**
+     * @zh Catmull-Rom 插值
+     * @en Catmull-Rom interpolation
+     */
+    interpolate(p0, p1, p2, p3, t) {
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const tension = this.tension;
+      const x = 0.5 * (2 * p1.x + (-p0.x + p2.x) * t * tension + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 * tension + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3 * tension);
+      const y = 0.5 * (2 * p1.y + (-p0.y + p2.y) * t * tension + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 * tension + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3 * tension);
+      return createPoint(x, y);
+    }
+  };
+  __name$2(_CatmullRomSmoother, "CatmullRomSmoother");
+  var CatmullRomSmoother = _CatmullRomSmoother;
+  var _CombinedSmoother = class _CombinedSmoother {
+    constructor(curveSegments = 5, tension = 0.5) {
+      __publicField$2(this, "simplifier");
+      __publicField$2(this, "curveSmoother");
+      this.simplifier = new LineOfSightSmoother();
+      this.curveSmoother = new CatmullRomSmoother(curveSegments, tension);
+    }
+    smooth(path, map) {
+      const simplified = this.simplifier.smooth(path, map);
+      return this.curveSmoother.smooth(simplified, map);
+    }
+  };
+  __name$2(_CombinedSmoother, "CombinedSmoother");
+  var CombinedSmoother = _CombinedSmoother;
+  function createLineOfSightSmoother(lineOfSight) {
+    return new LineOfSightSmoother(lineOfSight);
+  }
+  __name$2(createLineOfSightSmoother, "createLineOfSightSmoother");
+  function createCatmullRomSmoother(segments, tension) {
+    return new CatmullRomSmoother(segments, tension);
+  }
+  __name$2(createCatmullRomSmoother, "createCatmullRomSmoother");
+  function createCombinedSmoother(curveSegments, tension) {
+    return new CombinedSmoother(curveSegments, tension);
+  }
+  __name$2(createCombinedSmoother, "createCombinedSmoother");
+
+  // src/smoothing/RadiusAwarePathSmoother.ts
+  var DEFAULT_CONFIG$2 = {
+    safetyMargin: 0.1,
+    sampleDirections: 8,
+    maxOffsetAttempts: 8,
+    processCorners: true
+  };
+  var _RadiusAwarePathSmoother = class _RadiusAwarePathSmoother {
+    constructor(config) {
+      __publicField$2(this, "config");
+      __publicField$2(this, "sampleAngles");
+      this.config = {
+        ...DEFAULT_CONFIG$2,
+        ...config
+      };
+      this.sampleAngles = [];
+      const step = Math.PI * 2 / this.config.sampleDirections;
+      for (let i = 0; i < this.config.sampleDirections; i++) {
+        this.sampleAngles.push(i * step);
+      }
+    }
+    /**
+     * @zh 平滑路径，确保与障碍物保持安全距离
+     * @en Smooth path, ensuring safe distance from obstacles
+     *
+     * @param path - @zh 原始路径 @en Original path
+     * @param map - @zh 地图 @en Map
+     * @returns @zh 处理后的安全路径 @en Processed safe path
+     */
+    smooth(path, map) {
+      if (path.length <= 1) {
+        return [
+          ...path
+        ];
+      }
+      const result = [];
+      const clearance = this.config.agentRadius + this.config.safetyMargin;
+      for (let i = 0; i < path.length; i++) {
+        const point = path[i];
+        const isCorner = this.config.processCorners && i > 0 && i < path.length - 1;
+        let safePoint;
+        if (isCorner) {
+          const prev = path[i - 1];
+          const next = path[i + 1];
+          safePoint = this.offsetCornerPoint(point, prev, next, clearance, map);
+        } else {
+          safePoint = this.offsetPointFromObstacles(point, clearance, map);
+        }
+        result.push(safePoint);
+      }
+      return result;
+    }
+    /**
+     * @zh 将点从障碍物偏移
+     * @en Offset point away from obstacles
+     */
+    offsetPointFromObstacles(point, clearance, map) {
+      const obstacleDirections = this.detectNearbyObstacles(point, clearance, map);
+      if (obstacleDirections.length === 0) {
+        return point;
+      }
+      let avgDirX = 0;
+      let avgDirY = 0;
+      for (const dir of obstacleDirections) {
+        avgDirX += dir.x;
+        avgDirY += dir.y;
+      }
+      const len = Math.sqrt(avgDirX * avgDirX + avgDirY * avgDirY);
+      if (len < 1e-4) {
+        return point;
+      }
+      const offsetDirX = -avgDirX / len;
+      const offsetDirY = -avgDirY / len;
+      for (let attempt = 1; attempt <= this.config.maxOffsetAttempts; attempt++) {
+        const offsetDist = clearance * attempt / this.config.maxOffsetAttempts;
+        const newX = point.x + offsetDirX * offsetDist;
+        const newY = point.y + offsetDirY * offsetDist;
+        if (map.isWalkable(Math.floor(newX), Math.floor(newY))) {
+          const newObstacles = this.detectNearbyObstacles(createPoint(newX, newY), clearance, map);
+          if (newObstacles.length === 0) {
+            return createPoint(newX, newY);
+          }
+        }
+      }
+      return point;
+    }
+    /**
+     * @zh 偏移拐点（角落）
+     * @en Offset corner point
+     */
+    offsetCornerPoint(corner, prev, next, clearance, map) {
+      const inDirX = corner.x - prev.x;
+      const inDirY = corner.y - prev.y;
+      const inLen = Math.sqrt(inDirX * inDirX + inDirY * inDirY);
+      const outDirX = next.x - corner.x;
+      const outDirY = next.y - corner.y;
+      const outLen = Math.sqrt(outDirX * outDirX + outDirY * outDirY);
+      if (inLen < 1e-4 || outLen < 1e-4) {
+        return this.offsetPointFromObstacles(corner, clearance, map);
+      }
+      const inNormX = inDirX / inLen;
+      const inNormY = inDirY / inLen;
+      const outNormX = outDirX / outLen;
+      const outNormY = outDirY / outLen;
+      const bisectX = inNormX - outNormX;
+      const bisectY = inNormY - outNormY;
+      const bisectLen = Math.sqrt(bisectX * bisectX + bisectY * bisectY);
+      if (bisectLen < 1e-4) {
+        return this.offsetPointFromObstacles(corner, clearance, map);
+      }
+      const bisectNormX = bisectX / bisectLen;
+      const bisectNormY = bisectY / bisectLen;
+      const dotProduct = inNormX * outNormX + inNormY * outNormY;
+      const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+      const halfAngle = angle / 2;
+      const sinHalfAngle = Math.sin(halfAngle);
+      if (sinHalfAngle < 0.1) {
+        return this.offsetPointFromObstacles(corner, clearance, map);
+      }
+      const offsetDist = clearance / sinHalfAngle;
+      const maxOffset = clearance * 3;
+      const actualOffset = Math.min(offsetDist, maxOffset);
+      const newX = corner.x + bisectNormX * actualOffset;
+      const newY = corner.y + bisectNormY * actualOffset;
+      if (map.isWalkable(Math.floor(newX), Math.floor(newY))) {
+        return createPoint(newX, newY);
+      }
+      const altX = corner.x - bisectNormX * actualOffset;
+      const altY = corner.y - bisectNormY * actualOffset;
+      if (map.isWalkable(Math.floor(altX), Math.floor(altY))) {
+        return createPoint(altX, altY);
+      }
+      return this.offsetPointFromObstacles(corner, clearance, map);
+    }
+    /**
+     * @zh 检测附近的障碍物方向
+     * @en Detect nearby obstacle directions
+     */
+    detectNearbyObstacles(point, clearance, map) {
+      const obstacles = [];
+      for (const angle of this.sampleAngles) {
+        const dirX = Math.cos(angle);
+        const dirY = Math.sin(angle);
+        const sampleX = point.x + dirX * clearance;
+        const sampleY = point.y + dirY * clearance;
+        if (!map.isWalkable(Math.floor(sampleX), Math.floor(sampleY))) {
+          obstacles.push(createPoint(dirX, dirY));
+        }
+      }
+      return obstacles;
+    }
+  };
+  __name$2(_RadiusAwarePathSmoother, "RadiusAwarePathSmoother");
+  var RadiusAwarePathSmoother = _RadiusAwarePathSmoother;
+  var _CombinedRadiusAwareSmoother = class _CombinedRadiusAwareSmoother {
+    constructor(baseSmoother, config) {
+      __publicField$2(this, "baseSmoother");
+      __publicField$2(this, "radiusAwareSmoother");
+      this.baseSmoother = baseSmoother;
+      this.radiusAwareSmoother = new RadiusAwarePathSmoother(config);
+    }
+    smooth(path, map) {
+      const smoothed = this.baseSmoother.smooth(path, map);
+      return this.radiusAwareSmoother.smooth(smoothed, map);
+    }
+  };
+  __name$2(_CombinedRadiusAwareSmoother, "CombinedRadiusAwareSmoother");
+  var CombinedRadiusAwareSmoother = _CombinedRadiusAwareSmoother;
+  function createRadiusAwareSmoother(agentRadius, options) {
+    return new RadiusAwarePathSmoother({
+      agentRadius,
+      ...options
+    });
+  }
+  __name$2(createRadiusAwareSmoother, "createRadiusAwareSmoother");
+  function createCombinedRadiusAwareSmoother(baseSmoother, agentRadius, options) {
+    return new CombinedRadiusAwareSmoother(baseSmoother, {
+      agentRadius,
+      ...options
+    });
+  }
+  __name$2(createCombinedRadiusAwareSmoother, "createCombinedRadiusAwareSmoother");
 
   function _ts_decorate$1(decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -5433,225 +7506,264 @@ var ESEngine = (function (exports) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
   }
   __name$2(_ts_metadata$1, "_ts_metadata");
-  var _PathfindingAgentComponent = class _PathfindingAgentComponent extends Xe {
+  var NavigationState = /* @__PURE__ */ (function(NavigationState2) {
+    NavigationState2["Idle"] = "idle";
+    NavigationState2["Navigating"] = "navigating";
+    NavigationState2["Arrived"] = "arrived";
+    NavigationState2["Blocked"] = "blocked";
+    NavigationState2["Unreachable"] = "unreachable";
+    return NavigationState2;
+  })({});
+  var _NavigationAgentComponent = class _NavigationAgentComponent extends Xe {
     constructor() {
       super(...arguments);
       // =========================================================================
-      // 位置属性 | Position Properties
+      // 核心物理属性 | Core Physical Properties
       // =========================================================================
       /**
-       * @zh 当前位置 X 坐标
-       * @en Current position X coordinate
+       * @zh 代理半径
+       * @en Agent radius
        */
-      __publicField$2(this, "x", 0);
+      __publicField$2(this, "radius", 0.5);
       /**
-       * @zh 当前位置 Y 坐标
-       * @en Current position Y coordinate
+       * @zh 最大速度
+       * @en Maximum speed
        */
-      __publicField$2(this, "y", 0);
+      __publicField$2(this, "maxSpeed", 5);
+      /**
+       * @zh 加速度（用于平滑移动）
+       * @en Acceleration (for smooth movement)
+       */
+      __publicField$2(this, "acceleration", 10);
       // =========================================================================
-      // 目标属性 | Target Properties
-      // =========================================================================
-      /**
-       * @zh 目标位置 X 坐标
-       * @en Target position X coordinate
-       */
-      __publicField$2(this, "targetX", 0);
-      /**
-       * @zh 目标位置 Y 坐标
-       * @en Target position Y coordinate
-       */
-      __publicField$2(this, "targetY", 0);
-      /**
-       * @zh 是否有新的寻路请求待处理
-       * @en Whether there is a new path request pending
-       */
-      __publicField$2(this, "hasRequest", false);
-      // =========================================================================
-      // 配置属性 | Configuration Properties
+      // 寻路配置 | Pathfinding Configuration
       // =========================================================================
       /**
-       * @zh 寻路优先级（数值越小优先级越高）
-       * @en Pathfinding priority (lower number = higher priority)
+       * @zh 路径点到达阈值
+       * @en Waypoint arrival threshold
        */
-      __publicField$2(this, "priority", 50);
+      __publicField$2(this, "waypointThreshold", 0.5);
       /**
-       * @zh 每帧最大迭代次数
-       * @en Maximum iterations per frame
+       * @zh 目标到达阈值
+       * @en Destination arrival threshold
        */
-      __publicField$2(this, "maxIterationsPerFrame", 100);
+      __publicField$2(this, "arrivalThreshold", 0.3);
       /**
-       * @zh 是否启用动态重规划
-       * @en Whether dynamic replanning is enabled
+       * @zh 路径重新计算间隔（秒）
+       * @en Path recalculation interval (seconds)
        */
-      __publicField$2(this, "enableDynamicReplan", true);
-      /**
-       * @zh 向前探测距离（用于障碍物检测）
-       * @en Lookahead distance for obstacle detection
-       */
-      __publicField$2(this, "lookaheadDistance", 5);
-      /**
-       * @zh 路径验证间隔（帧数）
-       * @en Path validation interval (in frames)
-       */
-      __publicField$2(this, "validationInterval", 10);
+      __publicField$2(this, "repathInterval", 0.5);
       // =========================================================================
-      // 运行时状态（不序列化）| Runtime State (not serialized)
+      // 配置选项 | Configuration Options
       // =========================================================================
       /**
-       * @zh 当前寻路状态
-       * @en Current pathfinding state
+       * @zh 是否启用导航
+       * @en Whether navigation is enabled
        */
-      __publicField$2(this, "state", PathfindingState.Idle);
+      __publicField$2(this, "enabled", true);
       /**
-       * @zh 当前请求 ID
-       * @en Current request ID
+       * @zh 是否自动重新计算被阻挡的路径
+       * @en Whether to auto repath when blocked
        */
-      __publicField$2(this, "currentRequestId", -1);
+      __publicField$2(this, "autoRepath", true);
       /**
-       * @zh 当前路径点列表
-       * @en Current path waypoints
+       * @zh 是否启用平滑转向
+       * @en Whether to enable smooth steering
+       */
+      __publicField$2(this, "smoothSteering", true);
+      // =========================================================================
+      // 运行时状态 | Runtime State (Non-serialized)
+      // =========================================================================
+      /**
+       * @zh 当前位置
+       * @en Current position
+       */
+      __publicField$2(this, "position", {
+        x: 0,
+        y: 0
+      });
+      /**
+       * @zh 当前速度
+       * @en Current velocity
+       */
+      __publicField$2(this, "velocity", {
+        x: 0,
+        y: 0
+      });
+      /**
+       * @zh 目标位置
+       * @en Destination position
+       */
+      __publicField$2(this, "destination", null);
+      /**
+       * @zh 当前导航状态
+       * @en Current navigation state
+       */
+      __publicField$2(this, "state", "idle");
+      /**
+       * @zh 当前路径
+       * @en Current path
        */
       __publicField$2(this, "path", []);
       /**
-       * @zh 当前路径索引
-       * @en Current path index
+       * @zh 当前路径点索引
+       * @en Current waypoint index
        */
-      __publicField$2(this, "pathIndex", 0);
+      __publicField$2(this, "currentWaypointIndex", 0);
       /**
-       * @zh 路径总代价
-       * @en Total path cost
+       * @zh 上次重新计算路径的时间
+       * @en Last repath time
        */
-      __publicField$2(this, "pathCost", 0);
+      __publicField$2(this, "lastRepathTime", 0);
+      // =========================================================================
+      // 增量寻路状态（时间切片）| Incremental Pathfinding State (Time Slicing)
+      // =========================================================================
+      /**
+       * @zh 当前增量寻路请求 ID
+       * @en Current incremental pathfinding request ID
+       */
+      __publicField$2(this, "currentRequestId", -1);
       /**
        * @zh 寻路进度 (0-1)
        * @en Pathfinding progress (0-1)
        */
-      __publicField$2(this, "progress", 0);
+      __publicField$2(this, "pathProgress", 0);
       /**
-       * @zh 上次验证的帧号
-       * @en Last validation frame number
+       * @zh 优先级（数字越小优先级越高）
+       * @en Priority (lower number = higher priority)
        */
-      __publicField$2(this, "lastValidationFrame", 0);
+      __publicField$2(this, "priority", 50);
       /**
-       * @zh 寻路完成回调
-       * @en Pathfinding complete callback
+       * @zh 是否正在等待路径计算完成
+       * @en Whether waiting for path computation to complete
        */
-      __publicField$2(this, "onPathComplete");
-      /**
-       * @zh 寻路进度回调
-       * @en Pathfinding progress callback
-       */
-      __publicField$2(this, "onPathProgress");
+      __publicField$2(this, "isComputingPath", false);
     }
     // =========================================================================
     // 公共方法 | Public Methods
     // =========================================================================
     /**
-     * @zh 请求寻路到目标位置
-     * @en Request path to target position
+     * @zh 设置位置
+     * @en Set position
      *
-     * @param targetX - @zh 目标 X 坐标 @en Target X coordinate
-     * @param targetY - @zh 目标 Y 坐标 @en Target Y coordinate
+     * @param x - @zh X 坐标 @en X coordinate
+     * @param y - @zh Y 坐标 @en Y coordinate
      */
-    requestPathTo(targetX, targetY) {
-      this.targetX = targetX;
-      this.targetY = targetY;
-      this.hasRequest = true;
-      this.state = PathfindingState.Idle;
-      this.progress = 0;
+    setPosition(x, y) {
+      this.position = {
+        x,
+        y
+      };
     }
     /**
-     * @zh 取消当前寻路
-     * @en Cancel current pathfinding
+     * @zh 设置目标位置
+     * @en Set destination
+     *
+     * @param x - @zh 目标 X 坐标 @en Destination X coordinate
+     * @param y - @zh 目标 Y 坐标 @en Destination Y coordinate
      */
-    cancelPath() {
-      this.hasRequest = false;
-      this.state = PathfindingState.Cancelled;
+    setDestination(x, y) {
+      this.destination = {
+        x,
+        y
+      };
+      this.state = "navigating";
       this.path = [];
-      this.pathIndex = 0;
-      this.progress = 0;
-      this.currentRequestId = -1;
+      this.currentWaypointIndex = 0;
+      this.lastRepathTime = 0;
     }
     /**
-     * @zh 获取下一个路径点
-     * @en Get next waypoint
-     *
-     * @returns @zh 下一个路径点或 null @en Next waypoint or null
+     * @zh 停止导航
+     * @en Stop navigation
      */
-    getNextWaypoint() {
-      if (this.pathIndex < this.path.length) {
-        return this.path[this.pathIndex];
+    stop() {
+      this.destination = null;
+      this.state = "idle";
+      this.path = [];
+      this.currentWaypointIndex = 0;
+      this.velocity = {
+        x: 0,
+        y: 0
+      };
+    }
+    /**
+     * @zh 获取当前路径点
+     * @en Get current waypoint
+     *
+     * @returns @zh 当前路径点，如果没有则返回 null @en Current waypoint, or null if none
+     */
+    getCurrentWaypoint() {
+      if (this.currentWaypointIndex < this.path.length) {
+        return this.path[this.currentWaypointIndex];
       }
       return null;
     }
     /**
-     * @zh 前进到下一个路径点
-     * @en Advance to next waypoint
+     * @zh 获取到目标的距离
+     * @en Get distance to destination
+     *
+     * @returns @zh 到目标的距离，如果没有目标则返回 Infinity @en Distance to destination, or Infinity if no destination
      */
-    advanceWaypoint() {
-      if (this.pathIndex < this.path.length) {
-        this.pathIndex++;
-      }
+    getDistanceToDestination() {
+      if (!this.destination) return Infinity;
+      const dx = this.destination.x - this.position.x;
+      const dy = this.destination.y - this.position.y;
+      return Math.sqrt(dx * dx + dy * dy);
     }
     /**
-     * @zh 检查是否到达路径终点
-     * @en Check if reached path end
+     * @zh 获取当前速度大小
+     * @en Get current speed
      *
-     * @returns @zh 是否到达终点 @en Whether reached end
+     * @returns @zh 当前速度大小 @en Current speed magnitude
      */
-    isPathComplete() {
-      return this.pathIndex >= this.path.length;
+    getCurrentSpeed() {
+      return Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
     }
     /**
-     * @zh 检查是否正在寻路
-     * @en Check if pathfinding is in progress
+     * @zh 检查是否已到达目标
+     * @en Check if arrived at destination
      *
-     * @returns @zh 是否正在寻路 @en Whether pathfinding is in progress
+     * @returns @zh 是否已到达 @en Whether arrived
      */
-    isSearching() {
-      return this.state === PathfindingState.InProgress;
+    hasArrived() {
+      return this.state === "arrived";
     }
     /**
-     * @zh 检查是否有有效路径
-     * @en Check if has valid path
+     * @zh 检查路径是否被阻挡
+     * @en Check if path is blocked
      *
-     * @returns @zh 是否有有效路径 @en Whether has valid path
+     * @returns @zh 是否被阻挡 @en Whether blocked
      */
-    hasValidPath() {
-      return this.state === PathfindingState.Completed && this.path.length > 0;
+    isBlocked() {
+      return this.state === "blocked";
     }
     /**
-     * @zh 获取剩余路径点数量
-     * @en Get remaining waypoint count
+     * @zh 检查目标是否无法到达
+     * @en Check if destination is unreachable
      *
-     * @returns @zh 剩余路径点数量 @en Remaining waypoint count
+     * @returns @zh 是否无法到达 @en Whether unreachable
      */
-    getRemainingWaypointCount() {
-      return Math.max(0, this.path.length - this.pathIndex);
-    }
-    /**
-     * @zh 获取当前路径的总长度
-     * @en Get total path length
-     *
-     * @returns @zh 路径总长度 @en Total path length
-     */
-    getPathLength() {
-      return this.path.length;
+    isUnreachable() {
+      return this.state === "unreachable";
     }
     /**
      * @zh 重置组件状态
      * @en Reset component state
      */
     reset() {
-      this.state = PathfindingState.Idle;
-      this.currentRequestId = -1;
+      this.position = {
+        x: 0,
+        y: 0
+      };
+      this.velocity = {
+        x: 0,
+        y: 0
+      };
+      this.destination = null;
+      this.state = "idle";
       this.path = [];
-      this.pathIndex = 0;
-      this.pathCost = 0;
-      this.progress = 0;
-      this.hasRequest = false;
-      this.lastValidationFrame = 0;
+      this.currentWaypointIndex = 0;
+      this.lastRepathTime = 0;
     }
     /**
      * @zh 组件从实体移除时调用
@@ -5659,99 +7771,101 @@ var ESEngine = (function (exports) {
      */
     onRemovedFromEntity() {
       this.reset();
-      this.onPathComplete = void 0;
-      this.onPathProgress = void 0;
     }
   };
-  __name$2(_PathfindingAgentComponent, "PathfindingAgentComponent");
-  exports.PathfindingAgentComponent = _PathfindingAgentComponent;
+  __name$2(_NavigationAgentComponent, "NavigationAgentComponent");
+  exports.NavigationAgentComponent = _NavigationAgentComponent;
   _ts_decorate$1([
     st(),
     Se({
       type: "number",
-      label: "Position X"
+      label: "Radius",
+      min: 0.1,
+      max: 10
     }),
     _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "x", void 0);
+  ], exports.NavigationAgentComponent.prototype, "radius", void 0);
   _ts_decorate$1([
     st(),
     Se({
       type: "number",
-      label: "Position Y"
-    }),
-    _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "y", void 0);
-  _ts_decorate$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Target X"
-    }),
-    _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "targetX", void 0);
-  _ts_decorate$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Target Y"
-    }),
-    _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "targetY", void 0);
-  _ts_decorate$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Priority",
-      min: 0,
+      label: "Max Speed",
+      min: 0.1,
       max: 100
     }),
     _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "priority", void 0);
+  ], exports.NavigationAgentComponent.prototype, "maxSpeed", void 0);
   _ts_decorate$1([
     st(),
     Se({
       type: "number",
-      label: "Max Iterations/Frame",
-      min: 10,
-      max: 1e3
+      label: "Acceleration",
+      min: 0.1,
+      max: 100
     }),
     _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "maxIterationsPerFrame", void 0);
+  ], exports.NavigationAgentComponent.prototype, "acceleration", void 0);
+  _ts_decorate$1([
+    st(),
+    Se({
+      type: "number",
+      label: "Waypoint Threshold",
+      min: 0.1,
+      max: 10
+    }),
+    _ts_metadata$1("design:type", Number)
+  ], exports.NavigationAgentComponent.prototype, "waypointThreshold", void 0);
+  _ts_decorate$1([
+    st(),
+    Se({
+      type: "number",
+      label: "Arrival Threshold",
+      min: 0.1,
+      max: 10
+    }),
+    _ts_metadata$1("design:type", Number)
+  ], exports.NavigationAgentComponent.prototype, "arrivalThreshold", void 0);
+  _ts_decorate$1([
+    st(),
+    Se({
+      type: "number",
+      label: "Repath Interval",
+      min: 0.1,
+      max: 10
+    }),
+    _ts_metadata$1("design:type", Number)
+  ], exports.NavigationAgentComponent.prototype, "repathInterval", void 0);
   _ts_decorate$1([
     st(),
     Se({
       type: "boolean",
-      label: "Dynamic Replan"
+      label: "Enabled"
     }),
     _ts_metadata$1("design:type", Boolean)
-  ], exports.PathfindingAgentComponent.prototype, "enableDynamicReplan", void 0);
+  ], exports.NavigationAgentComponent.prototype, "enabled", void 0);
   _ts_decorate$1([
     st(),
     Se({
-      type: "number",
-      label: "Lookahead Distance",
-      min: 1,
-      max: 20
+      type: "boolean",
+      label: "Auto Repath"
     }),
-    _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "lookaheadDistance", void 0);
+    _ts_metadata$1("design:type", Boolean)
+  ], exports.NavigationAgentComponent.prototype, "autoRepath", void 0);
   _ts_decorate$1([
     st(),
     Se({
-      type: "number",
-      label: "Validation Interval",
-      min: 1,
-      max: 60
+      type: "boolean",
+      label: "Smooth Steering"
     }),
-    _ts_metadata$1("design:type", Number)
-  ], exports.PathfindingAgentComponent.prototype, "validationInterval", void 0);
-  exports.PathfindingAgentComponent = _ts_decorate$1([
-    X("PathfindingAgent"),
+    _ts_metadata$1("design:type", Boolean)
+  ], exports.NavigationAgentComponent.prototype, "smoothSteering", void 0);
+  exports.NavigationAgentComponent = _ts_decorate$1([
+    X("NavigationAgent"),
     nt({
       version: 1,
-      typeId: "PathfindingAgent"
+      typeId: "NavigationAgent"
     })
-  ], exports.PathfindingAgentComponent);
+  ], exports.NavigationAgentComponent);
   function _ts_decorate2$1(decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -5763,418 +7877,793 @@ var ESEngine = (function (exports) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
   }
   __name$2(_ts_metadata2$1, "_ts_metadata");
-  var _PathfindingMapComponent = class _PathfindingMapComponent extends Xe {
-    constructor() {
-      super(...arguments);
+  var DEFAULT_CONFIG$1 = {
+    timeStep: 1 / 60,
+    enablePathPlanning: true,
+    enableFlowControl: true,
+    enableLocalAvoidance: true,
+    enableCollisionResolution: true,
+    enableAgentCollisionResolution: true,
+    enableTimeSlicing: false,
+    iterationsBudget: 1e3,
+    maxAgentsPerFrame: 10,
+    maxIterationsPerAgent: 200
+  };
+  var _NavigationSystem = class _NavigationSystem extends _t {
+    constructor(config = {}) {
+      super(lt.all(exports.NavigationAgentComponent));
+      __publicField$2(this, "config");
+      __publicField$2(this, "pathPlanner", null);
+      __publicField$2(this, "flowController", null);
+      __publicField$2(this, "localAvoidance", null);
+      __publicField$2(this, "collisionResolver", null);
+      /**
+       * @zh 静态障碍物（墙壁、建筑等）- 由 PathPlanner 和 CollisionResolver 处理
+       * @en Static obstacles (walls, buildings) - handled by PathPlanner and CollisionResolver
+       */
+      __publicField$2(this, "staticObstacles", []);
+      /**
+       * @zh 动态障碍物（移动物体等）- 由 ORCA 和 CollisionResolver 处理
+       * @en Dynamic obstacles (moving objects) - handled by ORCA and CollisionResolver
+       */
+      __publicField$2(this, "dynamicObstacles", []);
+      __publicField$2(this, "currentTime", 0);
+      __publicField$2(this, "agentEnterTimes", /* @__PURE__ */ new Map());
       // =========================================================================
-      // 地图配置 | Map Configuration
-      // =========================================================================
-      /**
-       * @zh 地图类型
-       * @en Map type
-       */
-      __publicField$2(this, "mapType", "grid");
-      /**
-       * @zh 网格宽度（仅 grid 类型）
-       * @en Grid width (grid type only)
-       */
-      __publicField$2(this, "width", 100);
-      /**
-       * @zh 网格高度（仅 grid 类型）
-       * @en Grid height (grid type only)
-       */
-      __publicField$2(this, "height", 100);
-      /**
-       * @zh 是否允许对角移动
-       * @en Whether diagonal movement is allowed
-       */
-      __publicField$2(this, "allowDiagonal", true);
-      /**
-       * @zh 是否避免穿角
-       * @en Whether to avoid corner cutting
-       */
-      __publicField$2(this, "avoidCorners", true);
-      // =========================================================================
-      // 系统配置 | System Configuration
-      // =========================================================================
-      /**
-       * @zh 每帧处理的最大代理数
-       * @en Maximum agents processed per frame
-       */
-      __publicField$2(this, "maxAgentsPerFrame", 10);
-      /**
-       * @zh 每帧总迭代次数预算
-       * @en Total iterations budget per frame
-       */
-      __publicField$2(this, "iterationsBudget", 1e3);
-      /**
-       * @zh 是否启用路径平滑
-       * @en Whether path smoothing is enabled
-       */
-      __publicField$2(this, "enableSmoothing", true);
-      /**
-       * @zh 路径平滑类型
-       * @en Path smoothing type
-       */
-      __publicField$2(this, "smoothingType", "los");
-      // =========================================================================
-      // 缓存配置 | Cache Configuration
+      // 时间切片状态 | Time Slicing State
       // =========================================================================
       /**
-       * @zh 是否启用路径缓存
-       * @en Whether path caching is enabled
+       * @zh 是否为增量寻路器
+       * @en Whether the path planner is incremental
        */
-      __publicField$2(this, "enableCache", true);
+      __publicField$2(this, "isIncrementalPlanner", false);
       /**
-       * @zh 缓存最大条目数
-       * @en Maximum cache entries
+       * @zh 等待寻路的代理队列（按优先级排序）
+       * @en Queue of agents waiting for pathfinding (sorted by priority)
        */
-      __publicField$2(this, "cacheMaxEntries", 1e3);
-      /**
-       * @zh 缓存过期时间（毫秒），0 表示不过期
-       * @en Cache TTL in milliseconds, 0 means no expiration
-       */
-      __publicField$2(this, "cacheTtlMs", 5e3);
-      // =========================================================================
-      // 调试配置 | Debug Configuration
-      // =========================================================================
-      /**
-       * @zh 是否显示调试信息
-       * @en Whether to show debug info
-       */
-      __publicField$2(this, "debugMode", false);
-      /**
-       * @zh 是否显示网格
-       * @en Whether to show grid
-       */
-      __publicField$2(this, "showGrid", false);
-      /**
-       * @zh 是否显示路径
-       * @en Whether to show paths
-       */
-      __publicField$2(this, "showPaths", false);
-      // =========================================================================
-      // 运行时实例（不序列化）| Runtime Instances (not serialized)
-      // =========================================================================
-      /**
-       * @zh 地图实例
-       * @en Map instance
-       */
-      __publicField$2(this, "map", null);
-      /**
-       * @zh 增量寻路器实例
-       * @en Incremental pathfinder instance
-       */
-      __publicField$2(this, "pathfinder", null);
-      /**
-       * @zh 路径平滑器实例
-       * @en Path smoother instance
-       */
-      __publicField$2(this, "smoother", null);
-      /**
-       * @zh 是否已初始化
-       * @en Whether initialized
-       */
-      __publicField$2(this, "initialized", false);
-      // =========================================================================
-      // 统计信息 | Statistics
-      // =========================================================================
-      /**
-       * @zh 当前活跃请求数
-       * @en Current active request count
-       */
-      __publicField$2(this, "activeRequests", 0);
-      /**
-       * @zh 本帧使用的迭代次数
-       * @en Iterations used this frame
-       */
-      __publicField$2(this, "iterationsUsedThisFrame", 0);
-      /**
-       * @zh 本帧处理的代理数
-       * @en Agents processed this frame
-       */
-      __publicField$2(this, "agentsProcessedThisFrame", 0);
-      /**
-       * @zh 缓存命中次数
-       * @en Cache hit count
-       */
-      __publicField$2(this, "cacheHits", 0);
-      /**
-       * @zh 缓存未命中次数
-       * @en Cache miss count
-       */
-      __publicField$2(this, "cacheMisses", 0);
+      __publicField$2(this, "pendingPathRequests", /* @__PURE__ */ new Set());
+      this.config = {
+        ...DEFAULT_CONFIG$1,
+        ...config
+      };
     }
     // =========================================================================
-    // 公共方法 | Public Methods
+    // 算法设置 | Algorithm Setters
     // =========================================================================
     /**
-     * @zh 设置网格单元格是否可通行
-     * @en Set grid cell walkability
+     * @zh 设置路径规划器
+     * @en Set path planner
      *
-     * @param x - @zh X 坐标 @en X coordinate
-     * @param y - @zh Y 坐标 @en Y coordinate
-     * @param walkable - @zh 是否可通行 @en Is walkable
+     * @param planner - @zh 路径规划器，传入 null 禁用路径规划 @en Path planner, pass null to disable
+     *
+     * @zh 如果传入 IIncrementalPathPlanner 且启用了时间切片，会自动使用增量寻路
+     * @en If passing IIncrementalPathPlanner and time slicing is enabled, will automatically use incremental pathfinding
+     *
+     * @example
+     * ```typescript
+     * navSystem.setPathPlanner(createNavMeshPathPlanner(navMesh));
+     * navSystem.setPathPlanner(createAStarPlanner(gridMap));
+     * navSystem.setPathPlanner(createIncrementalAStarPlanner(gridMap));  // 支持时间切片
+     * navSystem.setPathPlanner(null);  // 禁用
+     * ```
      */
-    setWalkable(x, y, walkable) {
-      if (this.map && "setWalkable" in this.map) {
-        this.map.setWalkable(x, y, walkable);
-        if (this.pathfinder) {
-          this.pathfinder.notifyObstacleChange(x - 1, y - 1, x + 1, y + 1);
+    setPathPlanner(planner) {
+      this.pathPlanner?.dispose();
+      this.pathPlanner = planner;
+      this.isIncrementalPlanner = planner !== null && isIncrementalPlanner(planner);
+      this.pendingPathRequests.clear();
+    }
+    /**
+     * @zh 获取当前路径规划器
+     * @en Get current path planner
+     */
+    getPathPlanner() {
+      return this.pathPlanner;
+    }
+    /**
+     * @zh 设置流量控制器
+     * @en Set flow controller
+     *
+     * @param controller - @zh 流量控制器，传入 null 禁用流量控制 @en Flow controller, pass null to disable
+     *
+     * @example
+     * ```typescript
+     * navSystem.setFlowController(createFlowController());
+     * navSystem.setFlowController(null);  // 禁用
+     * ```
+     */
+    setFlowController(controller) {
+      this.flowController?.dispose();
+      this.flowController = controller;
+    }
+    /**
+     * @zh 获取当前流量控制器
+     * @en Get current flow controller
+     */
+    getFlowController() {
+      return this.flowController;
+    }
+    /**
+     * @zh 设置局部避让算法
+     * @en Set local avoidance algorithm
+     *
+     * @param avoidance - @zh 局部避让算法，传入 null 禁用避让 @en Local avoidance, pass null to disable
+     *
+     * @example
+     * ```typescript
+     * navSystem.setLocalAvoidance(createORCAAvoidance());
+     * navSystem.setLocalAvoidance(null);  // 禁用
+     * ```
+     */
+    setLocalAvoidance(avoidance) {
+      this.localAvoidance?.dispose();
+      this.localAvoidance = avoidance;
+    }
+    /**
+     * @zh 获取当前局部避让算法
+     * @en Get current local avoidance algorithm
+     */
+    getLocalAvoidance() {
+      return this.localAvoidance;
+    }
+    /**
+     * @zh 设置碰撞解决器
+     * @en Set collision resolver
+     *
+     * @param resolver - @zh 碰撞解决器，传入 null 禁用碰撞解决 @en Collision resolver, pass null to disable
+     *
+     * @example
+     * ```typescript
+     * navSystem.setCollisionResolver(createDefaultCollisionResolver());
+     * navSystem.setCollisionResolver(null);  // 禁用
+     * ```
+     */
+    setCollisionResolver(resolver) {
+      this.collisionResolver?.dispose();
+      this.collisionResolver = resolver;
+    }
+    /**
+     * @zh 获取当前碰撞解决器
+     * @en Get current collision resolver
+     */
+    getCollisionResolver() {
+      return this.collisionResolver;
+    }
+    // =========================================================================
+    // 障碍物管理 | Obstacle Management
+    // =========================================================================
+    /**
+     * @zh 添加静态障碍物（墙壁、建筑等）
+     * @en Add static obstacle (walls, buildings, etc.)
+     *
+     * @zh 静态障碍物由 PathPlanner 规划路径时考虑，CollisionResolver 防止穿透
+     * @zh ORCA 不会处理静态障碍物，因为路径规划已经绑开了它们
+     * @en Static obstacles are considered by PathPlanner for routing, CollisionResolver for penetration prevention
+     * @en ORCA does NOT process static obstacles since path planning already avoids them
+     *
+     * @param obstacle - @zh 障碍物数据 @en Obstacle data
+     */
+    addStaticObstacle(obstacle) {
+      this.staticObstacles.push(obstacle);
+    }
+    /**
+     * @zh 添加动态障碍物（移动物体、临时障碍等）
+     * @en Add dynamic obstacle (moving objects, temporary obstacles, etc.)
+     *
+     * @zh 动态障碍物由 ORCA 进行局部避让，CollisionResolver 防止穿透
+     * @en Dynamic obstacles are handled by ORCA for local avoidance, CollisionResolver for penetration prevention
+     *
+     * @param obstacle - @zh 障碍物数据 @en Obstacle data
+     */
+    addDynamicObstacle(obstacle) {
+      this.dynamicObstacles.push(obstacle);
+    }
+    /**
+     * @zh 移除所有静态障碍物
+     * @en Remove all static obstacles
+     */
+    clearStaticObstacles() {
+      this.staticObstacles = [];
+    }
+    /**
+     * @zh 移除所有动态障碍物
+     * @en Remove all dynamic obstacles
+     */
+    clearDynamicObstacles() {
+      this.dynamicObstacles = [];
+    }
+    /**
+     * @zh 移除所有障碍物（静态和动态）
+     * @en Remove all obstacles (static and dynamic)
+     */
+    clearObstacles() {
+      this.staticObstacles = [];
+      this.dynamicObstacles = [];
+    }
+    /**
+     * @zh 获取静态障碍物列表
+     * @en Get static obstacles list
+     */
+    getStaticObstacles() {
+      return this.staticObstacles;
+    }
+    /**
+     * @zh 获取动态障碍物列表
+     * @en Get dynamic obstacles list
+     */
+    getDynamicObstacles() {
+      return this.dynamicObstacles;
+    }
+    /**
+     * @zh 获取所有障碍物列表（静态+动态）
+     * @en Get all obstacles list (static + dynamic)
+     */
+    getObstacles() {
+      return [
+        ...this.staticObstacles,
+        ...this.dynamicObstacles
+      ];
+    }
+    /**
+     * @zh 获取所有障碍物用于碰撞检测
+     * @en Get all obstacles for collision detection
+     */
+    getAllObstaclesForCollision() {
+      return [
+        ...this.staticObstacles,
+        ...this.dynamicObstacles
+      ];
+    }
+    /**
+     * @zh 设置静态障碍物列表
+     * @en Set static obstacles list
+     *
+     * @param obstacles - @zh 障碍物列表 @en Obstacles list
+     */
+    setStaticObstacles(obstacles) {
+      this.staticObstacles = [
+        ...obstacles
+      ];
+    }
+    /**
+     * @zh 设置动态障碍物列表
+     * @en Set dynamic obstacles list
+     *
+     * @param obstacles - @zh 障碍物列表 @en Obstacles list
+     */
+    setDynamicObstacles(obstacles) {
+      this.dynamicObstacles = [
+        ...obstacles
+      ];
+    }
+    // =========================================================================
+    // 系统生命周期 | System Lifecycle
+    // =========================================================================
+    /**
+     * @zh 系统销毁时调用
+     * @en Called when system is destroyed
+     */
+    onDestroy() {
+      this.pathPlanner?.dispose();
+      this.flowController?.dispose();
+      this.localAvoidance?.dispose();
+      this.collisionResolver?.dispose();
+      this.pathPlanner = null;
+      this.flowController = null;
+      this.localAvoidance = null;
+      this.collisionResolver = null;
+      this.staticObstacles = [];
+      this.dynamicObstacles = [];
+      this.agentEnterTimes.clear();
+      this.pendingPathRequests.clear();
+      this.isIncrementalPlanner = false;
+    }
+    // =========================================================================
+    // 处理管线 | Processing Pipeline
+    // =========================================================================
+    /**
+     * @zh 处理实体
+     * @en Process entities
+     */
+    process(entities) {
+      if (entities.length === 0) return;
+      const deltaTime = this.config.timeStep;
+      this.currentTime += deltaTime;
+      const agentDataMap = /* @__PURE__ */ new Map();
+      const flowAgentDataList = [];
+      const entityMap = /* @__PURE__ */ new Map();
+      for (const entity of entities) {
+        entityMap.set(entity.id, entity);
+      }
+      if (this.config.enablePathPlanning && this.pathPlanner) {
+        if (this.config.enableTimeSlicing && this.isIncrementalPlanner) {
+          const agentList = [];
+          for (const entity of entities) {
+            const agent = entity.getComponent(exports.NavigationAgentComponent);
+            if (agent.enabled) {
+              agentList.push({
+                entityId: entity.id,
+                agent
+              });
+            }
+          }
+          this.processIncrementalPathPlanning(agentList, entityMap);
+        } else {
+          for (const entity of entities) {
+            const agent = entity.getComponent(exports.NavigationAgentComponent);
+            if (!agent.enabled) continue;
+            this.processPathPlanning(agent, deltaTime);
+          }
         }
       }
-    }
-    /**
-     * @zh 设置矩形区域是否可通行
-     * @en Set rectangular area walkability
-     *
-     * @param x - @zh 起始 X @en Start X
-     * @param y - @zh 起始 Y @en Start Y
-     * @param width - @zh 宽度 @en Width
-     * @param height - @zh 高度 @en Height
-     * @param walkable - @zh 是否可通行 @en Is walkable
-     */
-    setRectWalkable(x, y, rectWidth, rectHeight, walkable) {
-      if (this.map && "setRectWalkable" in this.map) {
-        this.map.setRectWalkable(x, y, rectWidth, rectHeight, walkable);
-        if (this.pathfinder) {
-          this.pathfinder.notifyObstacleChange(x - 1, y - 1, x + rectWidth + 1, y + rectHeight + 1);
+      for (const entity of entities) {
+        const agent = entity.getComponent(exports.NavigationAgentComponent);
+        if (!agent.enabled) continue;
+        if (!this.agentEnterTimes.has(entity.id)) {
+          this.agentEnterTimes.set(entity.id, this.currentTime);
+        }
+        const preferredVelocity = this.calculatePreferredVelocity(agent);
+        const agentData = this.buildAgentData(entity, agent, preferredVelocity);
+        agentDataMap.set(entity.id, agentData);
+        flowAgentDataList.push({
+          id: entity.id,
+          position: {
+            x: agent.position.x,
+            y: agent.position.y
+          },
+          destination: agent.destination,
+          currentWaypoint: agent.getCurrentWaypoint(),
+          radius: agent.radius,
+          priority: 50,
+          enterTime: this.agentEnterTimes.get(entity.id)
+        });
+      }
+      if (this.config.enableFlowControl && this.flowController) {
+        this.flowController.update(flowAgentDataList, deltaTime);
+      }
+      if (this.config.enableLocalAvoidance && this.localAvoidance && agentDataMap.size > 0) {
+        const proceedingAgents = [];
+        const proceedingEntityIds = /* @__PURE__ */ new Set();
+        for (const entity of entities) {
+          const agent = entity.getComponent(exports.NavigationAgentComponent);
+          if (!agent.enabled) continue;
+          const flowResult = this.flowController?.getFlowControl(entity.id);
+          const permission = flowResult?.permission ?? PassPermission.Proceed;
+          if (permission === PassPermission.Wait) {
+            this.handleWaitingAgent(entity, agent, flowResult.waitPosition, deltaTime);
+          } else {
+            const agentData = agentDataMap.get(entity.id);
+            if (agentData) {
+              const speedMult = flowResult?.speedMultiplier ?? 1;
+              if (speedMult < 1) {
+                const modifiedAgentData = {
+                  ...agentData,
+                  preferredVelocity: {
+                    x: agentData.preferredVelocity.x * speedMult,
+                    y: agentData.preferredVelocity.y * speedMult
+                  }
+                };
+                proceedingAgents.push(modifiedAgentData);
+              } else {
+                proceedingAgents.push(agentData);
+              }
+              proceedingEntityIds.add(entity.id);
+            }
+          }
+        }
+        if (proceedingAgents.length > 0) {
+          const avoidanceResults = this.localAvoidance.computeBatchAvoidance(proceedingAgents, this.dynamicObstacles, deltaTime);
+          for (const entity of entities) {
+            if (!proceedingEntityIds.has(entity.id)) continue;
+            const agent = entity.getComponent(exports.NavigationAgentComponent);
+            if (!agent.enabled) continue;
+            const result = avoidanceResults.get(entity.id);
+            if (result) {
+              this.applyAvoidanceResult(entity, agent, result.velocity, deltaTime);
+            } else {
+              const agentData = agentDataMap.get(entity.id);
+              if (agentData) {
+                this.applyAvoidanceResult(entity, agent, agentData.preferredVelocity, deltaTime);
+              }
+            }
+          }
+        }
+      } else {
+        for (const entity of entities) {
+          const agent = entity.getComponent(exports.NavigationAgentComponent);
+          if (!agent.enabled) continue;
+          const flowResult = this.flowController?.getFlowControl(entity.id);
+          const permission = flowResult?.permission ?? PassPermission.Proceed;
+          if (permission === PassPermission.Wait && this.config.enableFlowControl && this.flowController) {
+            this.handleWaitingAgent(entity, agent, flowResult.waitPosition, deltaTime);
+          } else {
+            const agentData = agentDataMap.get(entity.id);
+            if (agentData) {
+              let velocity = agentData.preferredVelocity;
+              const speedMult = flowResult?.speedMultiplier ?? 1;
+              if (speedMult < 1) {
+                velocity = {
+                  x: velocity.x * speedMult,
+                  y: velocity.y * speedMult
+                };
+              }
+              this.applyAvoidanceResult(entity, agent, velocity, deltaTime);
+            }
+          }
         }
       }
+      if (this.config.enableAgentCollisionResolution && this.collisionResolver) {
+        this.resolveAgentCollisions(entities);
+      }
+      this.cleanupEnterTimes(entities);
     }
     /**
-     * @zh 检查位置是否可通行
-     * @en Check if position is walkable
-     *
-     * @param x - @zh X 坐标 @en X coordinate
-     * @param y - @zh Y 坐标 @en Y coordinate
-     * @returns @zh 是否可通行 @en Is walkable
+     * @zh 处理等待中的代理
+     * @en Handle waiting agent
      */
-    isWalkable(x, y) {
-      return this.map?.isWalkable(x, y) ?? false;
-    }
-    /**
-     * @zh 重置统计信息
-     * @en Reset statistics
-     */
-    resetStats() {
-      this.iterationsUsedThisFrame = 0;
-      this.agentsProcessedThisFrame = 0;
-    }
-    /**
-     * @zh 获取剩余迭代预算
-     * @en Get remaining iteration budget
-     *
-     * @returns @zh 剩余预算 @en Remaining budget
-     */
-    getRemainingBudget() {
-      return Math.max(0, this.iterationsBudget - this.iterationsUsedThisFrame);
-    }
-    /**
-     * @zh 获取缓存统计信息
-     * @en Get cache statistics
-     *
-     * @returns @zh 缓存统计 @en Cache statistics
-     */
-    getCacheStats() {
-      const pathfinderWithCache = this.pathfinder;
-      if (pathfinderWithCache?.getCacheStats) {
-        const stats = pathfinderWithCache.getCacheStats();
-        this.cacheHits = stats.hits;
-        this.cacheMisses = stats.misses;
-        return {
-          enabled: this.enableCache,
-          hits: stats.hits,
-          misses: stats.misses,
-          hitRate: stats.hitRate
+    handleWaitingAgent(entity, agent, waitPosition, deltaTime) {
+      if (waitPosition) {
+        const dx = waitPosition.x - agent.position.x;
+        const dy = waitPosition.y - agent.position.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > agent.arrivalThreshold) {
+          const speed = Math.min(agent.maxSpeed * 0.5, dist);
+          const velocity = {
+            x: dx / dist * speed,
+            y: dy / dist * speed
+          };
+          this.applyAvoidanceResult(entity, agent, velocity, deltaTime);
+        } else {
+          agent.velocity = {
+            x: 0,
+            y: 0
+          };
+        }
+      } else {
+        agent.velocity = {
+          x: 0,
+          y: 0
         };
       }
+    }
+    /**
+     * @zh 清理已移除代理的进入时间记录
+     * @en Cleanup enter times for removed agents
+     */
+    cleanupEnterTimes(entities) {
+      const activeIds = new Set(entities.map((e) => e.id));
+      for (const id of this.agentEnterTimes.keys()) {
+        if (!activeIds.has(id)) {
+          this.agentEnterTimes.delete(id);
+        }
+      }
+    }
+    /**
+     * @zh 处理路径规划（同步模式）
+     * @en Process path planning (synchronous mode)
+     */
+    processPathPlanning(agent, deltaTime) {
+      if (!agent.destination || agent.state === NavigationState.Arrived) {
+        return;
+      }
+      const needsRepath = agent.path.length === 0 || agent.autoRepath && this.currentTime - agent.lastRepathTime > agent.repathInterval;
+      if (needsRepath && this.pathPlanner) {
+        const result = this.pathPlanner.findPath(agent.position, agent.destination, {
+          agentRadius: agent.radius
+        });
+        if (result.found) {
+          agent.path = result.path.map((p) => ({
+            x: p.x,
+            y: p.y
+          }));
+          agent.currentWaypointIndex = 0;
+          agent.state = NavigationState.Navigating;
+        } else {
+          agent.state = NavigationState.Unreachable;
+          agent.path = [];
+        }
+        agent.lastRepathTime = this.currentTime;
+      }
+      this.advanceWaypoint(agent);
+    }
+    /**
+     * @zh 处理增量路径规划（时间切片模式）
+     * @en Process incremental path planning (time slicing mode)
+     *
+     * @param agents - @zh 代理列表 @en Agent list
+     * @param entityMap - @zh 实体 ID 到代理的映射 @en Entity ID to agent mapping
+     */
+    processIncrementalPathPlanning(agents, entityMap) {
+      if (!this.pathPlanner || !this.isIncrementalPlanner) return;
+      const planner = this.pathPlanner;
+      let remainingBudget = this.config.iterationsBudget;
+      let processedCount = 0;
+      for (const { entityId, agent } of agents) {
+        if (!agent.destination || agent.state === NavigationState.Arrived) {
+          if (agent.currentRequestId >= 0) {
+            planner.cleanup(agent.currentRequestId);
+            agent.currentRequestId = -1;
+            agent.isComputingPath = false;
+          }
+          continue;
+        }
+        const needsRepath = !agent.isComputingPath && agent.currentRequestId < 0 && (agent.path.length === 0 || agent.autoRepath && this.currentTime - agent.lastRepathTime > agent.repathInterval);
+        if (needsRepath) {
+          this.pendingPathRequests.add(entityId);
+        }
+      }
+      const pendingArray = Array.from(this.pendingPathRequests);
+      pendingArray.sort((a, b) => {
+        const agentA = agents.find((x) => x.entityId === a);
+        const agentB = agents.find((x) => x.entityId === b);
+        return (agentA?.agent.priority ?? 50) - (agentB?.agent.priority ?? 50);
+      });
+      for (const entityId of pendingArray) {
+        if (processedCount >= this.config.maxAgentsPerFrame) break;
+        const entry = agents.find((x) => x.entityId === entityId);
+        const destination = entry?.agent.destination;
+        if (!entry || !destination) {
+          this.pendingPathRequests.delete(entityId);
+          continue;
+        }
+        const { agent } = entry;
+        const request = planner.requestPath(agent.position, destination, {
+          agentRadius: agent.radius
+        });
+        agent.currentRequestId = request.id;
+        agent.isComputingPath = true;
+        agent.pathProgress = 0;
+        this.pendingPathRequests.delete(entityId);
+        processedCount++;
+      }
+      const activeAgents = agents.filter((x) => x.agent.isComputingPath && x.agent.currentRequestId >= 0);
+      activeAgents.sort((a, b) => a.agent.priority - b.agent.priority);
+      for (const { agent } of activeAgents) {
+        if (remainingBudget <= 0) break;
+        const iterations = Math.min(remainingBudget, this.config.maxIterationsPerAgent);
+        const progress = planner.step(agent.currentRequestId, iterations);
+        remainingBudget -= progress.nodesSearched;
+        agent.pathProgress = progress.estimatedProgress;
+        if (progress.state === PathPlanState.Completed) {
+          const result = planner.getResult(agent.currentRequestId);
+          planner.cleanup(agent.currentRequestId);
+          if (result && result.found) {
+            agent.path = result.path.map((p) => ({
+              x: p.x,
+              y: p.y
+            }));
+            agent.currentWaypointIndex = 0;
+            agent.state = NavigationState.Navigating;
+          } else {
+            agent.state = NavigationState.Unreachable;
+            agent.path = [];
+          }
+          agent.currentRequestId = -1;
+          agent.isComputingPath = false;
+          agent.pathProgress = 0;
+          agent.lastRepathTime = this.currentTime;
+        } else if (progress.state === PathPlanState.Failed || progress.state === PathPlanState.Cancelled) {
+          planner.cleanup(agent.currentRequestId);
+          agent.state = NavigationState.Unreachable;
+          agent.path = [];
+          agent.currentRequestId = -1;
+          agent.isComputingPath = false;
+          agent.pathProgress = 0;
+          agent.lastRepathTime = this.currentTime;
+        }
+      }
+      for (const { agent } of agents) {
+        this.advanceWaypoint(agent);
+      }
+    }
+    /**
+     * @zh 推进路径点
+     * @en Advance waypoint
+     */
+    advanceWaypoint(agent) {
+      while (agent.currentWaypointIndex < agent.path.length) {
+        const waypoint = agent.path[agent.currentWaypointIndex];
+        const dx = waypoint.x - agent.position.x;
+        const dy = waypoint.y - agent.position.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < agent.waypointThreshold) {
+          agent.currentWaypointIndex++;
+        } else {
+          break;
+        }
+      }
+    }
+    /**
+     * @zh 计算首选速度
+     * @en Calculate preferred velocity
+     */
+    calculatePreferredVelocity(agent) {
+      if (!agent.destination) {
+        return {
+          x: 0,
+          y: 0
+        };
+      }
+      let targetX, targetY;
+      let isLastWaypoint = false;
+      if (agent.currentWaypointIndex < agent.path.length) {
+        const waypoint = agent.path[agent.currentWaypointIndex];
+        targetX = waypoint.x;
+        targetY = waypoint.y;
+        isLastWaypoint = agent.currentWaypointIndex === agent.path.length - 1;
+      } else {
+        targetX = agent.destination.x;
+        targetY = agent.destination.y;
+        isLastWaypoint = true;
+      }
+      const dx = targetX - agent.position.x;
+      const dy = targetY - agent.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 1e-4) {
+        return {
+          x: 0,
+          y: 0
+        };
+      }
+      const speed = isLastWaypoint ? Math.min(agent.maxSpeed, dist) : agent.maxSpeed;
       return {
-        enabled: this.enableCache,
-        hits: this.cacheHits,
-        misses: this.cacheMisses,
-        hitRate: this.cacheHits + this.cacheMisses > 0 ? this.cacheHits / (this.cacheHits + this.cacheMisses) : 0
+        x: dx / dist * speed,
+        y: dy / dist * speed
       };
     }
     /**
-     * @zh 组件从实体移除时调用
-     * @en Called when component is removed from entity
+     * @zh 构建代理数据
+     * @en Build agent data
      */
-    onRemovedFromEntity() {
-      if (this.pathfinder) {
-        this.pathfinder.clear();
+    buildAgentData(entity, agent, preferredVelocity) {
+      return {
+        id: entity.id,
+        position: {
+          x: agent.position.x,
+          y: agent.position.y
+        },
+        velocity: {
+          x: agent.velocity.x,
+          y: agent.velocity.y
+        },
+        preferredVelocity,
+        radius: agent.radius,
+        maxSpeed: agent.maxSpeed
+      };
+    }
+    /**
+     * @zh 应用避让结果
+     * @en Apply avoidance result
+     */
+    applyAvoidanceResult(entity, agent, newVelocity, deltaTime) {
+      const allObstacles = this.getAllObstaclesForCollision();
+      if (this.config.enableCollisionResolution && this.collisionResolver && allObstacles.length > 0) {
+        newVelocity = this.collisionResolver.validateVelocity(agent.position, newVelocity, agent.radius, allObstacles, deltaTime);
       }
-      this.map = null;
-      this.pathfinder = null;
-      this.smoother = null;
-      this.initialized = false;
+      if (agent.smoothSteering) {
+        newVelocity = this.applySmoothSteering(agent, newVelocity, deltaTime);
+      }
+      agent.velocity = {
+        x: newVelocity.x,
+        y: newVelocity.y
+      };
+      let newPosition = {
+        x: agent.position.x + newVelocity.x * deltaTime,
+        y: agent.position.y + newVelocity.y * deltaTime
+      };
+      if (this.config.enableCollisionResolution && this.collisionResolver && allObstacles.length > 0) {
+        newPosition = this.collisionResolver.resolveCollision(newPosition, agent.radius, allObstacles);
+      }
+      agent.position = newPosition;
+      this.checkArrival(agent);
+    }
+    /**
+     * @zh 应用平滑转向
+     * @en Apply smooth steering
+     */
+    applySmoothSteering(agent, targetVelocity, deltaTime) {
+      const maxChange = agent.acceleration * deltaTime;
+      const dvx = targetVelocity.x - agent.velocity.x;
+      const dvy = targetVelocity.y - agent.velocity.y;
+      const changeMag = Math.sqrt(dvx * dvx + dvy * dvy);
+      if (changeMag <= maxChange) {
+        return targetVelocity;
+      }
+      const factor = maxChange / changeMag;
+      const newVel = {
+        x: agent.velocity.x + dvx * factor,
+        y: agent.velocity.y + dvy * factor
+      };
+      const targetSpeed = Math.sqrt(targetVelocity.x * targetVelocity.x + targetVelocity.y * targetVelocity.y);
+      const newSpeed = Math.sqrt(newVel.x * newVel.x + newVel.y * newVel.y);
+      if (newSpeed > 1e-4 && targetSpeed > 1e-4) {
+        const scale = targetSpeed / newSpeed;
+        newVel.x *= scale;
+        newVel.y *= scale;
+      }
+      return newVel;
+    }
+    /**
+     * @zh 检查是否到达目标
+     * @en Check if arrived at destination
+     */
+    checkArrival(agent) {
+      if (!agent.destination) return;
+      const dx = agent.destination.x - agent.position.x;
+      const dy = agent.destination.y - agent.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < agent.arrivalThreshold) {
+        agent.state = NavigationState.Arrived;
+        agent.velocity = {
+          x: 0,
+          y: 0
+        };
+      }
+    }
+    /**
+     * @zh 解决代理间碰撞
+     * @en Resolve agent-agent collisions
+     */
+    resolveAgentCollisions(entities) {
+      if (!this.collisionResolver) return;
+      const corrections = /* @__PURE__ */ new Map();
+      const activeEntities = entities.filter((e) => {
+        const agent = e.getComponent(exports.NavigationAgentComponent);
+        return agent.enabled;
+      });
+      for (let i = 0; i < activeEntities.length; i++) {
+        for (let j = i + 1; j < activeEntities.length; j++) {
+          const entityA = activeEntities[i];
+          const entityB = activeEntities[j];
+          const agentA = entityA.getComponent(exports.NavigationAgentComponent);
+          const agentB = entityB.getComponent(exports.NavigationAgentComponent);
+          const collision = this.collisionResolver.detectAgentCollision(agentA.position, agentA.radius, agentB.position, agentB.radius);
+          if (collision.collided) {
+            const halfPush = (collision.penetration + 0.01) * 0.5;
+            const corrA = corrections.get(entityA.id) ?? {
+              x: 0,
+              y: 0
+            };
+            corrA.x += collision.normal.x * halfPush;
+            corrA.y += collision.normal.y * halfPush;
+            corrections.set(entityA.id, corrA);
+            const corrB = corrections.get(entityB.id) ?? {
+              x: 0,
+              y: 0
+            };
+            corrB.x -= collision.normal.x * halfPush;
+            corrB.y -= collision.normal.y * halfPush;
+            corrections.set(entityB.id, corrB);
+          }
+        }
+      }
+      const allObstacles = this.getAllObstaclesForCollision();
+      for (const [entityId, correction] of corrections) {
+        const entity = activeEntities.find((e) => e.id === entityId);
+        if (!entity) continue;
+        const agent = entity.getComponent(exports.NavigationAgentComponent);
+        let newPosition = {
+          x: agent.position.x + correction.x,
+          y: agent.position.y + correction.y
+        };
+        if (allObstacles.length > 0) {
+          newPosition = this.collisionResolver.resolveCollision(newPosition, agent.radius, allObstacles);
+        }
+        agent.position = newPosition;
+      }
     }
   };
-  __name$2(_PathfindingMapComponent, "PathfindingMapComponent");
-  exports.PathfindingMapComponent = _PathfindingMapComponent;
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "enum",
-      label: "Map Type",
-      options: [
-        {
-          value: "grid",
-          label: "Grid"
-        },
-        {
-          value: "navmesh",
-          label: "NavMesh"
-        }
-      ]
+  __name$2(_NavigationSystem, "NavigationSystem");
+  exports.NavigationSystem = _NavigationSystem;
+  exports.NavigationSystem = _ts_decorate2$1([
+    K("Navigation", {
+      updateOrder: 45
     }),
-    _ts_metadata2$1("design:type", typeof PathfindingMapType === "undefined" ? Object : PathfindingMapType)
-  ], exports.PathfindingMapComponent.prototype, "mapType", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Map Width",
-      min: 1,
-      max: 1e4
-    }),
-    _ts_metadata2$1("design:type", Number)
-  ], exports.PathfindingMapComponent.prototype, "width", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Map Height",
-      min: 1,
-      max: 1e4
-    }),
-    _ts_metadata2$1("design:type", Number)
-  ], exports.PathfindingMapComponent.prototype, "height", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Allow Diagonal"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "allowDiagonal", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Avoid Corners"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "avoidCorners", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Max Agents/Frame",
-      min: 1,
-      max: 100
-    }),
-    _ts_metadata2$1("design:type", Number)
-  ], exports.PathfindingMapComponent.prototype, "maxAgentsPerFrame", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Iterations Budget",
-      min: 100,
-      max: 1e4
-    }),
-    _ts_metadata2$1("design:type", Number)
-  ], exports.PathfindingMapComponent.prototype, "iterationsBudget", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Enable Smoothing"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "enableSmoothing", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "enum",
-      label: "Smoothing Type",
-      options: [
-        {
-          value: "los",
-          label: "Line of Sight"
-        },
-        {
-          value: "catmullrom",
-          label: "Catmull-Rom"
-        },
-        {
-          value: "combined",
-          label: "Combined"
-        }
-      ]
-    }),
-    _ts_metadata2$1("design:type", String)
-  ], exports.PathfindingMapComponent.prototype, "smoothingType", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Enable Cache"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "enableCache", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Cache Size",
-      min: 100,
-      max: 1e4
-    }),
-    _ts_metadata2$1("design:type", Number)
-  ], exports.PathfindingMapComponent.prototype, "cacheMaxEntries", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "number",
-      label: "Cache TTL (ms)",
-      min: 0,
-      max: 6e4
-    }),
-    _ts_metadata2$1("design:type", Number)
-  ], exports.PathfindingMapComponent.prototype, "cacheTtlMs", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Debug Mode"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "debugMode", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Show Grid"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "showGrid", void 0);
-  _ts_decorate2$1([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Show Paths"
-    }),
-    _ts_metadata2$1("design:type", Boolean)
-  ], exports.PathfindingMapComponent.prototype, "showPaths", void 0);
-  exports.PathfindingMapComponent = _ts_decorate2$1([
-    X("PathfindingMap"),
-    nt({
-      version: 1,
-      typeId: "PathfindingMap"
-    })
-  ], exports.PathfindingMapComponent);
+    _ts_metadata2$1("design:type", Function),
+    _ts_metadata2$1("design:paramtypes", [
+      typeof INavigationSystemConfig === "undefined" ? Object : INavigationSystemConfig
+    ])
+  ], exports.NavigationSystem);
   function _ts_decorate3(decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -6186,502 +8675,46 @@ var ESEngine = (function (exports) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
   }
   __name$2(_ts_metadata3, "_ts_metadata");
-  var _PathfindingSystem = class _PathfindingSystem extends _t {
-    constructor() {
-      super(lt.all(exports.PathfindingAgentComponent));
-      __publicField$2(this, "mapEntity", null);
-      __publicField$2(this, "mapComponent", null);
-      __publicField$2(this, "pathValidator");
-      __publicField$2(this, "agentQueue", []);
-      __publicField$2(this, "frameCounter", 0);
-      this.pathValidator = new PathValidator();
-    }
-    /**
-     * @zh 系统初始化
-     * @en System initialization
-     */
-    onInitialize() {
-      this.findMapEntity();
-      this.initializeMap();
-    }
-    /**
-     * @zh 系统激活时调用
-     * @en Called when system is enabled
-     */
-    onEnable() {
-      this.findMapEntity();
-    }
-    /**
-     * @zh 处理实体
-     * @en Process entities
-     */
-    process(entities) {
-      if (!this.mapComponent?.pathfinder) {
-        this.findMapEntity();
-        if (!this.mapComponent?.pathfinder) {
-          return;
-        }
-      }
-      this.frameCounter++;
-      this.mapComponent.resetStats();
-      this.buildAgentQueue(entities);
-      this.processAgentsWithBudget();
-      this.validatePaths(entities);
-    }
-    // =========================================================================
-    // 私有方法 | Private Methods
-    // =========================================================================
-    /**
-     * @zh 查找地图实体
-     * @en Find map entity
-     */
-    findMapEntity() {
-      if (!this.scene) return;
-      const entities = this.scene.entities.findEntitiesWithComponent(exports.PathfindingMapComponent);
-      if (entities.length > 0) {
-        const entity = entities[0];
-        const mapComp = entity.getComponent(exports.PathfindingMapComponent);
-        if (mapComp) {
-          this.mapEntity = entity;
-          this.mapComponent = mapComp;
-          if (!mapComp.initialized) {
-            this.initializeMap();
-          }
-        }
-      }
-    }
-    /**
-     * @zh 初始化地图
-     * @en Initialize map
-     */
-    initializeMap() {
-      if (!this.mapComponent) return;
-      if (this.mapComponent.initialized) return;
-      if (!this.mapComponent.map) {
-        if (this.mapComponent.mapType === "grid") {
-          this.mapComponent.map = new GridMap(this.mapComponent.width, this.mapComponent.height, {
-            allowDiagonal: this.mapComponent.allowDiagonal,
-            avoidCorners: this.mapComponent.avoidCorners
-          });
-        }
-      }
-      if (!this.mapComponent.pathfinder && this.mapComponent.map) {
-        this.mapComponent.pathfinder = new IncrementalAStarPathfinder(this.mapComponent.map, {
-          enableCache: this.mapComponent.enableCache,
-          cacheConfig: {
-            maxEntries: this.mapComponent.cacheMaxEntries,
-            ttlMs: this.mapComponent.cacheTtlMs
-          }
-        });
-      }
-      if (!this.mapComponent.smoother && this.mapComponent.enableSmoothing) {
-        switch (this.mapComponent.smoothingType) {
-          case "catmullrom":
-            this.mapComponent.smoother = new CatmullRomSmoother();
-            break;
-          case "combined":
-            this.mapComponent.smoother = new CombinedSmoother();
-            break;
-          case "los":
-          default:
-            this.mapComponent.smoother = new LineOfSightSmoother();
-            break;
-        }
-      }
-      this.mapComponent.initialized = true;
-    }
-    /**
-     * @zh 构建代理优先级队列
-     * @en Build agent priority queue
-     */
-    buildAgentQueue(entities) {
-      this.agentQueue.length = 0;
-      for (const entity of entities) {
-        const agent = entity.getComponent(exports.PathfindingAgentComponent);
-        if (!agent) continue;
-        if (!agent.hasRequest && (agent.state === PathfindingState.Idle || agent.state === PathfindingState.Completed || agent.state === PathfindingState.Cancelled)) {
-          continue;
-        }
-        this.agentQueue.push({
-          entity,
-          component: agent
-        });
-      }
-      this.agentQueue.sort((a, b) => a.component.priority - b.component.priority);
-    }
-    /**
-     * @zh 使用预算处理代理
-     * @en Process agents with budget
-     */
-    processAgentsWithBudget() {
-      const pathfinder = this.mapComponent.pathfinder;
-      const maxAgents = this.mapComponent.maxAgentsPerFrame;
-      let remainingBudget = this.mapComponent.iterationsBudget;
-      let agentsProcessed = 0;
-      for (const { component: agent } of this.agentQueue) {
-        if (agentsProcessed >= maxAgents || remainingBudget <= 0) {
-          break;
-        }
-        if (agent.hasRequest && agent.state === PathfindingState.Idle) {
-          this.startNewRequest(agent, pathfinder);
-        }
-        if (agent.state === PathfindingState.InProgress) {
-          const iterations = Math.min(agent.maxIterationsPerFrame, remainingBudget);
-          const progress = pathfinder.step(agent.currentRequestId, iterations);
-          this.updateAgentFromProgress(agent, progress, pathfinder);
-          remainingBudget -= progress.nodesSearched;
-          this.mapComponent.iterationsUsedThisFrame += progress.nodesSearched;
-        }
-        agentsProcessed++;
-      }
-      this.mapComponent.agentsProcessedThisFrame = agentsProcessed;
-    }
-    /**
-     * @zh 启动新的寻路请求
-     * @en Start new pathfinding request
-     */
-    startNewRequest(agent, pathfinder) {
-      if (agent.currentRequestId >= 0) {
-        pathfinder.cancel(agent.currentRequestId);
-        pathfinder.cleanup(agent.currentRequestId);
-      }
-      const request = pathfinder.requestPath(agent.x, agent.y, agent.targetX, agent.targetY, {
-        priority: agent.priority
-      });
-      agent.currentRequestId = request.id;
-      agent.state = PathfindingState.InProgress;
-      agent.hasRequest = false;
-      agent.progress = 0;
-      agent.path = [];
-      agent.pathIndex = 0;
-      this.mapComponent.activeRequests++;
-    }
-    /**
-     * @zh 从进度更新代理状态
-     * @en Update agent state from progress
-     */
-    updateAgentFromProgress(agent, progress, pathfinder) {
-      agent.state = progress.state;
-      agent.progress = progress.estimatedProgress;
-      agent.onPathProgress?.(progress.estimatedProgress);
-      if (progress.state === PathfindingState.Completed) {
-        const result = pathfinder.getResult(agent.currentRequestId);
-        if (result && result.found) {
-          const smoother = this.mapComponent?.smoother;
-          const map = this.mapComponent?.map;
-          if (smoother && map && this.mapComponent?.enableSmoothing) {
-            agent.path = smoother.smooth(result.path, map);
-          } else {
-            agent.path = [
-              ...result.path
-            ];
-          }
-          agent.pathIndex = 0;
-          agent.pathCost = result.cost;
-          agent.onPathComplete?.(true, agent.path);
-        } else {
-          agent.path = [];
-          agent.state = PathfindingState.Failed;
-          agent.onPathComplete?.(false, []);
-        }
-        pathfinder.cleanup(agent.currentRequestId);
-        this.mapComponent.activeRequests--;
-      } else if (progress.state === PathfindingState.Failed) {
-        agent.path = [];
-        agent.onPathComplete?.(false, []);
-        pathfinder.cleanup(agent.currentRequestId);
-        this.mapComponent.activeRequests--;
-      }
-    }
-    /**
-     * @zh 周期性验证路径有效性
-     * @en Periodically validate path validity
-     */
-    validatePaths(entities) {
-      const map = this.mapComponent?.map;
-      if (!map) return;
-      for (const entity of entities) {
-        const agent = entity.getComponent(exports.PathfindingAgentComponent);
-        if (!agent || !agent.enableDynamicReplan) continue;
-        if (agent.path.length === 0 || agent.isPathComplete()) continue;
-        if (this.frameCounter - agent.lastValidationFrame < agent.validationInterval) {
-          continue;
-        }
-        agent.lastValidationFrame = this.frameCounter;
-        const checkEnd = Math.min(agent.pathIndex + agent.lookaheadDistance, agent.path.length);
-        const result = this.pathValidator.validatePath(agent.path, agent.pathIndex, checkEnd, map);
-        if (!result.valid) {
-          agent.x = agent.path[agent.pathIndex]?.x ?? agent.x;
-          agent.y = agent.path[agent.pathIndex]?.y ?? agent.y;
-          agent.requestPathTo(agent.targetX, agent.targetY);
-        }
-      }
-    }
-  };
-  __name$2(_PathfindingSystem, "PathfindingSystem");
-  exports.PathfindingSystem = _PathfindingSystem;
-  exports.PathfindingSystem = _ts_decorate3([
-    K("Pathfinding", {
-      updateOrder: 0
-    }),
-    _ts_metadata3("design:type", Function),
-    _ts_metadata3("design:paramtypes", [])
-  ], exports.PathfindingSystem);
-  function _ts_decorate4(decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-  }
-  __name$2(_ts_decorate4, "_ts_decorate");
-  function _ts_metadata4(k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-  }
-  __name$2(_ts_metadata4, "_ts_metadata");
-  var _AvoidanceAgentComponent = class _AvoidanceAgentComponent extends Xe {
+  var _ORCAConfigComponent = class _ORCAConfigComponent extends Xe {
     constructor() {
       super(...arguments);
-      // =========================================================================
-      // 物理属性 | Physical Properties
-      // =========================================================================
-      /**
-       * @zh 代理半径
-       * @en Agent radius
-       *
-       * @zh 用于碰撞检测和避让计算
-       * @en Used for collision detection and avoidance computation
-       */
-      __publicField$2(this, "radius", DEFAULT_AGENT_PARAMS.radius);
-      /**
-       * @zh 最大速度
-       * @en Maximum speed
-       */
-      __publicField$2(this, "maxSpeed", DEFAULT_AGENT_PARAMS.maxSpeed);
-      // =========================================================================
-      // ORCA 参数 | ORCA Parameters
-      // =========================================================================
       /**
        * @zh 邻居检测距离
        * @en Neighbor detection distance
        *
-       * @zh 只考虑此范围内的其他代理
-       * @en Only considers other agents within this range
+       * @zh 代理检测邻居的最大距离，更大的值意味着更早开始避让但也更消耗性能
+       * @en Maximum distance for detecting neighbors, larger value means earlier avoidance but more performance cost
        */
-      __publicField$2(this, "neighborDist", DEFAULT_AGENT_PARAMS.neighborDist);
+      __publicField$2(this, "neighborDist", 15);
       /**
        * @zh 最大邻居数量
-       * @en Maximum number of neighbors to consider
+       * @en Maximum number of neighbors
        *
-       * @zh 限制计算量，优先考虑最近的邻居
-       * @en Limits computation, prioritizes closest neighbors
+       * @zh 计算避让时考虑的最大邻居数量，更多邻居意味着更精确但也更消耗性能
+       * @en Maximum neighbors considered for avoidance, more neighbors means more accurate but slower
        */
-      __publicField$2(this, "maxNeighbors", DEFAULT_AGENT_PARAMS.maxNeighbors);
+      __publicField$2(this, "maxNeighbors", 10);
       /**
-       * @zh 代理避让时间视野（秒）
-       * @en Time horizon for agent avoidance (seconds)
+       * @zh 代理避让时间视野
+       * @en Time horizon for agent avoidance
        *
-       * @zh 更大的值会让代理更早开始避让，但可能导致过于保守
-       * @en Larger values make agents start avoiding earlier, but may be too conservative
+       * @zh 预测其他代理未来位置的时间范围，更长意味着更平滑但可能过度避让
+       * @en Time range for predicting other agents' future positions, longer means smoother but may over-avoid
        */
-      __publicField$2(this, "timeHorizon", DEFAULT_AGENT_PARAMS.timeHorizon);
+      __publicField$2(this, "timeHorizon", 2);
       /**
-       * @zh 障碍物避让时间视野（秒）
-       * @en Time horizon for obstacle avoidance (seconds)
-       */
-      __publicField$2(this, "timeHorizonObst", DEFAULT_AGENT_PARAMS.timeHorizonObst);
-      // =========================================================================
-      // 位置和速度（运行时状态）| Position & Velocity (Runtime State)
-      // =========================================================================
-      /**
-       * @zh 当前位置 X
-       * @en Current position X
+       * @zh 障碍物避让时间视野
+       * @en Time horizon for obstacle avoidance
        *
-       * @zh 如果实体有 Transform 组件，系统会自动同步
-       * @en If entity has Transform component, system will sync automatically
+       * @zh 预测与障碍物碰撞的时间范围，通常比代理视野短
+       * @en Time range for predicting obstacle collisions, usually shorter than agent horizon
        */
-      __publicField$2(this, "positionX", 0);
-      /**
-       * @zh 当前位置 Y
-       * @en Current position Y
-       */
-      __publicField$2(this, "positionY", 0);
-      /**
-       * @zh 当前速度 X
-       * @en Current velocity X
-       */
-      __publicField$2(this, "velocityX", 0);
-      /**
-       * @zh 当前速度 Y
-       * @en Current velocity Y
-       */
-      __publicField$2(this, "velocityY", 0);
-      /**
-       * @zh 首选速度 X（通常指向目标方向）
-       * @en Preferred velocity X (usually towards target)
-       */
-      __publicField$2(this, "preferredVelocityX", 0);
-      /**
-       * @zh 首选速度 Y
-       * @en Preferred velocity Y
-       */
-      __publicField$2(this, "preferredVelocityY", 0);
-      /**
-       * @zh ORCA 计算的新速度 X
-       * @en New velocity X computed by ORCA
-       */
-      __publicField$2(this, "newVelocityX", 0);
-      /**
-       * @zh ORCA 计算的新速度 Y
-       * @en New velocity Y computed by ORCA
-       */
-      __publicField$2(this, "newVelocityY", 0);
-      // =========================================================================
-      // 配置选项 | Configuration Options
-      // =========================================================================
-      /**
-       * @zh 是否启用避让
-       * @en Whether avoidance is enabled
-       */
-      __publicField$2(this, "enabled", true);
-      /**
-       * @zh 是否自动应用新速度
-       * @en Whether to automatically apply new velocity
-       *
-       * @zh 如果为 true，系统会在计算后自动将 newVelocity 赋值给 velocity
-       * @en If true, system will automatically assign newVelocity to velocity after computation
-       */
-      __publicField$2(this, "autoApplyVelocity", true);
-    }
-    // =========================================================================
-    // 公共方法 | Public Methods
-    // =========================================================================
-    /**
-     * @zh 设置位置
-     * @en Set position
-     */
-    setPosition(x, y) {
-      this.positionX = x;
-      this.positionY = y;
-    }
-    /**
-     * @zh 设置当前速度
-     * @en Set current velocity
-     */
-    setVelocity(x, y) {
-      this.velocityX = x;
-      this.velocityY = y;
-    }
-    /**
-     * @zh 设置首选速度
-     * @en Set preferred velocity
-     */
-    setPreferredVelocity(x, y) {
-      this.preferredVelocityX = x;
-      this.preferredVelocityY = y;
-    }
-    /**
-     * @zh 设置首选速度朝向目标
-     * @en Set preferred velocity towards target
-     *
-     * @param targetX - @zh 目标 X @en Target X
-     * @param targetY - @zh 目标 Y @en Target Y
-     * @param currentX - @zh 当前 X（可选，默认使用 positionX）@en Current X (optional, defaults to positionX)
-     * @param currentY - @zh 当前 Y（可选，默认使用 positionY）@en Current Y (optional, defaults to positionY)
-     */
-    setPreferredVelocityTowards(targetX, targetY, currentX, currentY) {
-      const x = currentX ?? this.positionX;
-      const y = currentY ?? this.positionY;
-      const dx = targetX - x;
-      const dy = targetY - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 1e-4) {
-        const speed = Math.min(this.maxSpeed, dist);
-        this.preferredVelocityX = dx / dist * speed;
-        this.preferredVelocityY = dy / dist * speed;
-      } else {
-        this.preferredVelocityX = 0;
-        this.preferredVelocityY = 0;
-      }
-    }
-    /**
-     * @zh 应用 ORCA 计算的新速度
-     * @en Apply new velocity computed by ORCA
-     */
-    applyNewVelocity() {
-      this.velocityX = this.newVelocityX;
-      this.velocityY = this.newVelocityY;
-    }
-    /**
-     * @zh 获取新速度的长度
-     * @en Get length of new velocity
-     */
-    getNewSpeed() {
-      return Math.sqrt(this.newVelocityX * this.newVelocityX + this.newVelocityY * this.newVelocityY);
-    }
-    /**
-     * @zh 获取当前速度的长度
-     * @en Get length of current velocity
-     */
-    getCurrentSpeed() {
-      return Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY);
-    }
-    /**
-     * @zh 停止代理
-     * @en Stop the agent
-     */
-    stop() {
-      this.velocityX = 0;
-      this.velocityY = 0;
-      this.preferredVelocityX = 0;
-      this.preferredVelocityY = 0;
-      this.newVelocityX = 0;
-      this.newVelocityY = 0;
-    }
-    /**
-     * @zh 重置组件状态
-     * @en Reset component state
-     */
-    reset() {
-      this.positionX = 0;
-      this.positionY = 0;
-      this.velocityX = 0;
-      this.velocityY = 0;
-      this.preferredVelocityX = 0;
-      this.preferredVelocityY = 0;
-      this.newVelocityX = 0;
-      this.newVelocityY = 0;
-    }
-    /**
-     * @zh 组件从实体移除时调用
-     * @en Called when component is removed from entity
-     */
-    onRemovedFromEntity() {
-      this.reset();
+      __publicField$2(this, "timeHorizonObst", 1);
     }
   };
-  __name$2(_AvoidanceAgentComponent, "AvoidanceAgentComponent");
-  exports.AvoidanceAgentComponent = _AvoidanceAgentComponent;
-  _ts_decorate4([
-    st(),
-    Se({
-      type: "number",
-      label: "Radius",
-      min: 0.1,
-      max: 10
-    }),
-    _ts_metadata4("design:type", Number)
-  ], exports.AvoidanceAgentComponent.prototype, "radius", void 0);
-  _ts_decorate4([
-    st(),
-    Se({
-      type: "number",
-      label: "Max Speed",
-      min: 0.1,
-      max: 100
-    }),
-    _ts_metadata4("design:type", Number)
-  ], exports.AvoidanceAgentComponent.prototype, "maxSpeed", void 0);
-  _ts_decorate4([
+  __name$2(_ORCAConfigComponent, "ORCAConfigComponent");
+  exports.ORCAConfigComponent = _ORCAConfigComponent;
+  _ts_decorate3([
     st(),
     Se({
       type: "number",
@@ -6689,9 +8722,9 @@ var ESEngine = (function (exports) {
       min: 1,
       max: 100
     }),
-    _ts_metadata4("design:type", Number)
-  ], exports.AvoidanceAgentComponent.prototype, "neighborDist", void 0);
-  _ts_decorate4([
+    _ts_metadata3("design:type", Number)
+  ], exports.ORCAConfigComponent.prototype, "neighborDist", void 0);
+  _ts_decorate3([
     st(),
     Se({
       type: "number",
@@ -6699,9 +8732,9 @@ var ESEngine = (function (exports) {
       min: 1,
       max: 50
     }),
-    _ts_metadata4("design:type", Number)
-  ], exports.AvoidanceAgentComponent.prototype, "maxNeighbors", void 0);
-  _ts_decorate4([
+    _ts_metadata3("design:type", Number)
+  ], exports.ORCAConfigComponent.prototype, "maxNeighbors", void 0);
+  _ts_decorate3([
     st(),
     Se({
       type: "number",
@@ -6709,9 +8742,9 @@ var ESEngine = (function (exports) {
       min: 0.1,
       max: 10
     }),
-    _ts_metadata4("design:type", Number)
-  ], exports.AvoidanceAgentComponent.prototype, "timeHorizon", void 0);
-  _ts_decorate4([
+    _ts_metadata3("design:type", Number)
+  ], exports.ORCAConfigComponent.prototype, "timeHorizon", void 0);
+  _ts_decorate3([
     st(),
     Se({
       type: "number",
@@ -6719,383 +8752,15 @@ var ESEngine = (function (exports) {
       min: 0.1,
       max: 10
     }),
-    _ts_metadata4("design:type", Number)
-  ], exports.AvoidanceAgentComponent.prototype, "timeHorizonObst", void 0);
-  _ts_decorate4([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Enabled"
-    }),
-    _ts_metadata4("design:type", Boolean)
-  ], exports.AvoidanceAgentComponent.prototype, "enabled", void 0);
-  _ts_decorate4([
-    st(),
-    Se({
-      type: "boolean",
-      label: "Auto Apply"
-    }),
-    _ts_metadata4("design:type", Boolean)
-  ], exports.AvoidanceAgentComponent.prototype, "autoApplyVelocity", void 0);
-  exports.AvoidanceAgentComponent = _ts_decorate4([
-    X("AvoidanceAgent"),
+    _ts_metadata3("design:type", Number)
+  ], exports.ORCAConfigComponent.prototype, "timeHorizonObst", void 0);
+  exports.ORCAConfigComponent = _ts_decorate3([
+    X("ORCAConfig"),
     nt({
       version: 1,
-      typeId: "AvoidanceAgent"
+      typeId: "ORCAConfig"
     })
-  ], exports.AvoidanceAgentComponent);
-  function _ts_decorate5(decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-  }
-  __name$2(_ts_decorate5, "_ts_decorate");
-  function _ts_metadata5(k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-  }
-  __name$2(_ts_metadata5, "_ts_metadata");
-  var _AvoidanceWorldComponent = class _AvoidanceWorldComponent extends Xe {
-    constructor() {
-      super(...arguments);
-      // =========================================================================
-      // ORCA 配置 | ORCA Configuration
-      // =========================================================================
-      /**
-       * @zh 默认时间视野（代理）
-       * @en Default time horizon for agents
-       */
-      __publicField$2(this, "defaultTimeHorizon", DEFAULT_ORCA_CONFIG.defaultTimeHorizon);
-      /**
-       * @zh 默认时间视野（障碍物）
-       * @en Default time horizon for obstacles
-       */
-      __publicField$2(this, "defaultTimeHorizonObst", DEFAULT_ORCA_CONFIG.defaultTimeHorizonObst);
-      /**
-       * @zh 时间步长
-       * @en Time step
-       */
-      __publicField$2(this, "timeStep", DEFAULT_ORCA_CONFIG.timeStep);
-      // =========================================================================
-      // 运行时实例（不序列化）| Runtime Instances (not serialized)
-      // =========================================================================
-      /**
-       * @zh ORCA 求解器实例
-       * @en ORCA solver instance
-       */
-      __publicField$2(this, "solver", null);
-      /**
-       * @zh KD-Tree 实例
-       * @en KD-Tree instance
-       */
-      __publicField$2(this, "kdTree", null);
-      /**
-       * @zh 静态障碍物列表
-       * @en List of static obstacles
-       */
-      __publicField$2(this, "obstacles", []);
-      /**
-       * @zh 是否已初始化
-       * @en Whether initialized
-       */
-      __publicField$2(this, "initialized", false);
-      // =========================================================================
-      // 统计信息 | Statistics
-      // =========================================================================
-      /**
-       * @zh 当前代理数量
-       * @en Current agent count
-       */
-      __publicField$2(this, "agentCount", 0);
-      /**
-       * @zh 本帧处理的代理数
-       * @en Agents processed this frame
-       */
-      __publicField$2(this, "agentsProcessedThisFrame", 0);
-      /**
-       * @zh 本帧 ORCA 计算耗时（毫秒）
-       * @en ORCA computation time this frame (ms)
-       */
-      __publicField$2(this, "computeTimeMs", 0);
-    }
-    // =========================================================================
-    // 公共方法 | Public Methods
-    // =========================================================================
-    /**
-     * @zh 获取 ORCA 配置
-     * @en Get ORCA configuration
-     */
-    getConfig() {
-      return {
-        defaultTimeHorizon: this.defaultTimeHorizon,
-        defaultTimeHorizonObst: this.defaultTimeHorizonObst,
-        timeStep: this.timeStep
-      };
-    }
-    /**
-     * @zh 添加静态障碍物
-     * @en Add static obstacle
-     *
-     * @param obstacle - @zh 障碍物（顶点列表，逆时针顺序）@en Obstacle (vertex list, counter-clockwise)
-     */
-    addObstacle(obstacle) {
-      this.obstacles.push(obstacle);
-    }
-    /**
-     * @zh 添加矩形障碍物
-     * @en Add rectangular obstacle
-     *
-     * @param x - @zh 左下角 X @en Bottom-left X
-     * @param y - @zh 左下角 Y @en Bottom-left Y
-     * @param width - @zh 宽度 @en Width
-     * @param height - @zh 高度 @en Height
-     */
-    addRectObstacle(x, y, width, height) {
-      this.obstacles.push({
-        vertices: [
-          {
-            x,
-            y
-          },
-          {
-            x: x + width,
-            y
-          },
-          {
-            x: x + width,
-            y: y + height
-          },
-          {
-            x,
-            y: y + height
-          }
-        ]
-      });
-    }
-    /**
-     * @zh 移除所有障碍物
-     * @en Remove all obstacles
-     */
-    clearObstacles() {
-      this.obstacles = [];
-    }
-    /**
-     * @zh 重置统计信息
-     * @en Reset statistics
-     */
-    resetStats() {
-      this.agentsProcessedThisFrame = 0;
-      this.computeTimeMs = 0;
-    }
-    /**
-     * @zh 组件从实体移除时调用
-     * @en Called when component is removed from entity
-     */
-    onRemovedFromEntity() {
-      this.solver = null;
-      this.kdTree = null;
-      this.obstacles = [];
-      this.initialized = false;
-    }
-  };
-  __name$2(_AvoidanceWorldComponent, "AvoidanceWorldComponent");
-  exports.AvoidanceWorldComponent = _AvoidanceWorldComponent;
-  _ts_decorate5([
-    st(),
-    Se({
-      type: "number",
-      label: "Time Horizon",
-      min: 0.1,
-      max: 10
-    }),
-    _ts_metadata5("design:type", Number)
-  ], exports.AvoidanceWorldComponent.prototype, "defaultTimeHorizon", void 0);
-  _ts_decorate5([
-    st(),
-    Se({
-      type: "number",
-      label: "Time Horizon Obst",
-      min: 0.1,
-      max: 10
-    }),
-    _ts_metadata5("design:type", Number)
-  ], exports.AvoidanceWorldComponent.prototype, "defaultTimeHorizonObst", void 0);
-  _ts_decorate5([
-    st(),
-    Se({
-      type: "number",
-      label: "Time Step",
-      min: 1e-3,
-      max: 0.1
-    }),
-    _ts_metadata5("design:type", Number)
-  ], exports.AvoidanceWorldComponent.prototype, "timeStep", void 0);
-  exports.AvoidanceWorldComponent = _ts_decorate5([
-    X("AvoidanceWorld"),
-    nt({
-      version: 1,
-      typeId: "AvoidanceWorld"
-    })
-  ], exports.AvoidanceWorldComponent);
-  function _ts_decorate6(decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-  }
-  __name$2(_ts_decorate6, "_ts_decorate");
-  function _ts_metadata6(k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-  }
-  __name$2(_ts_metadata6, "_ts_metadata");
-  var _LocalAvoidanceSystem = class _LocalAvoidanceSystem extends _t {
-    constructor() {
-      super(lt.all(exports.AvoidanceAgentComponent));
-      __publicField$2(this, "worldEntity", null);
-      __publicField$2(this, "worldComponent", null);
-      __publicField$2(this, "solver", null);
-      __publicField$2(this, "kdTree", null);
-    }
-    /**
-     * @zh 系统初始化
-     * @en System initialization
-     */
-    onInitialize() {
-      this.findWorldEntity();
-      this.initializeSolver();
-    }
-    /**
-     * @zh 系统激活时调用
-     * @en Called when system is enabled
-     */
-    onEnable() {
-      this.findWorldEntity();
-    }
-    /**
-     * @zh 处理实体
-     * @en Process entities
-     */
-    process(entities) {
-      if (entities.length === 0) return;
-      if (!this.solver) {
-        this.initializeSolver();
-      }
-      const startTime = performance.now();
-      const agents = this.collectAgentData(entities);
-      this.kdTree.build(agents);
-      const obstacles = this.worldComponent?.obstacles ?? [];
-      const deltaTime = this.worldComponent?.timeStep ?? 1 / 60;
-      for (let i = 0; i < entities.length; i++) {
-        const entity = entities[i];
-        const component = entity.getComponent(exports.AvoidanceAgentComponent);
-        if (!component.enabled) continue;
-        const agent = agents[i];
-        const neighborResults = this.kdTree.queryNeighbors(agent.position, agent.neighborDist, agent.maxNeighbors, agent.id);
-        const neighbors = neighborResults.map((r) => r.agent);
-        const newVelocity = this.solver.computeNewVelocity(agent, neighbors, obstacles, deltaTime);
-        component.newVelocityX = newVelocity.x;
-        component.newVelocityY = newVelocity.y;
-        if (component.autoApplyVelocity) {
-          component.applyNewVelocity();
-        }
-      }
-      const endTime = performance.now();
-      if (this.worldComponent) {
-        this.worldComponent.agentCount = entities.length;
-        this.worldComponent.agentsProcessedThisFrame = entities.length;
-        this.worldComponent.computeTimeMs = endTime - startTime;
-      }
-    }
-    // =========================================================================
-    // 私有方法 | Private Methods
-    // =========================================================================
-    /**
-     * @zh 查找世界实体
-     * @en Find world entity
-     */
-    findWorldEntity() {
-      if (!this.scene) return;
-      const entities = this.scene.entities.findEntitiesWithComponent(exports.AvoidanceWorldComponent);
-      if (entities.length > 0) {
-        const entity = entities[0];
-        const worldComp = entity.getComponent(exports.AvoidanceWorldComponent);
-        if (worldComp) {
-          this.worldEntity = entity;
-          this.worldComponent = worldComp;
-          if (this.solver && !worldComp.solver) {
-            worldComp.solver = this.solver;
-          }
-          if (this.kdTree && !worldComp.kdTree) {
-            worldComp.kdTree = this.kdTree;
-          }
-          worldComp.initialized = true;
-        }
-      }
-    }
-    /**
-     * @zh 初始化求解器
-     * @en Initialize solver
-     */
-    initializeSolver() {
-      const config = this.worldComponent?.getConfig();
-      this.solver = createORCASolver(config);
-      this.kdTree = createKDTree();
-      if (this.worldComponent) {
-        this.worldComponent.solver = this.solver;
-        this.worldComponent.kdTree = this.kdTree;
-      }
-    }
-    /**
-     * @zh 收集代理数据
-     * @en Collect agent data
-     */
-    collectAgentData(entities) {
-      const agents = [];
-      for (const entity of entities) {
-        const avoidance = entity.getComponent(exports.AvoidanceAgentComponent);
-        const pathAgent = entity.getComponent(exports.PathfindingAgentComponent);
-        if (pathAgent) {
-          avoidance.positionX = pathAgent.x;
-          avoidance.positionY = pathAgent.y;
-          const waypoint = pathAgent.getNextWaypoint();
-          if (waypoint && avoidance.preferredVelocityX === 0 && avoidance.preferredVelocityY === 0) {
-            avoidance.setPreferredVelocityTowards(waypoint.x, waypoint.y);
-          }
-        }
-        agents.push({
-          id: entity.id,
-          position: {
-            x: avoidance.positionX,
-            y: avoidance.positionY
-          },
-          velocity: {
-            x: avoidance.velocityX,
-            y: avoidance.velocityY
-          },
-          preferredVelocity: {
-            x: avoidance.preferredVelocityX,
-            y: avoidance.preferredVelocityY
-          },
-          radius: avoidance.radius,
-          maxSpeed: avoidance.maxSpeed,
-          neighborDist: avoidance.neighborDist,
-          maxNeighbors: avoidance.maxNeighbors,
-          timeHorizon: avoidance.timeHorizon,
-          timeHorizonObst: avoidance.timeHorizonObst
-        });
-      }
-      return agents;
-    }
-  };
-  __name$2(_LocalAvoidanceSystem, "LocalAvoidanceSystem");
-  exports.LocalAvoidanceSystem = _LocalAvoidanceSystem;
-  exports.LocalAvoidanceSystem = _ts_decorate6([
-    K("LocalAvoidance", {
-      updateOrder: 50
-    }),
-    _ts_metadata6("design:type", Function),
-    _ts_metadata6("design:paramtypes", [])
-  ], exports.LocalAvoidanceSystem);
+  ], exports.ORCAConfigComponent);
 
   var __defProp$1 = Object.defineProperty;
   var __defNormalProp$1 = (obj, key, value) => key in obj ? __defProp$1(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
@@ -10831,11 +12496,14 @@ var ESEngine = (function (exports) {
   exports.AStarPathfinder = AStarPathfinder;
   exports.Circle = s;
   exports.ClientPrediction = ClientPrediction;
+  exports.CollisionResolverAdapter = CollisionResolverAdapter;
   exports.Color = l;
   exports.Component = Xe;
   exports.Core = Ss;
   exports.DEFAULT_AGENT_PARAMS = DEFAULT_AGENT_PARAMS;
+  exports.DEFAULT_FLOW_CONTROLLER_CONFIG = DEFAULT_FLOW_CONTROLLER_CONFIG;
   exports.DEFAULT_ORCA_CONFIG = DEFAULT_ORCA_CONFIG;
+  exports.DEFAULT_ORCA_PARAMS = DEFAULT_ORCA_PARAMS;
   exports.ECSComponent = X;
   exports.ECSSystem = K;
   exports.Emitter = Ms;
@@ -10850,9 +12518,11 @@ var ESEngine = (function (exports) {
   exports.FixedTransformState = FixedTransformState;
   exports.FixedTransformStateWithVelocity = FixedTransformStateWithVelocity;
   exports.FixedVector2 = u;
+  exports.FlowController = FlowController;
   exports.GlobalManager = As;
   exports.GridMap = GridMap;
   exports.GridPathfinder = GridPathfinder;
+  exports.GridPathfinderAdapter = GridPathfinderAdapter;
   exports.HPAPathfinder = HPAPathfinder;
   exports.HermiteTransformInterpolator = HermiteTransformInterpolator;
   exports.IncrementalAStarPathfinder = IncrementalAStarPathfinder;
@@ -10864,7 +12534,11 @@ var ESEngine = (function (exports) {
   exports.MathUtils = c;
   exports.Matrix3 = r;
   exports.NavMesh = NavMesh;
+  exports.NavMeshPathPlannerAdapter = NavMeshPathPlannerAdapter;
+  exports.NavigationState = NavigationState;
+  exports.ORCALocalAvoidanceAdapter = ORCALocalAvoidanceAdapter;
   exports.ORCASolver = ORCASolver;
+  exports.PassPermission = PassPermission;
   exports.PassiveSystem = Ds;
   exports.Polygon = i;
   exports.ProcessingSystem = ks;
@@ -10882,21 +12556,28 @@ var ESEngine = (function (exports) {
   exports.WorldManager = _s;
   exports.chebyshevDistance = chebyshevDistance;
   exports.createAStarPathfinder = createAStarPathfinder;
+  exports.createAStarPlanner = createAStarPlanner;
   exports.createCatmullRomSmoother = createCatmullRomSmoother;
   exports.createClientPrediction = createClientPrediction;
   exports.createCombinedSmoother = createCombinedSmoother;
+  exports.createDefaultCollisionResolver = createDefaultCollisionResolver;
   exports.createFixedClientPrediction = createFixedClientPrediction;
   exports.createFixedHermiteTransformInterpolator = createFixedHermiteTransformInterpolator;
   exports.createFixedMovementPositionExtractor = createFixedMovementPositionExtractor;
   exports.createFixedMovementPredictor = createFixedMovementPredictor;
   exports.createFixedSnapshotBuffer = createFixedSnapshotBuffer;
   exports.createFixedTransformInterpolator = createFixedTransformInterpolator;
+  exports.createFlowController = createFlowController;
   exports.createGridMap = createGridMap;
+  exports.createHPAPlanner = createHPAPlanner;
   exports.createHermiteTransformInterpolator = createHermiteTransformInterpolator;
+  exports.createJPSPlanner = createJPSPlanner;
   exports.createKDTree = createKDTree;
   exports.createLineOfSightSmoother = createLineOfSightSmoother;
   exports.createLogger = $;
   exports.createNavMesh = createNavMesh;
+  exports.createNavMeshPathPlanner = createNavMeshPathPlanner;
+  exports.createORCAAvoidance = createORCAAvoidance;
   exports.createORCASolver = createORCASolver;
   exports.createSnapshotBuffer = createSnapshotBuffer;
   exports.createTransformInterpolator = createTransformInterpolator;

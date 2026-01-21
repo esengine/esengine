@@ -12,81 +12,94 @@ ORCA 是 RVO (Reciprocal Velocity Obstacles) 的改进版本，被广泛应用�
 ### 特性
 
 - 高效的多代理碰撞避让
-- 支持静态障碍物
+- 支持静态和动态障碍物
 - 基于 KD-Tree 的空间索引加速邻居查询
-- 与 ECS 框架无缝集成
+- 与 NavigationSystem 无缝集成
 - 可配置的避让参数
 
-## 基本用法
+## 与 NavigationSystem 集成（推荐）
 
-### 1. 创建避让世界
+通过 `NavigationSystem` 的可插拔架构使用 ORCA 避让：
+
+### 1. 创建导航系统
 
 ```typescript
-import { AvoidanceWorldComponent } from '@esengine/pathfinding/ecs';
-import { Polygon } from '@esengine/ecs-framework-math';
+import {
+    NavigationSystem,
+    NavigationAgentComponent,
+    ORCAConfigComponent,  // 可选：用于自定义每个代理的 ORCA 参数
+    createNavMeshPathPlanner,
+    createORCAAvoidance,
+    createDefaultCollisionResolver
+} from '@esengine/pathfinding/ecs';
 
-// 创建场景中的避让世界实体
-const worldEntity = scene.createEntity('AvoidanceWorld');
-const world = worldEntity.addComponent(new AvoidanceWorldComponent());
-
-// 可选：添加静态障碍物（如墙壁）
-// 注意：障碍物顶点必须按逆时针（CCW）顺序排列
-world.addRectObstacle(0, 0, 100, 10);  // 矩形障碍物
-world.addObstacle({
-    // 使用 Polygon.ensureCCW 确保正确顺序
-    // Y 轴向下的坐标系（如 Canvas）需要传入 true
-    vertices: Polygon.ensureCCW([
-        { x: 0, y: 0 },
-        { x: 10, y: 0 },
-        { x: 10, y: 10 },
-        { x: 0, y: 10 }
-    ], true)  // Canvas 坐标系用 true
+// 创建可插拔的导航系统
+const navSystem = new NavigationSystem({
+    enablePathPlanning: true,
+    enableLocalAvoidance: true,      // 启用 ORCA 避让
+    enableCollisionResolution: true
 });
+
+// 设置寻路器
+navSystem.setPathPlanner(createNavMeshPathPlanner(navMesh));
+
+// 设置 ORCA 局部避让
+navSystem.setLocalAvoidance(createORCAAvoidance({
+    defaultTimeHorizon: 2.0,
+    defaultTimeHorizonObst: 1.0,
+    timeStep: 1/60
+}));
+
+// 设置碰撞解决器
+navSystem.setCollisionResolver(createDefaultCollisionResolver());
+
+scene.addSystem(navSystem);
 ```
 
-### 2. 创建避让代理
+### 2. 创建导航代理
 
 ```typescript
-import { AvoidanceAgentComponent } from '@esengine/pathfinding/ecs';
-
 // 为每个需要避让的实体添加组件
 const agentEntity = scene.createEntity('Agent');
-const agent = agentEntity.addComponent(new AvoidanceAgentComponent());
+const agent = agentEntity.addComponent(new NavigationAgentComponent());
 
-// 配置代理参数
+// 核心导航参数
 agent.radius = 0.5;           // 代理半径
 agent.maxSpeed = 5;           // 最大速度
-agent.neighborDist = 10;      // 邻居搜索距离
-agent.maxNeighbors = 10;      // 最大邻居数量
-agent.timeHorizon = 2;        // 时间视野（代理）
-agent.timeHorizonObst = 1;    // 时间视野（障碍物）
+
+// 可选：添加 ORCA 配置组件自定义避让参数
+const orcaConfig = agentEntity.addComponent(new ORCAConfigComponent());
+orcaConfig.neighborDist = 10;      // 邻居搜索距离
+orcaConfig.maxNeighbors = 10;      // 最大邻居数量
+orcaConfig.timeHorizon = 2;        // 时间视野（代理）
+orcaConfig.timeHorizonObst = 1;    // 时间视野（障碍物）
+
+// 设置目标位置
+agent.setDestination(100, 100);
 ```
 
-### 3. 添加系统
+### 3. 添加障碍物
 
 ```typescript
-import { LocalAvoidanceSystem } from '@esengine/pathfinding/ecs';
+import { Polygon } from '@esengine/ecs-framework-math';
 
-// 添加局部避让系统
-scene.addSystem(new LocalAvoidanceSystem());
-```
+// 静态障碍物（路径规划器绕开）
+navSystem.addStaticObstacle({
+    vertices: Polygon.ensureCCW([
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 200, y: 200 },
+        { x: 100, y: 200 }
+    ], true)  // Canvas 坐标系用 true
+});
 
-### 4. 设置期望速度
+// 动态障碍物（ORCA 实时避让）
+navSystem.addDynamicObstacle({
+    vertices: [{ x: 300, y: 100 }, { x: 350, y: 100 }, { x: 350, y: 150 }, { x: 300, y: 150 }]
+});
 
-```typescript
-// 每帧更新代理的期望速度（会使用代理当前位置计算方向）
-agent.setPreferredVelocityTowards(targetX, targetY);
-
-// 或指定当前位置
-agent.setPreferredVelocityTowards(targetX, targetY, currentX, currentY);
-
-// 或直接设置
-agent.preferredVelocityX = 3;
-agent.preferredVelocityY = 2;
-
-// 其他有用的方法
-agent.stop();              // 停止代理
-agent.applyNewVelocity();  // 手动应用 ORCA 计算的新速度
+// 清除所有动态障碍物
+navSystem.clearDynamicObstacles();
 ```
 
 ## 直接使用 ORCA 求解器
@@ -145,10 +158,6 @@ const obstacles: IObstacle[] = [
 // 构建 KD-Tree
 kdTree.build(agents);
 
-// KD-Tree 其他方法
-kdTree.clear();              // 清空索引
-console.log(kdTree.agentCount); // 获取代理数量
-
 // 为每个代理计算新速度
 for (const agent of agents) {
     // 查询邻居（返回 INeighborResult[]）
@@ -177,54 +186,26 @@ for (const agent of agents) {
 
 ## 配置参数说明
 
-### 代理参数 (AvoidanceAgentComponent)
+### 代理参数 (NavigationAgentComponent)
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `radius` | 0.5 | 代理碰撞半径 |
 | `maxSpeed` | 5.0 | 最大移动速度 |
+| `enabled` | true | 是否启用导航 |
+
+### ORCA 参数 (ORCAConfigComponent)
+
+可选组件，用于自定义每个代理的 ORCA 避让参数：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
 | `neighborDist` | 15.0 | 邻居搜索距离 |
 | `maxNeighbors` | 10 | 最大邻居数量 |
 | `timeHorizon` | 2.0 | 对其他代理的预测时间 |
 | `timeHorizonObst` | 1.0 | 对障碍物的预测时间 |
-| `enabled` | true | 是否启用避让 |
-| `autoApplyVelocity` | true | 是否自动应用计算的新速度 |
-
-### 代理方法 (AvoidanceAgentComponent)
-
-| 方法 | 说明 |
-|------|------|
-| `setPosition(x, y)` | 设置代理位置 |
-| `setVelocity(x, y)` | 设置当前速度 |
-| `setPreferredVelocity(x, y)` | 设置期望速度 |
-| `setPreferredVelocityTowards(targetX, targetY, currentX?, currentY?)` | 设置朝向目标的期望速度 |
-| `applyNewVelocity()` | 手动应用 ORCA 计算的新速度 |
-| `getNewSpeed()` | 获取新速度的大小（标量） |
-| `getCurrentSpeed()` | 获取当前速度的大小（标量） |
-| `stop()` | 停止代理（清零所有速度） |
-| `reset()` | 重置组件所有状态 |
-
-### 世界参数 (AvoidanceWorldComponent)
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `defaultTimeHorizon` | 2.0 | 默认代理时间视野 |
-| `defaultTimeHorizonObst` | 1.0 | 默认障碍物时间视野 |
-| `timeStep` | 1/60 | 仿真时间步长 |
-
-### 世界方法 (AvoidanceWorldComponent)
-
-| 方法 | 说明 |
-|------|------|
-| `addObstacle(obstacle)` | 添加静态障碍物（顶点需 CCW 顺序） |
-| `addRectObstacle(x, y, width, height)` | 添加矩形障碍物 |
-| `clearObstacles()` | 移除所有障碍物 |
-| `resetStats()` | 重置统计信息 |
-| `getConfig()` | 获取 ORCA 配置对象 |
 
 ### 求解器配置 (IORCASolverConfig)
-
-直接使用 ORCA 求解器时的配置参数：
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -232,28 +213,7 @@ for (const agent of agents) {
 | `defaultTimeHorizonObst` | 1.0 | 默认障碍物时间视野 |
 | `timeStep` | 1/60 | 仿真时间步长 |
 | `epsilon` | 0.00001 | 数值精度阈值 |
-
-## 与寻路系统集成
-
-ORCA 可以与寻路系统配合使用，实现完整的导航方案：
-
-```typescript
-import {
-    PathfindingAgentComponent,
-    PathfindingSystem,
-    AvoidanceAgentComponent,
-    LocalAvoidanceSystem
-} from '@esengine/pathfinding/ecs';
-
-// 同一实体添加两个组件
-const entity = scene.createEntity('NavigatingAgent');
-entity.addComponent(new PathfindingAgentComponent());
-entity.addComponent(new AvoidanceAgentComponent());
-
-// 寻路系统计算路径，局部避让系统处理动态避让
-scene.addSystem(new PathfindingSystem());
-scene.addSystem(new LocalAvoidanceSystem());
-```
+| `yAxisDown` | false | 是否使用 Y 轴向下坐标系（如 Canvas） |
 
 ## ORCA 算法原理
 
@@ -274,26 +234,97 @@ ORCA 基于"速度障碍"概念：
              ●  最优新速度
 ```
 
+## 流量控制器
+
+当多个代理在狭窄区域（如走廊、门口）相遇时，ORCA 可能无法找到可行的速度解。流量控制器通过排队机制解决这一问题：
+
+### 为什么需要流量控制器？
+
+在以下场景中，ORCA 算法可能会产生不理想的行为：
+
+- **狭窄通道**：多个代理试图同时通过，ORCA 约束过多导致无可行解
+- **交叉路口**：代理相向而行，可能出现"死锁"或反复抖动
+- **门口拥堵**：大量代理聚集在入口处，互相阻挡
+
+流量控制器通过检测拥堵区域并管理通行顺序来解决这些问题。
+
+### 基本用法
+
+```typescript
+import {
+    NavigationSystem,
+    createFlowController,
+    PassPermission
+} from '@esengine/pathfinding/ecs';
+
+// 创建导航系统
+const navSystem = new NavigationSystem({
+    enableFlowControl: true  // 启用流量控制
+});
+
+// 创建流量控制器
+const flowController = createFlowController({
+    detectionRadius: 3.0,         // 检测半径：多近的代理算作一组
+    minAgentsForCongestion: 3,    // 最小代理数：多少个代理触发拥堵检测
+    defaultCapacity: 2,           // 默认容量：同时允许多少代理通过
+    waitPointDistance: 1.5        // 等待点距离：排队时的间隔
+});
+
+// 设置流量控制器
+navSystem.setFlowController(flowController);
+
+// 添加静态拥堵区域（如门口）
+const doorZoneId = flowController.addStaticZone(
+    { x: 50, y: 50 },  // 中心点
+    5.0,               // 半径
+    1                  // 容量（一次只允许 1 个代理通过）
+);
+
+// 运行时移除
+flowController.removeStaticZone(doorZoneId);
+```
+
+### 通行权限
+
+流量控制器为每个代理返回三种权限之一：
+
+| 权限 | 说明 | 处理方式 |
+|------|------|----------|
+| `Proceed` | 正常通行 | 执行 ORCA 避让 |
+| `Wait` | 排队等待 | 移动到等待位置并停止 |
+| `Yield` | 减速让行 | 降低速度，执行 ORCA |
+
+### 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `detectionRadius` | 3.0 | 检测半径，决定多近的代理被视为一组 |
+| `minAgentsForCongestion` | 3 | 触发拥堵检测的最小代理数 |
+| `defaultCapacity` | 2 | 默认区域容量：同时允许通过的代理数 |
+| `waitPointDistance` | 1.5 | 等待点距离（到拥堵区域边缘） |
+| `yieldSpeedMultiplier` | 0.3 | 让路时的速度倍率 (0-1) |
+
+## NavigationSystem 处理流程
+
+```
+1. 路径规划 → 2. 流量控制 → 3. 局部避让 → 4. 碰撞解决
+     ↓              ↓              ↓              ↓
+  计算路径     检查通行权限    计算避让速度    验证并修正
+ (静态障碍)                    (动态障碍)    (所有障碍)
+```
+
+**架构说明**：NavigationSystem 将障碍物分为静态和动态两类：
+- **静态障碍物**：由路径规划器（A*/NavMesh）处理，计算绕开它们的全局路径
+- **动态障碍物**：由 ORCA 处理，实时避让移动中的障碍物
+
 ## 性能优化建议
 
 1. **调整 `neighborDist`**：减小搜索距离可以降低邻居查询开销
 2. **限制 `maxNeighbors`**：通常 5-10 个邻居就足够了
 3. **使用空间分区**：KD-Tree 已内置，确保代理数量较大时自动优化
 4. **减少障碍物顶点**：简化静态障碍物的几何形状
-
-## 统计信息
-
-获取运行时统计信息：
-
-```typescript
-const world = entity.getComponent(AvoidanceWorldComponent);
-
-// 获取统计信息
-console.log('代理数量:', world.agentCount);
-console.log('本帧处理数:', world.agentsProcessedThisFrame);
-console.log('计算耗时:', world.computeTimeMs, 'ms');
-```
+5. **启用流量控制**：在狭窄通道场景中使用流量控制器避免 ORCA 无解
 
 ## 在线演示
 
-查看 [ORCA 局部避让交互式演示](/esengine/examples/orca-avoidance-demo/) 体验不同场景和参数配置的效果。
+查看 [NavigationSystem 导航演示](/examples/navigation-system-demo/) 体验 ORCA 局部避让与其他导航功能的结合使用。

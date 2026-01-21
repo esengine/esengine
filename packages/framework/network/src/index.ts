@@ -143,6 +143,18 @@ export type {
     IFixedTransformStateWithVelocityRaw,
     IFixedInterpolator,
     IFixedExtrapolator,
+    // Fixed-point snapshot buffer types
+    IFixedStateSnapshot,
+    IFixedSnapshotBufferConfig,
+    IFixedInterpolationResult,
+    // Fixed-point client prediction types
+    IFixedInputSnapshot,
+    IFixedPredictedState,
+    IFixedPredictor,
+    IFixedStatePositionExtractor,
+    FixedClientPredictionConfig,
+    IFixedMovementInput,
+    IFixedMovementState,
 } from './sync'
 
 export {
@@ -172,6 +184,13 @@ export {
     FixedHermiteTransformInterpolator,
     createFixedTransformInterpolator,
     createFixedHermiteTransformInterpolator,
+    // Fixed-point snapshot buffer and prediction
+    FixedSnapshotBuffer,
+    createFixedSnapshotBuffer,
+    FixedClientPrediction,
+    createFixedClientPrediction,
+    createFixedMovementPredictor,
+    createFixedMovementPositionExtractor,
 } from './sync'
 
 // ============================================================================

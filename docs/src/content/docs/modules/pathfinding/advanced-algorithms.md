@@ -120,7 +120,11 @@ const result = hpa.findPath(10, 10, 990, 990);
 
 ```typescript
 interface IHPAConfig {
-    clusterSize?: number;  // 区块大小，默认 16
+    clusterSize: number;           // 区块大小，默认 64
+    maxEntranceWidth: number;      // 最大入口宽度，默认 16
+    cacheInternalPaths: boolean;   // 内部路径缓存，默认 true
+    entranceStrategy?: 'middle' | 'end';  // 入口策略，默认 'end'
+    lazyIntraEdges?: boolean;      // 延迟计算 intra-edges，默认 true
 }
 ```
 

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createORCASolver, createKDTree, type IAvoidanceAgent, type IObstacle } from '../src/avoidance';
+import { createORCASolver, createKDTree, createCollisionResolver, type IAvoidanceAgent, type IObstacle } from '../src/avoidance';
 import { solveORCALinearProgram } from '../src/avoidance/LinearProgram';
 import type { IORCALine } from '../src/avoidance/ILocalAvoidance';
 
@@ -54,17 +54,19 @@ describe('LinearProgram', () => {
         const lines: IORCALine[] = [];
         const result = solveORCALinearProgram(lines, 0, 5, { x: 3, y: 0 });
 
-        expect(result.x).toBeCloseTo(3, 5);
-        expect(result.y).toBeCloseTo(0, 5);
+        // @zh solveORCALinearProgram 返回 IORCALPResult，速度在 velocity 属性中
+        // @en solveORCALinearProgram returns IORCALPResult, velocity is in velocity property
+        expect(result.velocity.x).toBeCloseTo(3, 5);
+        expect(result.velocity.y).toBeCloseTo(0, 5);
     });
 
     it('should clamp to maxSpeed when preferred velocity exceeds it', () => {
         const lines: IORCALine[] = [];
         const result = solveORCALinearProgram(lines, 0, 2, { x: 10, y: 0 });
 
-        expect(velocityMagnitude(result)).toBeCloseTo(2, 5);
-        expect(result.x).toBeCloseTo(2, 5);
-        expect(result.y).toBeCloseTo(0, 5);
+        expect(velocityMagnitude(result.velocity)).toBeCloseTo(2, 5);
+        expect(result.velocity.x).toBeCloseTo(2, 5);
+        expect(result.velocity.y).toBeCloseTo(0, 5);
     });
 
     it('should satisfy single constraint line', () => {
@@ -76,7 +78,7 @@ describe('LinearProgram', () => {
         ];
 
         const result = solveORCALinearProgram(lines, 0, 5, { x: 0, y: -1 });
-        expect(result.y).toBeGreaterThanOrEqual(-0.0001);
+        expect(result.velocity.y).toBeGreaterThanOrEqual(-0.0001);
     });
 
     it('should find intersection of two constraints', () => {
@@ -93,8 +95,8 @@ describe('LinearProgram', () => {
 
         const result = solveORCALinearProgram(lines, 0, 5, { x: -1, y: -1 });
 
-        expect(result.x).toBeGreaterThanOrEqual(-0.0001);
-        expect(result.y).toBeGreaterThanOrEqual(-0.0001);
+        expect(result.velocity.x).toBeGreaterThanOrEqual(-0.0001);
+        expect(result.velocity.y).toBeGreaterThanOrEqual(-0.0001);
     });
 });
 
@@ -355,5 +357,165 @@ describe('ORCASolver', () => {
 
             expect(agent.position.y).toBeGreaterThan(100);
         });
+
+        it('should not push two agents into obstacle when squeezed', () => {
+            const { Polygon } = require('@esengine/ecs-framework-math');
+
+            const solver = createORCASolver({
+                defaultTimeHorizon: 2,
+                defaultTimeHorizonObst: 2,
+                timeStep: 1 / 60
+            });
+
+            // Wall at y = 0
+            const wallVertices = Polygon.ensureCCW([
+                { x: -50, y: -10 },
+                { x: 50, y: -10 },
+                { x: 50, y: 0 },
+                { x: -50, y: 0 }
+            ], false);
+
+            const obstacles: IObstacle[] = [{ vertices: wallVertices }];
+
+            // Two agents close to wall, moving toward each other
+            const agent1: IAvoidanceAgent = {
+                id: 1,
+                position: { x: -5, y: 3 },
+                velocity: { x: 2, y: 0 },
+                preferredVelocity: { x: 2, y: 0 },
+                radius: 1,
+                maxSpeed: 3,
+                neighborDist: 15,
+                maxNeighbors: 10,
+                timeHorizon: 2,
+                timeHorizonObst: 2
+            };
+
+            const agent2: IAvoidanceAgent = {
+                id: 2,
+                position: { x: 5, y: 3 },
+                velocity: { x: -2, y: 0 },
+                preferredVelocity: { x: -2, y: 0 },
+                radius: 1,
+                maxSpeed: 3,
+                neighborDist: 15,
+                maxNeighbors: 10,
+                timeHorizon: 2,
+                timeHorizonObst: 2
+            };
+
+            const dt = 1 / 60;
+            const wallY = 0;
+
+            for (let step = 0; step < 300; step++) {
+                const v1 = solver.computeNewVelocity(agent1, [agent2], obstacles, dt);
+                const v2 = solver.computeNewVelocity(agent2, [agent1], obstacles, dt);
+
+                agent1.velocity = v1;
+                agent2.velocity = v2;
+
+                agent1.position.x += v1.x * dt;
+                agent1.position.y += v1.y * dt;
+                agent2.position.x += v2.x * dt;
+                agent2.position.y += v2.y * dt;
+
+                // Check neither agent enters the wall (considering radius)
+                expect(agent1.position.y - agent1.radius).toBeGreaterThanOrEqual(wallY - 0.1);
+                expect(agent2.position.y - agent2.radius).toBeGreaterThanOrEqual(wallY - 0.1);
+            }
+        });
+    });
+});
+
+// =============================================================================
+// Collision Resolver Tests
+// =============================================================================
+
+describe('CollisionResolver', () => {
+    it('should detect circle inside polygon obstacle', () => {
+        const resolver = createCollisionResolver();
+        const obstacle: IObstacle = {
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 10, y: 0 },
+                { x: 10, y: 10 },
+                { x: 0, y: 10 }
+            ]
+        };
+
+        const collision = resolver.detectCollision({ x: 5, y: 5 }, 1, obstacle);
+        expect(collision.collided).toBe(true);
+    });
+
+    it('should detect circle intersecting polygon edge', () => {
+        const resolver = createCollisionResolver();
+        const obstacle: IObstacle = {
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 10, y: 0 },
+                { x: 10, y: 10 },
+                { x: 0, y: 10 }
+            ]
+        };
+
+        const collision = resolver.detectCollision({ x: -0.5, y: 5 }, 1, obstacle);
+        expect(collision.collided).toBe(true);
+    });
+
+    it('should not detect collision when circle is outside', () => {
+        const resolver = createCollisionResolver();
+        const obstacle: IObstacle = {
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 10, y: 0 },
+                { x: 10, y: 10 },
+                { x: 0, y: 10 }
+            ]
+        };
+
+        const collision = resolver.detectCollision({ x: -5, y: 5 }, 1, obstacle);
+        expect(collision.collided).toBe(false);
+    });
+
+    it('should resolve collision by pushing out', () => {
+        const resolver = createCollisionResolver();
+        const obstacles: IObstacle[] = [{
+            vertices: [
+                { x: 0, y: 0 },
+                { x: 10, y: 0 },
+                { x: 10, y: 10 },
+                { x: 0, y: 10 }
+            ]
+        }];
+
+        // Position slightly inside the left edge
+        const resolved = resolver.resolveCollision({ x: 0.5, y: 5 }, 1, obstacles);
+
+        // Should be pushed out to the left
+        expect(resolved.x).toBeLessThanOrEqual(0);
+    });
+
+    it('should validate and modify velocity to avoid collision', () => {
+        const resolver = createCollisionResolver();
+        const obstacles: IObstacle[] = [{
+            vertices: [
+                { x: 5, y: 0 },
+                { x: 15, y: 0 },
+                { x: 15, y: 10 },
+                { x: 5, y: 10 }
+            ]
+        }];
+
+        // Agent at x=3, moving right toward obstacle
+        const position = { x: 3, y: 5 };
+        const velocity = { x: 10, y: 0 };
+        const radius = 1;
+        const deltaTime = 0.1;
+
+        const safeVelocity = resolver.validateVelocity(position, velocity, radius, obstacles, deltaTime);
+
+        // Velocity should be modified to not enter obstacle
+        const newX = position.x + safeVelocity.x * deltaTime;
+        expect(newX + radius).toBeLessThanOrEqual(5.1);
     });
 });

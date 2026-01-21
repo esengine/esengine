@@ -152,7 +152,7 @@ inputSystem.addActionInput('jump');
 预制体工厂用于创建网络实体：
 
 ```typescript
-type PrefabFactory = (scene: Scene, spawn: MsgSpawn) => Entity;
+type PrefabFactory = (scene: Scene, spawn: SpawnData) => Entity;
 ```
 
 **完整示例：**

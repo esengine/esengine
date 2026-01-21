@@ -169,6 +169,9 @@ export function linearProgram2(
  * @zh 当 2D 线性规划失败时，使用此方法找到最小穿透的速度
  * @en When 2D LP fails, use this to find velocity with minimum penetration
  *
+ * @zh 重要：障碍物约束线（前 numObstLines 条）具有最高优先级，绝不会被违反
+ * @en Important: Obstacle constraint lines (first numObstLines) have highest priority and are never violated
+ *
  * @param lines - @zh 约束线列表 @en List of constraint lines
  * @param numObstLines - @zh 障碍物约束线数量 @en Number of obstacle constraint lines
  * @param beginLine - @zh 开始处理的线索引 @en Index of line to start processing
@@ -248,6 +251,12 @@ export function linearProgram3(
                 result.copy(tempResult);
             }
 
+            // @zh 验证结果不违反障碍物约束
+            // @en Verify result doesn't violate obstacle constraints
+            if (!verifyObstacleConstraints(lines, numObstLines, result)) {
+                result.copy(tempResult);
+            }
+
             distance = det(lines[i]!.direction, {
                 x: lines[i]!.point.x - result.x,
                 y: lines[i]!.point.y - result.y
@@ -257,31 +266,95 @@ export function linearProgram3(
 }
 
 /**
+ * @zh 验证速度是否满足所有障碍物约束
+ * @en Verify velocity satisfies all obstacle constraints
+ */
+function verifyObstacleConstraints(
+    lines: readonly IORCALine[],
+    numObstLines: number,
+    velocity: IVector2
+): boolean {
+    for (let i = 0; i < numObstLines; i++) {
+        const line = lines[i]!;
+        const detVal = det(line.direction, {
+            x: line.point.x - velocity.x,
+            y: line.point.y - velocity.y
+        });
+        if (detVal > EPSILON) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @zh ORCA 线性规划求解结果
+ * @en ORCA Linear Programming solve result
+ */
+export interface IORCALPResult {
+    /**
+     * @zh 计算得到的速度
+     * @en Computed velocity
+     */
+    velocity: Vector2;
+
+    /**
+     * @zh 是否找到可行解（满足所有约束）
+     * @en Whether a feasible solution was found (satisfies all constraints)
+     */
+    feasible: boolean;
+
+    /**
+     * @zh 违反的约束数量
+     * @en Number of violated constraints
+     */
+    violatedConstraints: number;
+}
+
+/**
  * @zh 求解 ORCA 线性规划
  * @en Solve ORCA Linear Programming
  *
  * @zh 综合使用 2D 和 3D 线性规划求解最优速度
  * @en Use both 2D and 3D LP to solve for optimal velocity
  *
+ * @zh 注意：此函数不包含回退逻辑，调用方应通过返回的 feasible 标志判断是否需要流量控制
+ * @en Note: This function does not include fallback logic, caller should check feasible flag for flow control
+ *
  * @param lines - @zh ORCA 约束线列表 @en List of ORCA constraint lines
- * @param numObstLines - @zh 障碍物约束线数量（优先级更高）@en Number of obstacle lines (higher priority)
+ * @param numObstLines - @zh 障碍物约束线数量 @en Number of obstacle lines
  * @param maxSpeed - @zh 最大速度 @en Maximum speed
  * @param preferredVelocity - @zh 首选速度 @en Preferred velocity
- * @returns @zh 计算得到的新速度 @en Computed new velocity
+ * @returns @zh 求解结果，包含速度和可行性标志 @en Solve result with velocity and feasibility flag
  */
 export function solveORCALinearProgram(
     lines: IORCALine[],
     numObstLines: number,
     maxSpeed: number,
     preferredVelocity: IVector2
-): Vector2 {
+): IORCALPResult {
     const result = new Vector2();
 
     const lineFail = linearProgram2(lines, maxSpeed, preferredVelocity, false, result);
 
-    if (lineFail < lines.length) {
+    let feasible = lineFail >= lines.length;
+    let violatedConstraints = 0;
+
+    if (!feasible) {
         linearProgram3(lines, numObstLines, lineFail, maxSpeed, result);
+        violatedConstraints = lines.length - lineFail;
     }
 
-    return result;
+    // @zh 检查是否违反障碍物约束
+    // @en Check if obstacle constraints are violated
+    if (numObstLines > 0 && !verifyObstacleConstraints(lines, numObstLines, result)) {
+        feasible = false;
+        violatedConstraints = Math.max(violatedConstraints, 1);
+    }
+
+    return {
+        velocity: result,
+        feasible,
+        violatedConstraints
+    };
 }

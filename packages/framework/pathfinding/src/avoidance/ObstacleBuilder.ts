@@ -80,17 +80,45 @@ export function createObstacleVertices(
 }
 
 /**
+ * @zh 构建障碍物顶点的选项
+ * @en Options for building obstacle vertices
+ */
+export interface IBuildObstacleOptions {
+    /**
+     * @zh 是否使用 Y 轴向下的坐标系（如 Canvas/屏幕坐标）
+     * @en Whether using Y-axis down coordinate system (like Canvas/screen coords)
+     *
+     * @zh 这会影响障碍物顶点顺序的判断
+     * @en This affects obstacle vertex order detection
+     *
+     * @default false
+     */
+    yAxisDown?: boolean;
+}
+
+/**
  * @zh 从障碍物数组创建所有障碍物顶点
  * @en Create all obstacle vertices from obstacle array
+ *
+ * @zh 自动检测并纠正顶点顺序为 CCW（逆时针）
+ * @en Automatically detects and corrects vertex order to CCW (counter-clockwise)
+ *
+ * @param obstacles - @zh 障碍物数组 @en Array of obstacles
+ * @param options - @zh 构建选项 @en Build options
  */
 export function buildObstacleVertices(
-    obstacles: readonly IObstacle[]
+    obstacles: readonly IObstacle[],
+    options: IBuildObstacleOptions = {}
 ): IObstacleVertex[] {
+    const { yAxisDown = false } = options;
     const allVertices: IObstacleVertex[] = [];
     let nextId = 0;
 
     for (const obstacle of obstacles) {
-        const vertices = createObstacleVertices(obstacle.vertices, nextId);
+        // @zh 自动确保顶点为 CCW 顺序
+        // @en Automatically ensure vertices are in CCW order
+        const ccwVertices = ensureCCW([...obstacle.vertices], yAxisDown);
+        const vertices = createObstacleVertices(ccwVertices, nextId);
         allVertices.push(...vertices);
         nextId += vertices.length;
     }

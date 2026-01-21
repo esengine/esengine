@@ -218,6 +218,17 @@ export interface IORCASolverConfig {
      * @en Numerical precision threshold
      */
     epsilon?: number;
+
+    /**
+     * @zh 是否使用 Y 轴向下的坐标系（如 Canvas/屏幕坐标）
+     * @en Whether using Y-axis down coordinate system (like Canvas/screen coords)
+     *
+     * @zh 这会影响障碍物顶点顺序的判断（CCW 检测）
+     * @en This affects obstacle vertex order detection (CCW check)
+     *
+     * @default false
+     */
+    yAxisDown?: boolean;
 }
 
 /**
@@ -232,8 +243,8 @@ export interface IORCAResult {
     velocity: IVector2;
 
     /**
-     * @zh 是否找到可行解
-     * @en Whether a feasible solution was found
+     * @zh 是否找到可行解（满足所有约束）
+     * @en Whether a feasible solution was found (satisfies all constraints)
      */
     feasible: boolean;
 
@@ -242,6 +253,12 @@ export interface IORCAResult {
      * @en Number of ORCA lines generated
      */
     numLines: number;
+
+    /**
+     * @zh 违反的约束数量
+     * @en Number of violated constraints
+     */
+    violatedConstraints: number;
 }
 
 /**
@@ -338,7 +355,8 @@ export const DEFAULT_ORCA_CONFIG: Required<IORCASolverConfig> = {
     defaultTimeHorizon: 2.0,
     defaultTimeHorizonObst: 1.0,
     timeStep: 1 / 60,
-    epsilon: 0.00001
+    epsilon: 0.00001,
+    yAxisDown: false
 };
 
 /**

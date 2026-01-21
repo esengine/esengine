@@ -7,5 +7,7 @@ export {
     NavMesh,
     createNavMesh,
     type INavPolygon,
-    type IPortal
+    type IPortal,
+    type IDynamicObstacle,
+    type ObstacleType
 } from './NavMesh';

@@ -27,7 +27,13 @@ The package provides three separate entry points for better tree-shaking:
 import { AStarPathfinder, GridPathfinder, JPSPathfinder } from '@esengine/pathfinding';
 
 // ECS components and systems (requires @esengine/ecs-framework)
-import { PathfindingSystem, PathfindingAgentComponent } from '@esengine/pathfinding/ecs';
+import {
+    NavigationSystem,
+    NavigationAgentComponent,
+    createNavMeshPathPlanner,
+    createAStarPlanner,
+    createORCAAvoidance
+} from '@esengine/pathfinding/ecs';
 
 // Blueprint nodes (requires @esengine/blueprint)
 import { FindPathTemplate, RequestPathAsyncTemplate } from '@esengine/pathfinding/nodes';
@@ -106,6 +112,7 @@ interface IPathfindingOptions {
     heuristicWeight?: number; // Heuristic weight (>1 faster but may be suboptimal)
     allowDiagonal?: boolean;  // Allow diagonal movement (default true)
     avoidCorners?: boolean;   // Avoid corner cutting (default true)
+    agentRadius?: number;     // Agent radius for clearance from walls (default 0)
 }
 ```
 
@@ -323,13 +330,11 @@ for (let y = 30; y < 35; y++) {
 | Dynamic Updates | Easy | Requires rebuild |
 | Setup Complexity | Simple | More complex |
 
-## Interactive Demos
+## Interactive Demo
 
-Experience the pathfinding system with interactive demos:
+Experience the pathfinding system with interactive demo:
 
-- [A* Pathfinding Demo](/esengine/en/examples/astar-pathfinding-demo) - Grid pathfinding visualization
-- [Multi-Agent Pathfinding Demo](/esengine/en/examples/multi-agent-pathfinding-demo) - A* + ORCA avoidance combined
-- [ORCA Local Avoidance Demo](/esengine/en/examples/orca-avoidance-demo) - Multi-agent collision avoidance
+- [NavigationSystem Demo](/en/examples/navigation-system-demo) - Complete demonstration of pluggable navigation architecture, including NavMesh, A*, JPS, ORCA avoidance and more scenarios
 
 ## Documentation
 

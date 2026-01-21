@@ -15,7 +15,7 @@ Download the latest version from GitHub Release (Free):
 
 **[Download Cocos Node Editor v1.2.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.0)**
 
-> QQ Group: **481923584** | Website: [esengine.cn](https://esengine.github.io/esengine/)
+> QQ Group: **481923584** | Website: [esengine.cn](https://esengine.cn/)
 
 ### Installation Steps
 

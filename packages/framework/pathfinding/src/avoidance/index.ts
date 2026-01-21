@@ -57,3 +57,19 @@ export {
     KDTree,
     createKDTree
 } from './KDTree';
+
+// =============================================================================
+// 碰撞解决 | Collision Resolution
+// =============================================================================
+
+export type {
+    ICollisionResult,
+    ICollisionResolverConfig
+} from './CollisionResolver';
+
+export {
+    EMPTY_COLLISION,
+    DEFAULT_COLLISION_CONFIG,
+    CollisionResolver,
+    createCollisionResolver
+} from './CollisionResolver';

@@ -12,7 +12,8 @@
     "dependencies": {
         "@esengine/ecs-framework": "workspace:*",
         "@esengine/ecs-framework-math": "workspace:*",
-        "@esengine/pathfinding": "workspace:*"
+        "@esengine/pathfinding": "workspace:*",
+        "@esengine/network": "workspace:*"
     },
     "devDependencies": {
         "@rollup/plugin-commonjs": "^25.0.0",

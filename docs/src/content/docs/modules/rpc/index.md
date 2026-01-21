@@ -75,37 +75,38 @@ await client.call('sendMessage', { text: 'Hello!' });
 ### 3. 创建服务器
 
 ```typescript
-import { RpcServer } from '@esengine/rpc/server';
+import { serve } from '@esengine/rpc/server';
 import { chatProtocol } from './protocol';
 
-// 创建服务器
-const server = new RpcServer(chatProtocol, {
+// 创建服务器（API 处理器在配置中定义）
+const server = serve(chatProtocol, {
     port: 3000,
     onStart: (port) => console.log(`服务器启动: ws://localhost:${port}`),
-});
 
-// 注册 API 处理器
-server.handle('login', async (input, ctx) => {
-    const userId = generateUserId();
-    const token = generateToken();
+    api: {
+        login: async (input, conn) => {
+            const userId = generateUserId();
+            const token = generateToken();
 
-    // 广播用户加入
-    server.broadcast('userJoined', { username: input.username });
+            // 广播用户加入
+            server.broadcast('userJoined', { username: input.username });
 
-    return { userId, token };
-});
+            return { userId, token };
+        },
 
-server.handle('sendMessage', async (input, ctx) => {
-    const messageId = generateMessageId();
+        sendMessage: async (input, conn) => {
+            const messageId = generateMessageId();
 
-    // 广播新消息
-    server.broadcast('newMessage', {
-        from: ctx.clientId,
-        text: input.text,
-        time: Date.now(),
-    });
+            // 广播新消息
+            server.broadcast('newMessage', {
+                from: conn.id,
+                text: input.text,
+                time: Date.now(),
+            });
 
-    return { messageId };
+            return { messageId };
+        },
+    },
 });
 
 // 启动服务器

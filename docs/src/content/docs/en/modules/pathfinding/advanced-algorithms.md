@@ -120,7 +120,11 @@ const result = hpa.findPath(10, 10, 990, 990);
 
 ```typescript
 interface IHPAConfig {
-    clusterSize?: number;  // Cluster size, default 16
+    clusterSize: number;           // Cluster size, default 64
+    maxEntranceWidth: number;      // Max entrance width, default 16
+    cacheInternalPaths: boolean;   // Internal path caching, default true
+    entranceStrategy?: 'middle' | 'end';  // Entrance strategy, default 'end'
+    lazyIntraEdges?: boolean;      // Lazy intra-edge computation, default true
 }
 ```
 

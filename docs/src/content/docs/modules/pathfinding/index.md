@@ -27,7 +27,13 @@ npm install @esengine/pathfinding
 import { AStarPathfinder, GridPathfinder, JPSPathfinder } from '@esengine/pathfinding';
 
 // ECS 组件和系统（需要 @esengine/ecs-framework）
-import { PathfindingSystem, PathfindingAgentComponent } from '@esengine/pathfinding/ecs';
+import {
+    NavigationSystem,
+    NavigationAgentComponent,
+    createNavMeshPathPlanner,
+    createAStarPlanner,
+    createORCAAvoidance
+} from '@esengine/pathfinding/ecs';
 
 // 蓝图节点（需要 @esengine/blueprint）
 import { FindPathTemplate, RequestPathAsyncTemplate } from '@esengine/pathfinding/nodes';
@@ -110,6 +116,7 @@ interface IPathfindingOptions {
     heuristicWeight?: number; // 启发式权重（>1 更快但可能非最优）
     allowDiagonal?: boolean;  // 是否允许对角移动（默认 true）
     avoidCorners?: boolean;   // 是否避免穿角（默认 true）
+    agentRadius?: number;     // 代理半径，用于避免贴墙路径（默认 0）
 }
 ```
 
@@ -135,9 +142,7 @@ interface IPathfindingOptions {
 
 体验寻路系统的交互式演示：
 
-- [A* 寻路演示](/esengine/examples/astar-pathfinding-demo) - 网格寻路可视化
-- [多代理寻路演示](/esengine/examples/multi-agent-pathfinding-demo) - A* + ORCA 避让结合
-- [ORCA 局部避让演示](/esengine/examples/orca-avoidance-demo) - 多代理碰撞避让
+- [NavigationSystem 导航演示](/examples/navigation-system-demo) - 可插拔导航架构完整演示，包含 NavMesh、A*、JPS、ORCA 避让等多种场景
 
 ## 文档导航
 
