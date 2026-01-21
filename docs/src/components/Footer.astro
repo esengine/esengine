@@ -1,0 +1,30 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<div class="icp-footer">
+  <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer">
+    赣ICP备2025064788号-2
+  </a>
+</div>
+
+<style>
+  .icp-footer {
+    text-align: center;
+    padding: 1rem 0;
+    font-size: 0.875rem;
+    color: var(--sl-color-gray-3);
+    border-top: 1px solid var(--sl-color-gray-5);
+    margin-top: 1rem;
+  }
+  .icp-footer a {
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+  }
+  .icp-footer a:hover {
+    color: var(--sl-color-white);
+    text-decoration: underline;
+  }
+</style>

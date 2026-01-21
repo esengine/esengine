@@ -416,6 +416,7 @@ export default defineConfig({
       components: {
         Head: './src/components/Head.astro',
         ThemeSelect: './src/components/ThemeSelect.astro',
+        Footer: './src/components/Footer.astro',
       },
     }),
     vue(),
