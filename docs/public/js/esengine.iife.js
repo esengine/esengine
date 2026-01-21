@@ -8418,7 +8418,7 @@ var ESEngine = (function (exports) {
       }
       const activeAgents = agents.filter((x) => x.agent.isComputingPath && x.agent.currentRequestId >= 0);
       activeAgents.sort((a, b) => a.agent.priority - b.agent.priority);
-      for (const { entityId, agent } of activeAgents) {
+      for (const { agent } of activeAgents) {
         if (remainingBudget <= 0) break;
         const iterations = Math.min(remainingBudget, this.config.maxIterationsPerAgent);
         const progress = planner.step(agent.currentRequestId, iterations);
