@@ -13,7 +13,6 @@ import {
     type Entity
 } from '@esengine/ecs-framework';
 import { NavigationAgentComponent, NavigationState } from './NavigationAgentComponent';
-import { ORCAConfigComponent } from './ORCAConfigComponent';
 import type {
     IPathPlanner,
     IVector2,
@@ -807,7 +806,7 @@ export class NavigationSystem extends EntitySystem {
         // Sort by priority
         activeAgents.sort((a, b) => a.agent.priority - b.agent.priority);
 
-        for (const { entityId, agent } of activeAgents) {
+        for (const { agent } of activeAgents) {
             if (remainingBudget <= 0) break;
 
             const iterations = Math.min(remainingBudget, this.config.maxIterationsPerAgent);

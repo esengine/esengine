@@ -88,21 +88,6 @@ function closestPointOnSegment(
 }
 
 /**
- * @zh 计算点到线段的距离平方
- * @en Calculate squared distance from point to line segment
- */
-function distanceToSegmentSq(
-    point: IVector2,
-    segStart: IVector2,
-    segEnd: IVector2
-): number {
-    const closest = closestPointOnSegment(point, segStart, segEnd);
-    const dx = point.x - closest.x;
-    const dy = point.y - closest.y;
-    return dx * dx + dy * dy;
-}
-
-/**
  * @zh 检查点是否在多边形内（射线法）
  * @en Check if point is inside polygon (ray casting)
  */
