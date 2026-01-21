@@ -1,6 +1,6 @@
 {
     "name": "@esengine/demos",
-    "version": "1.0.24",
+    "version": "1.0.25",
     "private": true,
     "description": "Demo tests for ESEngine modules documentation",
     "type": "module",
