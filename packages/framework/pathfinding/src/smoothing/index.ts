@@ -13,3 +13,11 @@ export {
     createCatmullRomSmoother,
     createCombinedSmoother
 } from './PathSmoother';
+
+export {
+    RadiusAwarePathSmoother,
+    CombinedRadiusAwareSmoother,
+    createRadiusAwareSmoother,
+    createCombinedRadiusAwareSmoother,
+    type IRadiusAwareSmootherConfig
+} from './RadiusAwarePathSmoother';

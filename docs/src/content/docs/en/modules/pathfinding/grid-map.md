@@ -110,3 +110,76 @@ const grid = createGridMap(20, 20, {
     heuristic: manhattanDistance // Use Manhattan distance
 });
 ```
+
+## Path Planner Adapters
+
+When integrating with `NavigationSystem`, use path planner adapter factory functions:
+
+### createAStarPlanner
+
+```typescript
+import { createAStarPlanner } from '@esengine/pathfinding/ecs';
+
+const planner = createAStarPlanner(
+    gridMap,           // Grid map
+    pathfindingOptions, // Pathfinding options (optional)
+    { cellSize: 20 }   // Adapter config
+);
+
+navSystem.setPathPlanner(planner);
+```
+
+### createJPSPlanner
+
+JPS (Jump Point Search) is optimized for uniform-cost grids, 10-100x faster than A*:
+
+```typescript
+import { createJPSPlanner } from '@esengine/pathfinding/ecs';
+
+const planner = createJPSPlanner(gridMap, undefined, { cellSize: 20 });
+```
+
+### createHPAPlanner
+
+HPA* (Hierarchical Pathfinding A*) is optimized for very large maps (1000x1000+):
+
+```typescript
+import { createHPAPlanner } from '@esengine/pathfinding/ecs';
+
+const planner = createHPAPlanner(
+    gridMap,
+    { clusterSize: 16 },  // HPA* config
+    undefined,
+    { cellSize: 20 }      // Adapter config
+);
+```
+
+### cellSize Coordinate Conversion
+
+The `cellSize` parameter handles conversion between pixel and grid coordinates:
+
+```typescript
+// Assume game world is 600x400 pixels, grid is 30x20 cells
+// Each cell is 20x20 pixels
+const gridMap = createGridMap(30, 20);
+const planner = createAStarPlanner(gridMap, undefined, { cellSize: 20 });
+
+// You can use pixel coordinates directly
+// Input (480, 300) → converts to grid (24, 15) → output pixels (490, 310)
+const result = planner.findPath(
+    { x: 50, y: 50 },    // Start (pixels)
+    { x: 480, y: 300 }   // End (pixels)
+);
+
+// Returned path points are also pixel coordinates (cell centers)
+console.log(result.path);
+// [{ x: 30, y: 30 }, { x: 50, y: 50 }, ..., { x: 490, y: 310 }]
+```
+
+**Conversion rules**:
+- Pixel → Grid: `Math.floor(pixel / cellSize)`
+- Grid → Pixel: `grid * cellSize + cellSize * 0.5` (returns cell center)
+
+**Without cellSize (default value 1)**:
+- Input coordinates are used directly as grid indices
+- Suitable when game logic already uses grid coordinates

@@ -101,4 +101,4 @@ class PhysicsWorkerSystem extends WorkerEntitySystem<PhysicsData> {
 
 ## Live Demo
 
-[Worker System Demo](https://esengine.github.io/esengine/demos/worker-system/)
+[Worker System Demo](https://esengine.cn/demos/worker-system/)

@@ -87,22 +87,30 @@ if (success) {
 ### 服务器端
 
 ```typescript
-import { RpcServer } from '@esengine/rpc/server';
+import { serve } from '@esengine/rpc/server';
 import { gameProtocol } from '@esengine/network';
 
-const server = new RpcServer(gameProtocol, {
+let nextPlayerId = 1;
+
+const server = serve(gameProtocol, {
     port: 3000,
-    onStart: (port) => console.log(`Server running on ws://localhost:${port}`)
-});
-
-// 注册 API 处理器
-server.handle('join', async (input, ctx) => {
-    const playerId = generatePlayerId();
-    return { playerId, roomId: input.roomId ?? 'default' };
-});
-
-server.handle('leave', async (input, ctx) => {
-    // 处理玩家离开
+    api: {
+        join: async (input, conn) => {
+            const playerId = nextPlayerId++;
+            console.log(`Player joined: ${input.playerName} (ID: ${playerId})`);
+            return { playerId, roomId: input.roomId ?? 'default' };
+        },
+        leave: async (_input, conn) => {
+            console.log(`Player left: ${conn.id}`);
+        },
+        reconnect: async (input, conn) => {
+            // 处理重连逻辑
+            return { success: true };
+        },
+    },
+    onConnect: (conn) => console.log(`Client connected: ${conn.id}`),
+    onDisconnect: (conn) => console.log(`Client disconnected: ${conn.id}`),
+    onStart: (port) => console.log(`Server running on ws://localhost:${port}`),
 });
 
 await server.start();
@@ -142,6 +150,12 @@ service.on('chat', (data) => {
     console.log(`${data.from}: ${data.text}`);
 });
 ```
+
+## 在线演示
+
+体验网络同步系统的交互式演示：
+
+- [网络同步演示](/examples/network-sync-demo) - 客户端预测与插值可视化
 
 ## 文档导航
 

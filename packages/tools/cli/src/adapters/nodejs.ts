@@ -78,8 +78,14 @@ main().catch(console.error);
 }
 
 function generateGameServer(config: ProjectConfig): string {
-    return `import { RpcServer } from '@esengine/rpc/server';
-import { gameProtocol, type JoinRequest, type JoinResponse } from '@esengine/network';
+    return `import { serve } from '@esengine/rpc/server';
+import {
+    gameProtocol,
+    type JoinRequest,
+    type JoinResponse,
+    type ReconnectRequest,
+    type ReconnectResponse,
+} from '@esengine/network';
 import { Game } from '../game/Game';
 
 /**
@@ -93,6 +99,16 @@ export interface ServerConfig {
 }
 
 /**
+ * @zh 玩家数据
+ * @en Player data
+ */
+interface PlayerData {
+    id: number;
+    name: string;
+    token: string;
+}
+
+/**
  * @zh 创建游戏服务器
  * @en Create game server
  */
@@ -101,37 +117,60 @@ export function createGameServer(config: Partial<ServerConfig> = {}) {
     const maxPlayers = config.maxPlayers ?? 16;
     const tickRate = config.tickRate ?? 20;
 
-    // 创建 RPC 服务器
-    const server = new RpcServer(gameProtocol, {
-        port,
-        onStart: (p) => console.log(\`[Server] Started on ws://localhost:\${p}\`),
-        onConnection: (id) => console.log(\`[Server] Client connected: \${id}\`),
-        onDisconnection: (id) => console.log(\`[Server] Client disconnected: \${id}\`),
-    });
-
     // 玩家管理
-    const players = new Map<string, { id: number; name: string }>();
+    const players = new Map<string, PlayerData>();
+    const playerTokens = new Map<number, string>(); // playerId -> token
     let nextPlayerId = 1;
 
-    // 注册 API 处理器
-    server.handle('join', async (input: JoinRequest, ctx): Promise<JoinResponse> => {
-        const playerId = nextPlayerId++;
-        players.set(ctx.clientId, { id: playerId, name: input.playerName });
+    // 创建 RPC 服务器
+    const server = serve(gameProtocol, {
+        port,
+        api: {
+            join: async (input: JoinRequest, conn): Promise<JoinResponse> => {
+                const playerId = nextPlayerId++;
+                const token = crypto.randomUUID();
 
-        console.log(\`[Server] Player joined: \${input.playerName} (ID: \${playerId})\`);
+                players.set(conn.id, { id: playerId, name: input.playerName, token });
+                playerTokens.set(playerId, token);
 
-        return {
-            playerId,
-            roomId: input.roomId ?? 'default',
-        };
-    });
+                console.log(\`[Server] Player joined: \${input.playerName} (ID: \${playerId})\`);
 
-    server.handle('leave', async (_input, ctx) => {
-        const player = players.get(ctx.clientId);
-        if (player) {
-            console.log(\`[Server] Player left: \${player.name}\`);
-            players.delete(ctx.clientId);
-        }
+                return {
+                    playerId,
+                    roomId: input.roomId ?? 'default',
+                };
+            },
+            leave: async (_input, conn) => {
+                const player = players.get(conn.id);
+                if (player) {
+                    console.log(\`[Server] Player left: \${player.name}\`);
+                    players.delete(conn.id);
+                }
+            },
+            reconnect: async (input: ReconnectRequest, conn): Promise<ReconnectResponse> => {
+                const expectedToken = playerTokens.get(input.playerId);
+
+                if (!expectedToken || expectedToken !== input.token) {
+                    return { success: false, error: 'Invalid token' };
+                }
+
+                console.log(\`[Server] Player reconnected: \${input.playerId}\`);
+                return { success: true };
+            },
+        },
+        onConnect: (conn) => {
+            console.log(\`[Server] Client connected: \${conn.id}\`);
+        },
+        onDisconnect: (conn) => {
+            const player = players.get(conn.id);
+            if (player) {
+                console.log(\`[Server] Player disconnected: \${player.name}\`);
+                players.delete(conn.id);
+            }
+        },
+        onStart: (p) => {
+            console.log(\`[Server] Started on ws://localhost:\${p}\`);
+        },
     });
 
     // 初始化 ECS 游戏逻辑
@@ -141,7 +180,7 @@ export function createGameServer(config: Partial<ServerConfig> = {}) {
     // 游戏循环：广播状态同步
     setInterval(() => {
         // 在这里广播游戏状态
-        // server.broadcast('sync', { entities: [...] });
+        // server.broadcast('sync', { frame: 0, timestamp: Date.now(), entities: [] });
     }, 1000 / tickRate);
 
     return { server, game, players };
@@ -308,8 +347,8 @@ function generateTsConfig(): string {
     return `{
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",

@@ -170,6 +170,14 @@ export interface IPathfindingOptions {
     allowDiagonal?: boolean;
     /** @zh 是否避免穿角 @en Avoid corner cutting */
     avoidCorners?: boolean;
+    /**
+     * @zh 代理半径，用于生成考虑碰撞体积的路径
+     * @en Agent radius, used to generate paths that consider collision volume
+     *
+     * @zh 如果指定，路径规划器会收缩 portal 宽度并偏移拐点，确保路径与障碍物保持足够距离
+     * @en If specified, the path planner will shrink portal widths and offset turning points to ensure sufficient clearance from obstacles
+     */
+    agentRadius?: number;
 }
 
 /**
@@ -180,7 +188,8 @@ export const DEFAULT_PATHFINDING_OPTIONS: Required<IPathfindingOptions> = {
     maxNodes: 10000,
     heuristicWeight: 1.0,
     allowDiagonal: true,
-    avoidCorners: true
+    avoidCorners: true,
+    agentRadius: 0
 };
 
 /**

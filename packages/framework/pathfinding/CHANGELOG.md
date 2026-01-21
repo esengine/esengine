@@ -1,5 +1,114 @@
 # @esengine/pathfinding
 
+## 13.3.0
+
+### Minor Changes
+
+- [#468](https://github.com/esengine/esengine/pull/468) [`39b0ebf`](https://github.com/esengine/esengine/commit/39b0ebf69fe870dfb6bd1c3067af383d2927e66e) Thanks [@esengine](https://github.com/esengine)! - ## Pathfinding Module Refactoring
+
+    ### New Features
+    - Added `NavigationSystem` as unified navigation and avoidance system
+    - Added `NavigationAgentComponent` combining pathfinding and avoidance functionality
+    - Added `ORCAConfigComponent` for per-agent ORCA configuration
+    - Added `RadiusAwarePathSmoother` for agent-radius-aware path smoothing
+    - Added `CollisionResolver` for post-ORCA collision resolution
+    - Added engine adapters (Cocos, Laya) in `adapters/` directory
+
+    ### Improvements
+    - Enhanced `ORCASolver` with configurable `yAxisDown` option for different coordinate systems
+    - Improved `ObstacleBuilder` with automatic CCW vertex order detection and correction
+    - Added `INavigationAgent` interface for unified agent representation
+    - Improved path smoothing with radius-aware corner cutting
+
+    ### Breaking Changes
+    - Deprecated `PathfindingSystem`, `LocalAvoidanceSystem` in favor of unified `NavigationSystem`
+    - Deprecated `PathfindingAgentComponent`, `AvoidanceAgentComponent` in favor of `NavigationAgentComponent`
+    - Deprecated `AvoidanceWorldComponent` - configuration now on components
+
+    ### Documentation
+    - Updated pathfinding documentation to reflect new APIs
+    - Added navigation system documentation
+    - Fixed documentation errors in network, rpc modules
+
+## 13.2.0
+
+### Minor Changes
+
+- [#464](https://github.com/esengine/esengine/pull/464) [`0f11191`](https://github.com/esengine/esengine/commit/0f11191da1e09890812bb80e03d2cdc960665773) Thanks [@esengine](https://github.com/esengine)! - feat(pathfinding): improve HPA\* algorithm with lazy intra-edges and better entrance node distribution
+    - **Lazy Intra-Edges**: Delay intra-cluster path computation until first query, reducing preprocessing time from ~68s to ~52ms on large maps
+    - **Entrance Node Distribution**: Fix path quality issue by distributing entrance nodes evenly across wide cluster boundaries instead of only placing at extremes
+    - **Path Quality**: HPA* now produces near-optimal paths (ratio ~1.0 vs A*) on open maps, previously had significant detours
+
+## 13.1.0
+
+### Minor Changes
+
+- [#462](https://github.com/esengine/esengine/pull/462) [`bbb7a2b`](https://github.com/esengine/esengine/commit/bbb7a2b7e2768e31d9ff9bc5d28181e7f51247ea) Thanks [@esengine](https://github.com/esengine)! - feat(pathfinding): add standalone avoidance subpath export
+
+    Added `@esengine/pathfinding/avoidance` export path for direct access to ORCA local avoidance module without importing the full pathfinding package.
+
+    ```typescript
+    // New import path
+    import { createORCASolver, createKDTree } from '@esengine/pathfinding/avoidance';
+    ```
+
+## 13.0.0
+
+### Minor Changes
+
+- [#460](https://github.com/esengine/esengine/pull/460) [`c6c8da1`](https://github.com/esengine/esengine/commit/c6c8da1f5b707a4ab43279b0a046a58797d08c66) Thanks [@esengine](https://github.com/esengine)! - feat(pathfinding): add ORCA local avoidance system
+
+    ### New Features
+    - **ORCA Algorithm**: Implement Optimal Reciprocal Collision Avoidance for multi-agent collision avoidance
+    - **ECS Components**: Add `AvoidanceAgentComponent` and `AvoidanceWorldComponent` for easy integration
+    - **LocalAvoidanceSystem**: System that automatically processes all avoidance agents each frame
+    - **KD-Tree Spatial Index**: Efficient neighbor queries with `createKDTree()`
+    - **Direct Solver API**: Use `createORCASolver()` for non-ECS usage
+    - **Static Obstacle Support**: Define polygonal obstacles with CCW vertex ordering
+    - **Pathfinding Integration**: Works seamlessly with `PathfindingAgentComponent`
+
+    ### Usage
+
+    ```typescript
+    import { AvoidanceWorldComponent, AvoidanceAgentComponent, LocalAvoidanceSystem } from '@esengine/pathfinding/ecs';
+
+    // Setup world
+    const world = entity.addComponent(new AvoidanceWorldComponent());
+    world.addRectObstacle(0, 0, 100, 10);
+
+    // Setup agents
+    const agent = entity.addComponent(new AvoidanceAgentComponent());
+    agent.radius = 0.5;
+    agent.maxSpeed = 5;
+
+    // Add system
+    scene.addSystem(new LocalAvoidanceSystem());
+
+    // Each frame
+    agent.setPreferredVelocityTowards(targetX, targetY);
+    ```
+
+### Patch Changes
+
+- Updated dependencies [[`190924d`](https://github.com/esengine/esengine/commit/190924d2ad81df3d2b621ff70df8ba91ea2736c1)]:
+    - @esengine/ecs-framework-math@2.11.0
+
+## 12.1.2
+
+### Patch Changes
+
+- [`32f3343`](https://github.com/esengine/esengine/commit/32f33432ad25ef987efb34bc18bf5b105b0a26ea) Thanks [@esengine](https://github.com/esengine)! - fix: remove publishConfig.directory to fix npm publish
+
+- Updated dependencies [[`32f3343`](https://github.com/esengine/esengine/commit/32f33432ad25ef987efb34bc18bf5b105b0a26ea)]:
+    - @esengine/ecs-framework-math@2.10.3
+
+## 12.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`3364107`](https://github.com/esengine/esengine/commit/33641075d1a96523d27bed59abf28c026ba34a90)]:
+    - @esengine/ecs-framework-math@2.10.2
+
 ## 12.1.0
 
 ### Minor Changes

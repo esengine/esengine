@@ -503,6 +503,6 @@ console.log(json);
 
 ## 下一步
 
-- 学习[Cocos Creator 集成](/modules/behavior-tree/cocos-integration/)了解如何在游戏引擎中加载资源
-- 查看[自定义节点执行器](/modules/behavior-tree/custom-actions/)创建自定义行为
-- 阅读[最佳实践](/modules/behavior-tree/best-practices/)优化你的行为树设计
+- 学习[Cocos Creator 集成](../cocos-integration/)了解如何在游戏引擎中加载资源
+- 查看[自定义节点执行器](../custom-actions/)创建自定义行为
+- 阅读[最佳实践](../best-practices/)优化你的行为树设计

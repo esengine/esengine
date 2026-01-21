@@ -80,7 +80,10 @@
     "copy:ccesengine:dev": "node scripts/copy-ccesengine.mjs --mode=dev",
     "build:ccesengine": "cd engine && npm run build:editor && cd .. && npm run copy:ccesengine",
     "build:ccesengine:dev": "cd engine && npm run build:dev && cd .. && npm run copy:ccesengine:dev",
-    "setup:ccesengine": "git submodule update --init engine && cd engine && npm install && npm run build:editor && cd .. && npm run copy:ccesengine"
+    "setup:ccesengine": "git submodule update --init engine && cd engine && npm install && npm run build:editor && cd .. && npm run copy:ccesengine",
+    "copy-modules": "node scripts/copy-engine-modules.mjs",
+    "site:use-github": "node scripts/update-site-url.mjs",
+    "site:use-custom": "node scripts/update-site-url.mjs --to-alias"
   },
   "author": "yhh",
   "license": "MIT",

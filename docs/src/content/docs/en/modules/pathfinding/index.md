@@ -27,7 +27,13 @@ The package provides three separate entry points for better tree-shaking:
 import { AStarPathfinder, GridPathfinder, JPSPathfinder } from '@esengine/pathfinding';
 
 // ECS components and systems (requires @esengine/ecs-framework)
-import { PathfindingSystem, PathfindingAgentComponent } from '@esengine/pathfinding/ecs';
+import {
+    NavigationSystem,
+    NavigationAgentComponent,
+    createNavMeshPathPlanner,
+    createAStarPlanner,
+    createORCAAvoidance
+} from '@esengine/pathfinding/ecs';
 
 // Blueprint nodes (requires @esengine/blueprint)
 import { FindPathTemplate, RequestPathAsyncTemplate } from '@esengine/pathfinding/nodes';
@@ -106,6 +112,7 @@ interface IPathfindingOptions {
     heuristicWeight?: number; // Heuristic weight (>1 faster but may be suboptimal)
     allowDiagonal?: boolean;  // Allow diagonal movement (default true)
     avoidCorners?: boolean;   // Avoid corner cutting (default true)
+    agentRadius?: number;     // Agent radius for clearance from walls (default 0)
 }
 ```
 
@@ -323,6 +330,12 @@ for (let y = 30; y < 35; y++) {
 | Dynamic Updates | Easy | Requires rebuild |
 | Setup Complexity | Simple | More complex |
 
+## Interactive Demo
+
+Experience the pathfinding system with interactive demo:
+
+- [NavigationSystem Demo](/en/examples/navigation-system-demo) - Complete demonstration of pluggable navigation architecture, including NavMesh, A*, JPS, ORCA avoidance and more scenarios
+
 ## Documentation
 
 - [Grid Map API](./grid-map) - Grid operations and A* pathfinder
@@ -330,4 +343,5 @@ for (let y = 30; y < 35; y++) {
 - [Incremental Pathfinding](./incremental) - Time-sliced execution and dynamic replanning
 - [Navigation Mesh API](./navmesh) - NavMesh building and querying
 - [Path Smoothing](./smoothing) - Line of sight and curve smoothing
+- [Local Avoidance (ORCA)](./local-avoidance) - Multi-agent collision avoidance
 - [Examples](./examples) - Game movement, dynamic obstacles, hierarchical pathfinding

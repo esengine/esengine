@@ -75,37 +75,38 @@ await client.call('sendMessage', { text: 'Hello!' });
 ### 3. Create Server
 
 ```typescript
-import { RpcServer } from '@esengine/rpc/server';
+import { serve } from '@esengine/rpc/server';
 import { chatProtocol } from './protocol';
 
-// Create server
-const server = new RpcServer(chatProtocol, {
+// Create server (API handlers defined in config)
+const server = serve(chatProtocol, {
     port: 3000,
     onStart: (port) => console.log(`Server started: ws://localhost:${port}`),
-});
 
-// Register API handlers
-server.handle('login', async (input, ctx) => {
-    const userId = generateUserId();
-    const token = generateToken();
+    api: {
+        login: async (input, conn) => {
+            const userId = generateUserId();
+            const token = generateToken();
 
-    // Broadcast user joined
-    server.broadcast('userJoined', { username: input.username });
+            // Broadcast user joined
+            server.broadcast('userJoined', { username: input.username });
 
-    return { userId, token };
-});
+            return { userId, token };
+        },
 
-server.handle('sendMessage', async (input, ctx) => {
-    const messageId = generateMessageId();
+        sendMessage: async (input, conn) => {
+            const messageId = generateMessageId();
 
-    // Broadcast new message
-    server.broadcast('newMessage', {
-        from: ctx.clientId,
-        text: input.text,
-        time: Date.now(),
-    });
+            // Broadcast new message
+            server.broadcast('newMessage', {
+                from: conn.id,
+                text: input.text,
+                time: Date.now(),
+            });
 
-    return { messageId };
+            return { messageId };
+        },
+    },
 });
 
 // Start server

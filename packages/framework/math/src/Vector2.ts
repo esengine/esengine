@@ -420,75 +420,140 @@ export class Vector2 implements IVector2 {
     // 静态方法
 
     /**
-   * 向量加法（静态方法）
-   * @param a 向量a
-   * @param b 向量b
-   * @returns 新的结果向量
-   */
-    static add(a: Vector2, b: Vector2): Vector2 {
+     * @zh 向量加法（静态方法）
+     * @en Vector addition (static method)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 新的结果向量 @en New result vector
+     */
+    static add(a: IVector2, b: IVector2): Vector2 {
         return new Vector2(a.x + b.x, a.y + b.y);
     }
 
     /**
-   * 向量减法（静态方法）
-   * @param a 向量a
-   * @param b 向量b
-   * @returns 新的结果向量
-   */
-    static subtract(a: Vector2, b: Vector2): Vector2 {
+     * @zh 向量减法（静态方法）
+     * @en Vector subtraction (static method)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 新的结果向量 @en New result vector
+     */
+    static subtract(a: IVector2, b: IVector2): Vector2 {
         return new Vector2(a.x - b.x, a.y - b.y);
     }
 
     /**
-   * 向量数乘（静态方法）
-   * @param vector 向量
-   * @param scalar 标量
-   * @returns 新的结果向量
-   */
-    static multiply(vector: Vector2, scalar: number): Vector2 {
+     * @zh 向量数乘（静态方法）
+     * @en Scalar multiplication (static method)
+     * @param vector - @zh 向量 @en Vector
+     * @param scalar - @zh 标量 @en Scalar
+     * @returns @zh 新的结果向量 @en New result vector
+     */
+    static multiply(vector: IVector2, scalar: number): Vector2 {
         return new Vector2(vector.x * scalar, vector.y * scalar);
     }
 
     /**
-   * 向量点积（静态方法）
-   * @param a 向量a
-   * @param b 向量b
-   * @returns 点积值
-   */
-    static dot(a: Vector2, b: Vector2): number {
+     * @zh 向量点积（静态方法）
+     * @en Dot product (static method)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 点积值 @en Dot product value
+     */
+    static dot(a: IVector2, b: IVector2): number {
         return a.x * b.x + a.y * b.y;
     }
 
     /**
-   * 向量叉积（静态方法）
-   * @param a 向量a
-   * @param b 向量b
-   * @returns 叉积值
-   */
-    static cross(a: Vector2, b: Vector2): number {
+     * @zh 向量叉积（静态方法，返回标量）
+     * @en Cross product (static method, returns scalar)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 叉积值（z分量）@en Cross product value (z component)
+     */
+    static cross(a: IVector2, b: IVector2): number {
         return a.x * b.y - a.y * b.x;
     }
 
     /**
-   * 计算两点间距离（静态方法）
-   * @param a 点a
-   * @param b 点b
-   * @returns 距离值
-   */
-    static distance(a: Vector2, b: Vector2): number {
+     * @zh 行列式（等同于叉积）
+     * @en Determinant (same as cross product)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 行列式值 @en Determinant value
+     */
+    static det(a: IVector2, b: IVector2): number {
+        return a.x * b.y - a.y * b.x;
+    }
+
+    /**
+     * @zh 计算向量长度的平方（静态方法）
+     * @en Calculate squared length of vector (static method)
+     * @param v - @zh 向量 @en Vector
+     * @returns @zh 长度的平方 @en Squared length
+     */
+    static lengthSq(v: IVector2): number {
+        return v.x * v.x + v.y * v.y;
+    }
+
+    /**
+     * @zh 计算向量长度（静态方法）
+     * @en Calculate length of vector (static method)
+     * @param v - @zh 向量 @en Vector
+     * @returns @zh 长度 @en Length
+     */
+    static len(v: IVector2): number {
+        return Math.sqrt(v.x * v.x + v.y * v.y);
+    }
+
+    /**
+     * @zh 归一化向量（静态方法）
+     * @en Normalize vector (static method)
+     * @param v - @zh 向量 @en Vector
+     * @returns @zh 单位向量 @en Unit vector
+     */
+    static normalize(v: IVector2): Vector2 {
+        const len = Math.sqrt(v.x * v.x + v.y * v.y);
+        if (len < Number.EPSILON) {
+            return new Vector2(0, 0);
+        }
+        return new Vector2(v.x / len, v.y / len);
+    }
+
+    /**
+     * @zh 计算两点间距离（静态方法）
+     * @en Calculate distance between two points (static method)
+     * @param a - @zh 点a @en Point a
+     * @param b - @zh 点b @en Point b
+     * @returns @zh 距离值 @en Distance value
+     */
+    static distance(a: IVector2, b: IVector2): number {
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
     /**
-   * 线性插值（静态方法）
-   * @param a 起始向量
-   * @param b 目标向量
-   * @param t 插值参数（0到1）
-   * @returns 新的插值结果向量
-   */
-    static lerp(a: Vector2, b: Vector2, t: number): Vector2 {
+     * @zh 计算两点间距离的平方（静态方法）
+     * @en Calculate squared distance between two points (static method)
+     * @param a - @zh 点a @en Point a
+     * @param b - @zh 点b @en Point b
+     * @returns @zh 距离的平方 @en Squared distance
+     */
+    static distanceSq(a: IVector2, b: IVector2): number {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        return dx * dx + dy * dy;
+    }
+
+    /**
+     * @zh 线性插值（静态方法）
+     * @en Linear interpolation (static method)
+     * @param a - @zh 起始向量 @en Start vector
+     * @param b - @zh 目标向量 @en Target vector
+     * @param t - @zh 插值参数（0到1）@en Interpolation parameter (0 to 1)
+     * @returns @zh 新的插值结果向量 @en New interpolated result vector
+     */
+    static lerp(a: IVector2, b: IVector2, t: number): Vector2 {
         return new Vector2(
             a.x + (b.x - a.x) * t,
             a.y + (b.y - a.y) * t
@@ -496,42 +561,66 @@ export class Vector2 implements IVector2 {
     }
 
     /**
-   * 从角度创建单位向量（静态方法）
-   * @param angle 角度（弧度）
-   * @returns 新的单位向量
-   */
+     * @zh 从角度创建单位向量（静态方法）
+     * @en Create unit vector from angle (static method)
+     * @param angle - @zh 角度（弧度）@en Angle (radians)
+     * @returns @zh 新的单位向量 @en New unit vector
+     */
     static fromAngle(angle: number): Vector2 {
         return new Vector2(Math.cos(angle), Math.sin(angle));
     }
 
     /**
-   * 从极坐标创建向量（静态方法）
-   * @param length 长度
-   * @param angle 角度（弧度）
-   * @returns 新的向量
-   */
-    static fromPolar(length: number, angle: number): Vector2 {
-        return new Vector2(length * Math.cos(angle), length * Math.sin(angle));
+     * @zh 从极坐标创建向量（静态方法）
+     * @en Create vector from polar coordinates (static method)
+     * @param len - @zh 长度 @en Length
+     * @param angle - @zh 角度（弧度）@en Angle (radians)
+     * @returns @zh 新的向量 @en New vector
+     */
+    static fromPolar(len: number, angle: number): Vector2 {
+        return new Vector2(len * Math.cos(angle), len * Math.sin(angle));
     }
 
     /**
-   * 获取两个向量中的最小分量向量（静态方法）
-   * @param a 向量a
-   * @param b 向量b
-   * @returns 新的最小分量向量
-   */
-    static min(a: Vector2, b: Vector2): Vector2 {
+     * @zh 获取两个向量中的最小分量向量（静态方法）
+     * @en Get minimum component vector of two vectors (static method)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 新的最小分量向量 @en New minimum component vector
+     */
+    static min(a: IVector2, b: IVector2): Vector2 {
         return new Vector2(Math.min(a.x, b.x), Math.min(a.y, b.y));
     }
 
     /**
-   * 获取两个向量中的最大分量向量（静态方法）
-   * @param a 向量a
-   * @param b 向量b
-   * @returns 新的最大分量向量
-   */
-    static max(a: Vector2, b: Vector2): Vector2 {
+     * @zh 获取两个向量中的最大分量向量（静态方法）
+     * @en Get maximum component vector of two vectors (static method)
+     * @param a - @zh 向量a @en Vector a
+     * @param b - @zh 向量b @en Vector b
+     * @returns @zh 新的最大分量向量 @en New maximum component vector
+     */
+    static max(a: IVector2, b: IVector2): Vector2 {
         return new Vector2(Math.max(a.x, b.x), Math.max(a.y, b.y));
+    }
+
+    /**
+     * @zh 获取左垂直向量（逆时针旋转90度）（静态方法）
+     * @en Get left perpendicular vector (rotate 90 degrees counter-clockwise) (static method)
+     * @param v - @zh 向量 @en Vector
+     * @returns @zh 新的垂直向量 @en New perpendicular vector
+     */
+    static perpLeft(v: IVector2): Vector2 {
+        return new Vector2(-v.y, v.x);
+    }
+
+    /**
+     * @zh 获取右垂直向量（顺时针旋转90度）（静态方法）
+     * @en Get right perpendicular vector (rotate 90 degrees clockwise) (static method)
+     * @param v - @zh 向量 @en Vector
+     * @returns @zh 新的垂直向量 @en New perpendicular vector
+     */
+    static perpRight(v: IVector2): Vector2 {
+        return new Vector2(v.y, -v.x);
     }
 
     // 字符串转换

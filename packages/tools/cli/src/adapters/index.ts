@@ -2,6 +2,7 @@ import { cocosAdapter } from './cocos.js';
 import { cocos2Adapter } from './cocos2.js';
 import { layaAdapter } from './laya.js';
 import { nodejsAdapter } from './nodejs.js';
+import { webAdapter } from './web.js';
 import type { AdapterRegistry, PlatformAdapter, PlatformType } from './types.js';
 
 export * from './types.js';
@@ -9,6 +10,7 @@ export { cocosAdapter } from './cocos.js';
 export { cocos2Adapter } from './cocos2.js';
 export { layaAdapter } from './laya.js';
 export { nodejsAdapter } from './nodejs.js';
+export { webAdapter } from './web.js';
 
 /**
  * @zh 平台适配器注册表
@@ -18,7 +20,8 @@ export const adapters: AdapterRegistry = {
     cocos: cocosAdapter,
     cocos2: cocos2Adapter,
     laya: layaAdapter,
-    nodejs: nodejsAdapter
+    nodejs: nodejsAdapter,
+    web: webAdapter
 };
 
 /**

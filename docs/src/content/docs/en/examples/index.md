@@ -5,7 +5,22 @@ description: "ESEngine example projects and demos"
 
 Explore example projects to learn ESEngine best practices.
 
-## Available Examples
+## Navigation System
+
+### [NavigationSystem Demo](/en/examples/navigation-system-demo/)
+Complete demonstration of the pluggable navigation architecture:
+- **Scenarios**: NavMesh, A*, JPS, Circle Swap, Funnel Passage, Stress Test
+- **Features**: Runtime algorithm switching, ORCA multi-agent avoidance, collision resolution
+- **Tech**: NavigationSystem, IPathPlanner, ILocalAvoidance interfaces
+
+## Network Sync
+
+### [Network Sync Demo](/en/examples/network-sync-demo/)
+Client-server state synchronization demonstration:
+- Interpolation, prediction, lag compensation
+- NetworkIdentity, NetworkTransform, SnapshotBuffer
+
+## System Demos
 
 ### [Worker System Demo](/en/examples/worker-system-demo/)
 Demonstrates how to use Web Workers for parallel processing, offloading heavy computations from the main thread.

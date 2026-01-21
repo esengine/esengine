@@ -38,8 +38,11 @@ await server.start();
 ```typescript
 interface ServeOptions<P, TConnData> {
     // 必需
-    port: number;
     api: ApiHandlers<P, TConnData>;
+
+    // 端口配置（二选一）
+    port?: number;           // 独立端口
+    server?: HttpServer;     // 或附加到已有 HTTP 服务器
 
     // 可选
     msg?: MsgHandlers<P, TConnData>;

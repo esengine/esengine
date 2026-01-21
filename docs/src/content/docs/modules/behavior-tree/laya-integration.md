@@ -8,7 +8,7 @@ title: "Laya 引擎集成"
 
 - LayaAir 3.x 或更高版本
 - 基本的 TypeScript 知识
-- 已完成[快速开始](/modules/behavior-tree/getting-started/)教程
+- 已完成[快速开始](../getting-started/)教程
 
 ## 安装
 
@@ -311,5 +311,5 @@ class AIManager {
 
 ## 下一步
 
-- 查看[高级用法](/modules/behavior-tree/advanced-usage/)
-- 学习[最佳实践](/modules/behavior-tree/best-practices/)
+- 查看[高级用法](../advanced-usage/)
+- 学习[最佳实践](../best-practices/)

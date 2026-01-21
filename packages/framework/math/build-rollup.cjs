@@ -14,11 +14,7 @@ async function main() {
 
         // 执行Rollup构建
         console.log('📦 执行 Rollup 构建...');
-        execSync('rollup -c rollup.config.cjs', { stdio: 'inherit' });
-
-        // 生成package.json
-        console.log('📋 生成 package.json...');
-        generatePackageJson();
+        execSync('npx rollup -c rollup.config.cjs', { stdio: 'inherit' });
 
         // 复制其他文件
         console.log('📁 复制必要文件...');
@@ -28,8 +24,6 @@ async function main() {
         showBuildResults();
 
         console.log('✅ 构建完成！');
-        console.log('\n🚀 发布命令:');
-        console.log('cd dist && npm publish');
 
     } catch (error) {
         console.error('❌ 构建失败:', error.message);
@@ -37,65 +31,9 @@ async function main() {
     }
 }
 
-function generatePackageJson() {
-    const sourcePackage = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-    
-    const distPackage = {
-        name: sourcePackage.name,
-        version: sourcePackage.version,
-        description: sourcePackage.description,
-        main: 'index.cjs',
-        module: 'index.mjs',
-        unpkg: 'index.umd.js',
-        types: 'index.d.ts',
-        exports: {
-            '.': {
-                import: './index.mjs',
-                require: './index.cjs',
-                types: './index.d.ts'
-            }
-        },
-        files: [
-            'index.mjs',
-            'index.mjs.map',
-            'index.cjs',
-            'index.cjs.map',
-            'index.umd.js',
-            'index.umd.js.map',
-            'index.d.ts',
-            'README.md',
-            'LICENSE'
-        ],
-        keywords: [
-            'ecs',
-            'math',
-            '2d',
-            'vector',
-            'matrix',
-            'geometry',
-            'collision',
-            'game-engine',
-            'typescript',
-            'rollup'
-        ],
-        author: sourcePackage.author,
-        license: sourcePackage.license,
-        repository: sourcePackage.repository,
-        bugs: sourcePackage.bugs,
-        homepage: sourcePackage.homepage,
-        engines: {
-            node: '>=16.0.0'
-        },
-        sideEffects: false
-    };
-
-    fs.writeFileSync('./dist/package.json', JSON.stringify(distPackage, null, 2));
-}
-
 function copyFiles() {
     const filesToCopy = [
-        { src: './README.md', dest: './dist/README.md' },
-        { src: './LICENSE', dest: './dist/LICENSE' }
+        // 移除不存在的文件以避免警告
     ];
 
     filesToCopy.forEach(({ src, dest }) => {
@@ -106,12 +44,16 @@ function copyFiles() {
             console.log(`  ⚠️  文件不存在: ${src}`);
         }
     });
+
+    if (filesToCopy.length === 0) {
+        console.log('  ℹ️  没有需要复制的文件');
+    }
 }
 
 function showBuildResults() {
     const distDir = './dist';
     const files = ['index.mjs', 'index.cjs', 'index.umd.js', 'index.d.ts'];
-    
+
     console.log('\n📊 构建结果:');
     files.forEach(file => {
         const filePath = path.join(distDir, file);

@@ -258,8 +258,8 @@ describe('HPAPathfinder', () => {
 
     describe('Configuration', () => {
         it('should use default config values', () => {
-            expect(DEFAULT_HPA_CONFIG.clusterSize).toBe(10);
-            expect(DEFAULT_HPA_CONFIG.maxEntranceWidth).toBe(6);
+            expect(DEFAULT_HPA_CONFIG.clusterSize).toBe(64);
+            expect(DEFAULT_HPA_CONFIG.maxEntranceWidth).toBe(16);
             expect(DEFAULT_HPA_CONFIG.cacheInternalPaths).toBe(true);
         });
 

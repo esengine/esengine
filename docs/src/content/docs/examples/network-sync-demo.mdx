@@ -1,0 +1,1440 @@
+---
+title: "网络同步演示"
+description: "演示 @esengine/network 的状态同步和客户端预测"
+---
+
+import DemoPlayground from '../../../components/DemoPlayground.vue';
+
+export const networkScenes = [
+    { id: 'no-sync', label: '1', name: '无同步' },
+    { id: 'interpolation', label: '2', name: '插值同步' },
+    { id: 'prediction', label: '3', name: '客户端预测' },
+    { id: 'full', label: '4', name: '完整方案' }
+];
+
+export const networkParams = [
+    { id: 'latency', label: 'Latency', desc: '网络延迟 (ms)', value: 150, min: 0, max: 500, step: 10 },
+    { id: 'jitter', label: 'Jitter', desc: '延迟抖动 (ms)', value: 30, min: 0, max: 200, step: 5 },
+    { id: 'sendRate', label: 'Send Rate', desc: '服务器发送频率 (Hz)', value: 20, min: 5, max: 60, step: 5 },
+    { id: 'interpDelay', label: 'Interp Delay', desc: '插值延迟 (ms)', value: 100, min: 50, max: 300, step: 10 }
+];
+
+export const networkDemoCode = `/**
+ * 网络同步演示 - 使用 @esengine/network 框架 API
+ *
+ * 展示四种同步策略的对比：
+ * 1. 无同步 - 客户端与服务器完全脱节
+ * 2. 插值同步 - 等待服务器状态，有输入延迟
+ * 3. 客户端预测 - 立即响应，服务器校正
+ * 4. 完整方案 - 预测 + Hermite 插值 + 平滑校正
+ *
+ * 左侧: 客户端视角（你控制的玩家）
+ * 右侧: 服务器权威状态（真实位置）
+ */
+
+const {
+    // 网络同步工具 - 框架核心 API
+    createSnapshotBuffer,
+    createTransformInterpolator,
+    createHermiteTransformInterpolator,
+    createClientPrediction,
+    lerp,
+    smoothDamp
+} = ESEngine;
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * @typedef {Object} PlayerState - 玩家状态
+ * @property {number} id - 玩家 ID
+ * @property {number} x - X 坐标
+ * @property {number} y - Y 坐标
+ * @property {number} vx - X 速度
+ * @property {number} vy - Y 速度
+ */
+
+/**
+ * @typedef {Object} MovementInput - 移动输入
+ * @property {number} dx - X 方向 (-1, 0, 1)
+ * @property {number} dy - Y 方向 (-1, 0, 1)
+ */
+
+/**
+ * @typedef {Object} Metrics - 性能指标
+ * @property {number} rtt - 往返延迟
+ * @property {number} pendingInputs - 待确认输入数
+ * @property {number} correctionMag - 校正幅度
+ * @property {number} bufferSize - 快照缓冲区大小
+ */
+
+// ============================================================================
+// Config
+// ============================================================================
+
+const CONFIG = {
+    // 画布尺寸
+    WIDTH: 580,
+    HEIGHT: 380,
+    get HALF_WIDTH() { return this.WIDTH / 2 - 5; },
+
+    // 玩家属性
+    PLAYER_SIZE: 15,
+    PLAYER_SPEED: 150,
+
+    // 同步参数
+    SNAPSHOT_BUFFER_SIZE: 30,
+    MAX_PENDING_INPUTS: 60,
+    CORRECTION_THRESHOLD: 0.5,
+    SNAP_THRESHOLD: 100,
+
+    // AI 路径点（8 字形）
+    AI_WAYPOINTS: null,  // 延迟初始化
+    AI_MOVE_SPEED: 0.7,
+    AI_WAIT_TIME: 500
+};
+
+// 延迟初始化 AI 路径点
+CONFIG.AI_WAYPOINTS = [
+    { x: CONFIG.HALF_WIDTH * 0.25, y: CONFIG.HEIGHT * 0.3 },
+    { x: CONFIG.HALF_WIDTH * 0.75, y: CONFIG.HEIGHT * 0.7 },
+    { x: CONFIG.HALF_WIDTH * 0.25, y: CONFIG.HEIGHT * 0.7 },
+    { x: CONFIG.HALF_WIDTH * 0.75, y: CONFIG.HEIGHT * 0.3 }
+];
+
+// 颜色方案
+const COLORS = {
+    background: '#0d1117',
+    grid: 'rgba(255, 255, 255, 0.03)',
+    localPlayer: '#3b82f6',
+    remotePlayer: '#f97316',
+    serverGhost: 'rgba(100, 255, 100, 0.5)',
+    predictionGhost: 'rgba(255, 200, 0, 0.4)',
+    correctionArrow: '#ff4444',
+    divider: '#30363d',
+    panelBg: 'rgba(0, 0, 0, 0.85)',
+    textPrimary: '#e6edf3',
+    textSecondary: '#8b949e',
+    good: '#10b981',
+    warning: '#f59e0b',
+    bad: '#ef4444'
+};
+
+// 获取实时参数
+function getParams() {
+    const defaults = { latency: 150, jitter: 30, sendRate: 20, interpDelay: 100 };
+    return window.__demoParams || defaults;
+}
+
+// 工具函数
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+// ============================================================================
+// 模拟网络层
+// ============================================================================
+
+class MockNetwork {
+    constructor() {
+        this.clientToServer = [];
+        this.serverToClient = [];
+        this.rttHistory = [];
+        this.lastRtt = 0;
+    }
+
+    sendToServer(data) {
+        const p = getParams();
+        const delay = Math.max(0, p.latency + (Math.random() - 0.5) * p.jitter * 2);
+        const sendTime = performance.now();
+        this.clientToServer.push({
+            data: { ...data, _sendTime: sendTime },
+            deliverAt: sendTime + delay
+        });
+    }
+
+    sendToClient(data) {
+        const p = getParams();
+        const delay = Math.max(0, p.latency + (Math.random() - 0.5) * p.jitter * 2);
+        this.serverToClient.push({
+            data,
+            deliverAt: performance.now() + delay
+        });
+    }
+
+    receiveOnServer() {
+        const now = performance.now();
+        const ready = [];
+        while (this.clientToServer.length > 0 && this.clientToServer[0].deliverAt <= now) {
+            const msg = this.clientToServer.shift();
+            ready.push(msg.data);
+        }
+        return ready;
+    }
+
+    receiveOnClient() {
+        const now = performance.now();
+        const ready = [];
+        while (this.serverToClient.length > 0 && this.serverToClient[0].deliverAt <= now) {
+            const msg = this.serverToClient.shift();
+            // 计算 RTT
+            if (msg.data._clientSendTime) {
+                this.lastRtt = now - msg.data._clientSendTime;
+                this.rttHistory.push(this.lastRtt);
+                if (this.rttHistory.length > 60) this.rttHistory.shift();
+            }
+            ready.push(msg.data);
+        }
+        return ready;
+    }
+
+    getRtt() {
+        return this.lastRtt;
+    }
+
+    getAvgRtt() {
+        if (this.rttHistory.length === 0) return 0;
+        return this.rttHistory.reduce((a, b) => a + b, 0) / this.rttHistory.length;
+    }
+
+    clear() {
+        this.clientToServer = [];
+        this.serverToClient = [];
+        this.rttHistory = [];
+        this.lastRtt = 0;
+    }
+}
+
+// ============================================================================
+// 确定性 AI 控制器
+// ============================================================================
+
+class DeterministicAI {
+    constructor() {
+        this.waypointIndex = 0;
+        this.waitTimer = 0;
+        this.isWaiting = false;
+    }
+
+    update(currentPos, dt) {
+        if (this.isWaiting) {
+            this.waitTimer -= dt * 1000;
+            if (this.waitTimer <= 0) {
+                this.isWaiting = false;
+                this.waypointIndex = (this.waypointIndex + 1) % CONFIG.AI_WAYPOINTS.length;
+            }
+            return { dx: 0, dy: 0 };
+        }
+
+        const target = CONFIG.AI_WAYPOINTS[this.waypointIndex];
+        const dx = target.x - currentPos.x;
+        const dy = target.y - currentPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 10) {
+            this.isWaiting = true;
+            this.waitTimer = CONFIG.AI_WAIT_TIME;
+            return { dx: 0, dy: 0 };
+        }
+
+        return { dx: dx / dist, dy: dy / dist };
+    }
+
+    reset() {
+        this.waypointIndex = 0;
+        this.waitTimer = 0;
+        this.isWaiting = false;
+    }
+}
+
+// ============================================================================
+// 服务器（权威状态）
+// ============================================================================
+
+class GameServer {
+    constructor(network) {
+        this.network = network;
+        this.players = new Map();
+        this.ai = new DeterministicAI();
+        this.lastSendTime = 0;
+        this.lastAckSequence = 0;
+        this.lastClientSendTime = 0;
+
+        // 初始化玩家
+        this.players.set(0, {
+            x: CONFIG.HALF_WIDTH * 0.3,
+            y: CONFIG.HEIGHT / 2,
+            vx: 0,
+            vy: 0
+        });
+        this.players.set(1, {
+            x: CONFIG.HALF_WIDTH * 0.7,
+            y: CONFIG.HEIGHT / 2,
+            vx: 0,
+            vy: 0
+        });
+    }
+
+    update(dt) {
+        // 处理客户端输入
+        for (const msg of this.network.receiveOnServer()) {
+            if (msg.type === 'input') {
+                this.applyInput(msg.playerId, msg.input, dt);
+                this.lastAckSequence = msg.sequence;
+                this.lastClientSendTime = msg._sendTime;
+            }
+        }
+
+        // 更新物理
+        for (const [id, player] of this.players) {
+            player.x += player.vx * dt;
+            player.y += player.vy * dt;
+
+            // 边界约束
+            player.x = clamp(player.x, CONFIG.PLAYER_SIZE, CONFIG.HALF_WIDTH - CONFIG.PLAYER_SIZE);
+            player.y = clamp(player.y, CONFIG.PLAYER_SIZE, CONFIG.HEIGHT - CONFIG.PLAYER_SIZE);
+
+            // 摩擦
+            player.vx *= 0.9;
+            player.vy *= 0.9;
+            if (Math.abs(player.vx) < 1) player.vx = 0;
+            if (Math.abs(player.vy) < 1) player.vy = 0;
+        }
+
+        // 更新 AI 玩家
+        this.updateAI(dt);
+
+        // 按发送频率广播状态
+        const p = getParams();
+        const sendInterval = 1000 / p.sendRate;
+        const now = performance.now();
+        if (now - this.lastSendTime >= sendInterval) {
+            this.lastSendTime = now;
+            this.broadcastState();
+        }
+    }
+
+    applyInput(playerId, input, dt) {
+        const player = this.players.get(playerId);
+        if (!player) return;
+
+        if (input.dx !== 0 || input.dy !== 0) {
+            const len = Math.sqrt(input.dx * input.dx + input.dy * input.dy);
+            player.vx = (input.dx / len) * CONFIG.PLAYER_SPEED;
+            player.vy = (input.dy / len) * CONFIG.PLAYER_SPEED;
+        }
+    }
+
+    updateAI(dt) {
+        const ai = this.players.get(1);
+        if (!ai) return;
+
+        const input = this.ai.update(ai, dt);
+        if (input.dx !== 0 || input.dy !== 0) {
+            ai.vx = input.dx * CONFIG.PLAYER_SPEED * CONFIG.AI_MOVE_SPEED;
+            ai.vy = input.dy * CONFIG.PLAYER_SPEED * CONFIG.AI_MOVE_SPEED;
+        }
+    }
+
+    broadcastState() {
+        const states = [];
+        for (const [id, player] of this.players) {
+            states.push({
+                id,
+                x: player.x,
+                y: player.y,
+                vx: player.vx,
+                vy: player.vy
+            });
+        }
+
+        this.network.sendToClient({
+            type: 'state',
+            timestamp: performance.now(),
+            ackSequence: this.lastAckSequence,
+            _clientSendTime: this.lastClientSendTime,
+            states
+        });
+    }
+
+    reset() {
+        this.players.set(0, {
+            x: CONFIG.HALF_WIDTH * 0.3,
+            y: CONFIG.HEIGHT / 2,
+            vx: 0,
+            vy: 0
+        });
+        this.players.set(1, {
+            x: CONFIG.HALF_WIDTH * 0.7,
+            y: CONFIG.HEIGHT / 2,
+            vx: 0,
+            vy: 0
+        });
+        this.lastAckSequence = 0;
+        this.ai.reset();
+    }
+
+    getState(id) {
+        return this.players.get(id);
+    }
+}
+
+// ============================================================================
+// 客户端（使用框架 API）
+// ============================================================================
+
+class GameClient {
+    constructor(network) {
+        this.network = network;
+        this.mode = 'no-sync';
+
+        // 本地输入
+        this.localInput = { dx: 0, dy: 0 };
+        this.inputSequence = 0;
+
+        // ========== 框架 API 使用 ==========
+
+        // 1. 快照缓冲区 - 存储服务器状态用于插值
+        const p = getParams();
+        this.snapshotBuffer = createSnapshotBuffer(
+            CONFIG.SNAPSHOT_BUFFER_SIZE,
+            p.interpDelay
+        );
+
+        // 2. 线性插值器 - 用于基础插值模式
+        this.linearInterpolator = createTransformInterpolator();
+
+        // 3. Hermite 插值器 - 用于完整模式的远程玩家
+        this.hermiteInterpolator = createHermiteTransformInterpolator();
+
+        // 4. 客户端预测 - 使用框架 ClientPrediction
+        this.predictor = {
+            predict: (state, input, dt) => {
+                let vx = state.vx || 0;
+                let vy = state.vy || 0;
+
+                if (input.dx !== 0 || input.dy !== 0) {
+                    const len = Math.sqrt(input.dx * input.dx + input.dy * input.dy);
+                    vx = (input.dx / len) * CONFIG.PLAYER_SPEED;
+                    vy = (input.dy / len) * CONFIG.PLAYER_SPEED;
+                }
+
+                return {
+                    x: clamp(state.x + vx * dt, CONFIG.PLAYER_SIZE, CONFIG.HALF_WIDTH - CONFIG.PLAYER_SIZE),
+                    y: clamp(state.y + vy * dt, CONFIG.PLAYER_SIZE, CONFIG.HEIGHT - CONFIG.PLAYER_SIZE),
+                    vx: vx * 0.9,
+                    vy: vy * 0.9
+                };
+            }
+        };
+
+        this.prediction = createClientPrediction(this.predictor, {
+            maxUnacknowledgedInputs: CONFIG.MAX_PENDING_INPUTS,
+            reconciliationThreshold: CONFIG.CORRECTION_THRESHOLD,
+            reconciliationSpeed: 10
+        });
+
+        // ========== 本地状态（用于 no-sync 和渲染） ==========
+        this.localState = {
+            x: CONFIG.HALF_WIDTH * 0.3,
+            y: CONFIG.HEIGHT / 2,
+            vx: 0,
+            vy: 0
+        };
+
+        // 平滑校正用的偏移量
+        this.visualOffset = { x: 0, y: 0 };
+        this.smoothVelocity = { x: 0, y: 0 };
+
+        // 渲染状态
+        this.renderStates = new Map();
+        this.renderStates.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.renderStates.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+
+        // 最新服务器状态（用于 no-sync 模式）
+        this.lastServerState = new Map();
+        this.lastServerState.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+
+        // 指标
+        this.metrics = {
+            rtt: 0,
+            pendingInputs: 0,
+            correctionMag: 0,
+            bufferSize: 0,
+            divergence: 0
+        };
+
+        // 历史轨迹
+        this.trail = [];
+    }
+
+    setInput(dx, dy) {
+        this.localInput = { dx, dy };
+    }
+
+    update(dt) {
+        const now = performance.now();
+
+        // 1. 发送输入到服务器
+        if (this.localInput.dx !== 0 || this.localInput.dy !== 0) {
+            this.inputSequence++;
+            this.network.sendToServer({
+                type: 'input',
+                playerId: 0,
+                input: { ...this.localInput },
+                sequence: this.inputSequence
+            });
+
+            // 记录预测（用于 prediction 和 full 模式）
+            if (this.mode === 'prediction' || this.mode === 'full') {
+                const predicted = this.prediction.recordInput(
+                    this.localInput,
+                    this.localState,
+                    dt
+                );
+                if (predicted) {
+                    this.localState = { ...predicted };
+                }
+            }
+        } else if (this.mode === 'prediction' || this.mode === 'full') {
+            // 即使没有输入也要继续模拟
+            this.localState = this.predictor.predict(this.localState, { dx: 0, dy: 0 }, dt);
+        }
+
+        // 2. 接收服务器状态
+        for (const msg of this.network.receiveOnClient()) {
+            if (msg.type === 'state') {
+                // 更新插值延迟
+                const p = getParams();
+                this.snapshotBuffer._interpolationDelay = p.interpDelay;
+
+                // 存入快照缓冲区
+                const playerStates = {};
+                for (const s of msg.states) {
+                    playerStates[s.id] = {
+                        x: s.x,
+                        y: s.y,
+                        rotation: 0,
+                        velocityX: s.vx,
+                        velocityY: s.vy,
+                        angularVelocity: 0
+                    };
+                }
+                this.snapshotBuffer.push({
+                    timestamp: msg.timestamp,
+                    state: playerStates
+                });
+
+                // 存储最新服务器状态（用于 no-sync 模式）
+                for (const s of msg.states) {
+                    this.lastServerState.set(s.id, { x: s.x, y: s.y });
+                }
+
+                // 服务器校正（prediction 和 full 模式）
+                if (this.mode === 'prediction' || this.mode === 'full') {
+                    const serverState = playerStates[0];
+                    if (serverState) {
+                        // 使用框架 API 进行校正
+                        const reconciled = this.prediction.reconcile(
+                            { x: serverState.x, y: serverState.y, vx: serverState.velocityX, vy: serverState.velocityY },
+                            msg.ackSequence,
+                            s => ({ x: s.x, y: s.y }),
+                            dt
+                        );
+
+                        if (reconciled) {
+                            // 计算校正误差
+                            const errorX = reconciled.x - this.localState.x;
+                            const errorY = reconciled.y - this.localState.y;
+                            const errorMag = Math.sqrt(errorX * errorX + errorY * errorY);
+
+                            this.metrics.correctionMag = errorMag;
+
+                            if (errorMag > CONFIG.SNAP_THRESHOLD) {
+                                // 大误差：直接跳转，清除偏移
+                                this.localState.x = reconciled.x;
+                                this.localState.y = reconciled.y;
+                                this.visualOffset = { x: 0, y: 0 };
+                            } else if (errorMag > CONFIG.CORRECTION_THRESHOLD) {
+                                // 小误差：更新状态，用偏移补偿视觉跳变
+                                // visualOffset = 旧渲染位置 - 新状态位置
+                                this.visualOffset.x += this.localState.x - reconciled.x;
+                                this.visualOffset.y += this.localState.y - reconciled.y;
+                                this.localState.x = reconciled.x;
+                                this.localState.y = reconciled.y;
+                            }
+
+                            this.localState.vx = reconciled.vx;
+                            this.localState.vy = reconciled.vy;
+                        }
+                    }
+                }
+
+                // 计算偏差（用于 no-sync 模式显示）
+                const serverLocal = playerStates[0];
+                if (serverLocal && this.mode === 'no-sync') {
+                    const renderPos = this.renderStates.get(0);
+                    this.metrics.divergence = Math.sqrt(
+                        (renderPos.x - serverLocal.x) ** 2 +
+                        (renderPos.y - serverLocal.y) ** 2
+                    );
+                }
+            }
+        }
+
+        // 3. 应用平滑校正
+        if (this.mode === 'full') {
+            const result = smoothDamp(
+                this.visualOffset.x, 0, this.smoothVelocity.x, 0.1, dt, Infinity
+            );
+            this.visualOffset.x = result[0];
+            this.smoothVelocity.x = result[1];
+
+            const resultY = smoothDamp(
+                this.visualOffset.y, 0, this.smoothVelocity.y, 0.1, dt, Infinity
+            );
+            this.visualOffset.y = resultY[0];
+            this.smoothVelocity.y = resultY[1];
+        }
+
+        // 4. 更新渲染状态
+        this.updateRenderStates(now, dt);
+
+        // 5. 更新指标
+        this.metrics.rtt = this.network.getAvgRtt();
+        this.metrics.pendingInputs = this.prediction.pendingInputCount || 0;
+        this.metrics.bufferSize = this.snapshotBuffer.size;
+
+        // 6. 更新轨迹
+        const pos = this.renderStates.get(0);
+        this.trail.push({ x: pos.x, y: pos.y });
+        if (this.trail.length > 20) this.trail.shift();
+    }
+
+    updateRenderStates(now, dt) {
+        const p = getParams();
+        const renderTime = now - p.interpDelay;
+        const interpResult = this.snapshotBuffer.getInterpolationSnapshots(renderTime);
+
+        for (const playerId of [0, 1]) {
+            let targetPos;
+
+            if (playerId === 0) {
+                // 本地玩家
+                switch (this.mode) {
+                    case 'no-sync':
+                        // 直接使用服务器最新状态，不做任何插值或预测
+                        // 延迟为 0 时完全同步，有延迟时会有明显输入延迟
+                        const serverPos = this.lastServerState.get(0);
+                        if (serverPos) {
+                            targetPos = { x: serverPos.x, y: serverPos.y };
+                        }
+                        break;
+
+                    case 'interpolation':
+                        // 仅插值：等待服务器状态
+                        if (interpResult) {
+                            const [prev, next, t] = interpResult;
+                            const p0 = prev.state[0], n0 = next.state[0];
+                            if (p0 && n0) {
+                                targetPos = this.linearInterpolator.interpolate(
+                                    { x: p0.x, y: p0.y, rotation: 0 },
+                                    { x: n0.x, y: n0.y, rotation: 0 },
+                                    t
+                                );
+                            }
+                        }
+                        break;
+
+                    case 'prediction':
+                        // 预测模式：使用本地状态
+                        targetPos = { x: this.localState.x, y: this.localState.y };
+                        break;
+
+                    case 'full':
+                        // 完整方案：本地状态 + 平滑偏移
+                        targetPos = {
+                            x: this.localState.x + this.visualOffset.x,
+                            y: this.localState.y + this.visualOffset.y
+                        };
+                        break;
+                }
+            } else {
+                // 远程玩家：使用插值
+                if (interpResult) {
+                    const [prev, next, t] = interpResult;
+                    const p1 = prev.state[1], n1 = next.state[1];
+                    if (p1 && n1) {
+                        if (this.mode === 'full') {
+                            // 完整模式使用 Hermite 插值
+                            const result = this.hermiteInterpolator.interpolate(p1, n1, t);
+                            targetPos = { x: result.x, y: result.y };
+                        } else {
+                            // 其他模式使用线性插值
+                            targetPos = {
+                                x: lerp(p1.x, n1.x, t),
+                                y: lerp(p1.y, n1.y, t)
+                            };
+                        }
+                    }
+                }
+            }
+
+            // 更新渲染位置
+            if (targetPos) {
+                const currentRender = this.renderStates.get(playerId);
+                if (playerId === 0 && (this.mode === 'prediction' || this.mode === 'full')) {
+                    // 本地玩家预测模式：直接使用
+                    this.renderStates.set(playerId, targetPos);
+                } else {
+                    // 其他情况：平滑过渡
+                    const smoothing = 0.25;
+                    this.renderStates.set(playerId, {
+                        x: currentRender.x + (targetPos.x - currentRender.x) * smoothing,
+                        y: currentRender.y + (targetPos.y - currentRender.y) * smoothing
+                    });
+                }
+            }
+        }
+    }
+
+    setMode(mode) {
+        this.mode = mode;
+        this.metrics.divergence = 0;
+    }
+
+    reset() {
+        const p = getParams();
+        this.snapshotBuffer = createSnapshotBuffer(CONFIG.SNAPSHOT_BUFFER_SIZE, p.interpDelay);
+        this.prediction = createClientPrediction(this.predictor, {
+            maxUnacknowledgedInputs: CONFIG.MAX_PENDING_INPUTS,
+            reconciliationThreshold: CONFIG.CORRECTION_THRESHOLD,
+            reconciliationSpeed: 10
+        });
+
+        this.localState = {
+            x: CONFIG.HALF_WIDTH * 0.3,
+            y: CONFIG.HEIGHT / 2,
+            vx: 0,
+            vy: 0
+        };
+        this.visualOffset = { x: 0, y: 0 };
+        this.smoothVelocity = { x: 0, y: 0 };
+        this.renderStates.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.renderStates.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState.set(0, { x: CONFIG.HALF_WIDTH * 0.3, y: CONFIG.HEIGHT / 2 });
+        this.lastServerState.set(1, { x: CONFIG.HALF_WIDTH * 0.7, y: CONFIG.HEIGHT / 2 });
+        this.inputSequence = 0;
+        this.trail = [];
+        this.metrics = { rtt: 0, pendingInputs: 0, correctionMag: 0, bufferSize: 0, divergence: 0 };
+    }
+
+    getRenderPos(playerId) {
+        return this.renderStates.get(playerId) || { x: 0, y: 0 };
+    }
+
+    getMetrics() {
+        return this.metrics;
+    }
+}
+
+// ============================================================================
+// 全局实例
+// ============================================================================
+
+const network = new MockNetwork();
+const server = new GameServer(network);
+const client = new GameClient(network);
+
+// ============================================================================
+// 渲染
+// ============================================================================
+
+function render() {
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
+
+    // 左侧：客户端视角
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, CONFIG.HALF_WIDTH, CONFIG.HEIGHT);
+    ctx.clip();
+    drawClientView();
+    ctx.restore();
+
+    // 分隔线
+    ctx.strokeStyle = COLORS.divider;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(CONFIG.HALF_WIDTH + 2.5, 0);
+    ctx.lineTo(CONFIG.HALF_WIDTH + 2.5, CONFIG.HEIGHT);
+    ctx.stroke();
+
+    // 右侧：服务器视角
+    ctx.save();
+    ctx.translate(CONFIG.HALF_WIDTH + 5, 0);
+    ctx.beginPath();
+    ctx.rect(0, 0, CONFIG.HALF_WIDTH, CONFIG.HEIGHT);
+    ctx.clip();
+    drawServerView();
+    ctx.restore();
+
+    // UI
+    drawMetricsPanel();
+    drawModeInfo();
+    drawJoystick();
+}
+
+function drawGrid() {
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    for (let x = 0; x < CONFIG.HALF_WIDTH; x += 30) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CONFIG.HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y < CONFIG.HEIGHT; y += 30) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CONFIG.HALF_WIDTH, y);
+        ctx.stroke();
+    }
+}
+
+function drawPlayer(x, y, color, highlight, showGlow = true) {
+    if (showGlow) {
+        // 发光效果 - 正确处理 hex 颜色
+        let glowColor;
+        if (color.startsWith('#')) {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            glowColor = 'rgba(' + r + ',' + g + ',' + b + ',0.4)';
+        } else {
+            glowColor = color.replace('rgb', 'rgba').replace(')', ', 0.4)');
+        }
+
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, CONFIG.PLAYER_SIZE + 10);
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.arc(x, y, CONFIG.PLAYER_SIZE + 10, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+    }
+
+    // 主体
+    ctx.beginPath();
+    ctx.arc(x, y, CONFIG.PLAYER_SIZE, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = highlight ? '#fff' : 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = highlight ? 3 : 1;
+    ctx.stroke();
+}
+
+function drawGhostCircle(x, y, color, dashed = true) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    if (dashed) ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(x, y, CONFIG.PLAYER_SIZE + 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawCorrectionArrow(fromX, fromY, toX, toY) {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 2) return;
+
+    ctx.strokeStyle = COLORS.correctionArrow;
+    ctx.fillStyle = COLORS.correctionArrow;
+    ctx.lineWidth = 2;
+
+    // 线条
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+
+    // 箭头
+    const angle = Math.atan2(dy, dx);
+    const arrowSize = 8;
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - arrowSize * Math.cos(angle - Math.PI / 6), toY - arrowSize * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(toX - arrowSize * Math.cos(angle + Math.PI / 6), toY - arrowSize * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawTrail(trail, color) {
+    if (trail.length < 2) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x, trail[0].y);
+    for (let i = 1; i < trail.length; i++) {
+        const alpha = i / trail.length;
+        ctx.globalAlpha = alpha * 0.3;
+        ctx.lineTo(trail[i].x, trail[i].y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+}
+
+function drawClientView() {
+    drawGrid();
+
+    // 轨迹
+    drawTrail(client.trail, COLORS.localPlayer);
+
+    // AI 路径提示（完整模式）
+    if (client.mode === 'full') {
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(CONFIG.AI_WAYPOINTS[0].x, CONFIG.AI_WAYPOINTS[0].y);
+        for (let i = 1; i < CONFIG.AI_WAYPOINTS.length; i++) {
+            ctx.lineTo(CONFIG.AI_WAYPOINTS[i].x, CONFIG.AI_WAYPOINTS[i].y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // 绘制玩家
+    for (const playerId of [0, 1]) {
+        const pos = client.getRenderPos(playerId);
+        const isLocal = playerId === 0;
+        const color = isLocal ? COLORS.localPlayer : COLORS.remotePlayer;
+
+        drawPlayer(pos.x, pos.y, color, isLocal);
+
+        // 服务器位置 ghost（prediction 和 full 模式）
+        if (isLocal && (client.mode === 'prediction' || client.mode === 'full')) {
+            const serverPos = server.getState(0);
+            if (serverPos) {
+                drawGhostCircle(serverPos.x, serverPos.y, COLORS.serverGhost);
+
+                // 校正向量箭头（full 模式）
+                if (client.mode === 'full') {
+                    const dist = Math.sqrt((pos.x - serverPos.x) ** 2 + (pos.y - serverPos.y) ** 2);
+                    if (dist > 5) {
+                        drawCorrectionArrow(pos.x, pos.y, serverPos.x, serverPos.y);
+                    }
+                }
+            }
+        }
+
+        // 偏差警告（no-sync 模式）
+        if (isLocal && client.mode === 'no-sync' && client.metrics.divergence > 20) {
+            ctx.strokeStyle = COLORS.bad;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, CONFIG.PLAYER_SIZE + 8, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 显示偏差距离
+            ctx.fillStyle = COLORS.bad;
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(client.metrics.divergence.toFixed(0) + 'px', pos.x, pos.y - CONFIG.PLAYER_SIZE - 12);
+        }
+    }
+
+    // 标题
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(5, 5, 90, 20);
+    ctx.fillStyle = COLORS.localPlayer;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Client View', 10, 18);
+}
+
+function drawServerView() {
+    drawGrid();
+
+    // AI 路径
+    ctx.strokeStyle = 'rgba(249, 115, 22, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(CONFIG.AI_WAYPOINTS[0].x, CONFIG.AI_WAYPOINTS[0].y);
+    for (let i = 1; i < CONFIG.AI_WAYPOINTS.length; i++) {
+        ctx.lineTo(CONFIG.AI_WAYPOINTS[i].x, CONFIG.AI_WAYPOINTS[i].y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 绘制服务器权威状态
+    for (const playerId of [0, 1]) {
+        const state = server.getState(playerId);
+        if (state) {
+            const isLocal = playerId === 0;
+            const color = isLocal ? COLORS.localPlayer : COLORS.remotePlayer;
+            drawPlayer(state.x, state.y, color, false);
+        }
+    }
+
+    // 标题
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(5, 5, 130, 20);
+    ctx.fillStyle = COLORS.good;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Server (Authority)', 10, 18);
+}
+
+function drawMetricsPanel() {
+    const metrics = client.getMetrics();
+    const x = 10, y = CONFIG.HEIGHT - 55;
+    const width = 200, height = 50;
+
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeStyle = COLORS.divider;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, width, height);
+
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+
+    // RTT
+    const rttColor = metrics.rtt < 100 ? COLORS.good : metrics.rtt < 200 ? COLORS.warning : COLORS.bad;
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('RTT:', x + 8, y + 15);
+    ctx.fillStyle = rttColor;
+    ctx.fillText(metrics.rtt.toFixed(0) + 'ms', x + 35, y + 15);
+
+    // Pending Inputs
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Pending:', x + 75, y + 15);
+    ctx.fillStyle = metrics.pendingInputs > 30 ? COLORS.warning : COLORS.textPrimary;
+    ctx.fillText(metrics.pendingInputs.toString(), x + 125, y + 15);
+
+    // Buffer Size
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Buffer:', x + 8, y + 30);
+    ctx.fillStyle = COLORS.textPrimary;
+    ctx.fillText(metrics.bufferSize + '/' + CONFIG.SNAPSHOT_BUFFER_SIZE, x + 50, y + 30);
+
+    // Correction
+    const corrColor = metrics.correctionMag < 5 ? COLORS.good : metrics.correctionMag < 20 ? COLORS.warning : COLORS.bad;
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Correction:', x + 100, y + 30);
+    ctx.fillStyle = corrColor;
+    ctx.fillText(metrics.correctionMag.toFixed(1) + 'px', x + 160, y + 30);
+
+    // 插值延迟
+    const p = getParams();
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.fillText('Interp Delay: ' + p.interpDelay + 'ms', x + 8, y + 45);
+}
+
+function drawModeInfo() {
+    const modeNames = {
+        'no-sync': '无补偿 (延迟明显)',
+        'interpolation': '仅插值',
+        'prediction': '客户端预测',
+        'full': '完整方案'
+    };
+
+    const modeDescs = {
+        'no-sync': '直接使用服务器状态，有明显输入延迟',
+        'interpolation': '等待服务器状态，有 interpDelay 延迟',
+        'prediction': '立即响应 + 服务器校正',
+        'full': '预测 + Hermite 插值 + 平滑校正'
+    };
+
+    const x = CONFIG.WIDTH / 2 - 90, y = 5;
+    const width = 180, height = 35;
+
+    ctx.fillStyle = COLORS.panelBg;
+    ctx.fillRect(x, y, width, height);
+
+    ctx.fillStyle = '#58a6ff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(modeNames[client.mode] || 'Unknown', CONFIG.WIDTH / 2, y + 14);
+
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.font = '9px monospace';
+    ctx.fillText(modeDescs[client.mode] || '', CONFIG.WIDTH / 2, y + 28);
+}
+
+// ============================================================================
+// 摇杆
+// ============================================================================
+
+const joystick = { x: 70, y: CONFIG.HEIGHT - 80, r: 40, dx: 0, dy: 0, active: false, touchId: null };
+
+function drawJoystick() {
+    ctx.beginPath();
+    ctx.arc(joystick.x, joystick.y, joystick.r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const hx = joystick.x + joystick.dx * joystick.r * 0.6;
+    const hy = joystick.y + joystick.dy * joystick.r * 0.6;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+    ctx.fillStyle = joystick.active ? 'rgba(59,130,246,0.8)' : 'rgba(255,255,255,0.4)';
+    ctx.fill();
+
+    // 提示文字
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('WASD / Drag', joystick.x, joystick.y + joystick.r + 15);
+}
+
+function getCanvasPos(cx, cy) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (cx - rect.left) * (CONFIG.WIDTH / rect.width),
+        y: (cy - rect.top) * (CONFIG.HEIGHT / rect.height)
+    };
+}
+
+function inJoystick(x, y) {
+    return Math.hypot(x - joystick.x, y - joystick.y) <= joystick.r * 1.5;
+}
+
+function updateJoystick(x, y) {
+    const dx = x - joystick.x, dy = y - joystick.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+        const clamped = Math.min(dist, joystick.r);
+        joystick.dx = (dx / dist) * (clamped / joystick.r);
+        joystick.dy = (dy / dist) * (clamped / joystick.r);
+    }
+    const threshold = 0.3;
+    client.setInput(
+        Math.abs(joystick.dx) > threshold ? Math.sign(joystick.dx) : 0,
+        Math.abs(joystick.dy) > threshold ? Math.sign(joystick.dy) : 0
+    );
+}
+
+function resetJoystick() {
+    joystick.dx = 0;
+    joystick.dy = 0;
+    joystick.active = false;
+    joystick.touchId = null;
+    client.setInput(0, 0);
+}
+
+// 鼠标事件
+canvas.addEventListener('mousedown', e => {
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    if (inJoystick(pos.x, pos.y)) {
+        joystick.active = true;
+        updateJoystick(pos.x, pos.y);
+    }
+});
+canvas.addEventListener('mousemove', e => {
+    if (joystick.active) {
+        const pos = getCanvasPos(e.clientX, e.clientY);
+        updateJoystick(pos.x, pos.y);
+    }
+});
+canvas.addEventListener('mouseup', () => joystick.active && resetJoystick());
+canvas.addEventListener('mouseleave', () => joystick.active && resetJoystick());
+
+// 触摸事件
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    const pos = getCanvasPos(touch.clientX, touch.clientY);
+    if (inJoystick(pos.x, pos.y)) {
+        joystick.active = true;
+        joystick.touchId = touch.identifier;
+        updateJoystick(pos.x, pos.y);
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const touch of e.changedTouches) {
+        if (touch.identifier === joystick.touchId) {
+            const pos = getCanvasPos(touch.clientX, touch.clientY);
+            updateJoystick(pos.x, pos.y);
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    for (const touch of e.changedTouches) {
+        if (touch.identifier === joystick.touchId) resetJoystick();
+    }
+});
+
+// ============================================================================
+// 键盘输入
+// ============================================================================
+
+const keys = new Set();
+
+window.addEventListener('keydown', e => {
+    const key = e.key.toLowerCase();
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        keys.add(key);
+        e.preventDefault();
+        updateKeyboardInput();
+    }
+});
+
+window.addEventListener('keyup', e => {
+    const key = e.key.toLowerCase();
+    keys.delete(key);
+    updateKeyboardInput();
+});
+
+function updateKeyboardInput() {
+    if (joystick.active) return;  // 摇杆优先
+
+    let dx = 0, dy = 0;
+    if (keys.has('w') || keys.has('arrowup')) dy = -1;
+    if (keys.has('s') || keys.has('arrowdown')) dy = 1;
+    if (keys.has('a') || keys.has('arrowleft')) dx = -1;
+    if (keys.has('d') || keys.has('arrowright')) dx = 1;
+
+    // 对角线归一化
+    if (dx !== 0 && dy !== 0) {
+        const len = Math.sqrt(dx * dx + dy * dy);
+        dx /= len;
+        dy /= len;
+    }
+
+    client.setInput(dx, dy);
+}
+
+// ============================================================================
+// 场景切换
+// ============================================================================
+
+function loadScenario(type) {
+    client.setMode(type);
+    network.clear();
+    server.reset();
+    client.reset();
+    resetJoystick();
+    keys.clear();
+}
+
+window.__demoScene = { loadScenario };
+
+// ============================================================================
+// 主循环
+// ============================================================================
+
+let lastTime = performance.now();
+
+function gameLoop() {
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+
+    server.update(dt);
+    client.update(dt);
+    render();
+
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();`;
+
+这是一个演示 **@esengine/network** 网络同步工具的交互式 demo。
+
+**左侧**是客户端视角（你控制的玩家），**右侧**是服务器权威状态。通过切换不同模式，观察各种同步策略的效果。
+
+**操作说明：**
+- **键盘**: WASD 或方向键移动
+- **触摸/鼠标**: 左下角虚拟摇杆
+
+<DemoPlayground
+    client:load
+    title="网络同步 - 状态同步与客户端预测"
+    code={networkDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={networkScenes}
+    params={networkParams}
+/>
+
+<script is:inline src="/js/esengine.iife.js"></script>
+
+## 四种同步模式对比
+
+### 1. 无同步
+客户端直接响应输入，完全不考虑服务器状态。
+
+**问题**：客户端和服务器状态会逐渐偏离，红色警告圈显示偏差距离。
+
+### 2. 插值同步
+客户端等待服务器状态，使用 `SnapshotBuffer` 进行插值显示。
+
+**问题**：输入延迟明显（感觉"黏糊糊"），因为需要等待服务器确认。
+
+### 3. 客户端预测
+使用框架 `ClientPrediction` API 立即响应输入，收到服务器状态后校正。
+
+**特点**：绿色虚线圈显示服务器真实位置，可能出现轻微位置回跳。
+
+### 4. 完整方案
+结合预测 + `HermiteTransformInterpolator` + `smoothDamp` 平滑校正。
+
+**特点**：
+- 绿色虚线：服务器真实位置
+- 红色箭头：校正向量（从预测位置指向服务器位置）
+- 远程玩家使用 Hermite 曲线插值，移动更平滑
+- AI 玩家按固定 8 字形路径移动，便于观察同步效果
+
+---
+
+## 使用的框架 API
+
+### 1. SnapshotBuffer - 快照缓冲区
+
+```typescript
+import { createSnapshotBuffer } from '@esengine/network';
+
+// 创建快照缓冲区
+const buffer = createSnapshotBuffer<PlayerState>(
+    30,   // maxSize: 最大快照数量
+    100   // interpolationDelay: 插值延迟(ms)
+);
+
+// 收到服务器状态时存入
+buffer.push({
+    timestamp: serverTimestamp,
+    state: playerState
+});
+
+// 获取插值用的快照
+const renderTime = Date.now() - 100;
+const result = buffer.getInterpolationSnapshots(renderTime);
+
+if (result) {
+    const [prevSnapshot, nextSnapshot, t] = result;
+    // t 是 0~1 之间的插值因子
+}
+```
+
+### 2. ClientPrediction - 客户端预测
+
+```typescript
+import { createClientPrediction } from '@esengine/network';
+
+// 定义预测器
+const predictor = {
+    predict(state, input, deltaTime) {
+        return {
+            x: state.x + input.dx * SPEED * deltaTime,
+            y: state.y + input.dy * SPEED * deltaTime,
+            vx: input.dx * SPEED,
+            vy: input.dy * SPEED
+        };
+    }
+};
+
+// 创建预测管理器
+const prediction = createClientPrediction(predictor, {
+    maxUnacknowledgedInputs: 60,
+    reconciliationThreshold: 0.5,
+    reconciliationSpeed: 10
+});
+
+// 每帧：记录输入并预测
+const predictedState = prediction.recordInput(input, currentState, deltaTime);
+
+// 收到服务器状态时：校正
+const reconciledState = prediction.reconcile(
+    serverState,
+    acknowledgedSequence,
+    state => ({ x: state.x, y: state.y }),
+    deltaTime
+);
+```
+
+### 3. HermiteTransformInterpolator - Hermite 曲线插值
+
+```typescript
+import { createHermiteTransformInterpolator } from '@esengine/network';
+
+// 创建 Hermite 插值器（比线性插值更平滑）
+const hermiteInterpolator = createHermiteTransformInterpolator();
+
+// 使用速度信息进行平滑插值
+const result = hermiteInterpolator.interpolate(
+    { x: 0, y: 0, rotation: 0, velocityX: 10, velocityY: 0, angularVelocity: 0 },
+    { x: 100, y: 50, rotation: 0, velocityX: 5, velocityY: 5, angularVelocity: 0 },
+    0.5  // t = 0.5
+);
+```
+
+### 4. smoothDamp - 平滑阻尼
+
+```typescript
+import { smoothDamp } from '@esengine/network';
+
+// 平滑过渡到目标值（用于校正偏移量）
+const [newValue, newVelocity] = smoothDamp(
+    currentValue,   // 当前值
+    targetValue,    // 目标值
+    velocity,       // 当前速度（会被更新）
+    smoothTime,     // 平滑时间
+    deltaTime,      // 帧时间
+    maxSpeed        // 最大速度（可选）
+);
+```
+
+---
+
+## 网络同步最佳实践
+
+### 1. 服务器权威
+```
+服务器是唯一的"真相来源"
+客户端只是"预测"和"展示"
+任何作弊行为服务器都能检测
+```
+
+### 2. 插值延迟
+```
+renderTime = currentTime - interpolationDelay
+
+插值延迟越大 → 越平滑，但延迟越高
+插值延迟越小 → 越即时，但可能卡顿
+推荐值: 100-150ms（可通过参数面板调整）
+```
+
+### 3. 预测与校正
+```
+预测: 立即响应输入，提升手感
+校正: 收到服务器状态后平滑修正
+关键: 使用 smoothDamp 避免"跳跃"
+```
+
+### 4. Hermite vs 线性插值
+```
+线性插值: 简单，但转向时不够平滑
+Hermite 插值: 使用速度信息，曲线更自然
+推荐: 对远程玩家使用 Hermite 插值
+```
+
+---
+
+## 相关文档
+
+- [网络模块 API](/modules/network) - 完整 API 文档
+- [帧同步指南](/modules/network/lockstep) - 帧同步实现
+- [状态同步指南](/modules/network/state-sync) - 状态同步详解
