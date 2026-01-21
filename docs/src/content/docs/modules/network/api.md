@@ -136,7 +136,9 @@ type PrefabFactory = (scene: Scene, spawn: SpawnData) => Entity;
 
 ```typescript
 interface PlayerInput {
-    frame: number;
+    seq: number;               // 输入序列号（用于客户端预测）
+    frame: number;             // 帧序号
+    timestamp: number;         // 客户端时间戳
     moveDir?: { x: number; y: number };
     actions?: string[];
 }
@@ -200,11 +202,15 @@ import {
     NetworkServiceToken,
     NetworkSyncSystemToken,
     NetworkSpawnSystemToken,
-    NetworkInputSystemToken
+    NetworkInputSystemToken,
+    NetworkPredictionSystemToken,
+    NetworkAOISystemToken,
 } from '@esengine/network';
 
 // 使用
 const networkService = services.get(NetworkServiceToken);
+const predictionSystem = services.get(NetworkPredictionSystemToken);
+const aoiSystem = services.get(NetworkAOISystemToken);
 ```
 
 ## 服务器端 API
@@ -281,8 +287,10 @@ const gameProtocol = rpc.define({
 
 ```typescript
 interface SyncData {
-    time: number;
-    entities: IEntityState[];
+    frame: number;              // 服务器帧号
+    timestamp: number;          // 服务器时间戳
+    ackSeq?: number;            // 已确认的输入序列号
+    entities: EntitySyncState[];
 }
 ```
 
@@ -293,8 +301,8 @@ interface SpawnData {
     netId: number;
     ownerId: number;
     prefab: string;
-    position: { x: number; y: number };
-    rotation: number;
+    pos: { x: number; y: number };
+    rot?: number;
 }
 ```
 
@@ -329,8 +337,11 @@ interface JoinResponse {
 ```typescript
 interface EntitySyncState {
     netId: number;
-    position?: { x: number; y: number };
-    rotation?: number;
+    pos?: { x: number; y: number };
+    rot?: number;
+    vel?: { x: number; y: number };
+    angVel?: number;
+    custom?: Record<string, unknown>;
 }
 ```
 

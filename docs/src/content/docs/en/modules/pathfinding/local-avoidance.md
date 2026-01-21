@@ -12,81 +12,94 @@ ORCA is an improved version of RVO (Reciprocal Velocity Obstacles) and is widely
 ### Features
 
 - Efficient multi-agent collision avoidance
-- Support for static obstacles
+- Support for static and dynamic obstacles
 - KD-Tree based spatial indexing for accelerated neighbor queries
-- Seamless integration with ECS framework
+- Seamless integration with NavigationSystem
 - Configurable avoidance parameters
 
-## Basic Usage
+## Integration with NavigationSystem (Recommended)
 
-### 1. Create Avoidance World
+Use ORCA avoidance through `NavigationSystem`'s pluggable architecture:
+
+### 1. Create Navigation System
 
 ```typescript
-import { AvoidanceWorldComponent } from '@esengine/pathfinding/ecs';
-import { Polygon } from '@esengine/ecs-framework-math';
+import {
+    NavigationSystem,
+    NavigationAgentComponent,
+    ORCAConfigComponent,  // Optional: for per-agent ORCA customization
+    createNavMeshPathPlanner,
+    createORCAAvoidance,
+    createDefaultCollisionResolver
+} from '@esengine/pathfinding/ecs';
 
-// Create avoidance world entity in the scene
-const worldEntity = scene.createEntity('AvoidanceWorld');
-const world = worldEntity.addComponent(new AvoidanceWorldComponent());
-
-// Optional: Add static obstacles (like walls)
-// Note: Obstacle vertices must be in counter-clockwise (CCW) order
-world.addRectObstacle(0, 0, 100, 10);  // Rectangular obstacle
-world.addObstacle({
-    // Use Polygon.ensureCCW to ensure correct order
-    // Y-down coordinate system (like Canvas) needs true
-    vertices: Polygon.ensureCCW([
-        { x: 0, y: 0 },
-        { x: 10, y: 0 },
-        { x: 10, y: 10 },
-        { x: 0, y: 10 }
-    ], true)  // Use true for Canvas coordinate system
+// Create pluggable navigation system
+const navSystem = new NavigationSystem({
+    enablePathPlanning: true,
+    enableLocalAvoidance: true,      // Enable ORCA avoidance
+    enableCollisionResolution: true
 });
+
+// Set path planner
+navSystem.setPathPlanner(createNavMeshPathPlanner(navMesh));
+
+// Set ORCA local avoidance
+navSystem.setLocalAvoidance(createORCAAvoidance({
+    defaultTimeHorizon: 2.0,
+    defaultTimeHorizonObst: 1.0,
+    timeStep: 1/60
+}));
+
+// Set collision resolver
+navSystem.setCollisionResolver(createDefaultCollisionResolver());
+
+scene.addSystem(navSystem);
 ```
 
-### 2. Create Avoidance Agents
+### 2. Create Navigation Agents
 
 ```typescript
-import { AvoidanceAgentComponent } from '@esengine/pathfinding/ecs';
-
 // Add component to each entity that needs avoidance
 const agentEntity = scene.createEntity('Agent');
-const agent = agentEntity.addComponent(new AvoidanceAgentComponent());
+const agent = agentEntity.addComponent(new NavigationAgentComponent());
 
-// Configure agent parameters
+// Core navigation parameters
 agent.radius = 0.5;           // Agent radius
 agent.maxSpeed = 5;           // Maximum speed
-agent.neighborDist = 10;      // Neighbor search distance
-agent.maxNeighbors = 10;      // Maximum number of neighbors
-agent.timeHorizon = 2;        // Time horizon (agents)
-agent.timeHorizonObst = 1;    // Time horizon (obstacles)
+
+// Optional: Add ORCA config to customize avoidance parameters
+const orcaConfig = agentEntity.addComponent(new ORCAConfigComponent());
+orcaConfig.neighborDist = 10;      // Neighbor search distance
+orcaConfig.maxNeighbors = 10;      // Maximum number of neighbors
+orcaConfig.timeHorizon = 2;        // Time horizon (agents)
+orcaConfig.timeHorizonObst = 1;    // Time horizon (obstacles)
+
+// Set destination
+agent.setDestination(100, 100);
 ```
 
-### 3. Add System
+### 3. Add Obstacles
 
 ```typescript
-import { LocalAvoidanceSystem } from '@esengine/pathfinding/ecs';
+import { Polygon } from '@esengine/ecs-framework-math';
 
-// Add local avoidance system
-scene.addSystem(new LocalAvoidanceSystem());
-```
+// Static obstacles (path planner routes around)
+navSystem.addStaticObstacle({
+    vertices: Polygon.ensureCCW([
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 200, y: 200 },
+        { x: 100, y: 200 }
+    ], true)  // Use true for Canvas coordinate system
+});
 
-### 4. Set Preferred Velocity
+// Dynamic obstacles (ORCA real-time avoidance)
+navSystem.addDynamicObstacle({
+    vertices: [{ x: 300, y: 100 }, { x: 350, y: 100 }, { x: 350, y: 150 }, { x: 300, y: 150 }]
+});
 
-```typescript
-// Update agent's preferred velocity each frame (uses agent's current position)
-agent.setPreferredVelocityTowards(targetX, targetY);
-
-// Or specify current position
-agent.setPreferredVelocityTowards(targetX, targetY, currentX, currentY);
-
-// Or set directly
-agent.preferredVelocityX = 3;
-agent.preferredVelocityY = 2;
-
-// Other useful methods
-agent.stop();              // Stop the agent
-agent.applyNewVelocity();  // Manually apply ORCA computed new velocity
+// Clear all dynamic obstacles
+navSystem.clearDynamicObstacles();
 ```
 
 ## Direct ORCA Solver Usage
@@ -145,10 +158,6 @@ const obstacles: IObstacle[] = [
 // Build KD-Tree
 kdTree.build(agents);
 
-// Other KD-Tree methods
-kdTree.clear();              // Clear the index
-console.log(kdTree.agentCount); // Get agent count
-
 // Compute new velocity for each agent
 for (const agent of agents) {
     // Query neighbors (returns INeighborResult[])
@@ -177,54 +186,26 @@ for (const agent of agents) {
 
 ## Configuration Parameters
 
-### Agent Parameters (AvoidanceAgentComponent)
+### Agent Parameters (NavigationAgentComponent)
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `radius` | 0.5 | Agent collision radius |
 | `maxSpeed` | 5.0 | Maximum movement speed |
+| `enabled` | true | Whether navigation is enabled |
+
+### ORCA Parameters (ORCAConfigComponent)
+
+Optional component to customize ORCA avoidance parameters per agent:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
 | `neighborDist` | 15.0 | Neighbor search distance |
 | `maxNeighbors` | 10 | Maximum number of neighbors |
 | `timeHorizon` | 2.0 | Prediction time for other agents |
 | `timeHorizonObst` | 1.0 | Prediction time for obstacles |
-| `enabled` | true | Whether avoidance is enabled |
-| `autoApplyVelocity` | true | Whether to auto-apply computed new velocity |
-
-### Agent Methods (AvoidanceAgentComponent)
-
-| Method | Description |
-|--------|-------------|
-| `setPosition(x, y)` | Set agent position |
-| `setVelocity(x, y)` | Set current velocity |
-| `setPreferredVelocity(x, y)` | Set preferred velocity |
-| `setPreferredVelocityTowards(targetX, targetY, currentX?, currentY?)` | Set preferred velocity towards target |
-| `applyNewVelocity()` | Manually apply ORCA computed new velocity |
-| `getNewSpeed()` | Get magnitude of new velocity (scalar) |
-| `getCurrentSpeed()` | Get magnitude of current velocity (scalar) |
-| `stop()` | Stop the agent (zero all velocities) |
-| `reset()` | Reset all component state |
-
-### World Parameters (AvoidanceWorldComponent)
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `defaultTimeHorizon` | 2.0 | Default agent time horizon |
-| `defaultTimeHorizonObst` | 1.0 | Default obstacle time horizon |
-| `timeStep` | 1/60 | Simulation time step |
-
-### World Methods (AvoidanceWorldComponent)
-
-| Method | Description |
-|--------|-------------|
-| `addObstacle(obstacle)` | Add static obstacle (vertices must be CCW order) |
-| `addRectObstacle(x, y, width, height)` | Add rectangular obstacle |
-| `clearObstacles()` | Remove all obstacles |
-| `resetStats()` | Reset statistics |
-| `getConfig()` | Get ORCA configuration object |
 
 ### Solver Configuration (IORCASolverConfig)
-
-Configuration parameters when using ORCA solver directly:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -232,28 +213,7 @@ Configuration parameters when using ORCA solver directly:
 | `defaultTimeHorizonObst` | 1.0 | Default obstacle time horizon |
 | `timeStep` | 1/60 | Simulation time step |
 | `epsilon` | 0.00001 | Numerical precision threshold |
-
-## Integration with Pathfinding
-
-ORCA can work with the pathfinding system for complete navigation:
-
-```typescript
-import {
-    PathfindingAgentComponent,
-    PathfindingSystem,
-    AvoidanceAgentComponent,
-    LocalAvoidanceSystem
-} from '@esengine/pathfinding/ecs';
-
-// Add both components to the same entity
-const entity = scene.createEntity('NavigatingAgent');
-entity.addComponent(new PathfindingAgentComponent());
-entity.addComponent(new AvoidanceAgentComponent());
-
-// Pathfinding calculates paths, local avoidance handles dynamic obstacles
-scene.addSystem(new PathfindingSystem());
-scene.addSystem(new LocalAvoidanceSystem());
-```
+| `yAxisDown` | false | Whether using Y-axis down coordinate system (like Canvas) |
 
 ## ORCA Algorithm Principle
 
@@ -274,26 +234,97 @@ ORCA is based on the "velocity obstacle" concept:
                ●  Optimal new velocity
 ```
 
+## Flow Controller
+
+When multiple agents converge in narrow areas (corridors, doorways), ORCA may fail to find a feasible velocity solution. The flow controller solves this through queuing mechanisms:
+
+### Why Use a Flow Controller?
+
+ORCA algorithm may produce undesirable behavior in these scenarios:
+
+- **Narrow passages**: Multiple agents trying to pass simultaneously, too many ORCA constraints lead to no feasible solution
+- **Intersections**: Agents moving towards each other may cause "deadlock" or repeated jittering
+- **Doorway congestion**: Large numbers of agents gathering at entrances, blocking each other
+
+The flow controller addresses these issues by detecting congestion zones and managing passage order.
+
+### Basic Usage
+
+```typescript
+import {
+    NavigationSystem,
+    createFlowController,
+    PassPermission
+} from '@esengine/pathfinding/ecs';
+
+// Create navigation system
+const navSystem = new NavigationSystem({
+    enableFlowControl: true  // Enable flow control
+});
+
+// Create flow controller
+const flowController = createFlowController({
+    detectionRadius: 3.0,         // Detection radius: how close agents are grouped
+    minAgentsForCongestion: 3,    // Minimum agents to trigger congestion detection
+    defaultCapacity: 2,           // Default zone capacity: agents that can pass simultaneously
+    waitPointDistance: 1.5        // Wait point distance: spacing when queuing
+});
+
+// Set flow controller
+navSystem.setFlowController(flowController);
+
+// Add static congestion zone (like a doorway)
+const doorZoneId = flowController.addStaticZone(
+    { x: 50, y: 50 },  // Center point
+    5.0,               // Radius
+    1                  // Capacity (only 1 agent can pass at a time)
+);
+
+// Remove at runtime
+flowController.removeStaticZone(doorZoneId);
+```
+
+### Pass Permissions
+
+The flow controller returns one of three permissions for each agent:
+
+| Permission | Description | Handling |
+|------------|-------------|----------|
+| `Proceed` | Normal passage | Execute ORCA avoidance |
+| `Wait` | Queue and wait | Move to wait position and stop |
+| `Yield` | Slow down and yield | Reduce speed, execute ORCA |
+
+### Configuration Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `detectionRadius` | 3.0 | Detection radius, determines how close agents are grouped |
+| `minAgentsForCongestion` | 3 | Minimum agents to trigger congestion detection |
+| `defaultCapacity` | 2 | Default zone capacity: agents allowed to pass simultaneously |
+| `waitPointDistance` | 1.5 | Distance from congestion zone edge for wait points |
+| `yieldSpeedMultiplier` | 0.3 | Speed multiplier when yielding (0-1) |
+
+## NavigationSystem Processing Pipeline
+
+```
+1. Path Planning → 2. Flow Control → 3. Local Avoidance → 4. Collision Resolution
+        ↓                ↓                  ↓                    ↓
+   Compute path    Check permission   Compute avoidance    Validate & correct
+(static obstacles)                   (dynamic obstacles)   (all obstacles)
+```
+
+**Architecture Note**: NavigationSystem separates obstacles into static and dynamic:
+- **Static obstacles**: Handled by path planner (A*/NavMesh), computes global paths around them
+- **Dynamic obstacles**: Handled by ORCA, real-time avoidance for moving obstacles
+
 ## Performance Optimization Tips
 
 1. **Adjust `neighborDist`**: Reducing search distance lowers neighbor query overhead
 2. **Limit `maxNeighbors`**: Usually 5-10 neighbors is sufficient
 3. **Use spatial partitioning**: KD-Tree is built-in, automatically optimizes for large agent counts
 4. **Reduce obstacle vertices**: Simplify static obstacle geometry
-
-## Statistics
-
-Get runtime statistics:
-
-```typescript
-const world = entity.getComponent(AvoidanceWorldComponent);
-
-// Get statistics
-console.log('Agent count:', world.agentCount);
-console.log('Processed this frame:', world.agentsProcessedThisFrame);
-console.log('Compute time:', world.computeTimeMs, 'ms');
-```
+5. **Enable flow control**: Use flow controller in narrow passage scenarios to avoid ORCA failures
 
 ## Interactive Demo
 
-Check out the [ORCA Local Avoidance Interactive Demo](/esengine/en/examples/orca-avoidance-demo/) to experience different scenarios and parameter configurations.
+Check out the [NavigationSystem Demo](/en/examples/navigation-system-demo/) to experience ORCA local avoidance combined with other navigation features.

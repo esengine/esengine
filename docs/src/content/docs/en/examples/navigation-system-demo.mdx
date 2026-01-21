@@ -1,0 +1,637 @@
+---
+title: "NavigationSystem 导航系统演示"
+description: "可插拔导航架构的交互式演示 - 支持运行时切换寻路、避让、碰撞检测算法"
+---
+
+import DemoPlayground from '../../../components/DemoPlayground.vue';
+
+export const navScenes = [
+    { id: 'navmesh', label: 'NavMesh', name: 'NavMesh 寻路' },
+    { id: 'astar', label: 'A*', name: 'A* 网格寻路' },
+    { id: 'jps', label: 'JPS', name: 'JPS 跳点搜索' },
+    { id: 'circle', label: 'Circle', name: '圆形交换' },
+    { id: 'funnel', label: 'Funnel', name: '漏斗通道' },
+    { id: 'stress', label: 'Stress', name: '压力测试' }
+];
+
+export const navParams = [
+    { id: 'agentCount', label: 'Agents', desc: '代理数量', value: 16, min: 4, max: 100, step: 4 },
+    { id: 'maxSpeed', label: 'Speed', desc: '最大移动速度', value: 80, min: 30, max: 150, step: 10 },
+    { id: 'radius', label: 'Radius', desc: '代理半径', value: 6, min: 3, max: 15, step: 1 },
+    { id: 'neighborDist', label: 'Neighbor', desc: 'ORCA 邻居检测范围', value: 50, min: 20, max: 100, step: 5 }
+];
+
+export const navDemoCode = `// NavigationSystem 可插拔导航演示
+// ============================================
+// 展示运行时切换寻路算法、避让算法的能力
+// 左键点击设置目标点，右键点击添加代理
+
+const {
+    Core, Scene, Component, EntitySystem, Matcher, Time,
+    // 导航系统
+    NavigationAgentComponent, NavigationSystem, NavigationState,
+    // 适配器工厂
+    createNavMeshPathPlanner, createAStarPlanner, createJPSPlanner,
+    createORCAAvoidance, createDefaultCollisionResolver,
+    // 基础类
+    NavMesh, GridMap
+} = ESEngine;
+
+const WIDTH = 580, HEIGHT = 380;
+const CX = WIDTH / 2, CY = HEIGHT / 2;
+
+const params = window.__demoParams || {
+    agentCount: 16, maxSpeed: 80, radius: 6, neighborDist: 50
+};
+
+// 全局变量
+let currentScenario = 'navmesh';
+let navMesh = null;
+let gridMap = null;
+let navSystem = null;
+const agentColors = new Map();
+const agentTargets = new Map();
+
+// ============================================
+// 渲染系统
+// ============================================
+
+class RenderSystem extends EntitySystem {
+    constructor(context) {
+        super(Matcher.all(NavigationAgentComponent));
+        this.ctx = context;
+        this.fps = 0;
+        this.frameCount = 0;
+        this.lastFpsTime = 0;
+    }
+
+    process(entities) {
+        this.ctx.fillStyle = '#16213e';
+        this.ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        this.drawMap();
+
+        this.frameCount++;
+        const now = performance.now();
+        if (now - this.lastFpsTime >= 1000) {
+            this.fps = this.frameCount;
+            this.frameCount = 0;
+            this.lastFpsTime = now;
+        }
+
+        for (const entity of entities) {
+            const nav = entity.getComponent(NavigationAgentComponent);
+            const color = agentColors.get(entity.id) || '#00d4ff';
+            this.drawAgent(nav, color, entity.id);
+        }
+
+        this.drawHUD(entities.length);
+    }
+
+    drawMap() {
+        if (currentScenario === 'navmesh' && navMesh) {
+            this.ctx.fillStyle = 'rgba(120, 50, 50, 0.7)';
+            this.ctx.fillRect(100, 140, 380, 100);
+            this.ctx.strokeStyle = '#4a7c59';
+            this.ctx.lineWidth = 2;
+            const polygons = navMesh.getPolygons();
+            for (const poly of polygons) {
+                const verts = poly.vertices;
+                if (verts.length >= 3) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(verts[0].x, verts[0].y);
+                    for (let i = 1; i < verts.length; i++) {
+                        this.ctx.lineTo(verts[i].x, verts[i].y);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.fillStyle = 'rgba(74, 124, 89, 0.15)';
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                }
+            }
+        } else if ((currentScenario === 'astar' || currentScenario === 'jps') && gridMap) {
+            const cellSize = 20;
+            this.ctx.strokeStyle = 'rgba(45, 66, 99, 0.15)';
+            this.ctx.lineWidth = 0.5;
+            for (let x = 0; x <= WIDTH; x += cellSize) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, 0);
+                this.ctx.lineTo(x, HEIGHT);
+                this.ctx.stroke();
+            }
+            for (let y = 0; y <= HEIGHT; y += cellSize) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, y);
+                this.ctx.lineTo(WIDTH, y);
+                this.ctx.stroke();
+            }
+            this.ctx.fillStyle = 'rgba(80, 40, 40, 0.6)';
+            for (let gx = 0; gx < gridMap.width; gx++) {
+                for (let gy = 0; gy < gridMap.height; gy++) {
+                    if (!gridMap.isWalkable(gx, gy)) {
+                        this.ctx.fillRect(gx * cellSize, gy * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+        } else if (currentScenario === 'circle' || currentScenario === 'stress') {
+            // 圆形/压力测试：绘制中心圆
+            this.ctx.strokeStyle = 'rgba(74, 124, 89, 0.3)';
+            this.ctx.lineWidth = 1;
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            this.ctx.arc(CX, CY, Math.min(CX, CY) - 30, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        } else if (currentScenario === 'funnel') {
+            // 漏斗：绘制两侧墙壁
+            this.ctx.fillStyle = 'rgba(120, 50, 50, 0.7)';
+            // 上墙
+            this.ctx.fillRect(200, 0, 180, 150);
+            // 下墙
+            this.ctx.fillRect(200, 230, 180, 150);
+            // 标注通道
+            this.ctx.fillStyle = '#4a7c59';
+            this.ctx.font = '11px monospace';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('通道 (40px)', 290, 195);
+            this.ctx.textAlign = 'left';
+        }
+    }
+
+    drawAgent(nav, color, entityId) {
+        const x = nav.position?.x ?? 0;
+        const y = nav.position?.y ?? 0;
+        const r = nav.radius || 6;
+        const vx = nav.velocity?.x ?? 0;
+        const vy = nav.velocity?.y ?? 0;
+
+        if (!isFinite(x) || !isFinite(y) || !isFinite(r) || r <= 0) return;
+
+        // 绘制路径
+        if (nav.path && nav.path.length > 0) {
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            this.ctx.lineWidth = 1;
+            this.ctx.setLineDash([2, 2]);
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y);
+            for (const pt of nav.path) {
+                if (pt && isFinite(pt.x) && isFinite(pt.y)) {
+                    this.ctx.lineTo(pt.x, pt.y);
+                }
+            }
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+
+        // 绘制目标点
+        const target = agentTargets.get(entityId);
+        if (target) {
+            this.ctx.beginPath();
+            this.ctx.arc(target.x, target.y, 3, 0, Math.PI * 2);
+            this.ctx.fillStyle = color;
+            this.ctx.globalAlpha = 0.4;
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1;
+        }
+
+        // 代理圆形
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, r, 0, Math.PI * 2);
+        this.ctx.fillStyle = color;
+        this.ctx.fill();
+
+        // 速度方向
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        if (speed > 1) {
+            const dirX = vx / speed;
+            const dirY = vy / speed;
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y);
+            this.ctx.lineTo(x + dirX * r * 1.5, y + dirY * r * 1.5);
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.stroke();
+        }
+    }
+
+    drawHUD(agentCount) {
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(5, 5, 200, 58);
+        this.ctx.fillStyle = '#00d4ff';
+        this.ctx.font = '11px monospace';
+        const planner = navSystem?.getPathPlanner();
+        const avoidance = navSystem?.getLocalAvoidance();
+        this.ctx.fillText('Planner: ' + (planner?.type || 'None'), 10, 18);
+        this.ctx.fillText('Avoidance: ' + (avoidance?.type || 'None'), 10, 30);
+        this.ctx.fillText('Agents: ' + agentCount + ' | FPS: ' + this.fps, 10, 42);
+        this.ctx.fillStyle = '#888';
+        this.ctx.fillText('Left:Target Right:Add', 10, 54);
+    }
+}
+
+// ============================================
+// 场景定义
+// ============================================
+
+class NavigationDemoScene extends Scene {
+    initialize() {
+        this.name = 'NavigationDemo';
+        navSystem = new NavigationSystem();
+        this.addSystem(navSystem);
+        this.addSystem(new RenderSystem(ctx));
+    }
+
+    onStart() {
+        this.loadScenario('navmesh');
+    }
+
+    setupNavMesh() {
+        navMesh = new NavMesh();
+        // 上左
+        navMesh.addPolygon([
+            { x: 20, y: 20 }, { x: 290, y: 20 },
+            { x: 290, y: 140 }, { x: 20, y: 140 }
+        ]);
+        // 上右
+        navMesh.addPolygon([
+            { x: 290, y: 20 }, { x: 560, y: 20 },
+            { x: 560, y: 140 }, { x: 290, y: 140 }
+        ]);
+        // 中左
+        navMesh.addPolygon([
+            { x: 20, y: 140 }, { x: 100, y: 140 },
+            { x: 100, y: 240 }, { x: 20, y: 240 }
+        ]);
+        // 中右
+        navMesh.addPolygon([
+            { x: 480, y: 140 }, { x: 560, y: 140 },
+            { x: 560, y: 240 }, { x: 480, y: 240 }
+        ]);
+        // 下左
+        navMesh.addPolygon([
+            { x: 20, y: 240 }, { x: 290, y: 240 },
+            { x: 290, y: 360 }, { x: 20, y: 360 }
+        ]);
+        // 下右
+        navMesh.addPolygon([
+            { x: 290, y: 240 }, { x: 560, y: 240 },
+            { x: 560, y: 360 }, { x: 290, y: 360 }
+        ]);
+        navMesh.setConnection(0, 2, { left: { x: 20, y: 140 }, right: { x: 100, y: 140 } });
+        navMesh.setConnection(1, 3, { left: { x: 480, y: 140 }, right: { x: 560, y: 140 } });
+        navMesh.setConnection(2, 4, { left: { x: 20, y: 240 }, right: { x: 100, y: 240 } });
+        navMesh.setConnection(3, 5, { left: { x: 480, y: 240 }, right: { x: 560, y: 240 } });
+        navMesh.build();
+    }
+
+    setupGridMap(withMaze = false) {
+        const cellSize = 20;
+        const w = Math.floor(WIDTH / cellSize);
+        const h = Math.floor(HEIGHT / cellSize);
+        gridMap = new GridMap(w, h, { allowDiagonal: true });
+
+        if (withMaze) {
+            // 迷宫式障碍物
+            for (let x = 5; x < 24; x++) {
+                for (let y = 7; y < 12; y++) {
+                    gridMap.setWalkable(x, y, false);
+                }
+            }
+            // 额外障碍物增加复杂度
+            for (let y = 2; y < 7; y++) gridMap.setWalkable(10, y, false);
+            for (let y = 12; y < 17; y++) gridMap.setWalkable(18, y, false);
+        } else {
+            for (let x = 5; x < 24; x++) {
+                for (let y = 7; y < 12; y++) {
+                    gridMap.setWalkable(x, y, false);
+                }
+            }
+        }
+    }
+
+    setupFunnelMap() {
+        const cellSize = 20;
+        const w = Math.floor(WIDTH / cellSize);
+        const h = Math.floor(HEIGHT / cellSize);
+        gridMap = new GridMap(w, h, { allowDiagonal: true });
+
+        // 上墙: x=10-19, y=0-7
+        for (let x = 10; x < 19; x++) {
+            for (let y = 0; y < 8; y++) {
+                gridMap.setWalkable(x, y, false);
+            }
+        }
+        // 下墙: x=10-19, y=12-19
+        for (let x = 10; x < 19; x++) {
+            for (let y = 12; y < h; y++) {
+                gridMap.setWalkable(x, y, false);
+            }
+        }
+    }
+
+    loadScenario(type) {
+        const result = this.queryAll(NavigationAgentComponent);
+        this.destroyEntities([...result.entities]);
+        agentColors.clear();
+        agentTargets.clear();
+        currentScenario = type;
+
+        const setupORCA = () => {
+            const orca = createORCAAvoidance();
+            const speedFactor = Math.max(1, params.maxSpeed / 80);
+            orca.setDefaultParams({
+                neighborDist: params.neighborDist,
+                timeHorizon: 1.0 / speedFactor,
+                timeHorizonObst: 0.5,
+                maxNeighbors: 10
+            });
+            navSystem.setLocalAvoidance(orca);
+            navSystem.setCollisionResolver(createDefaultCollisionResolver());
+        };
+
+        const configs = {
+            navmesh: () => {
+                this.setupNavMesh();
+                navSystem.setPathPlanner(createNavMeshPathPlanner(navMesh));
+                setupORCA();
+                navSystem.clearObstacles();
+                navSystem.addStaticObstacle({
+                    vertices: [
+                        { x: 100, y: 140 }, { x: 480, y: 140 },
+                        { x: 480, y: 240 }, { x: 100, y: 240 }
+                    ]
+                });
+                this.createAgentsInCorners(params.agentCount);
+            },
+            astar: () => {
+                this.setupGridMap(true);
+                navSystem.setPathPlanner(createAStarPlanner(gridMap, undefined, { cellSize: 20 }));
+                setupORCA();
+                navSystem.clearObstacles();
+                navSystem.addStaticObstacle({
+                    vertices: [
+                        { x: 100, y: 140 }, { x: 480, y: 140 },
+                        { x: 480, y: 240 }, { x: 100, y: 240 }
+                    ]
+                });
+                this.createAgentsInCorners(params.agentCount);
+            },
+            jps: () => {
+                this.setupGridMap(true);
+                navSystem.setPathPlanner(createJPSPlanner(gridMap, undefined, { cellSize: 20 }));
+                setupORCA();
+                navSystem.clearObstacles();
+                navSystem.addStaticObstacle({
+                    vertices: [
+                        { x: 100, y: 140 }, { x: 480, y: 140 },
+                        { x: 480, y: 240 }, { x: 100, y: 240 }
+                    ]
+                });
+                this.createAgentsInCorners(params.agentCount);
+            },
+            circle: () => {
+                gridMap = null;
+                navMesh = null;
+                navSystem.setPathPlanner(null);
+                setupORCA();
+                navSystem.clearObstacles();
+                this.createCircleAgents(params.agentCount);
+            },
+            funnel: () => {
+                this.setupFunnelMap();
+                navSystem.setPathPlanner(createAStarPlanner(gridMap, undefined, { cellSize: 20 }));
+                setupORCA();
+                navSystem.clearObstacles();
+                // 上墙
+                navSystem.addStaticObstacle({
+                    vertices: [
+                        { x: 200, y: 0 }, { x: 380, y: 0 },
+                        { x: 380, y: 150 }, { x: 200, y: 150 }
+                    ]
+                });
+                // 下墙
+                navSystem.addStaticObstacle({
+                    vertices: [
+                        { x: 200, y: 230 }, { x: 380, y: 230 },
+                        { x: 380, y: 380 }, { x: 200, y: 380 }
+                    ]
+                });
+                this.createFunnelAgents(params.agentCount);
+            },
+            stress: () => {
+                gridMap = null;
+                navMesh = null;
+                navSystem.setPathPlanner(null);
+                const orca = createORCAAvoidance();
+                orca.setDefaultParams({
+                    neighborDist: 30,
+                    timeHorizon: 0.5,
+                    timeHorizonObst: 0.3,
+                    maxNeighbors: 8
+                });
+                navSystem.setLocalAvoidance(orca);
+                navSystem.setCollisionResolver(createDefaultCollisionResolver());
+                navSystem.clearObstacles();
+                const count = Math.max(params.agentCount, 50);
+                this.createCircleAgents(count);
+            }
+        };
+
+        if (configs[type]) configs[type]();
+    }
+
+    createAgentsInCorners(count) {
+        const positions = [
+            { x: 60, y: 80 }, { x: 520, y: 80 },
+            { x: 60, y: 300 }, { x: 520, y: 300 }
+        ];
+        const colors = ['#00d4ff', '#ff6b6b', '#4ecdc4', '#ffe66d'];
+
+        for (let i = 0; i < count; i++) {
+            const posIndex = i % 4;
+            const pos = positions[posIndex];
+            const offset = Math.floor(i / 4) * 15;
+            const x = pos.x + (Math.random() - 0.5) * offset * 2;
+            const y = pos.y + (Math.random() - 0.5) * offset * 2;
+            const entity = this.createAgent(x, y, colors[posIndex]);
+
+            // 设置对角目标
+            const targetIndex = (posIndex + 2) % 4;
+            const target = positions[targetIndex];
+            agentTargets.set(entity.id, { x: target.x, y: target.y });
+            const nav = entity.getComponent(NavigationAgentComponent);
+            nav.setDestination(target.x + (Math.random() - 0.5) * 30, target.y + (Math.random() - 0.5) * 30);
+        }
+    }
+
+    createCircleAgents(count) {
+        const radius = Math.min(CX, CY) - 40;
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const x = CX + Math.cos(angle) * radius;
+            const y = CY + Math.sin(angle) * radius;
+            const color = 'hsl(' + ((i / count) * 360) + ', 70%, 55%)';
+            const entity = this.createAgent(x, y, color);
+
+            // 目标是对面
+            const targetAngle = angle + Math.PI;
+            const targetX = CX + Math.cos(targetAngle) * radius;
+            const targetY = CY + Math.sin(targetAngle) * radius;
+            agentTargets.set(entity.id, { x: targetX, y: targetY });
+            const nav = entity.getComponent(NavigationAgentComponent);
+            nav.setDestination(targetX, targetY);
+        }
+    }
+
+    createFunnelAgents(count) {
+        const half = Math.floor(count / 2);
+        // 左侧代理
+        for (let i = 0; i < half; i++) {
+            const x = 30 + Math.random() * 140;
+            const y = 50 + (i / half) * 280;
+            const entity = this.createAgent(x, y, '#00d4ff');
+            const targetX = 450 + Math.random() * 100;
+            const targetY = 50 + Math.random() * 280;
+            agentTargets.set(entity.id, { x: targetX, y: targetY });
+            const nav = entity.getComponent(NavigationAgentComponent);
+            nav.setDestination(targetX, targetY);
+        }
+        // 右侧代理
+        for (let i = 0; i < count - half; i++) {
+            const x = 410 + Math.random() * 140;
+            const y = 50 + (i / (count - half)) * 280;
+            const entity = this.createAgent(x, y, '#ff6b6b');
+            const targetX = 30 + Math.random() * 140;
+            const targetY = 50 + Math.random() * 280;
+            agentTargets.set(entity.id, { x: targetX, y: targetY });
+            const nav = entity.getComponent(NavigationAgentComponent);
+            nav.setDestination(targetX, targetY);
+        }
+    }
+
+    createAgent(x, y, color) {
+        const entity = this.createEntity('NavAgent');
+        const nav = entity.addComponent(new NavigationAgentComponent());
+        nav.setPosition(x, y);
+        nav.radius = params.radius;
+        nav.maxSpeed = params.maxSpeed;
+        nav.acceleration = 300;
+        nav.waypointThreshold = Math.max(params.radius * 2, 12);
+        nav.arrivalThreshold = 10;
+        agentColors.set(entity.id, color);
+        return entity;
+    }
+
+    setAllAgentsDestination(x, y) {
+        const result = this.queryAll(NavigationAgentComponent);
+        for (const entity of result.entities) {
+            const nav = entity.getComponent(NavigationAgentComponent);
+            nav.setDestination(x, y);
+            agentTargets.set(entity.id, { x, y });
+        }
+    }
+}
+
+// ============================================
+// 初始化
+// ============================================
+
+Core.create({ debug: false });
+const demoScene = new NavigationDemoScene();
+Core.setScene(demoScene);
+window.__demoScene = demoScene;
+
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    demoScene.setAllAgentsDestination(x, y);
+});
+
+canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const color = 'hsl(' + (Math.random() * 360) + ', 70%, 55%)';
+    demoScene.createAgent(x, y, color);
+});
+
+let lastTime = performance.now();
+function gameLoop() {
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+    Core.update(dt);
+    requestAnimationFrame(gameLoop);
+}
+gameLoop();`;
+
+这是一个展示 **NavigationSystem 可插拔导航架构** 的交互式演示，涵盖多种寻路算法和避让场景。
+
+点击 **Run** 启动模拟，使用工具栏按钮切换不同配置：
+
+**场景说明：**
+
+| 场景 | 寻路算法 | 特点 |
+|------|----------|------|
+| **NavMesh** | NavMesh | 多边形导航网格，适合复杂地形 |
+| **A*** | A* 网格寻路 | 经典网格寻路，搜索完整 |
+| **JPS** | 跳点搜索 | 优化的网格寻路，减少节点扩展 |
+| **Circle** | 无路径规划 | 纯 ORCA 避让，经典圆形交换测试 |
+| **Funnel** | A* | 漏斗通道，测试窄道通行 |
+| **Stress** | 无路径规划 | 大量代理压力测试 |
+
+**交互操作：**
+- **左键点击** 设置所有代理的目标位置
+- **右键点击** 在点击位置添加新代理
+
+<DemoPlayground
+    client:load
+    title="NavigationSystem 可插拔导航"
+    code={navDemoCode}
+    canvasWidth={580}
+    canvasHeight={380}
+    scenes={navScenes}
+    params={navParams}
+/>
+
+<script is:inline src="/js/esengine.iife.js"></script>
+
+## 架构亮点
+
+### 运行时算法切换
+
+```typescript
+// 切换寻路算法
+navSystem.setPathPlanner(createNavMeshPathPlanner(navMesh));
+navSystem.setPathPlanner(createAStarPlanner(gridMap, undefined, { cellSize: 20 }));
+navSystem.setPathPlanner(createJPSPlanner(gridMap, undefined, { cellSize: 20 }));
+
+// 切换避让算法
+navSystem.setLocalAvoidance(createORCAAvoidance());
+navSystem.setLocalAvoidance(null);  // 禁用
+```
+
+### 可插拔接口
+
+| 接口 | 职责 | 实现 |
+|------|------|------|
+| `IPathPlanner` | 全局路径规划 | NavMesh, A*, JPS, HPA* |
+| `ILocalAvoidance` | 局部避让 | ORCA |
+| `ICollisionResolver` | 碰撞解决 | CollisionResolver |
+
+### 静态/动态障碍物分离
+
+```typescript
+// 静态障碍物：路径规划绑开，CollisionResolver 防穿墙
+navSystem.addStaticObstacle({ vertices: [...] });
+
+// 动态障碍物：ORCA 实时避让
+navSystem.addDynamicObstacle({ vertices: [...] });
+```
+
+## 相关文档
+
+- [NavigationSystem 文档](/en/modules/pathfinding/navigation-system) - 完整 API 参考
+- [ORCA 局部避让](/en/modules/pathfinding/local-avoidance) - 避让算法详解

@@ -38,8 +38,11 @@ await server.start();
 ```typescript
 interface ServeOptions<P, TConnData> {
     // Required
-    port: number;
     api: ApiHandlers<P, TConnData>;
+
+    // Port config (choose one)
+    port?: number;           // Standalone port
+    server?: HttpServer;     // Or attach to existing HTTP server
 
     // Optional
     msg?: MsgHandlers<P, TConnData>;

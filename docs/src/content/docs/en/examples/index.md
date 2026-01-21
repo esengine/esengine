@@ -5,26 +5,20 @@ description: "ESEngine example projects and demos"
 
 Explore example projects to learn ESEngine best practices.
 
-## Pathfinding Demos
+## Navigation System
 
-### [A* Pathfinding Demo](/en/examples/astar-pathfinding-demo/)
-Grid-based A* pathfinding visualization:
-- Maze generation, random obstacles, room layouts, spiral maps
-- Incremental pathfinding with time-slicing
-- ECS architecture demonstration
+### [NavigationSystem Demo](/en/examples/navigation-system-demo/)
+Complete demonstration of the pluggable navigation architecture:
+- **Scenarios**: NavMesh, A*, JPS, Circle Swap, Funnel Passage, Stress Test
+- **Features**: Runtime algorithm switching, ORCA multi-agent avoidance, collision resolution
+- **Tech**: NavigationSystem, IPathPlanner, ILocalAvoidance interfaces
 
-### [Multi-Agent Pathfinding Demo](/en/examples/multi-agent-pathfinding-demo/)
-Multiple agents pathfinding simultaneously with avoidance:
-- A* pathfinding + ORCA avoidance combined
-- Multiple scenario presets (swap, gather, scatter, patrol)
-- PathfindingSystem and LocalAvoidanceSystem cooperation
+## Network Sync
 
-### [ORCA Local Avoidance Demo](/en/examples/orca-avoidance-demo/)
-Interactive multi-agent collision avoidance using ORCA algorithm:
-- KDTree spatial indexing for efficient neighbor queries
-- Linear programming solver for velocity optimization
-- Multiple scenario presets (circle swap, crossroads, funnel)
-- Support for 50-500 agents with real-time parameter adjustment
+### [Network Sync Demo](/en/examples/network-sync-demo/)
+Client-server state synchronization demonstration:
+- Interpolation, prediction, lag compensation
+- NetworkIdentity, NetworkTransform, SnapshotBuffer
 
 ## System Demos
 

@@ -15,7 +15,7 @@ export interface ProjectConfig {
  * @zh 支持的平台类型
  * @en Supported platform types
  */
-export type PlatformType = 'cocos' | 'cocos2' | 'laya' | 'nodejs';
+export type PlatformType = 'cocos' | 'cocos2' | 'laya' | 'nodejs' | 'web';
 
 /**
  * @zh 文件入口

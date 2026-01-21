@@ -110,3 +110,76 @@ const grid = createGridMap(20, 20, {
     heuristic: manhattanDistance // 使用曼哈顿距离
 });
 ```
+
+## 路径规划器适配器
+
+当与 `NavigationSystem` 集成时，使用路径规划器适配器工厂函数：
+
+### createAStarPlanner
+
+```typescript
+import { createAStarPlanner } from '@esengine/pathfinding/ecs';
+
+const planner = createAStarPlanner(
+    gridMap,           // 网格地图
+    pathfindingOptions, // 寻路选项（可选）
+    { cellSize: 20 }   // 适配器配置
+);
+
+navSystem.setPathPlanner(planner);
+```
+
+### createJPSPlanner
+
+JPS（Jump Point Search）适用于均匀代价的网格地图，比 A* 快 10-100 倍：
+
+```typescript
+import { createJPSPlanner } from '@esengine/pathfinding/ecs';
+
+const planner = createJPSPlanner(gridMap, undefined, { cellSize: 20 });
+```
+
+### createHPAPlanner
+
+HPA*（Hierarchical Pathfinding A*）适用于超大地图（1000x1000+）：
+
+```typescript
+import { createHPAPlanner } from '@esengine/pathfinding/ecs';
+
+const planner = createHPAPlanner(
+    gridMap,
+    { clusterSize: 16 },  // HPA* 配置
+    undefined,
+    { cellSize: 20 }      // 适配器配置
+);
+```
+
+### cellSize 坐标转换
+
+`cellSize` 参数用于像素坐标与网格坐标之间的转换：
+
+```typescript
+// 假设游戏世界 600x400 像素，网格 30x20 单元格
+// 每个单元格 20x20 像素
+const gridMap = createGridMap(30, 20);
+const planner = createAStarPlanner(gridMap, undefined, { cellSize: 20 });
+
+// 可以直接使用像素坐标
+// 输入 (480, 300) → 转换为网格 (24, 15) → 输出像素 (490, 310)
+const result = planner.findPath(
+    { x: 50, y: 50 },    // 起点（像素）
+    { x: 480, y: 300 }   // 终点（像素）
+);
+
+// 返回的路径点也是像素坐标（单元格中心）
+console.log(result.path);
+// [{ x: 30, y: 30 }, { x: 50, y: 50 }, ..., { x: 490, y: 310 }]
+```
+
+**转换规则**：
+- 像素 → 网格：`Math.floor(pixel / cellSize)`
+- 网格 → 像素：`grid * cellSize + cellSize * 0.5`（返回单元格中心）
+
+**不设置 cellSize（默认值 1）**：
+- 输入坐标直接作为网格索引使用
+- 适用于游戏逻辑已经使用网格坐标的情况

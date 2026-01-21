@@ -9,18 +9,22 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./server": {
       "import": "./dist/server/index.js",
+      "require": "./dist/server/index.js",
       "types": "./dist/server/index.d.ts"
     },
     "./client": {
       "import": "./dist/client/index.js",
+      "require": "./dist/client/index.js",
       "types": "./dist/client/index.d.ts"
     },
     "./codec": {
       "import": "./dist/codec/index.js",
+      "require": "./dist/codec/index.js",
       "types": "./dist/codec/index.d.ts"
     }
   },

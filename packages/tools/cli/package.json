@@ -35,13 +35,15 @@
   "author": "yhh",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^4.1.2",
+    "@clack/prompts": "^0.11.0",
+    "boxen": "^8.0.1",
+    "cli-table3": "^0.6.5",
     "commander": "^12.1.0",
-    "prompts": "^2.4.2"
+    "ora": "^8.1.1",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
-    "@types/prompts": "^2.4.9",
     "rimraf": "^5.0.0",
     "typescript": "^5.8.3"
   },

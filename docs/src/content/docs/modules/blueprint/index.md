@@ -11,7 +11,7 @@ Cocos Creator 蓝图编辑器插件（免费）：
 
 **[下载 Cocos Node Editor v1.2.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.0)**
 
-> 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.github.io/esengine/)
+> 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.cn/)
 
 详细使用教程请参考 [编辑器使用指南](./editor-guide)。
 

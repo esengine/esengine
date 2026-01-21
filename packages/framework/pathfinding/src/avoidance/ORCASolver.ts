@@ -16,7 +16,7 @@ import type {
     IORCASolverConfig
 } from './ILocalAvoidance';
 import { DEFAULT_ORCA_CONFIG } from './ILocalAvoidance';
-import { solveORCALinearProgram } from './LinearProgram';
+import { solveORCALinearProgram, type IORCALPResult } from './LinearProgram';
 import { buildObstacleVertices } from './ObstacleBuilder';
 
 /**
@@ -69,18 +69,45 @@ export class ORCASolver implements IORCASolver {
         obstacles: readonly IObstacle[],
         deltaTime: number
     ): IVector2 {
+        const result = this.computeNewVelocityWithResult(agent, neighbors, obstacles, deltaTime);
+        return result.velocity;
+    }
+
+    /**
+     * @zh 计算代理的新速度（带完整结果）
+     * @en Compute new velocity for agent (with full result)
+     *
+     * @param agent - @zh 当前代理 @en Current agent
+     * @param neighbors - @zh 邻近代理列表 @en List of neighboring agents
+     * @param obstacles - @zh 障碍物列表 @en List of obstacles
+     * @param deltaTime - @zh 时间步长 @en Time step
+     * @returns @zh 完整求解结果 @en Full solve result
+     */
+    computeNewVelocityWithResult(
+        agent: IAvoidanceAgent,
+        neighbors: readonly IAvoidanceAgent[],
+        obstacles: readonly IObstacle[],
+        deltaTime: number
+    ): IORCALPResult & { numLines: number } {
         const orcaLines: IORCALine[] = [];
 
-        const obstacleVertices = buildObstacleVertices(obstacles);
+        const obstacleVertices = buildObstacleVertices(obstacles, {
+            yAxisDown: this.config.yAxisDown
+        });
         const numObstLines = this.createObstacleORCALines(agent, obstacleVertices, orcaLines);
         this.createAgentORCALines(agent, neighbors, deltaTime, orcaLines);
 
-        return solveORCALinearProgram(
+        const result = solveORCALinearProgram(
             orcaLines,
             numObstLines,
             agent.maxSpeed,
             agent.preferredVelocity
         );
+
+        return {
+            ...result,
+            numLines: orcaLines.length
+        };
     }
 
     /**

@@ -87,22 +87,30 @@ if (success) {
 ### Server
 
 ```typescript
-import { RpcServer } from '@esengine/rpc/server';
+import { serve } from '@esengine/rpc/server';
 import { gameProtocol } from '@esengine/network';
 
-const server = new RpcServer(gameProtocol, {
+let nextPlayerId = 1;
+
+const server = serve(gameProtocol, {
     port: 3000,
-    onStart: (port) => console.log(`Server running on ws://localhost:${port}`)
-});
-
-// Register API handlers
-server.handle('join', async (input, ctx) => {
-    const playerId = generatePlayerId();
-    return { playerId, roomId: input.roomId ?? 'default' };
-});
-
-server.handle('leave', async (input, ctx) => {
-    // Handle player leaving
+    api: {
+        join: async (input, conn) => {
+            const playerId = nextPlayerId++;
+            console.log(`Player joined: ${input.playerName} (ID: ${playerId})`);
+            return { playerId, roomId: input.roomId ?? 'default' };
+        },
+        leave: async (_input, conn) => {
+            console.log(`Player left: ${conn.id}`);
+        },
+        reconnect: async (input, conn) => {
+            // Handle reconnection logic
+            return { success: true };
+        },
+    },
+    onConnect: (conn) => console.log(`Client connected: ${conn.id}`),
+    onDisconnect: (conn) => console.log(`Client disconnected: ${conn.id}`),
+    onStart: (port) => console.log(`Server running on ws://localhost:${port}`),
 });
 
 await server.start();
@@ -142,6 +150,12 @@ service.on('chat', (data) => {
     console.log(`${data.from}: ${data.text}`);
 });
 ```
+
+## Interactive Demo
+
+Experience the network synchronization system with interactive demos:
+
+- [Network Sync Demo](/en/examples/network-sync-demo) - Client prediction and interpolation visualization
 
 ## Documentation
 

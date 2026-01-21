@@ -450,16 +450,24 @@ function switchScene(sceneId: string) {
     }
 }
 
+let paramUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
 function updateParam(param: ParamConfig) {
     const demoParams = (window as any).__demoParams;
     if (demoParams) {
         demoParams[param.id] = param.value;
     }
-    // 触发场景重新加载以应用新参数
-    const scene = (window as any).__demoScene;
-    if (scene && typeof scene.loadScenario === 'function') {
-        scene.loadScenario(currentScene.value);
+
+    // 防抖：参数变化后延迟重载场景（避免拖动滑块时频繁重载）
+    if (paramUpdateTimer) {
+        clearTimeout(paramUpdateTimer);
     }
+    paramUpdateTimer = setTimeout(() => {
+        const scene = (window as any).__demoScene;
+        if (scene && typeof scene.loadScenario === 'function' && currentScene.value) {
+            scene.loadScenario(currentScene.value);
+        }
+    }, 300);
 }
 
 function toggleEditor() {

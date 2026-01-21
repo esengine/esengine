@@ -6,8 +6,8 @@ import tailwindcss from '@tailwindcss/vite';
 import rehypeRaw from 'rehype-raw';
 
 export default defineConfig({
-  site: 'https://esengine.github.io',
-  base: '/esengine',
+  site: 'https://esengine.cn',
+  base: '/',
   markdown: {
     rehypePlugins: [rehypeRaw],
   },
@@ -247,6 +247,7 @@ export default defineConfig({
                     { label: '导航网格 API', slug: 'modules/pathfinding/navmesh', translations: { en: 'NavMesh API' } },
                     { label: '路径平滑', slug: 'modules/pathfinding/smoothing', translations: { en: 'Path Smoothing' } },
                     { label: '局部避让 (ORCA)', slug: 'modules/pathfinding/local-avoidance', translations: { en: 'Local Avoidance (ORCA)' } },
+                    { label: '统一导航系统', slug: 'modules/pathfinding/navigation-system', translations: { en: 'Navigation System' } },
                     { label: '实际示例', slug: 'modules/pathfinding/examples', translations: { en: 'Examples' } },
                   ],
                 },
@@ -383,18 +384,7 @@ export default defineConfig({
           translations: { en: 'Examples' },
           items: [
             { label: '示例总览', slug: 'examples', translations: { en: 'Examples Overview' } },
-            {
-              label: '寻路演示',
-              translations: { en: 'Pathfinding Demos' },
-              items: [
-                { label: 'A* 寻路', slug: 'examples/astar-pathfinding-demo', translations: { en: 'A* Pathfinding' } },
-                { label: '搜索可视化', slug: 'examples/search-visualization-demo', translations: { en: 'Search Visualization' } },
-                { label: '算法对比', slug: 'examples/algorithm-comparison-demo', translations: { en: 'Algorithm Comparison' } },
-                { label: 'HPA* 分层寻路', slug: 'examples/hpa-pathfinding-demo', translations: { en: 'HPA* Hierarchical' } },
-                { label: '多代理寻路', slug: 'examples/multi-agent-pathfinding-demo', translations: { en: 'Multi-Agent Pathfinding' } },
-                { label: 'ORCA 局部避让', slug: 'examples/orca-avoidance-demo', translations: { en: 'ORCA Local Avoidance' } },
-              ],
-            },
+            { label: '导航系统演示', slug: 'examples/navigation-system-demo', translations: { en: 'Navigation System Demo' } },
             { label: 'Worker 系统演示', slug: 'examples/worker-system-demo', translations: { en: 'Worker System Demo' } },
             { label: '网络同步演示', slug: 'examples/network-sync-demo', translations: { en: 'Network Sync Demo' } },
           ],
