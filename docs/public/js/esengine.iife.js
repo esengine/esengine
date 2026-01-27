@@ -4192,11 +4192,17 @@ var ESEngine = (function (exports) {
       __publicField$2(this, "options");
       __publicField$2(this, "type");
       __publicField$2(this, "cellSize");
+      __publicField$2(this, "alignToCenter");
       this.pathfinder = pathfinder;
       this.map = map;
       this.options = options;
       this.type = type;
-      this.cellSize = config?.cellSize ?? 1;
+      const cellSize = config?.cellSize ?? 1;
+      if (cellSize <= 0 || !Number.isFinite(cellSize)) {
+        throw new Error(`cellSize must be a positive finite number, got: ${cellSize}`);
+      }
+      this.cellSize = cellSize;
+      this.alignToCenter = config?.alignToCenter ?? cellSize > 1;
     }
     /**
      * @zh 像素坐标转网格坐标
@@ -4206,11 +4212,15 @@ var ESEngine = (function (exports) {
       return Math.floor(pixel / this.cellSize);
     }
     /**
-     * @zh 网格坐标转像素坐标（单元格中心）
-     * @en Convert grid coordinate to pixel coordinate (cell center)
+     * @zh 网格坐标转像素坐标
+     * @en Convert grid coordinate to pixel coordinate
+     *
+     * @zh 根据 alignToCenter 配置决定是否偏移到单元格中心
+     * @en Offsets to cell center based on alignToCenter configuration
      */
     toPixelCoord(grid) {
-      return grid * this.cellSize + this.cellSize * 0.5;
+      const base = grid * this.cellSize;
+      return this.alignToCenter ? base + this.cellSize * 0.5 : base;
     }
     findPath(start, end) {
       const startGridX = this.toGridCoord(start.x);
@@ -4307,6 +4317,7 @@ var ESEngine = (function (exports) {
       __publicField$2(this, "map");
       __publicField$2(this, "options");
       __publicField$2(this, "cellSize");
+      __publicField$2(this, "alignToCenter");
       /**
        * @zh 活跃请求 ID 集合（用于跟踪）
        * @en Active request IDs set (for tracking)
@@ -4319,7 +4330,12 @@ var ESEngine = (function (exports) {
       __publicField$2(this, "requestTotalNodes", /* @__PURE__ */ new Map());
       this.map = map;
       this.options = options;
-      this.cellSize = config?.cellSize ?? 1;
+      const cellSize = config?.cellSize ?? 1;
+      if (cellSize <= 0 || !Number.isFinite(cellSize)) {
+        throw new Error(`cellSize must be a positive finite number, got: ${cellSize}`);
+      }
+      this.cellSize = cellSize;
+      this.alignToCenter = config?.alignToCenter ?? cellSize > 1;
       this.pathfinder = new IncrementalAStarPathfinder(map, config);
     }
     /**
@@ -4330,11 +4346,15 @@ var ESEngine = (function (exports) {
       return Math.floor(pixel / this.cellSize);
     }
     /**
-     * @zh 网格坐标转像素坐标（单元格中心）
-     * @en Convert grid coordinate to pixel coordinate (cell center)
+     * @zh 网格坐标转像素坐标
+     * @en Convert grid coordinate to pixel coordinate
+     *
+     * @zh 根据 alignToCenter 配置决定是否偏移到单元格中心
+     * @en Offsets to cell center based on alignToCenter configuration
      */
     toPixelCoord(grid) {
-      return grid * this.cellSize + this.cellSize * 0.5;
+      const base = grid * this.cellSize;
+      return this.alignToCenter ? base + this.cellSize * 0.5 : base;
     }
     // =========================================================================
     // IPathPlanner 基础接口 | IPathPlanner Base Interface
@@ -5988,6 +6008,12 @@ var ESEngine = (function (exports) {
       __publicField$2(this, "height");
       __publicField$2(this, "nodes");
       __publicField$2(this, "options");
+      if (width <= 0 || !Number.isFinite(width) || !Number.isInteger(width)) {
+        throw new Error(`width must be a positive integer, got: ${width}`);
+      }
+      if (height <= 0 || !Number.isFinite(height) || !Number.isInteger(height)) {
+        throw new Error(`height must be a positive integer, got: ${height}`);
+      }
       this.width = width;
       this.height = height;
       this.options = {
@@ -6048,8 +6074,16 @@ var ESEngine = (function (exports) {
     /**
      * @zh 设置位置的移动代价
      * @en Set movement cost at position
+     *
+     * @param x - @zh X 坐标 @en X coordinate
+     * @param y - @zh Y 坐标 @en Y coordinate
+     * @param cost - @zh 移动代价，必须为正数 @en Movement cost, must be positive
+     * @throws @zh 如果 cost 不是正数则抛出错误 @en Throws if cost is not positive
      */
     setCost(x, y, cost) {
+      if (cost <= 0 || !Number.isFinite(cost)) {
+        throw new Error(`cost must be a positive finite number, got: ${cost}`);
+      }
       const node = this.getNodeAt(x, y);
       if (node) {
         node.cost = cost;
@@ -8484,6 +8518,18 @@ var ESEngine = (function (exports) {
           y: 0
         };
       }
+      if (agent.state === NavigationState.Unreachable || agent.state === NavigationState.Arrived) {
+        return {
+          x: 0,
+          y: 0
+        };
+      }
+      if (agent.path.length === 0 && !agent.isComputingPath) {
+        return {
+          x: 0,
+          y: 0
+        };
+      }
       let targetX, targetY;
       let isLastWaypoint = false;
       if (agent.currentWaypointIndex < agent.path.length) {
@@ -8491,10 +8537,15 @@ var ESEngine = (function (exports) {
         targetX = waypoint.x;
         targetY = waypoint.y;
         isLastWaypoint = agent.currentWaypointIndex === agent.path.length - 1;
-      } else {
+      } else if (agent.path.length > 0) {
         targetX = agent.destination.x;
         targetY = agent.destination.y;
         isLastWaypoint = true;
+      } else {
+        return {
+          x: 0,
+          y: 0
+        };
       }
       const dx = targetX - agent.position.x;
       const dy = targetY - agent.position.y;

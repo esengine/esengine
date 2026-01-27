@@ -33,6 +33,18 @@ export interface IIncrementalGridPathPlannerConfig extends IIncrementalPathfinde
      * @default 1 (no conversion)
      */
     cellSize?: number;
+
+    /**
+     * @zh 是否将输出坐标对齐到单元格中心
+     * @en Whether to align output coordinates to cell center
+     *
+     * @zh 为 true 时，输出坐标会偏移 cellSize * 0.5，指向单元格中心
+     * @en When true, output coordinates are offset by cellSize * 0.5, pointing to cell center
+     *
+     * @zh 默认：当 cellSize > 1 时为 true（像素坐标场景），cellSize = 1 时为 false（网格坐标场景）
+     * @en Default: true when cellSize > 1 (pixel coordinate scenario), false when cellSize = 1 (grid coordinate scenario)
+     */
+    alignToCenter?: boolean;
 }
 
 /**
@@ -87,6 +99,7 @@ export class IncrementalGridPathPlannerAdapter implements IIncrementalPathPlanne
     private readonly map: IPathfindingMap;
     private readonly options?: IPathfindingOptions;
     private readonly cellSize: number;
+    private readonly alignToCenter: boolean;
 
     /**
      * @zh 活跃请求 ID 集合（用于跟踪）
@@ -107,7 +120,12 @@ export class IncrementalGridPathPlannerAdapter implements IIncrementalPathPlanne
     ) {
         this.map = map;
         this.options = options;
-        this.cellSize = config?.cellSize ?? 1;
+        const cellSize = config?.cellSize ?? 1;
+        if (cellSize <= 0 || !Number.isFinite(cellSize)) {
+            throw new Error(`cellSize must be a positive finite number, got: ${cellSize}`);
+        }
+        this.cellSize = cellSize;
+        this.alignToCenter = config?.alignToCenter ?? (cellSize > 1);
         this.pathfinder = new IncrementalAStarPathfinder(map, config);
     }
 
@@ -120,11 +138,15 @@ export class IncrementalGridPathPlannerAdapter implements IIncrementalPathPlanne
     }
 
     /**
-     * @zh 网格坐标转像素坐标（单元格中心）
-     * @en Convert grid coordinate to pixel coordinate (cell center)
+     * @zh 网格坐标转像素坐标
+     * @en Convert grid coordinate to pixel coordinate
+     *
+     * @zh 根据 alignToCenter 配置决定是否偏移到单元格中心
+     * @en Offsets to cell center based on alignToCenter configuration
      */
     private toPixelCoord(grid: number): number {
-        return grid * this.cellSize + this.cellSize * 0.5;
+        const base = grid * this.cellSize;
+        return this.alignToCenter ? base + this.cellSize * 0.5 : base;
     }
 
     // =========================================================================

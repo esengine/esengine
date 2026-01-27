@@ -178,8 +178,23 @@ console.log(result.path);
 
 **转换规则**：
 - 像素 → 网格：`Math.floor(pixel / cellSize)`
-- 网格 → 像素：`grid * cellSize + cellSize * 0.5`（返回单元格中心）
+- 网格 → 像素：
+  - 当 `cellSize > 1` 时：`grid * cellSize + cellSize * 0.5`（返回单元格中心）
+  - 当 `cellSize = 1` 时：`grid`（直接返回网格坐标，无偏移）
+
+**alignToCenter 选项**：
+
+可以通过 `alignToCenter` 显式控制是否返回单元格中心：
+
+```typescript
+// 禁用中心对齐（返回单元格左上角）
+const planner = createAStarPlanner(gridMap, undefined, {
+    cellSize: 20,
+    alignToCenter: false
+});
+```
 
 **不设置 cellSize（默认值 1）**：
 - 输入坐标直接作为网格索引使用
+- 输出坐标也是整数网格坐标（无 0.5 偏移）
 - 适用于游戏逻辑已经使用网格坐标的情况
