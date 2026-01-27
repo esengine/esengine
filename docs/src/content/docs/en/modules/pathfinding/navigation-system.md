@@ -262,7 +262,30 @@ nav.setDestination(480, 300);
 
 **Conversion rules**:
 - Pixel → Grid: `Math.floor(pixel / cellSize)`
-- Grid → Pixel: `grid * cellSize + cellSize * 0.5` (returns cell center)
+- Grid → Pixel:
+  - When `cellSize > 1`: `grid * cellSize + cellSize * 0.5` (returns cell center)
+  - When `cellSize = 1`: `grid` (returns grid coordinate directly)
+
+**alignToCenter option**:
+
+You can explicitly control whether to return cell center using `alignToCenter`:
+
+```typescript
+// Default behavior: align to center when cellSize > 1, no alignment when cellSize = 1
+const planner1 = createAStarPlanner(gridMap, undefined, { cellSize: 20 });  // alignToCenter = true
+
+// Explicitly disable center alignment (returns cell top-left corner)
+const planner2 = createAStarPlanner(gridMap, undefined, {
+    cellSize: 20,
+    alignToCenter: false
+});
+
+// Explicitly enable center alignment (returns 0.5, 1.5, 2.5... even when cellSize = 1)
+const planner3 = createAStarPlanner(gridMap, undefined, {
+    cellSize: 1,
+    alignToCenter: true
+});
+```
 
 ### Time-Sliced Pathfinding (Large-Scale Agents)
 

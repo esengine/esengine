@@ -129,6 +129,12 @@ export class GridMap implements IPathfindingMap {
     private readonly options: Required<IGridMapOptions>;
 
     constructor(width: number, height: number, options?: IGridMapOptions) {
+        if (width <= 0 || !Number.isFinite(width) || !Number.isInteger(width)) {
+            throw new Error(`width must be a positive integer, got: ${width}`);
+        }
+        if (height <= 0 || !Number.isFinite(height) || !Number.isInteger(height)) {
+            throw new Error(`height must be a positive integer, got: ${height}`);
+        }
         this.width = width;
         this.height = height;
         this.options = { ...DEFAULT_GRID_OPTIONS, ...options };
@@ -194,8 +200,16 @@ export class GridMap implements IPathfindingMap {
     /**
      * @zh 设置位置的移动代价
      * @en Set movement cost at position
+     *
+     * @param x - @zh X 坐标 @en X coordinate
+     * @param y - @zh Y 坐标 @en Y coordinate
+     * @param cost - @zh 移动代价，必须为正数 @en Movement cost, must be positive
+     * @throws @zh 如果 cost 不是正数则抛出错误 @en Throws if cost is not positive
      */
     setCost(x: number, y: number, cost: number): void {
+        if (cost <= 0 || !Number.isFinite(cost)) {
+            throw new Error(`cost must be a positive finite number, got: ${cost}`);
+        }
         const node = this.getNodeAt(x, y);
         if (node) {
             node.cost = cost;

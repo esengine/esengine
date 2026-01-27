@@ -257,7 +257,30 @@ nav.setDestination(480, 300);
 
 **转换规则**：
 - 像素 → 网格：`Math.floor(pixel / cellSize)`
-- 网格 → 像素：`grid * cellSize + cellSize * 0.5`（返回单元格中心）
+- 网格 → 像素：
+  - 当 `cellSize > 1` 时：`grid * cellSize + cellSize * 0.5`（返回单元格中心）
+  - 当 `cellSize = 1` 时：`grid`（直接返回网格坐标）
+
+**alignToCenter 选项**：
+
+可以通过 `alignToCenter` 显式控制是否返回单元格中心：
+
+```typescript
+// 默认行为：cellSize > 1 时对齐中心，cellSize = 1 时不对齐
+const planner1 = createAStarPlanner(gridMap, undefined, { cellSize: 20 });  // alignToCenter = true
+
+// 显式禁用中心对齐（返回单元格左上角坐标）
+const planner2 = createAStarPlanner(gridMap, undefined, {
+    cellSize: 20,
+    alignToCenter: false
+});
+
+// 显式启用中心对齐（cellSize = 1 时也返回 0.5, 1.5, 2.5...）
+const planner3 = createAStarPlanner(gridMap, undefined, {
+    cellSize: 1,
+    alignToCenter: true
+});
+```
 
 ### 时间切片寻路（大规模代理）
 

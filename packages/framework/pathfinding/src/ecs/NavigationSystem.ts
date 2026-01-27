@@ -877,6 +877,18 @@ export class NavigationSystem extends EntitySystem {
             return { x: 0, y: 0 };
         }
 
+        // 如果代理处于无法到达或已到达状态，停止移动
+        // If agent is unreachable or arrived, stop moving
+        if (agent.state === NavigationState.Unreachable || agent.state === NavigationState.Arrived) {
+            return { x: 0, y: 0 };
+        }
+
+        // 如果没有路径且不在计算中，停止移动（避免直线穿墙）
+        // If no path and not computing, stop moving (avoid walking through walls)
+        if (agent.path.length === 0 && !agent.isComputingPath) {
+            return { x: 0, y: 0 };
+        }
+
         let targetX: number, targetY: number;
         let isLastWaypoint = false;
 
@@ -885,10 +897,16 @@ export class NavigationSystem extends EntitySystem {
             targetX = waypoint.x;
             targetY = waypoint.y;
             isLastWaypoint = agent.currentWaypointIndex === agent.path.length - 1;
-        } else {
+        } else if (agent.path.length > 0) {
+            // 路径已走完，使用最终目标
+            // Path exhausted, use final destination
             targetX = agent.destination.x;
             targetY = agent.destination.y;
             isLastWaypoint = true;
+        } else {
+            // 没有路径，不应该移动
+            // No path, should not move
+            return { x: 0, y: 0 };
         }
 
         const dx = targetX - agent.position.x;

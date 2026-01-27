@@ -178,8 +178,23 @@ console.log(result.path);
 
 **Conversion rules**:
 - Pixel → Grid: `Math.floor(pixel / cellSize)`
-- Grid → Pixel: `grid * cellSize + cellSize * 0.5` (returns cell center)
+- Grid → Pixel:
+  - When `cellSize > 1`: `grid * cellSize + cellSize * 0.5` (returns cell center)
+  - When `cellSize = 1`: `grid` (returns grid coordinate directly, no offset)
+
+**alignToCenter option**:
+
+You can explicitly control whether to return cell center using `alignToCenter`:
+
+```typescript
+// Disable center alignment (returns cell top-left corner)
+const planner = createAStarPlanner(gridMap, undefined, {
+    cellSize: 20,
+    alignToCenter: false
+});
+```
 
 **Without cellSize (default value 1)**:
 - Input coordinates are used directly as grid indices
+- Output coordinates are also integer grid coordinates (no 0.5 offset)
 - Suitable when game logic already uses grid coordinates

@@ -23,12 +23,24 @@ export interface IGridPathfinderAdapterConfig {
      * @zh 网格单元格大小（像素），用于坐标转换
      * @en Grid cell size (pixels), used for coordinate conversion
      *
-     * @zh 如果设置了此值，输入的像素坐标会自动转换为网格坐标，输出的网格坐标会转换回像素坐标（单元格中心）
-     * @en If set, input pixel coordinates are converted to grid coordinates, output grid coordinates are converted back to pixel coordinates (cell center)
+     * @zh 如果设置了此值，输入的像素坐标会自动转换为网格坐标，输出的网格坐标会转换回像素坐标
+     * @en If set, input pixel coordinates are converted to grid coordinates, output grid coordinates are converted back to pixel coordinates
      *
      * @default 1 (no conversion)
      */
     cellSize?: number;
+
+    /**
+     * @zh 是否将输出坐标对齐到单元格中心
+     * @en Whether to align output coordinates to cell center
+     *
+     * @zh 为 true 时，输出坐标会偏移 cellSize * 0.5，指向单元格中心
+     * @en When true, output coordinates are offset by cellSize * 0.5, pointing to cell center
+     *
+     * @zh 默认：当 cellSize > 1 时为 true（像素坐标场景），cellSize = 1 时为 false（网格坐标场景）
+     * @en Default: true when cellSize > 1 (pixel coordinate scenario), false when cellSize = 1 (grid coordinate scenario)
+     */
+    alignToCenter?: boolean;
 }
 
 /**
@@ -41,6 +53,7 @@ export interface IGridPathfinderAdapterConfig {
 export class GridPathfinderAdapter implements IPathPlanner {
     readonly type: string;
     private readonly cellSize: number;
+    private readonly alignToCenter: boolean;
 
     constructor(
         private readonly pathfinder: IPathfinder,
@@ -50,7 +63,12 @@ export class GridPathfinderAdapter implements IPathPlanner {
         config?: IGridPathfinderAdapterConfig
     ) {
         this.type = type;
-        this.cellSize = config?.cellSize ?? 1;
+        const cellSize = config?.cellSize ?? 1;
+        if (cellSize <= 0 || !Number.isFinite(cellSize)) {
+            throw new Error(`cellSize must be a positive finite number, got: ${cellSize}`);
+        }
+        this.cellSize = cellSize;
+        this.alignToCenter = config?.alignToCenter ?? (cellSize > 1);
     }
 
     /**
@@ -62,11 +80,15 @@ export class GridPathfinderAdapter implements IPathPlanner {
     }
 
     /**
-     * @zh 网格坐标转像素坐标（单元格中心）
-     * @en Convert grid coordinate to pixel coordinate (cell center)
+     * @zh 网格坐标转像素坐标
+     * @en Convert grid coordinate to pixel coordinate
+     *
+     * @zh 根据 alignToCenter 配置决定是否偏移到单元格中心
+     * @en Offsets to cell center based on alignToCenter configuration
      */
     private toPixelCoord(grid: number): number {
-        return grid * this.cellSize + this.cellSize * 0.5;
+        const base = grid * this.cellSize;
+        return this.alignToCenter ? base + this.cellSize * 0.5 : base;
     }
 
     findPath(start: IVector2, end: IVector2): IPathPlanResult {
