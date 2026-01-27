@@ -8605,6 +8605,22 @@ var ESEngine = (function (exports) {
       if (this.config.enableCollisionResolution && this.collisionResolver && allObstacles.length > 0) {
         newPosition = this.collisionResolver.resolveCollision(newPosition, agent.radius, allObstacles);
       }
+      if (!this.isPositionWalkable(newPosition, agent.radius)) {
+        const slidPosition = this.findSlidePosition(agent.position, newPosition, agent.radius);
+        if (slidPosition) {
+          newPosition = slidPosition;
+          agent.velocity = {
+            x: (newPosition.x - agent.position.x) / deltaTime,
+            y: (newPosition.y - agent.position.y) / deltaTime
+          };
+        } else {
+          agent.velocity = {
+            x: 0,
+            y: 0
+          };
+          return;
+        }
+      }
       agent.position = newPosition;
       this.checkArrival(agent);
     }
@@ -8697,11 +8713,129 @@ var ESEngine = (function (exports) {
           x: agent.position.x + correction.x,
           y: agent.position.y + correction.y
         };
+        if (!this.isPositionWalkable(newPosition, agent.radius, 1)) {
+          const partialCorrection = this.findValidCorrection(agent.position, correction, agent.radius);
+          if (partialCorrection) {
+            newPosition = {
+              x: agent.position.x + partialCorrection.x,
+              y: agent.position.y + partialCorrection.y
+            };
+          } else {
+            continue;
+          }
+        }
         if (allObstacles.length > 0) {
           newPosition = this.collisionResolver.resolveCollision(newPosition, agent.radius, allObstacles);
         }
+        if (!this.isPositionWalkable(newPosition, agent.radius, 1)) {
+          continue;
+        }
         agent.position = newPosition;
       }
+    }
+    /**
+     * @zh 查找有效的修正向量（不会进入障碍物）
+     * @en Find valid correction vector (won't enter obstacles)
+     */
+    findValidCorrection(currentPos, correction, radius = 0) {
+      if (!this.pathPlanner) return correction;
+      const steps = [
+        0.75,
+        0.5,
+        0.25,
+        0.1
+      ];
+      for (const scale of steps) {
+        const testPos = {
+          x: currentPos.x + correction.x * scale,
+          y: currentPos.y + correction.y * scale
+        };
+        if (this.isPositionWalkable(testPos, radius, 1)) {
+          return {
+            x: correction.x * scale,
+            y: correction.y * scale
+          };
+        }
+      }
+      return null;
+    }
+    /**
+     * @zh 查找滑动位置（当目标位置不可行走时）
+     * @en Find slide position (when target position is not walkable)
+     *
+     * @zh 尝试只沿 X 轴或 Y 轴移动，实现沿墙滑动效果
+     * @en Try moving only along X or Y axis, achieving wall sliding effect
+     */
+    findSlidePosition(currentPos, targetPos, radius) {
+      const dx = targetPos.x - currentPos.x;
+      const dy = targetPos.y - currentPos.y;
+      const xOnlyPos = {
+        x: targetPos.x,
+        y: currentPos.y
+      };
+      if (Math.abs(dx) > 1e-3 && this.isPositionWalkable(xOnlyPos, radius)) {
+        return xOnlyPos;
+      }
+      const yOnlyPos = {
+        x: currentPos.x,
+        y: targetPos.y
+      };
+      if (Math.abs(dy) > 1e-3 && this.isPositionWalkable(yOnlyPos, radius)) {
+        return yOnlyPos;
+      }
+      const halfPos = {
+        x: currentPos.x + dx * 0.5,
+        y: currentPos.y + dy * 0.5
+      };
+      if (this.isPositionWalkable(halfPos, radius)) {
+        return halfPos;
+      }
+      return null;
+    }
+    /**
+     * @zh 检查位置是否可行走（考虑代理半径）
+     * @en Check if position is walkable (considering agent radius)
+     *
+     * @zh 检查代理边界框的4个角点和中心点，确保整个代理都在可行走区域
+     * @en Check 4 corners and center of agent bounding box, ensure entire agent is in walkable area
+     *
+     * @param position - @zh 位置 @en Position
+     * @param radius - @zh 代理半径 @en Agent radius
+     * @param tolerance - @zh 容差比例 (0-1)，用于允许轻微重叠 @en Tolerance ratio (0-1), allows slight overlap
+     */
+    isPositionWalkable(position, radius = 0, tolerance = 0.8) {
+      if (!this.pathPlanner) return true;
+      if (!this.pathPlanner.isWalkable(position)) {
+        return false;
+      }
+      if (radius <= 0) {
+        return true;
+      }
+      const checkRadius = radius * tolerance;
+      const corners = [
+        {
+          x: position.x - checkRadius,
+          y: position.y - checkRadius
+        },
+        {
+          x: position.x + checkRadius,
+          y: position.y - checkRadius
+        },
+        {
+          x: position.x - checkRadius,
+          y: position.y + checkRadius
+        },
+        {
+          x: position.x + checkRadius,
+          y: position.y + checkRadius
+        }
+      ];
+      for (const corner of corners) {
+        if (!this.pathPlanner.isWalkable(corner)) {
+          return false;
+        }
+      }
+      return true;
     }
   };
   __name$2(_NavigationSystem, "NavigationSystem");
