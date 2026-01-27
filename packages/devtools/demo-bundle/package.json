@@ -1,6 +1,6 @@
 {
     "name": "@esengine/demo-bundle",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Browser bundle for ESEngine demos",
     "type": "module",
     "main": "./dist/esengine.iife.js",

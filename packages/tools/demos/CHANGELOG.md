@@ -1,5 +1,12 @@
 # @esengine/demos
 
+## 1.0.27
+
+### Patch Changes
+
+- Updated dependencies [[`2417d29`](https://github.com/esengine/esengine/commit/2417d2970479b388103f828d66c94645619c46b5)]:
+    - @esengine/pathfinding@13.3.2
+
 ## 1.0.26
 
 ### Patch Changes
