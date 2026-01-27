@@ -993,6 +993,30 @@ export class NavigationSystem extends EntitySystem {
             );
         }
 
+        // 最终检查：确保新位置可行走（防止出界或进入障碍物）
+        // Final check: ensure new position is walkable (prevent out-of-bounds or entering obstacles)
+        // 使用 isPositionWalkable 检查整个代理（包括半径）是否在可行走区域
+        // Use isPositionWalkable to check if entire agent (including radius) is in walkable area
+        if (!this.isPositionWalkable(newPosition, agent.radius)) {
+            // 新位置不可行走，尝试滑动到有效位置
+            // New position not walkable, try sliding to a valid position
+            const slidPosition = this.findSlidePosition(agent.position, newPosition, agent.radius);
+            if (slidPosition) {
+                newPosition = slidPosition;
+                // 更新速度以反映实际移动方向
+                // Update velocity to reflect actual movement direction
+                agent.velocity = {
+                    x: (newPosition.x - agent.position.x) / deltaTime,
+                    y: (newPosition.y - agent.position.y) / deltaTime
+                };
+            } else {
+                // 无法滑动，保持原位置
+                // Cannot slide, stay at current position
+                agent.velocity = { x: 0, y: 0 };
+                return;
+            }
+        }
+
         // Update position
         agent.position = newPosition;
 
@@ -1110,6 +1134,26 @@ export class NavigationSystem extends EntitySystem {
                 y: agent.position.y + correction.y
             };
 
+            // 先检查目标位置是否可行走（包括代理半径），防止被推入障碍物
+            // Check if target position is walkable (including agent radius) first, prevent being pushed into obstacles
+            // 使用严格的容差（1.0）防止代理被推入障碍物
+            // Use strict tolerance (1.0) to prevent agents being pushed into obstacles
+            if (!this.isPositionWalkable(newPosition, agent.radius, 1.0)) {
+                // 目标位置不可行走，尝试只应用部分修正或完全不应用
+                // Target position not walkable, try partial correction or skip entirely
+                const partialCorrection = this.findValidCorrection(agent.position, correction, agent.radius);
+                if (partialCorrection) {
+                    newPosition = {
+                        x: agent.position.x + partialCorrection.x,
+                        y: agent.position.y + partialCorrection.y
+                    };
+                } else {
+                    // 找不到有效的修正方向，跳过此代理的修正
+                    // Cannot find valid correction direction, skip this agent
+                    continue;
+                }
+            }
+
             if (allObstacles.length > 0) {
                 newPosition = this.collisionResolver.resolveCollision(
                     newPosition,
@@ -1118,7 +1162,132 @@ export class NavigationSystem extends EntitySystem {
                 );
             }
 
+            // 最终检查：确保修正后的位置仍然可行走（包括代理半径）
+            // Final check: ensure corrected position is still walkable (including agent radius)
+            // 使用严格的容差（1.0）
+            // Use strict tolerance (1.0)
+            if (!this.isPositionWalkable(newPosition, agent.radius, 1.0)) {
+                // 仍然不可行走，放弃此修正
+                // Still not walkable, abandon this correction
+                continue;
+            }
+
             agent.position = newPosition;
         }
+    }
+
+    /**
+     * @zh 查找有效的修正向量（不会进入障碍物）
+     * @en Find valid correction vector (won't enter obstacles)
+     */
+    private findValidCorrection(currentPos: IVector2, correction: IVector2, radius: number = 0): IVector2 | null {
+        if (!this.pathPlanner) return correction;
+
+        // 尝试逐步减少修正量，找到一个有效的位置
+        // Try progressively reducing correction to find a valid position
+        // 使用严格的容差（1.0）确保不进入障碍物
+        // Use strict tolerance (1.0) to ensure not entering obstacles
+        const steps = [0.75, 0.5, 0.25, 0.1];
+        for (const scale of steps) {
+            const testPos: IVector2 = {
+                x: currentPos.x + correction.x * scale,
+                y: currentPos.y + correction.y * scale
+            };
+            if (this.isPositionWalkable(testPos, radius, 1.0)) {
+                return { x: correction.x * scale, y: correction.y * scale };
+            }
+        }
+
+        // 所有缩放都失败，返回 null
+        // All scales failed, return null
+        return null;
+    }
+
+    /**
+     * @zh 查找滑动位置（当目标位置不可行走时）
+     * @en Find slide position (when target position is not walkable)
+     *
+     * @zh 尝试只沿 X 轴或 Y 轴移动，实现沿墙滑动效果
+     * @en Try moving only along X or Y axis, achieving wall sliding effect
+     */
+    private findSlidePosition(currentPos: IVector2, targetPos: IVector2, radius: number): IVector2 | null {
+        const dx = targetPos.x - currentPos.x;
+        const dy = targetPos.y - currentPos.y;
+
+        // 尝试只沿 X 轴移动
+        // Try moving only along X axis
+        const xOnlyPos: IVector2 = { x: targetPos.x, y: currentPos.y };
+        if (Math.abs(dx) > 0.001 && this.isPositionWalkable(xOnlyPos, radius)) {
+            return xOnlyPos;
+        }
+
+        // 尝试只沿 Y 轴移动
+        // Try moving only along Y axis
+        const yOnlyPos: IVector2 = { x: currentPos.x, y: targetPos.y };
+        if (Math.abs(dy) > 0.001 && this.isPositionWalkable(yOnlyPos, radius)) {
+            return yOnlyPos;
+        }
+
+        // 尝试部分移动（50%）
+        // Try partial movement (50%)
+        const halfPos: IVector2 = {
+            x: currentPos.x + dx * 0.5,
+            y: currentPos.y + dy * 0.5
+        };
+        if (this.isPositionWalkable(halfPos, radius)) {
+            return halfPos;
+        }
+
+        // 无法找到有效滑动位置
+        // Cannot find valid slide position
+        return null;
+    }
+
+    /**
+     * @zh 检查位置是否可行走（考虑代理半径）
+     * @en Check if position is walkable (considering agent radius)
+     *
+     * @zh 检查代理边界框的4个角点和中心点，确保整个代理都在可行走区域
+     * @en Check 4 corners and center of agent bounding box, ensure entire agent is in walkable area
+     *
+     * @param position - @zh 位置 @en Position
+     * @param radius - @zh 代理半径 @en Agent radius
+     * @param tolerance - @zh 容差比例 (0-1)，用于允许轻微重叠 @en Tolerance ratio (0-1), allows slight overlap
+     */
+    private isPositionWalkable(position: IVector2, radius: number = 0, tolerance: number = 0.8): boolean {
+        if (!this.pathPlanner) return true;
+
+        // 检查中心点（必须可行走）
+        // Check center point (must be walkable)
+        if (!this.pathPlanner.isWalkable(position)) {
+            return false;
+        }
+
+        // 如果没有半径，只检查中心点
+        // If no radius, only check center
+        if (radius <= 0) {
+            return true;
+        }
+
+        // 使用缩小后的半径进行检查，允许轻微重叠
+        // Use reduced radius for checking, allows slight overlap
+        const checkRadius = radius * tolerance;
+
+        // 检查边界框的4个角点
+        // Check 4 corners of bounding box
+        const corners: IVector2[] = [
+            { x: position.x - checkRadius, y: position.y - checkRadius },
+            { x: position.x + checkRadius, y: position.y - checkRadius },
+            { x: position.x - checkRadius, y: position.y + checkRadius },
+            { x: position.x + checkRadius, y: position.y + checkRadius }
+        ];
+
+        for (const corner of corners) {
+            if (!this.pathPlanner.isWalkable(corner)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
