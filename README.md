@@ -14,6 +14,7 @@
   <a href="https://github.com/esengine/esengine/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="license"></a>
   <a href="https://github.com/esengine/esengine/stargazers"><img src="https://img.shields.io/github/stars/esengine/esengine?style=flat-square" alt="stars"></a>
   <img src="https://img.shields.io/badge/TypeScript-5.0+-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <a href="https://discord.gg/gCAgzXFW"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 <p align="center">
@@ -40,23 +41,22 @@ npm install @esengine/ecs-framework
 
 ## Features
 
-| Module | Description | Engine Required |
-|--------|-------------|:---------------:|
-| **ECS Core** | Entity-Component-System framework with reactive queries | No |
-| **Behavior Tree** | AI behavior trees with visual editor support | No |
-| **Blueprint** | Visual scripting system | No |
-| **FSM** | Finite state machine | No |
-| **Timer** | Timer and cooldown systems | No |
-| **Spatial** | Spatial indexing and queries (QuadTree, Grid) | No |
-| **Pathfinding** | A* and navigation mesh pathfinding | No |
-| **Procgen** | Procedural generation (noise, random, sampling) | No |
-| **RPC** | High-performance RPC communication framework | No |
-| **Server** | Game server framework with rooms, auth, rate limiting | No |
-| **Network** | Client networking with prediction, AOI, delta compression | No |
-| **Transaction** | Game transaction system with Redis/Memory storage | No |
-| **World Streaming** | Open world chunk loading and streaming | No |
+| Module | Description |
+|--------|-------------|
+| [**ECS Core**](https://esengine.github.io/esengine/en/guide/) | Entity-Component-System framework with reactive queries |
+| [**Behavior Tree**](https://esengine.github.io/esengine/en/modules/behavior-tree/) | AI behavior trees with visual editor support |
+| [**Blueprint**](https://esengine.github.io/esengine/en/modules/blueprint/) | Visual scripting system |
+| [**FSM**](https://esengine.github.io/esengine/en/modules/fsm/) | Finite state machine |
+| [**Timer**](https://esengine.github.io/esengine/en/modules/timer/) | Timer and cooldown systems |
+| [**Spatial**](https://esengine.github.io/esengine/en/modules/spatial/) | Spatial indexing and queries (QuadTree, Grid) |
+| [**Pathfinding**](https://esengine.github.io/esengine/en/modules/pathfinding/) | A* and navigation mesh pathfinding |
+| [**Procgen**](https://esengine.github.io/esengine/en/modules/procgen/) | Procedural generation (noise, random, sampling) |
+| [**RPC**](https://esengine.github.io/esengine/en/modules/rpc/) | High-performance RPC communication framework |
+| [**Network**](https://esengine.github.io/esengine/en/modules/network/) | Client networking with prediction, AOI, delta compression |
+| [**Database**](https://esengine.github.io/esengine/en/modules/database/) | Game database with Redis/Memory storage |
+| [**World Streaming**](https://esengine.github.io/esengine/en/modules/world-streaming/) | Open world chunk loading and streaming |
 
-> All framework modules can be used standalone with any rendering engine.
+> All modules are engine-agnostic and work with any rendering engine.
 
 ## Quick Start
 
@@ -192,12 +192,11 @@ export class ECSManager extends Laya.Script {
 
 ## Packages
 
-### Framework (Engine-Agnostic)
-
-These packages have **zero rendering dependencies** and work with any engine:
+All packages are engine-agnostic with **zero rendering dependencies**:
 
 ```bash
 npm install @esengine/ecs-framework      # Core ECS
+npm install @esengine/ecs-framework-math # Math utilities
 npm install @esengine/behavior-tree      # AI behavior trees
 npm install @esengine/blueprint          # Visual scripting
 npm install @esengine/fsm                # State machines
@@ -206,60 +205,11 @@ npm install @esengine/spatial            # Spatial indexing
 npm install @esengine/pathfinding        # Pathfinding
 npm install @esengine/procgen            # Procedural generation
 npm install @esengine/rpc                # RPC framework
-npm install @esengine/server             # Game server
 npm install @esengine/network            # Client networking
+npm install @esengine/server             # Game server
+npm install @esengine/database           # Database abstraction
 npm install @esengine/transaction        # Transaction system
 npm install @esengine/world-streaming    # World streaming
-```
-
-### ESEngine Runtime (Optional)
-
-If you want a complete engine solution with rendering:
-
-| Category | Packages |
-|----------|----------|
-| **Core** | `engine-core`, `asset-system`, `material-system` |
-| **Rendering** | `sprite`, `tilemap`, `particle`, `camera`, `mesh-3d` |
-| **Physics** | `physics-rapier2d` |
-| **Platform** | `platform-web`, `platform-wechat` |
-
-### Editor (Optional)
-
-A visual editor built with Tauri for scene management:
-
-- Download from [Releases](https://github.com/esengine/esengine/releases)
-- [Build from source](./packages/editor/editor-app/README.md)
-- Supports behavior tree editing, tilemap painting, visual scripting
-
-## Project Structure
-
-```
-esengine/
-├── packages/
-│   ├── framework/          # Engine-agnostic modules (NPM publishable)
-│   │   ├── core/          # ECS Framework
-│   │   ├── math/          # Math utilities
-│   │   ├── behavior-tree/ # AI behavior trees
-│   │   ├── blueprint/     # Visual scripting
-│   │   ├── fsm/           # Finite state machine
-│   │   ├── timer/         # Timer system
-│   │   ├── spatial/       # Spatial queries
-│   │   ├── pathfinding/   # Pathfinding
-│   │   ├── procgen/       # Procedural generation
-│   │   ├── rpc/           # RPC framework
-│   │   ├── server/        # Game server
-│   │   ├── network/       # Client networking
-│   │   ├── transaction/   # Transaction system
-│   │   └── world-streaming/ # World streaming
-│   │
-│   ├── engine/            # ESEngine runtime
-│   ├── rendering/         # Rendering modules
-│   ├── physics/           # Physics modules
-│   ├── editor/            # Visual editor
-│   └── rust/              # WASM renderer
-│
-├── docs/                   # Documentation
-└── examples/               # Examples
 ```
 
 ## Building from Source
@@ -280,9 +230,8 @@ pnpm test
 
 ## Documentation
 
-- [ECS Framework Guide](./packages/framework/core/README.md)
-- [Behavior Tree Guide](./packages/framework/behavior-tree/README.md)
-- [Editor Setup Guide](./packages/editor/editor-app/README.md) ([中文](./packages/editor/editor-app/README_CN.md))
+- [ECS Framework Guide](https://esengine.github.io/esengine/en/guide/)
+- [Behavior Tree Guide](https://esengine.github.io/esengine/en/modules/behavior-tree/)
 - [API Reference](https://esengine.github.io/esengine/api/README)
 
 ## Community

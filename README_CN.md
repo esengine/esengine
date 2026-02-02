@@ -14,6 +14,7 @@
   <a href="https://github.com/esengine/esengine/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="license"></a>
   <a href="https://github.com/esengine/esengine/stargazers"><img src="https://img.shields.io/github/stars/esengine/esengine?style=flat-square" alt="stars"></a>
   <img src="https://img.shields.io/badge/TypeScript-5.0+-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <a href="https://discord.gg/gCAgzXFW"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 <p align="center">
@@ -40,23 +41,22 @@ npm install @esengine/ecs-framework
 
 ## 功能模块
 
-| 模块 | 描述 | 需要渲染引擎 |
-|------|------|:----------:|
-| **ECS 核心** | 实体-组件-系统框架，支持响应式查询 | 否 |
-| **行为树** | AI 行为树，支持可视化编辑 | 否 |
-| **蓝图** | 可视化脚本系统 | 否 |
-| **状态机** | 有限状态机 | 否 |
-| **定时器** | 定时器和冷却系统 | 否 |
-| **空间索引** | 空间查询（四叉树、网格） | 否 |
-| **寻路** | A* 和导航网格寻路 | 否 |
-| **程序化生成** | 噪声、随机、采样等生成算法 | 否 |
-| **RPC** | 高性能 RPC 通信框架 | 否 |
-| **服务端** | 游戏服务器框架，支持房间、认证、速率限制 | 否 |
-| **网络** | 客户端网络，支持预测、AOI、增量压缩 | 否 |
-| **事务系统** | 游戏事务系统，支持 Redis/内存存储 | 否 |
-| **世界流送** | 开放世界分块加载和流送 | 否 |
+| 模块 | 描述 |
+|------|------|
+| [**ECS 核心**](https://esengine.github.io/esengine/guide/) | 实体-组件-系统框架，支持响应式查询 |
+| [**行为树**](https://esengine.github.io/esengine/modules/behavior-tree/) | AI 行为树，支持可视化编辑 |
+| [**蓝图**](https://esengine.github.io/esengine/modules/blueprint/) | 可视化脚本系统 |
+| [**状态机**](https://esengine.github.io/esengine/modules/fsm/) | 有限状态机 |
+| [**定时器**](https://esengine.github.io/esengine/modules/timer/) | 定时器和冷却系统 |
+| [**空间索引**](https://esengine.github.io/esengine/modules/spatial/) | 空间查询（四叉树、网格） |
+| [**寻路**](https://esengine.github.io/esengine/modules/pathfinding/) | A* 和导航网格寻路 |
+| [**程序化生成**](https://esengine.github.io/esengine/modules/procgen/) | 噪声、随机、采样等生成算法 |
+| [**RPC**](https://esengine.github.io/esengine/modules/rpc/) | 高性能 RPC 通信框架 |
+| [**网络**](https://esengine.github.io/esengine/modules/network/) | 客户端网络，支持预测、AOI、增量压缩 |
+| [**数据库**](https://esengine.github.io/esengine/modules/database/) | 游戏数据库，支持 Redis/内存存储 |
+| [**世界流送**](https://esengine.github.io/esengine/modules/world-streaming/) | 开放世界分块加载和流送 |
 
-> 所有框架模块都可以独立使用，无需依赖特定渲染引擎。
+> 所有模块均为引擎无关设计，可与任何渲染引擎配合使用。
 
 ## 快速开始
 
@@ -192,12 +192,11 @@ export class ECSManager extends Laya.Script {
 
 ## 包列表
 
-### 框架包（引擎无关）
-
-这些包**零渲染依赖**，可与任何引擎配合使用：
+所有包均为引擎无关，**零渲染依赖**：
 
 ```bash
 npm install @esengine/ecs-framework      # ECS 核心
+npm install @esengine/ecs-framework-math # 数学工具
 npm install @esengine/behavior-tree      # AI 行为树
 npm install @esengine/blueprint          # 可视化脚本
 npm install @esengine/fsm                # 状态机
@@ -206,60 +205,11 @@ npm install @esengine/spatial            # 空间索引
 npm install @esengine/pathfinding        # 寻路
 npm install @esengine/procgen            # 程序化生成
 npm install @esengine/rpc                # RPC 框架
-npm install @esengine/server             # 游戏服务器
 npm install @esengine/network            # 客户端网络
+npm install @esengine/server             # 游戏服务器
+npm install @esengine/database           # 数据库抽象
 npm install @esengine/transaction        # 事务系统
 npm install @esengine/world-streaming    # 世界流送
-```
-
-### ESEngine 运行时（可选）
-
-如果你需要完整的引擎解决方案：
-
-| 分类 | 包名 |
-|------|------|
-| **核心** | `engine-core`, `asset-system`, `material-system` |
-| **渲染** | `sprite`, `tilemap`, `particle`, `camera`, `mesh-3d` |
-| **物理** | `physics-rapier2d` |
-| **平台** | `platform-web`, `platform-wechat` |
-
-### 编辑器（可选）
-
-基于 Tauri 构建的可视化编辑器：
-
-- 从 [Releases](https://github.com/esengine/esengine/releases) 下载
-- [从源码构建](./packages/editor/editor-app/README.md)
-- 支持行为树编辑、Tilemap 绘制、可视化脚本
-
-## 项目结构
-
-```
-esengine/
-├── packages/
-│   ├── framework/          # 引擎无关模块（可发布到 NPM）
-│   │   ├── core/          # ECS 框架
-│   │   ├── math/          # 数学工具
-│   │   ├── behavior-tree/ # AI 行为树
-│   │   ├── blueprint/     # 可视化脚本
-│   │   ├── fsm/           # 有限状态机
-│   │   ├── timer/         # 定时器系统
-│   │   ├── spatial/       # 空间查询
-│   │   ├── pathfinding/   # 寻路
-│   │   ├── procgen/       # 程序化生成
-│   │   ├── rpc/           # RPC 框架
-│   │   ├── server/        # 游戏服务器
-│   │   ├── network/       # 客户端网络
-│   │   ├── transaction/   # 事务系统
-│   │   └── world-streaming/ # 世界流送
-│   │
-│   ├── engine/            # ESEngine 运行时
-│   ├── rendering/         # 渲染模块
-│   ├── physics/           # 物理模块
-│   ├── editor/            # 可视化编辑器
-│   └── rust/              # WASM 渲染器
-│
-├── docs/                   # 文档
-└── examples/               # 示例
 ```
 
 ## 从源码构建
@@ -280,9 +230,8 @@ pnpm test
 
 ## 文档
 
-- [ECS 框架指南](./packages/framework/core/README.md)
-- [行为树指南](./packages/framework/behavior-tree/README.md)
-- [编辑器启动指南](./packages/editor/editor-app/README_CN.md) ([English](./packages/editor/editor-app/README.md))
+- [ECS 框架指南](https://esengine.github.io/esengine/guide/)
+- [行为树指南](https://esengine.github.io/esengine/modules/behavior-tree/)
 - [API 参考](https://esengine.github.io/esengine/api/README)
 
 ## 社区
