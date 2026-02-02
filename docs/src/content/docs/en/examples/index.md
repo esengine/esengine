@@ -20,11 +20,6 @@ Client-server state synchronization demonstration:
 - Interpolation, prediction, lag compensation
 - NetworkIdentity, NetworkTransform, SnapshotBuffer
 
-## System Demos
-
-### [Worker System Demo](/en/examples/worker-system-demo/)
-Demonstrates how to use Web Workers for parallel processing, offloading heavy computations from the main thread.
-
 ## External Examples
 
 ### [Lawn Mower Demo](https://github.com/esengine/lawn-mower-demo)

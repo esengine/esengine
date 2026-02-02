@@ -96,14 +96,6 @@ class AutoSaveSystem extends IntervalSystem {
 }
 ```
 
-## WorkerEntitySystem - Multi-threaded System
-
-A Web Worker-based multi-threaded processing system, suitable for compute-intensive tasks, capable of fully utilizing multi-core CPU performance.
-
-Worker systems provide true parallel computing capabilities, support SharedArrayBuffer optimization, and have automatic fallback support. Particularly suitable for physics simulation, particle systems, AI computation, and similar scenarios.
-
-**For detailed content, please refer to: [Worker System](/en/guide/worker-system)**
-
 ## Entity Matcher
 
 Matcher is used to define which entities a system needs to process. It provides flexible condition combinations:

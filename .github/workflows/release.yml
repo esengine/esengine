@@ -6,13 +6,16 @@ on:
     tags:
       - 'v*'
       - 'core-v*'
+      - 'math-v*'
       - 'behavior-tree-v*'
-      - 'editor-core-v*'
-      - 'node-editor-v*'
       - 'blueprint-v*'
-      - 'tilemap-v*'
-      - 'physics-rapier2d-v*'
-      - 'worker-generator-v*'
+      - 'fsm-v*'
+      - 'timer-v*'
+      - 'spatial-v*'
+      - 'procgen-v*'
+      - 'pathfinding-v*'
+      - 'network-v*'
+      - 'rpc-v*'
 
   # Manual trigger option
   workflow_dispatch:
@@ -23,13 +26,16 @@ on:
         type: choice
         options:
           - core
+          - math
           - behavior-tree
-          - editor-core
-          - node-editor
           - blueprint
-          - tilemap
-          - physics-rapier2d
-          - worker-generator
+          - fsm
+          - timer
+          - spatial
+          - procgen
+          - pathfinding
+          - network
+          - rpc
       version_type:
         description: 'Version bump type'
         required: true
@@ -109,14 +115,14 @@ jobs:
           EXPECTED_VERSION="${{ steps.parse.outputs.version }}"
 
           # Get version from package.json
-          ACTUAL_VERSION=$(node -p "require('./packages/$PACKAGE/package.json').version")
+          ACTUAL_VERSION=$(node -p "require('./packages/framework/$PACKAGE/package.json').version")
 
           if [ "$EXPECTED_VERSION" != "$ACTUAL_VERSION" ]; then
             echo "::error::Version mismatch!"
             echo "Tag version: $EXPECTED_VERSION"
             echo "package.json version: $ACTUAL_VERSION"
             echo ""
-            echo "Please update packages/$PACKAGE/package.json to version $EXPECTED_VERSION before tagging."
+            echo "Please update packages/framework/$PACKAGE/package.json to version $EXPECTED_VERSION before tagging."
             exit 1
           fi
 
@@ -127,7 +133,7 @@ jobs:
         id: bump
         run: |
           PACKAGE="${{ steps.parse.outputs.package }}"
-          cd packages/$PACKAGE
+          cd packages/framework/$PACKAGE
 
           CURRENT=$(node -p "require('./package.json').version")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
@@ -154,27 +160,21 @@ jobs:
           fi
 
       - name: Build core package (if needed)
-        if: ${{ steps.parse.outputs.package != 'core' && steps.parse.outputs.package != 'node-editor' && steps.parse.outputs.package != 'worker-generator' }}
+        if: ${{ steps.parse.outputs.package != 'core' }}
         run: |
           cd packages/framework/core
           pnpm run build
 
-      - name: Build node-editor package (if needed for blueprint)
-        if: ${{ steps.parse.outputs.package == 'blueprint' }}
-        run: |
-          cd packages/node-editor
-          pnpm run build
-
       - name: Build package
         run: |
-          cd packages/${{ steps.parse.outputs.package }}
+          cd packages/framework/${{ steps.parse.outputs.package }}
           pnpm run build:npm
 
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages/${{ steps.parse.outputs.package }}/dist
+          cd packages/framework/${{ steps.parse.outputs.package }}/dist
           pnpm publish --access public --no-git-checks
 
       - name: Create GitHub Release (tag mode)
@@ -215,7 +215,7 @@ jobs:
 
             ### Changes
             - Published to npm: [@esengine/${{ steps.parse.outputs.package }}@${{ steps.version.outputs.value }}](https://www.npmjs.com/package/@esengine/${{ steps.parse.outputs.package }}/v/${{ steps.version.outputs.value }})
-            - Updated `packages/${{ steps.parse.outputs.package }}/package.json` to `${{ steps.version.outputs.value }}`
+            - Updated `packages/framework/${{ steps.parse.outputs.package }}/package.json` to `${{ steps.version.outputs.value }}`
 
             ---
             *This PR was automatically created by the release workflow*
