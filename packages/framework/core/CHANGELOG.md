@@ -1,5 +1,13 @@
 # @esengine/ecs-framework
 
+## 2.11.1
+
+### Patch Changes
+
+- [#476](https://github.com/esengine/esengine/pull/476) [`57c2252`](https://github.com/esengine/esengine/commit/57c22525c7df33e63dc7c77b9b95d4cb0b51046a) Thanks [@esengine](https://github.com/esengine)! - fix: Entity.destroy() now properly releases entity handle
+    - After entity destruction, `handleManager.isAlive(handle)` correctly returns `false`
+    - `findEntityByHandle(handle)` correctly returns `null` after entity destruction
+
 ## 2.7.1
 
 ### Patch Changes
