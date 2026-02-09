@@ -378,3 +378,58 @@ describe('EntityHandleManager', () => {
         });
     });
 });
+
+describe('Entity.destroy() handle cleanup', () => {
+    // 需要导入 Scene 来进行集成测试
+    const { Scene } = require('../../../src/ECS/Scene');
+
+    it('Entity.destroy() 应该正确销毁 handle', () => {
+        const scene = new Scene();
+        const entity = scene.createEntity('TestEntity');
+        const handle = entity.handle;
+
+        // 销毁前 handle 应该存活
+        expect(scene.handleManager.isAlive(handle)).toBe(true);
+        expect(scene.findEntityByHandle(handle)).toBe(entity);
+
+        // 销毁实体
+        entity.destroy();
+
+        // 销毁后 handle 应该不再存活
+        expect(scene.handleManager.isAlive(handle)).toBe(false);
+        expect(scene.findEntityByHandle(handle)).toBeNull();
+    });
+
+    it('Scene.destroyEntities() 应该正确销毁所有 handle', () => {
+        const scene = new Scene();
+        const entity1 = scene.createEntity('Entity1');
+        const entity2 = scene.createEntity('Entity2');
+        const handle1 = entity1.handle;
+        const handle2 = entity2.handle;
+
+        // 销毁前两个 handle 都应该存活
+        expect(scene.handleManager.isAlive(handle1)).toBe(true);
+        expect(scene.handleManager.isAlive(handle2)).toBe(true);
+
+        // 批量销毁
+        scene.destroyEntities([entity1, entity2]);
+
+        // 销毁后两个 handle 都应该不再存活
+        expect(scene.handleManager.isAlive(handle1)).toBe(false);
+        expect(scene.handleManager.isAlive(handle2)).toBe(false);
+    });
+
+    it('isValidHandle 应该只检查非空', () => {
+        // isValidHandle 只是非空检查，不检查存活状态
+        const scene = new Scene();
+        const entity = scene.createEntity('TestEntity');
+        const handle = entity.handle;
+
+        entity.destroy();
+
+        // handle 仍然是非空的（isValidHandle 返回 true）
+        expect(isValidHandle(handle)).toBe(true);
+        // 但是不再存活
+        expect(scene.handleManager.isAlive(handle)).toBe(false);
+    });
+});

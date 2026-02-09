@@ -879,11 +879,7 @@ export class Scene implements IScene {
         for (const entity of entities) {
             this.entities.remove(entity);
             this.querySystem.removeEntity(entity);
-
-            if (isValidHandle(entity.handle)) {
-                this._handleToEntity.delete(entity.handle);
-                this.handleManager.destroy(entity.handle);
-            }
+            this.releaseEntityHandle(entity.handle);
         }
 
         this.querySystem.clearCache();
@@ -933,6 +929,25 @@ export class Scene implements IScene {
         }
 
         return this._handleToEntity.get(handle) ?? null;
+    }
+
+    /**
+     * 释放实体句柄
+     *
+     * 从句柄管理器中销毁句柄并清理映射关系。
+     * 当实体被销毁时调用此方法。
+     *
+     * Release entity handle.
+     * Destroys the handle in the handle manager and cleans up the mapping.
+     * Called when an entity is destroyed.
+     *
+     * @param handle 实体句柄 | Entity handle
+     */
+    public releaseEntityHandle(handle: EntityHandle): void {
+        if (isValidHandle(handle)) {
+            this._handleToEntity.delete(handle);
+            this.handleManager.destroy(handle);
+        }
     }
 
     /**

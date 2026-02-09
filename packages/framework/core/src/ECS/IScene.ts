@@ -13,6 +13,7 @@ import type { TypedQueryBuilder } from './Core/Query/TypedQuery';
 import type { SceneSerializationOptions, SceneDeserializationOptions } from './Serialization/SceneSerializer';
 import type { IncrementalSnapshot, IncrementalSerializationOptions } from './Serialization/IncrementalSerializer';
 import type { RuntimeEnvironment } from '../Types';
+import type { EntityHandle } from './Core/EntityHandle';
 
 // Re-export for convenience
 export type { RuntimeEnvironment };
@@ -253,6 +254,20 @@ export type IScene = {
      * 根据ID查找实体
      */
     findEntityById(id: number): Entity | null;
+
+    /**
+     * 释放实体句柄
+     *
+     * 从句柄管理器中销毁句柄并清理映射关系。
+     * 当实体被销毁时调用此方法。
+     *
+     * Release entity handle.
+     * Destroys the handle in the handle manager and cleans up the mapping.
+     * Called when an entity is destroyed.
+     *
+     * @param handle 实体句柄 | Entity handle
+     */
+    releaseEntityHandle(handle: EntityHandle): void;
 
     /**
      * 根据名称查找实体
