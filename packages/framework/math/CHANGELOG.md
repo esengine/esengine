@@ -1,5 +1,12 @@
 # @esengine/ecs-framework-math
 
+## 2.11.1
+
+### Patch Changes
+
+- Updated dependencies []:
+    - @esengine/blueprint@4.5.1
+
 ## 2.11.0
 
 ### Minor Changes
