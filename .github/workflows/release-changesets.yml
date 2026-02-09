@@ -51,6 +51,7 @@ jobs:
           pnpm --filter "@esengine/fsm" build
           pnpm --filter "@esengine/timer" build
           pnpm --filter "@esengine/spatial" build
+          pnpm --filter "@esengine/world-streaming" build
           pnpm --filter "@esengine/procgen" build
           pnpm --filter "@esengine/pathfinding" build
           pnpm --filter "@esengine/network-protocols" build

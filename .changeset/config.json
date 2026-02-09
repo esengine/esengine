@@ -32,7 +32,6 @@
     "@esengine/fairygui",
     "@esengine/physics-rapier2d",
     "@esengine/rapier2d",
-    "@esengine/world-streaming",
     "@esengine/editor-core",
     "@esengine/editor-runtime",
     "@esengine/editor-app",
