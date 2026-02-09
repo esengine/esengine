@@ -816,6 +816,9 @@ export class Entity {
         this.removeAllComponents();
 
         if (this.scene) {
+            // 释放实体句柄 | Release entity handle
+            this.scene.releaseEntityHandle(this._handle);
+
             if (this.scene.querySystem) {
                 this.scene.querySystem.removeEntity(this);
             }
