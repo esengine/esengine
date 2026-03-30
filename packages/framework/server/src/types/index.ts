@@ -139,6 +139,7 @@ export interface ServerConnection<TData = Record<string, unknown>> extends Conne
      * @en User-defined data
      */
     data: TData
+
 }
 
 // ============================================================================

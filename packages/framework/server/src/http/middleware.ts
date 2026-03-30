@@ -105,7 +105,7 @@ export function requestId(headerName: string = 'X-Request-ID'): HttpMiddleware {
             ?? generateId();
 
         res.header(headerName, id);
-        (req as any).requestId = id;
+        req.requestId = id;
 
         await next();
     };

@@ -186,7 +186,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
 
             if (requireAuth && !authContext.isAuthenticated) {
                 logger.warn(`Rejected unauthenticated player: ${player.id}`);
-                this.kick(player as any, 'Authentication required');
+                this.kick(player as Player<any>, 'Authentication required');
                 return;
             }
 
@@ -197,7 +197,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
 
                 if (!hasRole) {
                     logger.warn(`Rejected player ${player.id}: insufficient roles`);
-                    this.kick(player as any, 'Insufficient permissions');
+                    this.kick(player as Player<any>, 'Insufficient permissions');
                     return;
                 }
             }
@@ -209,12 +209,12 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
                     const allowed = await this.onAuth(authPlayer);
                     if (!allowed) {
                         logger.warn(`Rejected player ${player.id}: onAuth returned false`);
-                        this.kick(player as any, 'Authentication rejected');
+                        this.kick(player as Player<any>, 'Authentication rejected');
                         return;
                     }
                 } catch (error) {
                     logger.error(`Error in onAuth for player ${player.id}:`, error);
-                    this.kick(player as any, 'Authentication error');
+                    this.kick(player as Player<any>, 'Authentication error');
                     return;
                 }
             }

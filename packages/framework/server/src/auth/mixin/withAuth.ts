@@ -152,7 +152,7 @@ export function withAuth<TUser = unknown>(
                         await onAuthFailure?.(conn, result);
 
                         if (disconnectOnAuthFailure) {
-                            (conn as any).close?.();
+                            conn.close?.();
                             return;
                         }
                     }

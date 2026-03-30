@@ -57,6 +57,12 @@ export interface HttpRequest {
      * @en Client IP
      */
     ip: string;
+
+    /**
+     * @zh 请求唯一标识（由 requestId 中间件设置）
+     * @en Unique request identifier (set by requestId middleware)
+     */
+    requestId?: string;
 }
 
 /**
