@@ -158,12 +158,9 @@ export class JPSPathfinder implements IPathfinder {
      * @en Get map bounds
      */
     private getMapBounds(): { width: number; height: number } {
-        // 尝试从地图获取尺寸
-        const mapAny = this.map as any;
-        if (typeof mapAny.width === 'number' && typeof mapAny.height === 'number') {
-            return { width: mapAny.width, height: mapAny.height };
+        if (typeof this.map.width === 'number' && typeof this.map.height === 'number') {
+            return { width: this.map.width, height: this.map.height };
         }
-        // 默认尺寸
         return { width: 1000, height: 1000 };
     }
 
