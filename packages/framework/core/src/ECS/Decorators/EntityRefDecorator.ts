@@ -26,10 +26,11 @@ export type EntityRefMetadata = {
  * 获取或创建组件的EntityRef值存储Map
  */
 function getValueMap(component: Component): Map<string, Entity | null> {
-    let map = (component as any)[ENTITY_REF_VALUES];
+    const record = component as unknown as Record<symbol, Map<string, Entity | null> | undefined>;
+    let map = record[ENTITY_REF_VALUES];
     if (!map) {
         map = new Map<string, Entity | null>();
-        (component as any)[ENTITY_REF_VALUES] = map;
+        record[ENTITY_REF_VALUES] = map;
     }
     return map;
 }

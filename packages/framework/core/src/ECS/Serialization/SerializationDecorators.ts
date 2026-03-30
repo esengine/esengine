@@ -85,21 +85,20 @@ export function Serializable(options: SerializableOptions) {
 
         let metadata: SerializationMetadata;
 
+        const targetRecord = target as unknown as Record<symbol, SerializationMetadata | undefined>;
+
         if (hasOwnMetadata) {
-            // 已有自己的元数据，更新 options
-            metadata = (target as any)[SERIALIZABLE_METADATA];
+            metadata = targetRecord[SERIALIZABLE_METADATA]!;
             metadata.options = options;
         } else {
-            // 没有自己的元数据，检查是否有继承的元数据
-            const inheritedMetadata: SerializationMetadata | undefined = (target as any)[SERIALIZABLE_METADATA];
+            const inheritedMetadata = targetRecord[SERIALIZABLE_METADATA];
 
-            // 创建新的元数据对象（从继承的元数据复制字段，但使用新的 options）
             metadata = {
                 options,
                 fields: inheritedMetadata ? new Map(inheritedMetadata.fields) : new Map(),
                 ignoredFields: inheritedMetadata ? new Set(inheritedMetadata.ignoredFields) : new Set()
             };
-            (target as any)[SERIALIZABLE_METADATA] = metadata;
+            targetRecord[SERIALIZABLE_METADATA] = metadata;
         }
 
         return target;

@@ -46,7 +46,7 @@ export type IScene = {
      * scene.sceneData.set('checkpoint', { x: 100, y: 200 });
      * ```
      */
-    readonly sceneData: Map<string, any>;
+    readonly sceneData: Map<string, unknown>;
 
     /**
      * 场景中的实体集合
@@ -287,17 +287,17 @@ export type IScene = {
     /**
      * 查询拥有所有指定组件的实体
      */
-    queryAll(...componentTypes: any[]): { entities: readonly Entity[] };
+    queryAll(...componentTypes: ComponentType[]): { entities: readonly Entity[] };
 
     /**
      * 查询拥有任意一个指定组件的实体
      */
-    queryAny(...componentTypes: any[]): { entities: readonly Entity[] };
+    queryAny(...componentTypes: ComponentType[]): { entities: readonly Entity[] };
 
     /**
      * 查询不包含指定组件的实体
      */
-    queryNone(...componentTypes: any[]): { entities: readonly Entity[] };
+    queryNone(...componentTypes: ComponentType[]): { entities: readonly Entity[] };
 
     /**
      * 创建类型安全的查询构建器
@@ -330,7 +330,7 @@ export type IScene = {
     getStats(): {
         entityCount: number;
         processorCount: number;
-        componentStorageStats: Map<string, any>;
+        componentStorageStats: Map<string, unknown>;
     };
 
     /**
@@ -352,7 +352,7 @@ export type IScene = {
             updateOrder: number;
             entityCount: number;
         }>;
-        componentStats: Map<string, any>;
+        componentStats: Map<string, unknown>;
     };
 
     /**
@@ -380,7 +380,7 @@ export type IScene = {
      */
     applyIncremental(
         incremental: IncrementalSnapshot | string | Uint8Array,
-        componentRegistry?: Map<string, any>
+        componentRegistry?: Map<string, unknown>
     ): void;
 
     /**

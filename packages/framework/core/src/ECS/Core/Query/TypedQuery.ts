@@ -294,15 +294,15 @@ export class TypedQueryBuilder<
         let matcher = Matcher.complex();
 
         if (this._all.length > 0) {
-            matcher = matcher.all(...(this._all as unknown as ComponentConstructor[]));
+            matcher = matcher.all(...(this._all as readonly ComponentConstructor[]));
         }
 
         if (this._any.length > 0) {
-            matcher = matcher.any(...(this._any as unknown as ComponentConstructor[]));
+            matcher = matcher.any(...(this._any as readonly ComponentConstructor[]));
         }
 
         if (this._none.length > 0) {
-            matcher = matcher.none(...(this._none as unknown as ComponentConstructor[]));
+            matcher = matcher.none(...(this._none as readonly ComponentConstructor[]));
         }
 
         if (this._tag !== undefined) {

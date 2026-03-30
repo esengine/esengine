@@ -1,4 +1,5 @@
 import { IPerformanceDebugData } from '../../Types';
+import { getPerformanceWithMemory } from '../../Types/GlobalTypes';
 import { Time } from '../Time';
 
 /**
@@ -23,8 +24,9 @@ export class PerformanceDataCollector {
         const ecsPercentage = engineFrameTimeMs > 0 ? (ecsExecutionTimeMs / engineFrameTimeMs * 100) : 0;
 
         let memoryUsage = 0;
-        if ((performance as any).memory) {
-            memoryUsage = (performance as any).memory.usedJSHeapSize / 1024 / 1024;
+        const perfMemory = getPerformanceWithMemory().memory;
+        if (perfMemory) {
+            memoryUsage = perfMemory.usedJSHeapSize / 1024 / 1024;
         }
 
         // 更新ECS执行时间历史记录
@@ -149,8 +151,17 @@ export class PerformanceDataCollector {
     /**
      * 获取内存详情
      */
-    private getMemoryDetails(): any {
-        const memoryInfo: any = {
+    private getMemoryDetails(): {
+        entities: number;
+        components: number;
+        systems: number;
+        pooled: number;
+        totalMemory: number;
+        usedMemory: number;
+        freeMemory: number;
+        gcCollections: number;
+    } {
+        const memoryInfo = {
             entities: 0,
             components: 0,
             systems: 0,
@@ -162,16 +173,15 @@ export class PerformanceDataCollector {
         };
 
         try {
-            if ((performance as any).memory) {
-                const perfMemory = (performance as any).memory;
-                memoryInfo.totalMemory = perfMemory.jsHeapSizeLimit || 512 * 1024 * 1024;
-                memoryInfo.usedMemory = perfMemory.usedJSHeapSize || 0;
+            const perf = getPerformanceWithMemory();
+            if (perf.memory) {
+                memoryInfo.totalMemory = perf.memory.jsHeapSizeLimit || 512 * 1024 * 1024;
+                memoryInfo.usedMemory = perf.memory.usedJSHeapSize || 0;
                 memoryInfo.freeMemory = memoryInfo.totalMemory - memoryInfo.usedMemory;
 
-                // 检测GC：如果使用的内存突然大幅减少，可能发生了GC
                 if (this.lastMemoryCheck > 0) {
                     const memoryDrop = this.lastMemoryCheck - memoryInfo.usedMemory;
-                    if (memoryDrop > 1024 * 1024) { // 内存减少超过1MB
+                    if (memoryDrop > 1024 * 1024) {
                         this.gcCollections++;
                     }
                 }
@@ -182,13 +192,13 @@ export class PerformanceDataCollector {
             }
         } catch (error) {
             return {
+                entities: 0,
+                components: 0,
+                systems: 0,
+                pooled: 0,
                 totalMemory: 0,
                 usedMemory: 0,
                 freeMemory: 0,
-                entityMemory: 0,
-                componentMemory: 0,
-                systemMemory: 0,
-                pooledMemory: 0,
                 gcCollections: this.gcCollections
             };
         }
@@ -209,7 +219,7 @@ export class PerformanceDataCollector {
             }
 
             // 如果有其他GC检测API，可以在这里添加
-            if ((performance as any).measureUserAgentSpecificMemory) {
+            if (getPerformanceWithMemory().measureUserAgentSpecificMemory) {
                 // 实验性API，可能不可用
                 return this.gcCollections;
             }

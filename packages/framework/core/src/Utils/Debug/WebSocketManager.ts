@@ -2,7 +2,7 @@
  * WebSocket连接管理器
  */
 export class WebSocketManager {
-    private ws?: WebSocket;
+    private ws: WebSocket | undefined;
     private isConnected: boolean = false;
     private reconnectAttempts: number = 0;
     private maxReconnectAttempts: number = 5;
@@ -66,7 +66,7 @@ export class WebSocketManager {
         if (this.ws) {
             this.autoReconnect = false; // 主动断开时不自动重连
             this.ws.close();
-            delete (this as any).ws;
+            this.ws = undefined;
         }
         this.isConnected = false;
     }

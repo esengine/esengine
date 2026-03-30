@@ -80,7 +80,7 @@ export function getComponents<T extends readonly ComponentConstructor[]>(
     ...types: T
 ): { [K in keyof T]: ComponentInstance<T[K]> | null } {
     return types.map((type) =>
-        entity.getComponent(type as unknown as ComponentType<ComponentInstance<typeof type>>)
+        entity.getComponent(type as ComponentType<ComponentInstance<typeof type>>)
     ) as { [K in keyof T]: ComponentInstance<T[K]> | null };
 }
 
@@ -100,7 +100,7 @@ export function getComponents<T extends readonly ComponentConstructor[]>(
  * ```
  */
 export function hasComponents(entity: Entity, ...types: ComponentConstructor[]): boolean {
-    return types.every((type) => entity.hasComponent(type as unknown as ComponentType));
+    return types.every((type) => entity.hasComponent(type as ComponentType));
 }
 
 /**
@@ -111,7 +111,7 @@ export function hasComponents(entity: Entity, ...types: ComponentConstructor[]):
  * @returns 如果拥有任意一个组件返回true，否则返回false
  */
 export function hasAnyComponent(entity: Entity, ...types: ComponentConstructor[]): boolean {
-    return types.some((type) => entity.hasComponent(type as unknown as ComponentType));
+    return types.some((type) => entity.hasComponent(type as ComponentType));
 }
 
 /**

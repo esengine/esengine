@@ -238,7 +238,7 @@ export class AutoProfiler {
             });
 
             try {
-                (instance as any)[methodName] = wrapped;
+                (instance as Record<string, unknown>)[methodName] = wrapped;
             } catch {
                 // 某些属性可能是只读的
             }
@@ -432,7 +432,7 @@ export class AutoProfiler {
 class SamplingProfiler {
     private config: AutoProfilerConfig;
     private samples: SampleData[] = [];
-    private intervalId: number | null = null;
+    private intervalId: ReturnType<typeof setTimeout> | null = null;
     private isRunning = false;
 
     constructor(config: AutoProfilerConfig) {
@@ -468,9 +468,9 @@ class SamplingProfiler {
             // 继续采样
             if (this.config.sampleInterval < 16) {
                 // 高频采样使用 setTimeout
-                this.intervalId = setTimeout(sample, this.config.sampleInterval) as any;
+                this.intervalId = setTimeout(sample, this.config.sampleInterval);
             } else {
-                this.intervalId = setTimeout(sample, this.config.sampleInterval) as any;
+                this.intervalId = setTimeout(sample, this.config.sampleInterval);
             }
         };
 

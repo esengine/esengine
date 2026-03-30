@@ -618,7 +618,7 @@ export class EntityDataCollector {
             componentCount: entity.components.length,
             componentTypes: entity.components.map((component: Component) => getComponentInstanceTypeName(component)),
             parentId: hierarchy?.parentId ?? null,
-            children: [] as any[],
+            children: [] as ReturnType<typeof this.buildEntityHierarchyNode>[],
             depth,
             tag: entity.tag || 0,
             updateOrder: entity.updateOrder || 0
@@ -668,8 +668,9 @@ export class EntityDataCollector {
                     ? entity.getDebugInfo()
                     : this.buildFallbackEntityInfo(entity, scene, hierarchySystem);
 
-                const componentCacheStats = (entity as any).getComponentCacheStats
-                    ? (entity as any).getComponentCacheStats()
+                const getComponentCacheStats = (entity as unknown as Record<string, unknown>)['getComponentCacheStats'];
+                const componentCacheStats = typeof getComponentCacheStats === 'function'
+                    ? (getComponentCacheStats as () => { cacheStats: { hitRate: number; size: number; maxSize: number } })()
                     : null;
 
                 const componentDetails = this.extractComponentDetails(entity.components);
@@ -745,9 +746,10 @@ export class EntityDataCollector {
 
             try {
                 const propertyKeys = Object.keys(component);
+                const record = component as unknown as Record<string, unknown>;
                 propertyKeys.forEach((propertyKey) => {
                     if (!propertyKey.startsWith('_') && propertyKey !== 'entity' && propertyKey !== 'constructor') {
-                        const propertyValue = (component as any)[propertyKey];
+                        const propertyValue = record[propertyKey];
                         if (propertyValue !== undefined && propertyValue !== null) {
                             properties[propertyKey] = this.formatPropertyValue(propertyValue);
                         }
@@ -796,9 +798,10 @@ export class EntityDataCollector {
             const properties: Record<string, any> = {};
 
             const propertyKeys = Object.keys(component);
+            const record = component as unknown as Record<string, unknown>;
             propertyKeys.forEach((propertyKey) => {
                 if (!propertyKey.startsWith('_') && propertyKey !== 'entity') {
-                    const propertyValue = (component as any)[propertyKey];
+                    const propertyValue = record[propertyKey];
                     if (propertyValue !== undefined && propertyValue !== null) {
                         properties[propertyKey] = this.formatPropertyValue(propertyValue);
                     }

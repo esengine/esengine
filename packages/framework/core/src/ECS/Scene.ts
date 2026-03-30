@@ -58,8 +58,7 @@ export class Scene implements IScene {
      *
      * 用于存储场景级别的配置和状态数据。
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public readonly sceneData: Map<string, any> = new Map();
+    public readonly sceneData: Map<string, unknown> = new Map();
 
     /**
      * 场景中的实体集合

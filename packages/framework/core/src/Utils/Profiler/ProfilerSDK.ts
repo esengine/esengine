@@ -865,7 +865,7 @@ export class ProfilerSDK {
                         this.longTasks.push({
                             startTime: entry.startTime,
                             duration: entry.duration,
-                            attribution: (entry as any).attribution?.map((a: any) => a.name) || []
+                            attribution: (entry as unknown as { attribution?: Array<{ name: string }> }).attribution?.map((a) => a.name) || []
                         });
 
                         if (this.longTasks.length > 100) {

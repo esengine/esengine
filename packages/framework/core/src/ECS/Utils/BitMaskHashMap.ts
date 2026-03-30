@@ -123,11 +123,16 @@ export class BitMaskHashMap<T> {
         this._size = 0;
     }
 
-    *entries(): IterableIterator<[BitMask64Data, T]> {
+    /**
+     * @zh 遍历所有值（此数据结构不存储原始 key，无法还原，仅返回值）
+     * @en Iterate all values (original keys are not stored, only values are returned)
+     *
+     * @deprecated @zh 请使用 values() 代替 @en Use values() instead
+     */
+    *entries(): IterableIterator<[undefined, T]> {
         for (const [_, bucket] of this.buckets) {
             for (const [_secondary, value] of bucket) {
-                // 无法还原原始 key（只存二级 hash），所以 entries 返回不了 key
-                yield [undefined as any, value];
+                yield [undefined, value];
             }
         }
     }

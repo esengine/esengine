@@ -65,7 +65,7 @@ export function decodeComponent(
         if (field) {
             const value = decodeFieldValue(reader, field.type);
             // Directly set the private backing field to avoid triggering change tracking
-            (component as any)[`_sync_${field.name}`] = value;
+            (component as unknown as Record<string, unknown>)[`_sync_${field.name}`] = value;
         } else {
             // Unknown field, skip based on type info in metadata
             console.warn(`Unknown sync field index: ${fieldIndex}`);
@@ -150,7 +150,7 @@ export function decodeEntity(
             continue;
         }
 
-        const metadata: SyncMetadata | undefined = (componentClass as any)[SYNC_METADATA];
+        const metadata = (componentClass as unknown as Record<symbol, unknown>)[SYNC_METADATA] as SyncMetadata | undefined;
         if (!metadata) {
             console.warn(`Component ${typeId} has no sync metadata`);
             continue;
@@ -285,7 +285,7 @@ export function decodeSpawn(
             continue;
         }
 
-        const metadata: SyncMetadata | undefined = (componentClass as any)[SYNC_METADATA];
+        const metadata = (componentClass as unknown as Record<symbol, unknown>)[SYNC_METADATA] as SyncMetadata | undefined;
         if (!metadata) {
             continue;
         }

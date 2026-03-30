@@ -73,7 +73,7 @@ export function encodeComponentFull(
 
     for (const field of fields) {
         writer.writeUint8(field.index);
-        const value = (component as any)[field.name];
+        const value = (component as unknown as Record<string, unknown>)[field.name];
         encodeFieldValue(writer, value, field.type);
     }
 }
@@ -108,7 +108,7 @@ export function encodeComponentDelta(
         const field = metadata.fields[fieldIndex];
         if (field) {
             writer.writeUint8(field.index);
-            const value = (component as any)[field.name];
+            const value = (component as unknown as Record<string, unknown>)[field.name];
             encodeFieldValue(writer, value, field.type);
         }
     }
@@ -151,10 +151,10 @@ export function encodeEntity(
 
     // Collect components with sync metadata
     for (const component of components) {
-        const constructor = component.constructor as any;
-        const metadata: SyncMetadata | undefined = constructor[SYNC_METADATA];
+        const constructor = component.constructor as unknown as Record<symbol, unknown>;
+        const metadata = constructor[SYNC_METADATA] as SyncMetadata | undefined;
         if (metadata && metadata.fields.length > 0) {
-            const tracker = (component as any)[CHANGE_TRACKER] as ChangeTracker | undefined;
+            const tracker = (component as unknown as Record<symbol, unknown>)[CHANGE_TRACKER] as ChangeTracker | undefined;
 
             // For delta encoding, only include components with changes
             if (deltaOnly && tracker && !tracker.hasChanges()) {
@@ -237,8 +237,8 @@ export function encodeSpawn(entity: Entity, prefabType?: string): Uint8Array {
     const syncComponents: Array<{ component: Component; metadata: SyncMetadata }> = [];
 
     for (const component of components) {
-        const constructor = component.constructor as any;
-        const metadata: SyncMetadata | undefined = constructor[SYNC_METADATA];
+        const constructor = component.constructor as unknown as Record<symbol, unknown>;
+        const metadata = constructor[SYNC_METADATA] as SyncMetadata | undefined;
         if (metadata && metadata.fields.length > 0) {
             syncComponents.push({ component, metadata });
         }
