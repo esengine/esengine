@@ -75,6 +75,18 @@ export const EMPTY_PATH_RESULT: IPathResult = {
  */
 export interface IPathfindingMap {
     /**
+     * @zh 地图宽度（网格列数，可选）
+     * @en Map width (grid columns, optional)
+     */
+    readonly width?: number;
+
+    /**
+     * @zh 地图高度（网格行数，可选）
+     * @en Map height (grid rows, optional)
+     */
+    readonly height?: number;
+
+    /**
      * @zh 获取节点的邻居
      * @en Get neighbors of a node
      */

@@ -628,9 +628,8 @@ export class HPAPathfinder implements IPathfinder {
     // =========================================================================
 
     private getMapBounds(): { width: number; height: number } {
-        const mapAny = this.map as any;
-        if (typeof mapAny.width === 'number' && typeof mapAny.height === 'number') {
-            return { width: mapAny.width, height: mapAny.height };
+        if (typeof this.map.width === 'number' && typeof this.map.height === 'number') {
+            return { width: this.map.width, height: this.map.height };
         }
         return { width: 1000, height: 1000 };
     }
@@ -1063,7 +1062,7 @@ export class HPAPathfinder implements IPathfinder {
         if (cachedPath && cachedCost !== undefined) {
             // 更新边的代价和路径
             edge.cost = cachedCost;
-            (edge as any).innerPath = cachedPath;
+            edge.innerPath = cachedPath;
             return { cost: cachedCost, path: cachedPath };
         }
 
@@ -1090,13 +1089,13 @@ export class HPAPathfinder implements IPathfinder {
 
             // 更新边
             edge.cost = result.cost;
-            (edge as any).innerPath = globalPath;
+            edge.innerPath = globalPath;
 
             // 更新反向边
             const reverseEdge = toNode.edges.find(e => e.targetNodeId === fromNode.id);
             if (reverseEdge) {
                 reverseEdge.cost = result.cost;
-                (reverseEdge as any).innerPath = [...globalPath].reverse();
+                reverseEdge.innerPath = [...globalPath].reverse();
             }
 
             return { cost: result.cost, path: globalPath };
