@@ -730,7 +730,7 @@ describe('Incremental Serialization System', () => {
             const scene2 = new Scene({ name: 'Scene2' });
             scene2.applyIncremental(incremental);
 
-            const config = scene2.sceneData.get('config');
+            const config = scene2.sceneData.get('config') as { nested: { deep: { value: number } }; array: number[] };
             expect(config.nested.deep.value).toBe(42);
             expect(config.array).toEqual([1, 2, 3]);
 

@@ -341,7 +341,7 @@ describe('SceneSerializer', () => {
             const newScene = new Scene({ name: 'NewScene' });
             SceneSerializer.deserialize(newScene, serialized, { componentRegistry });
 
-            const restoredDate = newScene.sceneData.get('createdAt');
+            const restoredDate = newScene.sceneData.get('createdAt') as Date;
             expect(restoredDate).toBeInstanceOf(Date);
             expect(restoredDate.getTime()).toBe(date.getTime());
 
@@ -367,7 +367,7 @@ describe('SceneSerializer', () => {
             const newScene = new Scene({ name: 'NewScene' });
             SceneSerializer.deserialize(newScene, serialized, { componentRegistry });
 
-            const restoredMap = newScene.sceneData.get('mapping');
+            const restoredMap = newScene.sceneData.get('mapping') as Map<string, string>;
             expect(restoredMap).toBeInstanceOf(Map);
             expect(restoredMap.get('key1')).toBe('value1');
             expect(restoredMap.get('key2')).toBe('value2');
@@ -394,7 +394,7 @@ describe('SceneSerializer', () => {
             const newScene = new Scene({ name: 'NewScene' });
             SceneSerializer.deserialize(newScene, serialized, { componentRegistry });
 
-            const restoredSet = newScene.sceneData.get('numbers');
+            const restoredSet = newScene.sceneData.get('numbers') as Set<number>;
             expect(restoredSet).toBeInstanceOf(Set);
             expect(restoredSet.has(1)).toBe(true);
             expect(restoredSet.has(2)).toBe(true);
