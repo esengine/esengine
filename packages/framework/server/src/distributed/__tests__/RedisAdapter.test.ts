@@ -116,7 +116,7 @@ function createMockRedisClient(): RedisClient {
             for (let i = 0; i < args.length; i += 2) {
                 hash.set(String(args[i]), String(args[i + 1]));
             }
-            return 'OK';
+            return 'OK' as const;
         }),
 
         // Set 操作
@@ -217,7 +217,7 @@ function createMockRedisClient(): RedisClient {
 
         // 连接
         duplicate: vi.fn(() => createMockRedisClient()),
-        quit: vi.fn(async () => 'OK'),
+        quit: vi.fn(async () => 'OK' as const),
         disconnect: vi.fn()
     };
 
