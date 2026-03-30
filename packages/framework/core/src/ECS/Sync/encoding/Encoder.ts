@@ -9,8 +9,9 @@
 import type { Entity } from '../../Entity';
 import type { Component } from '../../Component';
 import type { SyncType, SyncMetadata } from '../types';
-import { SyncOperation, SYNC_METADATA, CHANGE_TRACKER } from '../types';
+import { SyncOperation } from '../types';
 import type { ChangeTracker } from '../ChangeTracker';
+import { getSyncMetadata, getChangeTracker } from '../decorators';
 import { BinaryWriter } from './BinaryWriter';
 
 /**
@@ -151,10 +152,9 @@ export function encodeEntity(
 
     // Collect components with sync metadata
     for (const component of components) {
-        const constructor = component.constructor as unknown as Record<symbol, unknown>;
-        const metadata = constructor[SYNC_METADATA] as SyncMetadata | undefined;
+        const metadata = getSyncMetadata(component);
         if (metadata && metadata.fields.length > 0) {
-            const tracker = (component as unknown as Record<symbol, unknown>)[CHANGE_TRACKER] as ChangeTracker | undefined;
+            const tracker = getChangeTracker(component) ?? undefined;
 
             // For delta encoding, only include components with changes
             if (deltaOnly && tracker && !tracker.hasChanges()) {
@@ -237,8 +237,7 @@ export function encodeSpawn(entity: Entity, prefabType?: string): Uint8Array {
     const syncComponents: Array<{ component: Component; metadata: SyncMetadata }> = [];
 
     for (const component of components) {
-        const constructor = component.constructor as unknown as Record<symbol, unknown>;
-        const metadata = constructor[SYNC_METADATA] as SyncMetadata | undefined;
+        const metadata = getSyncMetadata(component);
         if (metadata && metadata.fields.length > 0) {
             syncComponents.push({ component, metadata });
         }

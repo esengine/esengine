@@ -10,7 +10,8 @@ import type { Entity } from '../../Entity';
 import type { Component } from '../../Component';
 import type { Scene } from '../../Scene';
 import type { SyncType, SyncMetadata } from '../types';
-import { SyncOperation, SYNC_METADATA } from '../types';
+import { SyncOperation } from '../types';
+import { getSyncMetadata } from '../decorators';
 import { BinaryReader } from './BinaryReader';
 import { GlobalComponentRegistry } from '../../Core/ComponentStorage/ComponentRegistry';
 
@@ -150,7 +151,7 @@ export function decodeEntity(
             continue;
         }
 
-        const metadata = (componentClass as unknown as Record<symbol, unknown>)[SYNC_METADATA] as SyncMetadata | undefined;
+        const metadata = getSyncMetadata(componentClass);
         if (!metadata) {
             console.warn(`Component ${typeId} has no sync metadata`);
             continue;
@@ -285,7 +286,7 @@ export function decodeSpawn(
             continue;
         }
 
-        const metadata = (componentClass as unknown as Record<symbol, unknown>)[SYNC_METADATA] as SyncMetadata | undefined;
+        const metadata = getSyncMetadata(componentClass);
         if (!metadata) {
             continue;
         }

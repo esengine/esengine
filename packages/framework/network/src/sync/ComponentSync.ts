@@ -12,8 +12,7 @@ import {
     type Entity,
     // Sync types
     SyncOperation,
-    SYNC_METADATA,
-    CHANGE_TRACKER,
+    getChangeTracker,
     type SyncMetadata,
     type ChangeTracker,
     // Encoding
@@ -361,7 +360,7 @@ export class ComponentSyncSystem extends EntitySystem {
 
     private _hasChanges(entity: Entity): boolean {
         for (const component of entity.components) {
-            const tracker = (component as any)[CHANGE_TRACKER] as ChangeTracker | undefined;
+            const tracker = getChangeTracker(component);
             if (tracker?.hasChanges()) {
                 return true;
             }
@@ -372,7 +371,7 @@ export class ComponentSyncSystem extends EntitySystem {
     private _clearChangeTrackers(entities: Entity[]): void {
         for (const entity of entities) {
             for (const component of entity.components) {
-                const tracker = (component as any)[CHANGE_TRACKER] as ChangeTracker | undefined;
+                const tracker = getChangeTracker(component);
                 if (tracker) {
                     tracker.clear();
                 }
