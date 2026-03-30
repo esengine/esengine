@@ -4,6 +4,7 @@
  */
 
 import type { Room, Player } from '../../room/index.js';
+import type { ServerConnection } from '../../types/index.js';
 import type { IAuthContext, AuthRoomConfig } from '../types.js';
 import { createLogger } from '../../logger.js';
 import { getAuthContext } from './withAuth.js';
@@ -178,7 +179,7 @@ export function withRoomAuth<TUser = unknown, TBase extends new (...args: any[])
          * @en Wrapped onJoin method
          */
         private async _authOnJoin(player: Player): Promise<void> {
-            const conn = (player as any).connection ?? (player as any)._conn;
+            const conn = (player as unknown as { connection?: ServerConnection }).connection;
             const authContext = conn
                 ? (getAuthContext<TUser>(conn) ?? createGuestContext<TUser>())
                 : createGuestContext<TUser>();

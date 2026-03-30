@@ -152,7 +152,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
     // 发送函数（延迟绑定，因为 rpcServer 在 start() 后才创建）
     const sendFn = (conn: any, type: string, data: unknown) => {
-        rpcServer?.send(conn, 'RoomMessage' as any, { type, data } as any);
+        rpcServer?.send(conn, 'RoomMessage' as never, { type, data } as never);
     };
 
     // 二进制发送函数（使用原生 WebSocket 二进制帧，效率更高）
@@ -260,10 +260,10 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         }
                         if ('redirect' in result) {
                             // 发送重定向消息给客户端
-                            rpcServer?.send(conn, '$redirect' as any, {
+                            rpcServer?.send(conn, '$redirect' as never, {
                                 address: result.redirect,
                                 roomType
-                            } as any);
+                            } as never);
                             return { redirect: result.redirect };
                         }
                         return { roomId: result.room.id, playerId: result.player.id };
@@ -371,14 +371,18 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         opts.onStart?.(opts.port);
                     },
                     onConnect: async (conn) => {
-                        await config.onConnect?.(conn as ServerConnection);
+                        const serverConn = conn as ServerConnection;
+                        await gameServer._onConnect?.(serverConn, conn);
+                        await config.onConnect?.(serverConn);
                     },
                     onDisconnect: async (conn) => {
+                        const serverConn = conn as ServerConnection;
                         await roomManager?.leave(conn.id, 'disconnected');
-                        await config.onDisconnect?.(conn as ServerConnection);
+                        await gameServer._onDisconnect?.(serverConn);
+                        await config.onDisconnect?.(serverConn);
                     },
-                    api: apiHandlersObj as any,
-                    msg: msgHandlersObj as any
+                    api: apiHandlersObj as Record<string, (input: unknown, conn: unknown) => Promise<unknown>>,
+                    msg: msgHandlersObj as Record<string, (data: unknown, conn: unknown) => void | Promise<void>>
                 });
 
                 await rpcServer.start();
@@ -397,14 +401,18 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         opts.onStart?.(p);
                     },
                     onConnect: async (conn) => {
-                        await config.onConnect?.(conn as ServerConnection);
+                        const serverConn = conn as ServerConnection;
+                        await gameServer._onConnect?.(serverConn, conn);
+                        await config.onConnect?.(serverConn);
                     },
                     onDisconnect: async (conn) => {
+                        const serverConn = conn as ServerConnection;
                         await roomManager?.leave(conn.id, 'disconnected');
-                        await config.onDisconnect?.(conn as ServerConnection);
+                        await gameServer._onDisconnect?.(serverConn);
+                        await config.onDisconnect?.(serverConn);
                     },
-                    api: apiHandlersObj as any,
-                    msg: msgHandlersObj as any
+                    api: apiHandlersObj as Record<string, (input: unknown, conn: unknown) => Promise<unknown>>,
+                    msg: msgHandlersObj as Record<string, (data: unknown, conn: unknown) => void | Promise<void>>
                 });
 
                 await rpcServer.start();
@@ -450,11 +458,11 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
         },
 
         broadcast(name, data) {
-            rpcServer?.broadcast(name as any, data as any);
+            rpcServer?.broadcast(name as never, data as never);
         },
 
         send(conn, name, data) {
-            rpcServer?.send(conn as any, name as any, data as any);
+            rpcServer?.send(conn as never, name as never, data as never);
         }
     };
 

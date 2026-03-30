@@ -259,6 +259,22 @@ export interface GameServer {
      * @en Define room type
      */
     define(name: string, roomClass: new () => unknown): void
+
+    /**
+     * @zh 连接建立钩子（供 mixin 拦截）
+     * @en Connection established hook (for mixin interception)
+     *
+     * @internal
+     */
+    _onConnect?: (conn: ServerConnection, req?: unknown) => void | Promise<void>
+
+    /**
+     * @zh 连接断开钩子（供 mixin 拦截）
+     * @en Connection disconnected hook (for mixin interception)
+     *
+     * @internal
+     */
+    _onDisconnect?: (conn: ServerConnection) => void | Promise<void>
 }
 
 // ============================================================================

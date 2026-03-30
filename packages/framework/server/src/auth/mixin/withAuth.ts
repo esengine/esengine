@@ -131,8 +131,8 @@ export function withAuth<TUser = unknown>(
         }
     };
 
-    const originalOnConnect = (server as any)._onConnect;
-    (server as any)._onConnect = async (conn: ServerConnection, req?: unknown) => {
+    const originalOnConnect = server._onConnect;
+    server._onConnect = async (conn: ServerConnection, req?: unknown) => {
         const authContext = new AuthContext<TUser>();
         connectionAuthMap.set(conn, authContext);
         setAuthContext(conn, authContext);
@@ -167,8 +167,8 @@ export function withAuth<TUser = unknown>(
         }
     };
 
-    const originalOnDisconnect = (server as any)._onDisconnect;
-    (server as any)._onDisconnect = async (conn: ServerConnection) => {
+    const originalOnDisconnect = server._onDisconnect;
+    server._onDisconnect = async (conn: ServerConnection) => {
         connectionAuthMap.delete(conn);
 
         if (originalOnDisconnect) {
