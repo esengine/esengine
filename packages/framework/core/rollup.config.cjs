@@ -214,5 +214,69 @@ module.exports = [
       })
     ],
     external: []
+  },
+
+  // Profiler 独立入口 - ESM
+  {
+    input: 'bin/profiler.js',
+    output: {
+      file: 'dist/profiler.mjs',
+      format: 'es',
+      banner,
+      sourcemap: true,
+      exports: 'named'
+    },
+    plugins: [
+      ...modernPlugins,
+      terser({
+        format: {
+          comments: /^!/
+        }
+      })
+    ],
+    external,
+    treeshake: {
+      propertyReadSideEffects: false,
+      unknownGlobalSideEffects: false
+    }
+  },
+
+  // Profiler 独立入口 - CJS
+  {
+    input: 'bin/profiler.js',
+    output: {
+      file: 'dist/profiler.cjs',
+      format: 'cjs',
+      banner,
+      sourcemap: true,
+      exports: 'named'
+    },
+    plugins: [
+      ...modernPlugins,
+      terser({
+        format: {
+          comments: /^!/
+        }
+      })
+    ],
+    external,
+    treeshake: {
+      propertyReadSideEffects: false
+    }
+  },
+
+  // Profiler 类型定义
+  {
+    input: 'bin/profiler.d.ts',
+    output: {
+      file: 'dist/profiler.d.ts',
+      format: 'es'
+    },
+    plugins: [
+      dts({
+        respectExternal: true
+      })
+    ],
+    external: []
   }
 ]; 

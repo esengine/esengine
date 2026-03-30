@@ -13,6 +13,12 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs",
       "source": "./src/index.ts"
+    },
+    "./profiler": {
+      "types": "./dist/profiler.d.ts",
+      "import": "./dist/profiler.mjs",
+      "require": "./dist/profiler.cjs",
+      "source": "./src/profiler.ts"
     }
   },
   "files": [
