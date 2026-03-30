@@ -18,6 +18,7 @@ export class ChunkStreamingSystem extends EntitySystem {
     private _chunkManager: ChunkManager | null = null;
     private _loaderEntity: Entity | null = null;
     private _lastAnchorChunks: Map<Entity, IChunkCoord> = new Map();
+    private _loadingInProgress = false;
 
     constructor() {
         super(Matcher.all(StreamingAnchorComponent));
@@ -70,7 +71,16 @@ export class ChunkStreamingSystem extends EntitySystem {
         this.updateAnchors(entities, deltaTime);
         this.updateChunkRequests(entities, loader);
 
-        this._chunkManager.processLoads(loader.maxLoadsPerFrame);
+        if (!this._loadingInProgress) {
+            this._loadingInProgress = true;
+            this._chunkManager.processLoads(loader.maxLoadsPerFrame)
+                .catch((error) => {
+                    console.error('ChunkStreamingSystem: processLoads failed:', error);
+                })
+                .finally(() => {
+                    this._loadingInProgress = false;
+                });
+        }
         this._chunkManager.processUnloads(loader.maxUnloadsPerFrame);
     }
 
