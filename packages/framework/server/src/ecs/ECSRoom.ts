@@ -12,16 +12,15 @@ import {
     type Component,
     // Sync
     SyncOperation,
-    SYNC_METADATA,
-    CHANGE_TRACKER,
     type SyncMetadata,
-    type ChangeTracker,
     encodeSnapshot,
     encodeSpawn,
     encodeDespawn,
+    getSyncMetadata,
+    getChangeTracker,
     initChangeTracker,
     // Network Entity
-    NETWORK_ENTITY_METADATA,
+    getNetworkEntityMetadata,
     type NetworkEntityMetadata,
     // Events
     ECSEventType
@@ -69,7 +68,11 @@ const DEFAULT_ECS_CONFIG: ECSRoomConfig = {
  * @zh 网络实体标识组件
  * @en Network entity identity component
  */
-const NETWORK_ENTITY_OWNER = Symbol('NetworkEntityOwner');
+/**
+ * @zh 网络实体所有者映射
+ * @en Network entity owner mapping
+ */
+const networkEntityOwners = new WeakMap<Entity, string>();
 
 // =============================================================================
 // ECSRoom | ECS 房间
@@ -172,10 +175,9 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
      */
     private _setupAutoNetworkEntity(): void {
         // 监听组件添加事件，自动广播 spawn
-        this.scene.eventSystem.on(ECSEventType.COMPONENT_ADDED, (event: any) => {
+        this.scene.eventSystem.on(ECSEventType.COMPONENT_ADDED, (event: { entity: Entity; component: Component; [key: string]: unknown }) => {
             const { entity, component } = event;
-            const metadata: NetworkEntityMetadata | undefined =
-                (component.constructor as any)[NETWORK_ENTITY_METADATA];
+            const metadata = getNetworkEntityMetadata(component);
 
             if (metadata?.autoSpawn) {
                 // 避免重复广播同一实体
@@ -192,7 +194,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
         });
 
         // 监听实体销毁事件，自动广播 despawn
-        this.scene.eventSystem.on(ECSEventType.ENTITY_DESTROYED, (event: any) => {
+        this.scene.eventSystem.on(ECSEventType.ENTITY_DESTROYED, (event: { entityId: number; [key: string]: unknown }) => {
             const { entityId } = event;
             if (this._networkEntities.has(entityId)) {
                 const despawnData = encodeDespawn(entityId);
@@ -233,7 +235,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
     protected createPlayerEntity(playerId: string, name?: string): Entity {
         const entityName = name ?? `player_${playerId}`;
         const entity = this.scene.createEntity(entityName);
-        (entity as any)[NETWORK_ENTITY_OWNER] = playerId;
+        networkEntityOwners.set(entity, playerId);
         this._playerEntities.set(playerId, entity);
         return entity;
     }
@@ -377,7 +379,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
 
     private _hasSyncComponents(entity: Entity): boolean {
         for (const component of entity.components) {
-            const metadata: SyncMetadata | undefined = (component.constructor as any)[SYNC_METADATA];
+            const metadata = getSyncMetadata(component);
             if (metadata && metadata.fields.length > 0) {
                 return true;
             }
@@ -387,7 +389,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
 
     private _hasChanges(entity: Entity): boolean {
         for (const component of entity.components) {
-            const tracker = (component as any)[CHANGE_TRACKER] as ChangeTracker | undefined;
+            const tracker = getChangeTracker(component);
             if (tracker?.hasChanges()) {
                 return true;
             }
@@ -397,7 +399,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
 
     private _initComponentTrackers(entity: Entity): void {
         for (const component of entity.components) {
-            const metadata: SyncMetadata | undefined = (component.constructor as any)[SYNC_METADATA];
+            const metadata = getSyncMetadata(component);
             if (metadata && metadata.fields.length > 0) {
                 initChangeTracker(component);
             }
@@ -407,7 +409,7 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
     private _clearChangeTrackers(entities: Entity[]): void {
         for (const entity of entities) {
             for (const component of entity.components) {
-                const tracker = (component as any)[CHANGE_TRACKER] as ChangeTracker | undefined;
+                const tracker = getChangeTracker(component);
                 if (tracker) {
                     tracker.clear();
                 }

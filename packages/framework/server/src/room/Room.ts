@@ -334,14 +334,12 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
         const player = this._players.get(playerId);
         if (!player) return;
 
-        const handlers = (this.constructor as any)[MESSAGE_HANDLERS] as MessageHandlerMeta[] | undefined;
-        if (handlers) {
-            for (const handler of handlers) {
-                if (handler.type === type) {
-                    const method = (this as any)[handler.method];
-                    if (typeof method === 'function') {
-                        method.call(this, data, player);
-                    }
+        const handlers = getMessageHandlers(this.constructor);
+        for (const handler of handlers) {
+            if (handler.type === type) {
+                const method = this[handler.method as keyof this];
+                if (typeof method === 'function') {
+                    (method as (data: unknown, player: Player<TPlayerData>) => void).call(this, data, player);
                 }
             }
         }
