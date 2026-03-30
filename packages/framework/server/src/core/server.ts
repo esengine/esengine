@@ -60,6 +60,20 @@ const DEFAULT_CONFIG: Required<Omit<ServerConfig, 'onStart' | 'onConnect' | 'onD
  */
 export async function createServer(config: ServerConfig = {}): Promise<GameServer> {
     const opts = { ...DEFAULT_CONFIG, ...config };
+
+    // port: 0 时自动分配随机端口
+    if (opts.port === 0) {
+        const net = await import('node:net');
+        opts.port = await new Promise<number>((resolve, reject) => {
+            const srv = net.createServer();
+            srv.listen(0, () => {
+                const addr = srv.address();
+                srv.close(() => resolve(addr && typeof addr === 'object' ? addr.port : 3000));
+            });
+            srv.on('error', reject);
+        });
+    }
+
     const cwd = process.cwd();
     const logger = createLogger('Server');
 
@@ -146,6 +160,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
     // 服务器状态
     let currentTick = 0;
+    let actualPort = opts.port;
     let tickInterval: ReturnType<typeof setInterval> | null = null;
     let rpcServer: RpcServer<typeof protocol, Record<string, unknown>> | null = null;
     let httpServer: HttpServer | null = null;
@@ -212,6 +227,10 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
         get tick() {
             return currentTick;
+        },
+
+        get port() {
+            return actualPort;
         },
 
         get rooms() {
@@ -389,7 +408,13 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
                 // 启动 HTTP 服务器
                 await new Promise<void>((resolve) => {
-                    httpServer!.listen(opts.port, () => resolve());
+                    httpServer!.listen(opts.port, () => {
+                        const addr = httpServer!.address();
+                        if (addr && typeof addr === 'object') {
+                            actualPort = addr.port;
+                        }
+                        resolve();
+                    });
                 });
             } else {
                 // 仅 WebSocket 模式
@@ -397,8 +422,9 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     port: opts.port,
                     createConnData: () => ({}),
                     onStart: (p) => {
-                        logger.info(`Started on ws://localhost:${p}`);
-                        opts.onStart?.(p);
+                        if (p !== undefined) actualPort = p;
+                        logger.info(`Started on ws://localhost:${actualPort}`);
+                        opts.onStart?.(actualPort);
                     },
                     onConnect: async (conn) => {
                         const serverConn = conn as ServerConnection;
@@ -442,18 +468,25 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 await distributedManager.stop(true);
             }
 
+            // 先关闭 HTTP server（会同时关闭底层 socket），再清理 RPC
+            if (httpServer) {
+                await new Promise<void>((resolve) => {
+                    const timeout = setTimeout(() => {
+                        resolve();
+                    }, 3000);
+                    httpServer!.close(() => {
+                        clearTimeout(timeout);
+                        resolve();
+                    });
+                    // 强制关闭所有活跃连接，避免 keep-alive 阻塞
+                    httpServer!.closeAllConnections?.();
+                });
+                httpServer = null;
+            }
+
             if (rpcServer) {
                 await rpcServer.stop();
                 rpcServer = null;
-            }
-            if (httpServer) {
-                await new Promise<void>((resolve, reject) => {
-                    httpServer!.close((err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-                });
-                httpServer = null;
             }
         },
 

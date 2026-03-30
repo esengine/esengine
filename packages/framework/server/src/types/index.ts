@@ -21,21 +21,21 @@ export interface ServerConfig {
      * @en Listen port
      * @default 3000
      */
-    port?: number
+    port?: number;
 
     /**
      * @zh API 目录路径
      * @en API directory path
      * @default 'src/api'
      */
-    apiDir?: string
+    apiDir?: string;
 
     /**
      * @zh 消息处理器目录路径
      * @en Message handlers directory path
      * @default 'src/msg'
      */
-    msgDir?: string
+    msgDir?: string;
 
     /**
      * @zh HTTP 路由目录路径
@@ -51,52 +51,52 @@ export interface ServerConfig {
      * - `users/[id].ts` → /api/users/:id
      * - `health.ts` (method: 'GET') → GET /api/health
      */
-    httpDir?: string
+    httpDir?: string;
 
     /**
      * @zh HTTP 路由前缀
      * @en HTTP routes prefix
      * @default '/api'
      */
-    httpPrefix?: string
+    httpPrefix?: string;
 
     /**
      * @zh 游戏 Tick 速率 (每秒)
      * @en Game tick rate (per second)
      * @default 20
      */
-    tickRate?: number
+    tickRate?: number;
 
     /**
      * @zh HTTP 路由配置（内联定义，与 httpDir 文件路由合并）
      * @en HTTP routes configuration (inline definition, merged with httpDir file routes)
      */
-    http?: HttpRoutes
+    http?: HttpRoutes;
 
     /**
      * @zh CORS 配置
      * @en CORS configuration
      * @default true
      */
-    cors?: CorsOptions | boolean
+    cors?: CorsOptions | boolean;
 
     /**
      * @zh 服务器启动回调
      * @en Server start callback
      */
-    onStart?: (port: number) => void
+    onStart?: (port: number) => void;
 
     /**
      * @zh 连接建立回调
      * @en Connection established callback
      */
-    onConnect?: (conn: ServerConnection) => void | Promise<void>
+    onConnect?: (conn: ServerConnection) => void | Promise<void>;
 
     /**
      * @zh 连接断开回调
      * @en Connection closed callback
      */
-    onDisconnect?: (conn: ServerConnection) => void | Promise<void>
+    onDisconnect?: (conn: ServerConnection) => void | Promise<void>;
 
     /**
      * @zh 分布式模式配置
@@ -116,7 +116,7 @@ export interface ServerConfig {
      * });
      * ```
      */
-    distributed?: DistributedConfig
+    distributed?: DistributedConfig;
 }
 
 // ============================================================================
@@ -132,13 +132,13 @@ export interface ServerConnection<TData = Record<string, unknown>> extends Conne
      * @zh 连接唯一标识（继承自 Connection）
      * @en Connection unique identifier (inherited from Connection)
      */
-    readonly id: string
+    readonly id: string;
 
     /**
      * @zh 用户自定义数据
      * @en User-defined data
      */
-    data: TData
+    data: TData;
 
 }
 
@@ -155,13 +155,13 @@ export interface ApiContext<TData = Record<string, unknown>> {
      * @zh 当前连接
      * @en Current connection
      */
-    conn: ServerConnection<TData>
+    conn: ServerConnection<TData>;
 
     /**
      * @zh 服务器实例
      * @en Server instance
      */
-    server: GameServer
+    server: GameServer;
 }
 
 /**
@@ -173,7 +173,7 @@ export interface ApiDefinition<TReq = unknown, TRes = unknown, TData = Record<st
      * @zh API 处理函数
      * @en API handler function
      */
-    handler: (req: TReq, ctx: ApiContext<TData>) => TRes | Promise<TRes>
+    handler: (req: TReq, ctx: ApiContext<TData>) => TRes | Promise<TRes>;
 }
 
 // ============================================================================
@@ -189,13 +189,13 @@ export interface MsgContext<TData = Record<string, unknown>> {
      * @zh 当前连接
      * @en Current connection
      */
-    conn: ServerConnection<TData>
+    conn: ServerConnection<TData>;
 
     /**
      * @zh 服务器实例
      * @en Server instance
      */
-    server: GameServer
+    server: GameServer;
 }
 
 /**
@@ -207,7 +207,7 @@ export interface MsgDefinition<TMsg = unknown, TData = Record<string, unknown>> 
      * @zh 消息处理函数
      * @en Message handler function
      */
-    handler: (msg: TMsg, ctx: MsgContext<TData>) => void | Promise<void>
+    handler: (msg: TMsg, ctx: MsgContext<TData>) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -223,43 +223,52 @@ export interface GameServer {
      * @zh 启动服务器
      * @en Start server
      */
-    start(): Promise<void>
+    start(): Promise<void>;
 
     /**
      * @zh 停止服务器
      * @en Stop server
      */
-    stop(): Promise<void>
+    stop(): Promise<void>;
 
     /**
      * @zh 广播消息
      * @en Broadcast message
      */
-    broadcast<T>(name: string, data: T): void
+    broadcast<T>(name: string, data: T): void;
 
     /**
      * @zh 发送消息给指定连接
      * @en Send message to specific connection
      */
-    send<T>(conn: ServerConnection, name: string, data: T): void
+    send<T>(conn: ServerConnection, name: string, data: T): void;
 
     /**
      * @zh 获取所有连接
      * @en Get all connections
      */
-    readonly connections: ReadonlyArray<ServerConnection>
+    readonly connections: ReadonlyArray<ServerConnection>;
 
     /**
      * @zh 当前 Tick
      * @en Current tick
      */
-    readonly tick: number
+    readonly tick: number;
+
+    /**
+     * @zh 服务器实际监听端口
+     * @en Actual server listening port
+     *
+     * @zh 当配置 port 为 0 时，系统会自动分配端口，通过此属性获取实际端口号
+     * @en When port is configured as 0, the system auto-assigns a port, use this property to get the actual port
+     */
+    readonly port: number;
 
     /**
      * @zh 注册房间类型
      * @en Define room type
      */
-    define(name: string, roomClass: new () => unknown): void
+    define(name: string, roomClass: new () => unknown): void;
 
     /**
      * @zh 连接建立钩子（供 mixin 拦截）
@@ -267,7 +276,7 @@ export interface GameServer {
      *
      * @internal
      */
-    _onConnect?: (conn: ServerConnection, req?: unknown) => void | Promise<void>
+    _onConnect?: (conn: ServerConnection, req?: unknown) => void | Promise<void>;
 
     /**
      * @zh 连接断开钩子（供 mixin 拦截）
@@ -275,7 +284,7 @@ export interface GameServer {
      *
      * @internal
      */
-    _onDisconnect?: (conn: ServerConnection) => void | Promise<void>
+    _onDisconnect?: (conn: ServerConnection) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -287,9 +296,9 @@ export interface GameServer {
  * @en Loaded API handler
  */
 export interface LoadedApiHandler {
-    name: string
-    path: string
-    definition: ApiDefinition<any, any, any>
+    name: string;
+    path: string;
+    definition: ApiDefinition<any, any, any>;
 }
 
 /**
@@ -297,9 +306,9 @@ export interface LoadedApiHandler {
  * @en Loaded message handler
  */
 export interface LoadedMsgHandler {
-    name: string
-    path: string
-    definition: MsgDefinition<any, any>
+    name: string;
+    path: string;
+    definition: MsgDefinition<any, any>;
 }
 
 // ============================================================================
@@ -337,7 +346,7 @@ export interface HttpDefinition<TBody = unknown> {
      * @en Request method
      * @default 'POST'
      */
-    method?: HttpMethod
+    method?: HttpMethod;
 
     /**
      * @zh 处理函数
@@ -346,7 +355,7 @@ export interface HttpDefinition<TBody = unknown> {
     handler: (
         req: HttpRequest & { body: TBody },
         res: HttpResponse
-    ) => void | Promise<void>
+    ) => void | Promise<void>;
 }
 
 /**
@@ -358,23 +367,23 @@ export interface LoadedHttpHandler {
      * @zh 路由路径（如 /api/login）
      * @en Route path (e.g., /api/login)
      */
-    route: string
+    route: string;
 
     /**
      * @zh 请求方法
      * @en Request method
      */
-    method: HttpMethod
+    method: HttpMethod;
 
     /**
      * @zh 源文件路径
      * @en Source file path
      */
-    path: string
+    path: string;
 
     /**
      * @zh 处理器定义
      * @en Handler definition
      */
-    definition: HttpDefinition<any>
+    definition: HttpDefinition<any>;
 }
