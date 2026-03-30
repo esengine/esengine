@@ -123,6 +123,7 @@ export class TestClient {
     private readonly _pendingCalls = new Map<number, PendingCall>();
     private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>();
     private readonly _receivedMessages: ReceivedMessage[] = [];
+    private readonly _roomMessages: ReceivedMessage[] = [];
 
     constructor(port: number, options: TestClientOptions = {}) {
         this._port = port;
@@ -160,11 +161,24 @@ export class TestClient {
     }
 
     /**
-     * @zh 收到的所有消息
-     * @en All received messages
+     * @zh 收到的所有消息（原始协议层）
+     * @en All received messages (raw protocol level)
      */
     get receivedMessages(): ReadonlyArray<ReceivedMessage> {
         return this._receivedMessages;
+    }
+
+    /**
+     * @zh 收到的所有房间消息（已自动解包 RoomMessage）
+     * @en All received room messages (auto-unwrapped from RoomMessage)
+     *
+     * @zh 每条消息的 type 是房间内的实际消息类型（如 'Chat', 'PlayerJoined' 等），
+     * data 是消息负载。比直接查 receivedMessages 更方便。
+     * @en Each message's type is the actual room message type (e.g. 'Chat', 'PlayerJoined'),
+     * data is the message payload. More convenient than filtering receivedMessages.
+     */
+    get roomMessages(): ReadonlyArray<ReceivedMessage> {
+        return this._roomMessages;
     }
 
     // ========================================================================
@@ -403,11 +417,32 @@ export class TestClient {
     // ========================================================================
 
     /**
-     * @zh 是否收到过指定消息
-     * @en Whether received a specific message
+     * @zh 是否收到过指定消息（协议层）
+     * @en Whether received a specific message (protocol level)
      */
     hasReceivedMessage(type: string): boolean {
         return this._receivedMessages.some((m) => m.type === type);
+    }
+
+    /**
+     * @zh 是否收到过指定房间消息
+     * @en Whether received a specific room message
+     *
+     * @zh 自动匹配 RoomMessage 内部的实际类型
+     * @en Auto-matches actual type inside RoomMessage
+     */
+    hasReceivedRoomMessage(type: string): boolean {
+        return this._roomMessages.some((m) => m.type === type);
+    }
+
+    /**
+     * @zh 获取指定类型的所有房间消息
+     * @en Get all room messages of a specific type
+     */
+    getRoomMessagesOfType<T = unknown>(type: string): T[] {
+        return this._roomMessages
+            .filter((m) => m.type === type)
+            .map((m) => m.data as T);
     }
 
     /**
@@ -439,6 +474,7 @@ export class TestClient {
      */
     clearMessages(): void {
         this._receivedMessages.length = 0;
+        this._roomMessages.length = 0;
     }
 
     /**
@@ -496,12 +532,22 @@ export class TestClient {
     }
 
     private _handleMsg([, name, data]: [number, string, unknown]): void {
-        // 记录消息
-        this._receivedMessages.push({
-            type: name,
-            data,
-            timestamp: Date.now()
-        });
+        const now = Date.now();
+
+        // 记录原始消息
+        this._receivedMessages.push({ type: name, data, timestamp: now });
+
+        // 自动解包 RoomMessage 到 roomMessages
+        if (name === 'RoomMessage' && data && typeof data === 'object') {
+            const payload = data as { type?: string; data?: unknown };
+            if (payload.type) {
+                this._roomMessages.push({
+                    type: payload.type,
+                    data: payload.data,
+                    timestamp: now
+                });
+            }
+        }
 
         // 触发处理器
         const handlers = this._msgHandlers.get(name);
