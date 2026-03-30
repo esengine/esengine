@@ -1,11 +1,15 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import stylistic from '@stylistic/eslint-plugin';
 
 export default [
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     {
         files: ['packages/**/src/**/*.{ts,tsx,js,jsx}'],
+        plugins: {
+            '@stylistic': stylistic
+        },
         languageOptions: {
             parser: tseslint.parser,
             parserOptions: {
@@ -17,6 +21,10 @@ export default [
         },
         rules: {
             'semi': ['warn', 'always'],
+            '@stylistic/member-delimiter-style': ['warn', {
+                multiline: { delimiter: 'semi', requireLast: true },
+                singleline: { delimiter: 'semi', requireLast: false }
+            }],
             'quotes': ['warn', 'single', { avoidEscape: true }],
             'indent': ['warn', 4, {
                 SwitchCase: 1,
