@@ -181,12 +181,12 @@ export class World {
      * @returns @zh 创建的Scene实例 @en Created Scene instance
      * @throws @zh 名称为空、重复或超出限制时抛出错误 @en Throws if name is empty, duplicate, or limit exceeded
      */
-    public createScene(sceneName: string): IScene;
+    public createScene(sceneName: string): Scene;
     public createScene<T extends IScene>(sceneName: string, sceneInstance: T): T;
-    public createScene<T extends IScene>(sceneName: string, sceneInstance?: T): T | IScene {
+    public createScene<T extends IScene>(sceneName: string, sceneInstance?: T): T | Scene {
         this.validateSceneName(sceneName);
 
-        const scene: T | IScene = sceneInstance ?? new Scene();
+        const scene: T | Scene = sceneInstance ?? new Scene();
 
         if (this._config.debug) {
             const monitor = new PerformanceMonitor();

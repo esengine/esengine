@@ -382,7 +382,8 @@ export default defineConfig({
           items: [
             { label: '示例总览', slug: 'examples', translations: { en: 'Examples Overview' } },
             { label: '导航系统演示', slug: 'examples/navigation-system-demo', translations: { en: 'Navigation System Demo' } },
-            { label: 'Worker 系统演示', slug: 'examples/worker-system-demo', translations: { en: 'Worker System Demo' } },
+            // TODO: Worker 系统演示文档待补充
+            // { label: 'Worker 系统演示', slug: 'examples/worker-system-demo', translations: { en: 'Worker System Demo' } },
             { label: '网络同步演示', slug: 'examples/network-sync-demo', translations: { en: 'Network Sync Demo' } },
           ],
         },
