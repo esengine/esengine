@@ -177,14 +177,16 @@ export class World {
      * @en Create and add Scene to World
      *
      * @param sceneName - @zh Scene名称 @en Scene name
-     * @param sceneInstance - @zh Scene实例（可选）@en Scene instance (optional)
+     * @param sceneInstance - @zh Scene实例（可选，不提供时创建默认 Scene）@en Scene instance (optional, creates default Scene if not provided)
      * @returns @zh 创建的Scene实例 @en Created Scene instance
      * @throws @zh 名称为空、重复或超出限制时抛出错误 @en Throws if name is empty, duplicate, or limit exceeded
      */
-    public createScene<T extends IScene>(sceneName: string, sceneInstance?: T): T {
+    public createScene(sceneName: string): IScene;
+    public createScene<T extends IScene>(sceneName: string, sceneInstance: T): T;
+    public createScene<T extends IScene>(sceneName: string, sceneInstance?: T): T | IScene {
         this.validateSceneName(sceneName);
 
-        const scene = sceneInstance ?? new Scene() as unknown as T;
+        const scene: T | IScene = sceneInstance ?? new Scene();
 
         if (this._config.debug) {
             const monitor = new PerformanceMonitor();
