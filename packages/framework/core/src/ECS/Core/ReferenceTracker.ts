@@ -45,11 +45,9 @@ interface IWeakRefConstructor {
  * 优先使用原生 WeakRef，不支持时降级到 Polyfill
  */
 const WeakRefImpl: IWeakRefConstructor = (
-    (typeof globalThis !== 'undefined' && (globalThis as any).WeakRef) ||
-    (typeof global !== 'undefined' && (global as any).WeakRef) ||
-    (typeof window !== 'undefined' && (window as any).WeakRef) ||
+    (typeof globalThis !== 'undefined' && (globalThis as unknown as Record<string, unknown>)['WeakRef'] as IWeakRefConstructor | undefined) ||
     WeakRefPolyfill
-) as IWeakRefConstructor;
+);
 
 /**
  * Entity引用记录

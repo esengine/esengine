@@ -621,7 +621,8 @@ export class EntityDataCollector {
             children: [] as ReturnType<typeof this.buildEntityHierarchyNode>[],
             depth,
             tag: entity.tag || 0,
-            updateOrder: entity.updateOrder || 0
+            updateOrder: entity.updateOrder || 0,
+            componentDetails: undefined as ReturnType<typeof this.extractComponentDetails> | undefined
         };
 
         // 递归构建子实体节点
@@ -643,7 +644,7 @@ export class EntityDataCollector {
 
         // 收集所有组件详细属性信息
         if (entity.components && entity.components.length > 0) {
-            (node as any).componentDetails = this.extractComponentDetails(entity.components);
+            node.componentDetails = this.extractComponentDetails(entity.components);
         }
 
         return node;

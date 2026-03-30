@@ -642,8 +642,8 @@ export function Profile(
  * }
  * ```
  */
-export function ProfileClass(category: ProfileCategory = ProfileCategory.Custom): ClassDecorator {
-    return function<T extends Function>(constructor: T): T {
-        return AutoProfiler.registerClass(constructor as any, category) as any;
+export function ProfileClass(category: ProfileCategory = ProfileCategory.Custom) {
+    return function<T extends new (...args: any[]) => any>(constructor: T): T {
+        return AutoProfiler.registerClass(constructor, category);
     };
 }
