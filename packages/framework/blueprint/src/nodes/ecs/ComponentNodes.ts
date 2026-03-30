@@ -6,7 +6,7 @@
  * @en Provides complete ECS component operations in blueprint
  */
 
-import type { Entity, Component } from '@esengine/ecs-framework';
+import { type Entity, type Component, getComponentInstanceTypeName } from '@esengine/ecs-framework';
 import { BlueprintNodeTemplate, BlueprintNode } from '../../types/nodes';
 import { ExecutionContext, ExecutionResult } from '../../runtime/ExecutionContext';
 import { INodeExecutor, RegisterNode } from '../../runtime/NodeRegistry';
@@ -48,7 +48,7 @@ export class AddComponentExecutor implements INodeExecutor {
         // Check if component already exists
         const existing = entity.components.find(c =>
             c.constructor.name === componentType ||
-            (c.constructor as any).__componentName__ === componentType
+            getComponentInstanceTypeName(c) === componentType
         );
 
         if (existing) {
@@ -107,7 +107,7 @@ export class HasComponentExecutor implements INodeExecutor {
 
         const hasIt = entity.components.some(c =>
             c.constructor.name === componentType ||
-            (c.constructor as any).__componentName__ === componentType
+            getComponentInstanceTypeName(c) === componentType
         );
 
         return { outputs: { hasComponent: hasIt } };
@@ -149,7 +149,7 @@ export class GetComponentExecutor implements INodeExecutor {
 
         const component = entity.components.find(c =>
             c.constructor.name === componentType ||
-            (c.constructor as any).__componentName__ === componentType
+            getComponentInstanceTypeName(c) === componentType
         );
 
         return {
@@ -237,7 +237,7 @@ export class RemoveComponentExecutor implements INodeExecutor {
 
         const component = entity.components.find(c =>
             c.constructor.name === componentType ||
-            (c.constructor as any).__componentName__ === componentType
+            getComponentInstanceTypeName(c) === componentType
         );
 
         if (component) {
@@ -285,7 +285,7 @@ export class GetComponentPropertyExecutor implements INodeExecutor {
         if (propertyName in component) {
             return {
                 outputs: {
-                    value: (component as any)[propertyName],
+                    value: (component as unknown as Record<string, unknown>)[propertyName],
                     found: true
                 }
             };
@@ -331,7 +331,7 @@ export class SetComponentPropertyExecutor implements INodeExecutor {
         }
 
         if (propertyName in component) {
-            (component as any)[propertyName] = value;
+            (component as unknown as Record<string, unknown>)[propertyName] = value;
             return { outputs: { success: true }, nextExec: 'exec' };
         }
 
@@ -369,7 +369,7 @@ export class GetComponentTypeNameExecutor implements INodeExecutor {
             return { outputs: { typeName: '' } };
         }
 
-        const typeName = (component.constructor as any).__componentName__ ?? component.constructor.name;
+        const typeName = getComponentInstanceTypeName(component);
         return { outputs: { typeName } };
     }
 }

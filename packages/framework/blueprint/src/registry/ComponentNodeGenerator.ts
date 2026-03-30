@@ -9,7 +9,7 @@
  * auto-generate corresponding Get/Set/Call nodes and register to NodeRegistry
  */
 
-import type { Component, Entity } from '@esengine/ecs-framework';
+import { type Component, type Entity, getComponentInstanceTypeName } from '@esengine/ecs-framework';
 import type { BlueprintNodeTemplate, BlueprintNode } from '../types/nodes';
 import type { BlueprintPinType } from '../types/pins';
 import type { ExecutionContext, ExecutionResult } from '../runtime/ExecutionContext';
@@ -119,7 +119,7 @@ function generateAddComponentNode(
             const existing = entity.components.find(c =>
                 c.constructor === componentClass ||
                 c.constructor.name === componentName ||
-                (c.constructor as any).__componentName__ === componentName
+                getComponentInstanceTypeName(c) === componentName
             );
 
             if (existing) {
@@ -135,7 +135,7 @@ function generateAddComponentNode(
                 for (const key of propertyKeys) {
                     const value = context.evaluateInput(node.id, key, propertyDefaults[key]);
                     if (value !== undefined) {
-                        (component as any)[key] = value;
+                        (component as unknown as Record<string, unknown>)[key] = value;
                     }
                 }
 
@@ -195,7 +195,7 @@ function generateGetComponentNode(
             const component = entity.components.find(c =>
                 c.constructor === componentClass ||
                 c.constructor.name === componentName ||
-                (c.constructor as any).__componentName__ === componentName
+                getComponentInstanceTypeName(c) === componentName
             );
 
             return {
@@ -252,7 +252,7 @@ function generatePropertyGetNode(
                 return { outputs: { value: defaultValue ?? null } };
             }
 
-            const value = (component as any)[propertyKey];
+            const value = (component as unknown as Record<string, unknown>)[propertyKey];
             return { outputs: { value } };
         }
     };
@@ -300,7 +300,7 @@ function generatePropertySetNode(
             const value = context.evaluateInput(node.id, 'value', defaultValue);
 
             if (component) {
-                (component as any)[propertyKey] = value;
+                (component as unknown as Record<string, unknown>)[propertyKey] = value;
             }
 
             return { nextExec: 'exec' };
@@ -384,7 +384,7 @@ function generateMethodCallNode(
                 context.evaluateInput(node.id, name, undefined)
             );
 
-            const fn = (component as any)[methodKey];
+            const fn = (component as unknown as Record<string, Function>)[methodKey];
             if (typeof fn !== 'function') {
                 console.warn(`Method ${methodKey} not found on component ${componentName}`);
                 return isPure ? { outputs: { result: null } } : { nextExec: 'exec' };
