@@ -21,7 +21,7 @@ import type {
 import type { HttpRoutes, HttpHandler } from '../http/types.js';
 import type { Validator } from '../schema/index.js';
 import { loadApiHandlers, loadMsgHandlers, loadHttpHandlers } from '../router/loader.js';
-import { RoomManager, type RoomClass, type Room } from '../room/index.js';
+import { RoomManager, type RoomClass, type Room, type Player } from '../room/index.js';
 import { createHttpRouter } from '../http/router.js';
 import { DistributedRoomManager } from '../distributed/DistributedRoomManager.js';
 import { MemoryAdapter } from '../distributed/adapters/MemoryAdapter.js';
@@ -137,7 +137,9 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
     const apiDefs: Record<string, ReturnType<typeof rpc.api>> = {
         // 内置 API
         JoinRoom: rpc.api(),
-        LeaveRoom: rpc.api()
+        LeaveRoom: rpc.api(),
+        ListRooms: rpc.api(),
+        GetRoomInfo: rpc.api()
     };
     const msgDefs: Record<string, ReturnType<typeof rpc.msg>> = {
         // 内置消息（房间消息透传）
@@ -303,6 +305,46 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             apiHandlersObj['LeaveRoom'] = async (_input, conn) => {
                 await roomManager.leave(conn.id);
                 return { success: true };
+            };
+
+            // 内置 ListRooms API
+            apiHandlersObj['ListRooms'] = async (input) => {
+                const { type } = (input ?? {}) as { type?: string };
+                const rooms = type
+                    ? roomManager.getRoomsByType(type)
+                    : roomManager.getRooms();
+
+                return {
+                    rooms: rooms.map((room: Room) => ({
+                        roomId: room.id,
+                        playerCount: room.playerCount,
+                        maxPlayers: room.maxPlayers,
+                        locked: room.isLocked
+                    }))
+                };
+            };
+
+            // 内置 GetRoomInfo API
+            apiHandlersObj['GetRoomInfo'] = async (input) => {
+                const { roomId } = input as { roomId: string };
+                if (!roomId) {
+                    throw new Error('roomId is required');
+                }
+
+                const room = roomManager.getRoom(roomId);
+                if (!room) {
+                    throw new Error(`Room not found: ${roomId}`);
+                }
+
+                return {
+                    roomId: room.id,
+                    playerCount: room.playerCount,
+                    maxPlayers: room.maxPlayers,
+                    locked: room.isLocked,
+                    players: room.players.map((p: Player) => ({
+                        id: p.id
+                    }))
+                };
             };
 
             // 文件路由 API
