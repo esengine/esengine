@@ -333,4 +333,88 @@ export class Polygon {
 
         return { minX, minY, maxX, maxY };
     }
+
+    // =========================================================================
+    // 实例方法 | Instance Methods
+    // =========================================================================
+
+    /**
+     * @zh 多边形顶点
+     * @en Polygon vertices
+     */
+    readonly vertices: readonly IVector2[];
+
+    /**
+     * @zh 创建多边形实例
+     * @en Create polygon instance
+     *
+     * @param vertices - @zh 顶点数组 @en Array of vertices
+     *
+     * @example
+     * ```typescript
+     * const poly = new Polygon([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }]);
+     * console.log(poly.area);        // 5000
+     * console.log(poly.perimeter);   // ~341.42
+     * console.log(poly.isConvex);    // true
+     * ```
+     */
+    constructor(vertices: readonly IVector2[]) {
+        this.vertices = vertices;
+    }
+
+    /**
+     * @zh 多边形面积（绝对值）
+     * @en Polygon area (absolute value)
+     */
+    get area(): number {
+        return Polygon.area(this.vertices);
+    }
+
+    /**
+     * @zh 多边形周长
+     * @en Polygon perimeter
+     */
+    get perimeter(): number {
+        return Polygon.perimeter(this.vertices);
+    }
+
+    /**
+     * @zh 是否为凸多边形
+     * @en Whether polygon is convex
+     */
+    get isConvex(): boolean {
+        return Polygon.isConvex(this.vertices);
+    }
+
+    /**
+     * @zh 是否为逆时针
+     * @en Whether vertices are in CCW order
+     */
+    get isCCW(): boolean {
+        return Polygon.isCCW(this.vertices);
+    }
+
+    /**
+     * @zh 获取质心
+     * @en Get centroid
+     */
+    get centroid(): IVector2 {
+        return Polygon.centroid(this.vertices);
+    }
+
+    /**
+     * @zh 检查点是否在多边形内
+     * @en Check if point is inside polygon
+     */
+    containsPoint(point: IVector2): boolean {
+        return Polygon.containsPoint(point, this.vertices);
+    }
+
+    /**
+     * @zh 获取边界框
+     * @en Get bounding box
+     */
+    get bounds(): { minX: number; minY: number; maxX: number; maxY: number } {
+        return Polygon.bounds(this.vertices);
+    }
 }
