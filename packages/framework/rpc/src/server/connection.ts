@@ -20,11 +20,11 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
     private _onClose?: () => void;
 
     constructor(options: {
-        id: string
-        ip: string
-        socket: WebSocket
-        initialData: TData
-        onClose?: () => void
+        id: string;
+        ip: string;
+        socket: WebSocket;
+        initialData: TData;
+        onClose?: () => void;
     }) {
         this.id = options.id;
         this.ip = options.ip;

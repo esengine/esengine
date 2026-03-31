@@ -70,7 +70,7 @@ export interface ServeOptions<P extends ProtocolDef, TConnData = unknown> {
      * @zh 监听端口（与 server 二选一）
      * @en Listen port (mutually exclusive with server)
      */
-    port?: number
+    port?: number;
 
     /**
      * @zh 已有的 HTTP 服务器（与 port 二选一）
@@ -79,56 +79,56 @@ export interface ServeOptions<P extends ProtocolDef, TConnData = unknown> {
      * @zh 使用此选项可以在同一端口同时支持 HTTP 和 WebSocket
      * @en Use this option to support both HTTP and WebSocket on the same port
      */
-    server?: HttpServer
+    server?: HttpServer;
 
     /**
      * @zh API 处理器
      * @en API handlers
      */
-    api: ApiHandlers<P, TConnData>
+    api: ApiHandlers<P, TConnData>;
 
     /**
      * @zh 消息处理器
      * @en Message handlers
      */
-    msg?: MsgHandlers<P, TConnData>
+    msg?: MsgHandlers<P, TConnData>;
 
     /**
      * @zh 编解码器
      * @en Codec
      * @defaultValue json()
      */
-    codec?: Codec
+    codec?: Codec;
 
     /**
      * @zh 连接初始数据工厂
      * @en Connection initial data factory
      */
-    createConnData?: () => TConnData
+    createConnData?: () => TConnData;
 
     /**
      * @zh 连接建立回调
      * @en Connection established callback
      */
-    onConnect?: (conn: Connection<TConnData>) => void | Promise<void>
+    onConnect?: (conn: Connection<TConnData>) => void | Promise<void>;
 
     /**
      * @zh 连接断开回调
      * @en Connection closed callback
      */
-    onDisconnect?: (conn: Connection<TConnData>, reason?: string) => void | Promise<void>
+    onDisconnect?: (conn: Connection<TConnData>, reason?: string) => void | Promise<void>;
 
     /**
      * @zh 错误回调
      * @en Error callback
      */
-    onError?: (error: Error, conn?: Connection<TConnData>) => void
+    onError?: (error: Error, conn?: Connection<TConnData>) => void;
 
     /**
      * @zh 服务器启动回调
      * @en Server started callback
      */
-    onStart?: (port: number) => void
+    onStart?: (port: number) => void;
 }
 
 /**
@@ -140,19 +140,19 @@ export interface RpcServer<P extends ProtocolDef, TConnData = unknown> {
      * @zh 启动服务器
      * @en Start server
      */
-    start(): Promise<void>
+    start(): Promise<void>;
 
     /**
      * @zh 停止服务器
      * @en Stop server
      */
-    stop(): Promise<void>
+    stop(): Promise<void>;
 
     /**
      * @zh 获取所有连接
      * @en Get all connections
      */
-    readonly connections: ReadonlyArray<Connection<TConnData>>
+    readonly connections: ReadonlyArray<Connection<TConnData>>;
 
     /**
      * @zh 向单个连接发送消息
@@ -162,7 +162,7 @@ export interface RpcServer<P extends ProtocolDef, TConnData = unknown> {
         conn: Connection<TConnData>,
         name: K,
         data: MsgData<P['msg'][K]>
-    ): void
+    ): void;
 
     /**
      * @zh 广播消息给所有连接
@@ -172,7 +172,7 @@ export interface RpcServer<P extends ProtocolDef, TConnData = unknown> {
         name: K,
         data: MsgData<P['msg'][K]>,
         options?: { exclude?: Connection<TConnData> | Connection<TConnData>[] }
-    ): void
+    ): void;
 }
 
 // ============ Implementation ============

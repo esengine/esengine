@@ -90,8 +90,8 @@ export class PathValidator implements IPathValidator {
         const ix2 = Math.floor(x2);
         const iy2 = Math.floor(y2);
 
-        let dx = Math.abs(ix2 - ix1);
-        let dy = Math.abs(iy2 - iy1);
+        const dx = Math.abs(ix2 - ix1);
+        const dy = Math.abs(iy2 - iy1);
         let x = ix1;
         let y = iy1;
 

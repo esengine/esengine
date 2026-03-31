@@ -147,7 +147,7 @@ export function BlueprintExpose(options: BlueprintExposeOptions = {}): ClassDeco
 }
 
 export function BlueprintProperty(options: BlueprintPropertyOptions = {}): PropertyDecorator {
-    return function (target: Object, propertyKey: string | symbol) {
+    return function (target: object, propertyKey: string | symbol) {
         const key = String(propertyKey);
         const metadata = getOrCreateMetadata(target.constructor);
 
@@ -189,7 +189,7 @@ export function BlueprintProperty(options: BlueprintPropertyOptions = {}): Prope
  * ```
  */
 export function BlueprintArray(options: BlueprintArrayOptions): PropertyDecorator {
-    return function (target: Object, propertyKey: string | symbol) {
+    return function (target: object, propertyKey: string | symbol) {
         const key = String(propertyKey);
         const metadata = getOrCreateMetadata(target.constructor);
 
@@ -244,7 +244,7 @@ export function BlueprintArray(options: BlueprintArrayOptions): PropertyDecorato
  * ```
  */
 export function BlueprintObject(options: BlueprintObjectOptions): PropertyDecorator {
-    return function (target: Object, propertyKey: string | symbol) {
+    return function (target: object, propertyKey: string | symbol) {
         const key = String(propertyKey);
         const metadata = getOrCreateMetadata(target.constructor);
 
@@ -273,7 +273,7 @@ export function BlueprintObject(options: BlueprintObjectOptions): PropertyDecora
 }
 
 export function BlueprintMethod(options: BlueprintMethodOptions = {}): MethodDecorator {
-    return function (target: Object, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+    return function (target: object, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
         const key = String(propertyKey);
         const metadata = getOrCreateMetadata(target.constructor);
 

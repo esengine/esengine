@@ -45,13 +45,13 @@ export { RpcError, ErrorCode };
  * @en Used to adapt different platform WebSocket implementations (browser, WeChat Mini Games, etc.)
  */
 export interface WebSocketAdapter {
-    readonly readyState: number
-    send(data: string | ArrayBuffer): void
-    close(code?: number, reason?: string): void
-    onopen: ((ev: Event) => void) | null
-    onclose: ((ev: { code: number; reason: string }) => void) | null
-    onerror: ((ev: Event) => void) | null
-    onmessage: ((ev: { data: string | ArrayBuffer }) => void) | null
+    readonly readyState: number;
+    send(data: string | ArrayBuffer): void;
+    close(code?: number, reason?: string): void;
+    onopen: ((ev: Event) => void) | null;
+    onclose: ((ev: { code: number; reason: string }) => void) | null;
+    onerror: ((ev: Event) => void) | null;
+    onmessage: ((ev: { data: string | ArrayBuffer }) => void) | null;
 }
 
 /**
@@ -70,28 +70,28 @@ export interface RpcClientOptions {
      * @en Codec
      * @defaultValue json()
      */
-    codec?: Codec
+    codec?: Codec;
 
     /**
      * @zh API 调用超时（毫秒）
      * @en API call timeout in milliseconds
      * @defaultValue 30000
      */
-    timeout?: number
+    timeout?: number;
 
     /**
      * @zh 自动重连
      * @en Auto reconnect
      * @defaultValue true
      */
-    autoReconnect?: boolean
+    autoReconnect?: boolean;
 
     /**
      * @zh 重连间隔（毫秒）
      * @en Reconnect interval in milliseconds
      * @defaultValue 3000
      */
-    reconnectInterval?: number
+    reconnectInterval?: number;
 
     /**
      * @zh WebSocket 工厂函数
@@ -100,25 +100,25 @@ export interface RpcClientOptions {
      * @zh 用于自定义 WebSocket 实现，如微信小游戏
      * @en Used for custom WebSocket implementation, e.g., WeChat Mini Games
      */
-    webSocketFactory?: WebSocketFactory
+    webSocketFactory?: WebSocketFactory;
 
     /**
      * @zh 连接成功回调
      * @en Connection established callback
      */
-    onConnect?: () => void
+    onConnect?: () => void;
 
     /**
      * @zh 连接断开回调
      * @en Connection closed callback
      */
-    onDisconnect?: (reason?: string) => void
+    onDisconnect?: (reason?: string) => void;
 
     /**
      * @zh 错误回调
      * @en Error callback
      */
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void;
 }
 
 /** @deprecated Use RpcClientOptions instead */
@@ -144,9 +144,9 @@ const defaultWebSocketFactory: WebSocketFactory = (url) =>
 // ============================================================================
 
 interface PendingCall {
-    resolve: (value: unknown) => void
-    reject: (error: Error) => void
-    timer: ReturnType<typeof setTimeout>
+    resolve: (value: unknown) => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
 }
 
 /**

@@ -14,11 +14,11 @@ export interface Codec {
      * @zh 编码数据包
      * @en Encode packet
      */
-    encode(packet: Packet): string | Uint8Array
+    encode(packet: Packet): string | Uint8Array;
 
     /**
      * @zh 解码数据包
      * @en Decode packet
      */
-    decode(data: string | Uint8Array): Packet
+    decode(data: string | Uint8Array): Packet;
 }

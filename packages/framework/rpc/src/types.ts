@@ -10,9 +10,9 @@
  * @en API definition marker
  */
 export interface ApiDef<TInput = unknown, TOutput = unknown> {
-    readonly _type: 'api'
-    readonly _input: TInput
-    readonly _output: TOutput
+    readonly _type: 'api';
+    readonly _input: TInput;
+    readonly _output: TOutput;
 }
 
 /**
@@ -20,8 +20,8 @@ export interface ApiDef<TInput = unknown, TOutput = unknown> {
  * @en Message definition marker
  */
 export interface MsgDef<TData = unknown> {
-    readonly _type: 'msg'
-    readonly _data: TData
+    readonly _type: 'msg';
+    readonly _data: TData;
 }
 
 /**
@@ -29,8 +29,8 @@ export interface MsgDef<TData = unknown> {
  * @en Protocol definition
  */
 export interface ProtocolDef {
-    readonly api: Record<string, ApiDef<unknown, unknown>>
-    readonly msg: Record<string, MsgDef<unknown>>
+    readonly api: Record<string, ApiDef<unknown, unknown>>;
+    readonly msg: Record<string, MsgDef<unknown>>;
 }
 
 // ============ Type Inference ============
@@ -82,31 +82,31 @@ export interface Connection<TData = unknown> {
      * @zh 连接唯一标识
      * @en Connection unique identifier
      */
-    readonly id: string
+    readonly id: string;
 
     /**
      * @zh 客户端 IP 地址
      * @en Client IP address
      */
-    readonly ip: string
+    readonly ip: string;
 
     /**
      * @zh 连接状态
      * @en Connection status
      */
-    readonly status: ConnectionStatus
+    readonly status: ConnectionStatus;
 
     /**
      * @zh 用户自定义数据
      * @en User-defined data
      */
-    data: TData
+    data: TData;
 
     /**
      * @zh 关闭连接
      * @en Close connection
      */
-    close(reason?: string): void
+    close(reason?: string): void;
 }
 
 // ============ Packet Types ============
