@@ -141,7 +141,8 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
         LeaveRoom: rpc.api(),
         ReconnectRoom: rpc.api(),
         ListRooms: rpc.api(),
-        GetRoomInfo: rpc.api()
+        GetRoomInfo: rpc.api(),
+        Authenticate: rpc.api()
     };
     const msgDefs: Record<string, ReturnType<typeof rpc.msg>> = {
         // 内置消息（房间消息透传）
@@ -333,6 +334,25 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 }
 
                 return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
+            };
+
+            // 内置 Authenticate API
+            apiHandlersObj['Authenticate'] = async (input: any, conn) => {
+                const { token } = input as { token: unknown };
+                if (!token) {
+                    throw new Error('token is required');
+                }
+
+                if (!gameServer.authenticate) {
+                    throw new Error('Authentication not configured. Use withAuth() to enable.');
+                }
+
+                const result = await gameServer.authenticate(conn as ServerConnection, token);
+                return {
+                    success: result.success,
+                    user: result.success ? result.user : undefined,
+                    error: result.success ? undefined : result.error
+                };
             };
 
             // 内置 ListRooms API

@@ -286,6 +286,15 @@ export interface GameServer {
     define(name: string, roomClass: new () => unknown): void;
 
     /**
+     * @zh 认证连接（由 withAuth mixin 注入）
+     * @en Authenticate connection (injected by withAuth mixin)
+     *
+     * @zh 调用此方法验证 token 并设置连接的认证上下文
+     * @en Call this to verify token and set connection's auth context
+     */
+    authenticate?: (conn: ServerConnection, credentials: unknown) => Promise<{ success: boolean; user?: unknown; error?: string }>;
+
+    /**
      * @zh 连接建立钩子（供 mixin 拦截）
      * @en Connection established hook (for mixin interception)
      *

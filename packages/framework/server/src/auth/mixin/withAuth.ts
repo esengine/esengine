@@ -131,6 +131,9 @@ export function withAuth<TUser = unknown>(
         }
     };
 
+    // 注入 authenticate 到原始 server，使内置 Authenticate API 可用
+    server.authenticate = authServer.authenticate.bind(authServer);
+
     const originalOnConnect = server._onConnect;
     server._onConnect = async (conn: ServerConnection, req?: unknown) => {
         const authContext = new AuthContext<TUser>();
