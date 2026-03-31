@@ -147,12 +147,11 @@ export abstract class ECSRoom<TState = any, TPlayerData = Record<string, unknown
     constructor(ecsConfig?: Partial<ECSRoomConfig>) {
         super();
 
-        // Check Core initialization
-        if (!Core.worldManager) {
-            throw new Error(
-                'ECSRoom requires Core.create() to be called first. ' +
-                'Ensure Core is initialized before creating ECSRoom instances.'
-            );
+        // 自动初始化 Core（如果未初始化）
+        try {
+            Core.worldManager;
+        } catch {
+            Core.create({ runtimeEnvironment: 'server' });
         }
 
         this.ecsConfig = { ...DEFAULT_ECS_CONFIG, ...ecsConfig };
