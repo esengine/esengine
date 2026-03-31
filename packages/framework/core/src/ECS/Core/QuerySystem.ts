@@ -10,6 +10,22 @@ import type { QueryCondition, QueryResult } from './QueryTypes';
 import { QueryConditionType } from './QueryTypes';
 import { CompiledQuery } from './Query/CompiledQuery';
 
+/**
+ * @zh 为查询结果附加 where 便捷方法
+ * @en Attach where helper to query result
+ */
+function attachWhere(result: Omit<QueryResult, 'where'>): QueryResult {
+    return {
+        ...result,
+        where<T extends Component>(componentType: ComponentType<T>, predicate: (component: T) => boolean): readonly Entity[] {
+            return result.entities.filter(entity => {
+                const comp = entity.getComponent(componentType);
+                return comp !== null && predicate(comp);
+            });
+        }
+    };
+}
+
 export { QueryConditionType };
 export type { QueryCondition, QueryResult };
 export { CompiledQuery };
@@ -356,12 +372,12 @@ export class QuerySystem {
         // 统计为缓存命中(响应式查询本质上是永不过期的智能缓存)
         this._queryStats.cacheHits++;
 
-        return {
+        return attachWhere({
             entities,
             count: entities.length,
             executionTime: performance.now() - startTime,
             fromCache: true
-        };
+        });
     }
 
     /**
@@ -393,12 +409,12 @@ export class QuerySystem {
         // 统计为缓存命中(响应式查询本质上是永不过期的智能缓存)
         this._queryStats.cacheHits++;
 
-        return {
+        return attachWhere({
             entities,
             count: entities.length,
             executionTime: performance.now() - startTime,
             fromCache: true
-        };
+        });
     }
 
     /**
@@ -430,12 +446,12 @@ export class QuerySystem {
         // 统计为缓存命中(响应式查询本质上是永不过期的智能缓存)
         this._queryStats.cacheHits++;
 
-        return {
+        return attachWhere({
             entities,
             count: entities.length,
             executionTime: performance.now() - startTime,
             fromCache: true
-        };
+        });
     }
 
     /**
