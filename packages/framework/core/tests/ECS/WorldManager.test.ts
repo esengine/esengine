@@ -114,11 +114,11 @@ describe('WorldManager', () => {
         test('空的World name应该抛出错误', () => {
             expect(() => {
                 worldManager.createWorld('');
-            }).toThrow('World name不能为空');
+            }).toThrow('World name cannot be empty');
 
             expect(() => {
                 worldManager.createWorld('   ');
-            }).toThrow('World name不能为空');
+            }).toThrow('World name cannot be empty');
         });
 
         test('重复的World ID应该抛出错误', () => {
@@ -126,7 +126,7 @@ describe('WorldManager', () => {
 
             expect(() => {
                 worldManager.createWorld('duplicate-world');
-            }).toThrow("World name 'duplicate-world' 已存在");
+            }).toThrow("World 'duplicate-world' already exists");
         });
 
         test('超出最大World数量应该抛出错误', () => {
@@ -137,7 +137,7 @@ describe('WorldManager', () => {
 
             expect(() => {
                 limitedManager.createWorld('world3');
-            }).toThrow('已达到最大World数量限制: 2');
+            }).toThrow('Maximum World limit reached: 2');
 
             // 清理
             limitedManager.destroy();
