@@ -82,7 +82,8 @@ export class WebSocketManager {
         try {
             const message = typeof data === 'string' ? data : JSON.stringify(data);
             this.ws.send(message);
-        } catch (error) {
+        } catch {
+            // send 失败通常是连接已关闭，忽略
         }
     }
 
@@ -130,7 +131,8 @@ export class WebSocketManager {
             if (this.messageHandler) {
                 this.messageHandler(message);
             }
-        } catch (error) {
+        } catch {
+            // JSON 解析失败，忽略无效消息
         }
     }
 
