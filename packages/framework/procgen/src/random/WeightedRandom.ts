@@ -128,10 +128,10 @@ export class WeightedRandom<T> {
  */
 export function weightedPick<T>(
     items: WeightedItem<T>[],
-    rng: SeededRandom | { next(): number }
+    rng: SeededRandom | { next(): number } = { next: () => Math.random() }
 ): T {
     if (items.length === 0) {
-        throw new Error('Items array cannot be empty');
+        throw new Error('Items array cannot be empty | 项目数组不能为空');
     }
 
     let totalWeight = 0;
@@ -159,7 +159,7 @@ export function weightedPick<T>(
  */
 export function weightedPickFromMap<T extends string | number>(
     weights: Record<T, number>,
-    rng: SeededRandom | { next(): number }
+    rng: SeededRandom | { next(): number } = { next: () => Math.random() }
 ): T {
     const items: WeightedItem<T>[] = [];
     for (const key in weights) {
