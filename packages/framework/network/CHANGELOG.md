@@ -1,5 +1,15 @@
 # @esengine/network
 
+## 14.0.2
+
+### Patch Changes
+
+- Updated dependencies [[`dea283c`](https://github.com/esengine/esengine/commit/dea283c6fa0d870a9047852d66672af2f6463454)]:
+    - @esengine/rpc@1.1.4
+    - @esengine/ecs-framework@2.11.2
+    - @esengine/blueprint@4.5.2
+    - @esengine/ecs-framework-math@2.11.2
+
 ## 14.0.1
 
 ### Patch Changes
