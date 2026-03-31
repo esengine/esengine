@@ -120,6 +120,11 @@ export class SimplexNoise {
         return 70 * (n0 + n1 + n2);
     }
 
+    /** @zh noise2D 的别名 @en Alias for noise2D */
+    get(x: number, y: number): number {
+        return this.noise2D(x, y);
+    }
+
     /**
      * @zh 3D Simplex 噪声
      * @en 3D Simplex noise

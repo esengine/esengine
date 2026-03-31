@@ -107,6 +107,14 @@ export class PerlinNoise {
     }
 
     /**
+     * @zh noise2D 的别名，便于快速调用
+     * @en Alias for noise2D for convenience
+     */
+    get(x: number, y: number): number {
+        return this.noise2D(x, y);
+    }
+
+    /**
      * @zh 3D Perlin 噪声
      * @en 3D Perlin noise
      *

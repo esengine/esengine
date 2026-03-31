@@ -12,6 +12,8 @@
  */
 export interface INoise2D {
     noise2D(x: number, y: number): number;
+    /** @zh noise2D 的别名 @en Alias for noise2D */
+    get?(x: number, y: number): number;
 }
 
 /**
@@ -108,6 +110,11 @@ export class FBM {
         }
 
         return value / maxValue;
+    }
+
+    /** @zh noise2D 的别名 @en Alias for noise2D */
+    get(x: number, y: number): number {
+        return this.noise2D(x, y);
     }
 
     /**

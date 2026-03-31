@@ -123,6 +123,11 @@ export class WorleyNoise {
         return minDist;
     }
 
+    /** @zh noise2D 的别名 @en Alias for noise2D */
+    get(x: number, y: number): number {
+        return this.noise2D(x, y);
+    }
+
     /**
      * @zh 3D Worley 噪声
      * @en 3D Worley noise
