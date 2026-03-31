@@ -77,6 +77,14 @@ export class EpochManager {
     }
 
     /**
+     * @zh increment 的别名，语义更贴近帧推进
+     * @en Alias for increment, semantically closer to frame advance
+     */
+    public advance(): void {
+        this.increment();
+    }
+
+    /**
      * 重置 epoch
      *
      * 在场景重置时调用。
