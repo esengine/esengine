@@ -73,6 +73,22 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
     autoDispose = true;
 
     /**
+     * @zh 房间元数据（在 ListRooms 中可见）
+     * @en Room metadata (visible in ListRooms)
+     *
+     * @zh 在 onCreate 中设置，客户端可通过 ListRooms/GetRoomInfo 查看
+     * @en Set in onCreate, clients can view via ListRooms/GetRoomInfo
+     *
+     * @example
+     * ```typescript
+     * onCreate(options) {
+     *     this.metadata = { mapName: 'desert', gameMode: 'capture_flag' };
+     * }
+     * ```
+     */
+    metadata: Record<string, unknown> = {};
+
+    /**
      * @zh 断线重连宽限期（毫秒），0 = 禁用重连
      * @en Reconnection grace period (ms), 0 = disabled
      *
@@ -353,7 +369,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
     /**
      * @internal
      */
-    async _addPlayer(id: string, conn: any): Promise<Player<TPlayerData> | null> {
+    async _addPlayer(id: string, conn: any, playerData?: Record<string, unknown>): Promise<Player<TPlayerData> | null> {
         if (this._locked || this.isFull || this._disposed) {
             return null;
         }
@@ -364,7 +380,8 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
             conn,
             sendFn: this._sendFn!,
             sendBinaryFn: this._sendBinaryFn ?? undefined,
-            leaveFn: (p, reason) => this._removePlayer(p.id, reason)
+            leaveFn: (p, reason) => this._removePlayer(p.id, reason),
+            initialData: playerData as TPlayerData | undefined
         });
 
         this._players.set(id, player);

@@ -262,8 +262,8 @@ export class TestClient {
      * @zh 加入房间
      * @en Join a room
      */
-    async joinRoom(roomType: string, options?: Record<string, unknown>): Promise<JoinRoomResult> {
-        const result = await this.call<JoinRoomResult>('JoinRoom', { roomType, options });
+    async joinRoom(roomType: string, options?: Record<string, unknown>, playerData?: Record<string, unknown>): Promise<JoinRoomResult> {
+        const result = await this.call<JoinRoomResult>('JoinRoom', { roomType, options, playerData });
         this._currentRoomId = result.roomId;
         this._currentPlayerId = result.playerId;
         this._sessionToken = result.sessionToken ?? null;

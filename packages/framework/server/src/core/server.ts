@@ -265,14 +265,15 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     await roomManager.leave(conn.id, 'joining_other_room');
                 }
 
-                const { roomType, roomId, options } = input as {
+                const { roomType, roomId, options, playerData } = input as {
                     roomType?: string;
                     roomId?: string;
                     options?: Record<string, unknown>;
+                    playerData?: Record<string, unknown>;
                 };
 
                 if (roomId) {
-                    const result = await roomManager.joinById(roomId, conn.id, conn);
+                    const result = await roomManager.joinById(roomId, conn.id, conn, playerData);
                     if (!result) {
                         throw new Error('Failed to join room');
                     }
@@ -303,7 +304,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     }
 
                     // 单机模式
-                    const result = await roomManager.joinOrCreate(roomType, conn.id, conn, options);
+                    const result = await roomManager.joinOrCreate(roomType, conn.id, conn, options, playerData);
                     if (!result) {
                         throw new Error('Failed to join or create room');
                     }
@@ -346,7 +347,8 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                         roomId: room.id,
                         playerCount: room.playerCount,
                         maxPlayers: room.maxPlayers,
-                        locked: room.isLocked
+                        locked: room.isLocked,
+                        metadata: room.metadata
                     }))
                 };
             };
@@ -368,6 +370,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     playerCount: room.playerCount,
                     maxPlayers: room.maxPlayers,
                     locked: room.isLocked,
+                    metadata: room.metadata,
                     players: room.players.map((p: Player) => ({
                         id: p.id
                     }))

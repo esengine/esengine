@@ -131,7 +131,8 @@ export class RoomManager {
         name: string,
         playerId: string,
         conn: any,
-        options?: RoomOptions
+        options?: RoomOptions,
+        playerData?: Record<string, unknown>
     ): Promise<{ room: Room; player: Player } | null> {
         // 查找可加入的房间 | Find available room
         let room = this._findAvailableRoom(name);
@@ -143,7 +144,7 @@ export class RoomManager {
         }
 
         // 加入房间 | Join room
-        const player = await room._addPlayer(playerId, conn);
+        const player = await room._addPlayer(playerId, conn, playerData);
         if (!player) return null;
 
         this._onPlayerJoined(playerId, room.id, player);
@@ -164,12 +165,13 @@ export class RoomManager {
     async joinById(
         roomId: string,
         playerId: string,
-        conn: any
+        conn: any,
+        playerData?: Record<string, unknown>
     ): Promise<{ room: Room; player: Player } | null> {
         const room = this._rooms.get(roomId);
         if (!room) return null;
 
-        const player = await room._addPlayer(playerId, conn);
+        const player = await room._addPlayer(playerId, conn, playerData);
         if (!player) return null;
 
         this._onPlayerJoined(playerId, room.id, player);
