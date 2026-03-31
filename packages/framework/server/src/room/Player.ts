@@ -10,12 +10,14 @@ import type { Connection } from '@esengine/rpc';
  * @en Player interface
  */
 export interface IPlayer<TData = Record<string, unknown>> {
-    readonly id: string
-    readonly roomId: string
-    data: TData
-    send<T>(type: string, data: T): void
-    sendBinary(data: Uint8Array): void
-    leave(reason?: string): void
+    readonly id: string;
+    readonly roomId: string;
+    readonly sessionToken: string;
+    readonly connected: boolean;
+    data: TData;
+    send<T>(type: string, data: T): void;
+    sendBinary(data: Uint8Array): void;
+    leave(reason?: string): void;
 }
 
 /**
@@ -25,21 +27,23 @@ export interface IPlayer<TData = Record<string, unknown>> {
 export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
     readonly id: string;
     readonly roomId: string;
+    readonly sessionToken: string;
     data: TData;
 
     private _conn: Connection<any>;
     private _sendFn: (conn: Connection<any>, type: string, data: unknown) => void;
     private _sendBinaryFn?: (conn: Connection<any>, data: Uint8Array) => void;
     private _leaveFn: (player: Player<TData>, reason?: string) => void;
+    private _connected = true;
 
     constructor(options: {
-        id: string
-        roomId: string
-        conn: Connection<any>
-        sendFn: (conn: Connection<any>, type: string, data: unknown) => void
-        sendBinaryFn?: (conn: Connection<any>, data: Uint8Array) => void
-        leaveFn: (player: Player<TData>, reason?: string) => void
-        initialData?: TData
+        id: string;
+        roomId: string;
+        conn: Connection<any>;
+        sendFn: (conn: Connection<any>, type: string, data: unknown) => void;
+        sendBinaryFn?: (conn: Connection<any>, data: Uint8Array) => void;
+        leaveFn: (player: Player<TData>, reason?: string) => void;
+        initialData?: TData;
     }) {
         this.id = options.id;
         this.roomId = options.roomId;
@@ -48,6 +52,15 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
         this._sendBinaryFn = options.sendBinaryFn;
         this._leaveFn = options.leaveFn;
         this.data = options.initialData ?? ({} as TData);
+        this.sessionToken = this._generateToken();
+    }
+
+    /**
+     * @zh 玩家是否在线
+     * @en Whether player is currently connected
+     */
+    get connected(): boolean {
+        return this._connected;
     }
 
     /**
@@ -63,17 +76,16 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
      * @en Send message to player
      */
     send<T>(type: string, data: T): void {
+        if (!this._connected) return;
         this._sendFn(this._conn, type, data);
     }
 
     /**
      * @zh 发送二进制数据给玩家
      * @en Send binary data to player
-     *
-     * @zh 如果底层连接支持原生二进制帧，则直接发送；否则降级为 base64 编码通过 JSON 发送
-     * @en If underlying connection supports native binary frames, sends directly; otherwise falls back to base64 encoding via JSON
      */
     sendBinary(data: Uint8Array): void {
+        if (!this._connected) return;
         if (this._sendBinaryFn) {
             this._sendBinaryFn(this._conn, data);
         } else {
@@ -82,9 +94,38 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
     }
 
     /**
-     * @zh 将 Uint8Array 转换为 base64 字符串
-     * @en Convert Uint8Array to base64 string
+     * @zh 让玩家离开房间
+     * @en Make player leave the room
      */
+    leave(reason?: string): void {
+        this._leaveFn(this, reason);
+    }
+
+    /**
+     * @zh 更新底层连接（重连时使用）
+     * @en Update underlying connection (used on reconnect)
+     * @internal
+     */
+    _setConnection(
+        conn: Connection<any>,
+        sendFn: (conn: Connection<any>, type: string, data: unknown) => void,
+        sendBinaryFn?: (conn: Connection<any>, data: Uint8Array) => void
+    ): void {
+        this._conn = conn;
+        this._sendFn = sendFn;
+        this._sendBinaryFn = sendBinaryFn;
+        this._connected = true;
+    }
+
+    /**
+     * @zh 标记为断线
+     * @en Mark as disconnected
+     * @internal
+     */
+    _setDisconnected(): void {
+        this._connected = false;
+    }
+
     private _toBase64(data: Uint8Array): string {
         if (typeof Buffer !== 'undefined') {
             return Buffer.from(data).toString('base64');
@@ -96,11 +137,7 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
         return btoa(binary);
     }
 
-    /**
-     * @zh 让玩家离开房间
-     * @en Make player leave the room
-     */
-    leave(reason?: string): void {
-        this._leaveFn(this, reason);
+    private _generateToken(): string {
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     }
 }
