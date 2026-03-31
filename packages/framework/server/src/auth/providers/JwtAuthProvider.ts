@@ -4,7 +4,9 @@
  */
 
 import type { IAuthProvider, AuthResult, AuthErrorCode } from '../types.js';
-import * as jwt from 'jsonwebtoken';
+import type * as jwtTypes from 'jsonwebtoken';
+import jwtModule from 'jsonwebtoken';
+const jwt = (jwtModule as unknown as { default?: typeof jwtModule }).default ?? jwtModule;
 
 /**
  * @zh JWT 载荷
@@ -125,7 +127,7 @@ export class JwtAuthProvider<TUser = unknown> implements IAuthProvider<TUser, st
         }
 
         try {
-            const verifyOptions: jwt.VerifyOptions = {
+            const verifyOptions: jwtTypes.VerifyOptions = {
                 algorithms: [this._config.algorithm]
             };
             if (this._config.issuer) {
@@ -207,7 +209,7 @@ export class JwtAuthProvider<TUser = unknown> implements IAuthProvider<TUser, st
      * @en Generate token
      */
     sign(payload: Record<string, unknown>): string {
-        const signOptions: jwt.SignOptions = {
+        const signOptions: jwtTypes.SignOptions = {
             algorithm: this._config.algorithm,
             expiresIn: this._config.expiresIn
         };
