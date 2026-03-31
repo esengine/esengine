@@ -56,6 +56,12 @@ export class RoomManager {
     protected _nextRoomId = 1;
 
     /**
+     * @zh session token 到玩家信息的映射（用于重连）
+     * @en Session token to player info mapping (for reconnection)
+     */
+    protected _sessionToPlayer: Map<string, { playerId: string; roomId: string }> = new Map();
+
+    /**
      * @zh 消息发送函数
      * @en Message send function
      */
@@ -185,11 +191,54 @@ export class RoomManager {
 
         const room = this._rooms.get(roomId);
         if (room) {
+            // 断线+有宽限期：不清理映射，等待重连或超时
+            if (reason === 'disconnected' && room.reconnectGracePeriod > 0) {
+                await room._removePlayer(playerId, reason);
+                // _playerToRoom 保留，重连时需要
+                logger.info(`Player ${playerId} disconnected from ${roomId} (grace period: ${room.reconnectGracePeriod}ms)`);
+                return;
+            }
+
             await room._removePlayer(playerId, reason);
         }
 
         this._onPlayerLeft(playerId, roomId);
         logger.info(`Player ${playerId} left ${roomId}`);
+    }
+
+    /**
+     * @zh 使用 session token 重连
+     * @en Reconnect using session token
+     *
+     * @param sessionToken - @zh 会话令牌 @en Session token
+     * @param newConnId - @zh 新连接 ID @en New connection ID
+     * @param conn - @zh 新连接 @en New connection
+     * @returns @zh 房间和玩家实例或 null @en Room and player instance or null
+     */
+    async reconnect(
+        sessionToken: string,
+        newConnId: string,
+        conn: any
+    ): Promise<{ room: Room; player: Player } | null> {
+        const info = this._sessionToPlayer.get(sessionToken);
+        if (!info) return null;
+
+        const room = this._rooms.get(info.roomId);
+        if (!room) {
+            this._sessionToPlayer.delete(sessionToken);
+            return null;
+        }
+
+        const player = room._reconnectPlayer(sessionToken, newConnId, conn);
+        if (!player) return null;
+
+        // 更新连接 ID 映射
+        this._playerToRoom.delete(info.playerId);
+        this._playerToRoom.set(newConnId, info.roomId);
+        this._sessionToPlayer.set(sessionToken, { playerId: newConnId, roomId: info.roomId });
+
+        logger.info(`Player reconnected to ${info.roomId} (session: ${sessionToken.slice(0, 8)}...)`);
+        return { room, player };
     }
 
     /**
@@ -351,8 +400,9 @@ export class RoomManager {
      * @param roomId - 房间 ID | Room ID
      * @param player - 玩家实例 | Player instance
      */
-    protected _onPlayerJoined(playerId: string, roomId: string, _player: Player): void {
+    protected _onPlayerJoined(playerId: string, roomId: string, player: Player): void {
         this._playerToRoom.set(playerId, roomId);
+        this._sessionToPlayer.set(player.sessionToken, { playerId, roomId });
     }
 
     /**
