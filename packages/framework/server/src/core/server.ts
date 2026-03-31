@@ -6,7 +6,7 @@
 import * as path from 'node:path';
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { serve, type RpcServer } from '@esengine/rpc/server';
-import { rpc } from '@esengine/rpc';
+import { rpc, RpcError, ErrorCode } from '@esengine/rpc';
 import { createLogger } from '../logger.js';
 import type {
     ServerConfig,
@@ -261,7 +261,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 if (existingRoom) {
                     const policy = opts.duplicateJoinPolicy ?? 'auto-leave';
                     if (policy === 'reject') {
-                        throw new Error('Already in a room. Leave current room first.');
+                        throw new RpcError(ErrorCode.INVALID_REQUEST, 'Already in a room. Leave current room first.');
                     }
                     await roomManager.leave(conn.id, 'joining_other_room');
                 }
@@ -276,7 +276,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 if (roomId) {
                     const result = await roomManager.joinById(roomId, conn.id, conn, playerData);
                     if (!result) {
-                        throw new Error('Failed to join room');
+                        throw new RpcError(ErrorCode.NOT_FOUND, 'Room not found or is full/locked');
                     }
                     return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
                 }
@@ -291,7 +291,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                             options
                         );
                         if (!result) {
-                            throw new Error('Failed to join or create room');
+                            throw new RpcError(ErrorCode.NOT_FOUND, 'Failed to join or create room. Room type may not be defined.');
                         }
                         if ('redirect' in result) {
                             // 发送重定向消息给客户端
@@ -307,12 +307,12 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     // 单机模式
                     const result = await roomManager.joinOrCreate(roomType, conn.id, conn, options, playerData);
                     if (!result) {
-                        throw new Error('Failed to join or create room');
+                        throw new RpcError(ErrorCode.NOT_FOUND, 'Failed to join or create room. Room type may not be defined.');
                     }
                     return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
                 }
 
-                throw new Error('roomType or roomId required');
+                throw new RpcError(ErrorCode.INVALID_REQUEST, 'roomType or roomId is required');
             };
 
             // 内置 LeaveRoom API
@@ -325,12 +325,12 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             apiHandlersObj['ReconnectRoom'] = async (input: any, conn) => {
                 const { sessionToken } = input as { sessionToken: string };
                 if (!sessionToken) {
-                    throw new Error('sessionToken is required');
+                    throw new RpcError(ErrorCode.INVALID_REQUEST, 'sessionToken is required');
                 }
 
                 const result = await roomManager.reconnect(sessionToken, conn.id, conn);
                 if (!result) {
-                    throw new Error('Reconnection failed: invalid session or room no longer exists');
+                    throw new RpcError(ErrorCode.NOT_FOUND, 'Reconnection failed: invalid session or room no longer exists');
                 }
 
                 return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
@@ -340,11 +340,11 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             apiHandlersObj['Authenticate'] = async (input: any, conn) => {
                 const { token } = input as { token: unknown };
                 if (!token) {
-                    throw new Error('token is required');
+                    throw new RpcError(ErrorCode.INVALID_REQUEST, 'token is required');
                 }
 
                 if (!gameServer.authenticate) {
-                    throw new Error('Authentication not configured. Use withAuth() to enable.');
+                    throw new RpcError(ErrorCode.INVALID_REQUEST, 'Authentication not configured. Use withAuth() to enable.');
                 }
 
                 const result = await gameServer.authenticate(conn as ServerConnection, token);
@@ -377,12 +377,12 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             apiHandlersObj['GetRoomInfo'] = async (input) => {
                 const { roomId } = input as { roomId: string };
                 if (!roomId) {
-                    throw new Error('roomId is required');
+                    throw new RpcError(ErrorCode.INVALID_REQUEST, 'roomId is required');
                 }
 
                 const room = roomManager.getRoom(roomId);
                 if (!room) {
-                    throw new Error(`Room not found: ${roomId}`);
+                    throw new RpcError(ErrorCode.NOT_FOUND, `Room not found: ${roomId}`);
                 }
 
                 return {
@@ -412,7 +412,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                             const pathStr = result.error.path.length > 0
                                 ? ` at "${result.error.path.join('.')}"`
                                 : '';
-                            throw new Error(`Validation failed${pathStr}: ${result.error.message}`);
+                            throw new RpcError(ErrorCode.INVALID_REQUEST, `Validation failed${pathStr}: ${result.error.message}`);
                         }
                         return handler.definition.handler(result.data, ctx);
                     }
