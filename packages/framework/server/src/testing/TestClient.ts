@@ -56,9 +56,18 @@ export interface JoinRoomResult {
  * @en Received message record
  */
 export interface ReceivedMessage {
-    type: string
-    data: unknown
-    timestamp: number
+    type: string;
+    data: unknown;
+    timestamp: number;
+}
+
+/**
+ * @zh 收到的二进制消息记录
+ * @en Received binary message record
+ */
+export interface ReceivedBinaryMessage {
+    data: Uint8Array;
+    timestamp: number;
 }
 
 // ============================================================================
@@ -126,6 +135,7 @@ export class TestClient {
     private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>();
     private readonly _receivedMessages: ReceivedMessage[] = [];
     private readonly _roomMessages: ReceivedMessage[] = [];
+    private readonly _binaryMessages: ReceivedBinaryMessage[] = [];
 
     constructor(port: number, options: TestClientOptions = {}) {
         this._port = port;
@@ -191,6 +201,14 @@ export class TestClient {
         return this._roomMessages;
     }
 
+    /**
+     * @zh 收到的所有二进制消息
+     * @en All received binary messages
+     */
+    get binaryMessages(): ReadonlyArray<ReceivedBinaryMessage> {
+        return this._binaryMessages;
+    }
+
     // ========================================================================
     // Connection | 连接管理
     // ========================================================================
@@ -198,10 +216,16 @@ export class TestClient {
     /**
      * @zh 连接到服务器
      * @en Connect to server
+     *
+     * @param query - @zh 连接时附带的查询参数（如 token）@en Query params to attach on connect (e.g. token)
      */
-    connect(): Promise<this> {
+    connect(query?: Record<string, string>): Promise<this> {
         return new Promise((resolve, reject) => {
-            const url = `ws://localhost:${this._port}`;
+            let url = `ws://localhost:${this._port}`;
+            if (query) {
+                const qs = new URLSearchParams(query).toString();
+                url += `?${qs}`;
+            }
             this._ws = new WebSocket(url);
 
             const timeout = setTimeout(() => {
@@ -298,6 +322,17 @@ export class TestClient {
         this._currentPlayerId = result.playerId;
         this._sessionToken = result.sessionToken ?? token;
         return result;
+    }
+
+    /**
+     * @zh 认证（调用内置 Authenticate API）
+     * @en Authenticate (calls built-in Authenticate API)
+     *
+     * @param token - @zh 认证令牌（JWT token / session ID 等）@en Auth token (JWT / session ID etc.)
+     * @returns @zh 认证结果 @en Auth result
+     */
+    async authenticate(token: string): Promise<{ success: boolean; user?: unknown; error?: string }> {
+        return this.call('Authenticate', { token });
     }
 
     /**
@@ -505,6 +540,7 @@ export class TestClient {
     clearMessages(): void {
         this._receivedMessages.length = 0;
         this._roomMessages.length = 0;
+        this._binaryMessages.length = 0;
     }
 
     /**
@@ -523,6 +559,7 @@ export class TestClient {
     // ========================================================================
 
     private _handleMessage(raw: Buffer): void {
+        // 尝试 JSON RPC 解码；如果失败则视为二进制帧
         try {
             const packet = this._codec.decode(raw) as unknown[];
             const type = packet[0] as number;
@@ -538,8 +575,33 @@ export class TestClient {
                     this._handleMsg([packet[0], packet[1], packet[2]] as [number, string, unknown]);
                     break;
             }
-        } catch (err) {
-            logger.error('Failed to handle message:', err);
+        } catch {
+            // JSON 解码失败 → 当作二进制帧处理
+            this._handleBinaryMessage(raw);
+        }
+    }
+
+    private _handleBinaryMessage(data: Buffer): void {
+        const now = Date.now();
+        const uint8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+
+        this._receivedMessages.push({
+            type: '$binary',
+            data: uint8,
+            timestamp: now
+        });
+
+        this._binaryMessages.push({ data: uint8, timestamp: now });
+
+        const handlers = this._msgHandlers.get('$binary');
+        if (handlers) {
+            for (const handler of handlers) {
+                try {
+                    handler(uint8);
+                } catch (err) {
+                    logger.error('Binary handler error:', err);
+                }
+            }
         }
     }
 
