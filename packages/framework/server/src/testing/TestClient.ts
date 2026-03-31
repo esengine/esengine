@@ -46,8 +46,9 @@ export interface TestClientOptions {
  * @en Room join result
  */
 export interface JoinRoomResult {
-    roomId: string
-    playerId: string
+    roomId: string;
+    playerId: string;
+    sessionToken?: string;
 }
 
 /**
@@ -119,6 +120,7 @@ export class TestClient {
     private _connected = false;
     private _currentRoomId: string | null = null;
     private _currentPlayerId: string | null = null;
+    private _sessionToken: string | null = null;
 
     private readonly _pendingCalls = new Map<number, PendingCall>();
     private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>();
@@ -158,6 +160,14 @@ export class TestClient {
      */
     get playerId(): string | null {
         return this._currentPlayerId;
+    }
+
+    /**
+     * @zh 当前会话令牌（用于重连）
+     * @en Current session token (for reconnection)
+     */
+    get sessionToken(): string | null {
+        return this._sessionToken;
     }
 
     /**
@@ -256,6 +266,7 @@ export class TestClient {
         const result = await this.call<JoinRoomResult>('JoinRoom', { roomType, options });
         this._currentRoomId = result.roomId;
         this._currentPlayerId = result.playerId;
+        this._sessionToken = result.sessionToken ?? null;
         return result;
     }
 
@@ -267,6 +278,25 @@ export class TestClient {
         const result = await this.call<JoinRoomResult>('JoinRoom', { roomId });
         this._currentRoomId = result.roomId;
         this._currentPlayerId = result.playerId;
+        this._sessionToken = result.sessionToken ?? null;
+        return result;
+    }
+
+    /**
+     * @zh 使用 session token 重连房间
+     * @en Reconnect to room using session token
+     *
+     * @param sessionToken - @zh 会话令牌（不传则使用上次加入时保存的）@en Session token (uses saved one if not provided)
+     */
+    async reconnectRoom(sessionToken?: string): Promise<JoinRoomResult> {
+        const token = sessionToken ?? this._sessionToken;
+        if (!token) {
+            throw new Error('No session token available for reconnection');
+        }
+        const result = await this.call<JoinRoomResult>('ReconnectRoom', { sessionToken: token });
+        this._currentRoomId = result.roomId;
+        this._currentPlayerId = result.playerId;
+        this._sessionToken = result.sessionToken ?? token;
         return result;
     }
 

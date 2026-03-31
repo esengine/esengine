@@ -36,7 +36,8 @@ const DEFAULT_CONFIG: Required<Omit<ServerConfig, 'onStart' | 'onConnect' | 'onD
     msgDir: 'src/msg',
     httpDir: 'src/http',
     httpPrefix: '/api',
-    tickRate: 20
+    tickRate: 20,
+    duplicateJoinPolicy: 'auto-leave'
 };
 
 /**
@@ -138,6 +139,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
         // 内置 API
         JoinRoom: rpc.api(),
         LeaveRoom: rpc.api(),
+        ReconnectRoom: rpc.api(),
         ListRooms: rpc.api(),
         GetRoomInfo: rpc.api()
     };
@@ -253,10 +255,20 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
 
             // 内置 JoinRoom API
             apiHandlersObj['JoinRoom'] = async (input: any, conn) => {
+                // 检查重复加入
+                const existingRoom = roomManager.getPlayerRoom(conn.id);
+                if (existingRoom) {
+                    const policy = opts.duplicateJoinPolicy ?? 'auto-leave';
+                    if (policy === 'reject') {
+                        throw new Error('Already in a room. Leave current room first.');
+                    }
+                    await roomManager.leave(conn.id, 'joining_other_room');
+                }
+
                 const { roomType, roomId, options } = input as {
-                    roomType?: string
-                    roomId?: string
-                    options?: Record<string, unknown>
+                    roomType?: string;
+                    roomId?: string;
+                    options?: Record<string, unknown>;
                 };
 
                 if (roomId) {
@@ -264,7 +276,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     if (!result) {
                         throw new Error('Failed to join room');
                     }
-                    return { roomId: result.room.id, playerId: result.player.id };
+                    return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
                 }
 
                 if (roomType) {
@@ -287,7 +299,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                             } as never);
                             return { redirect: result.redirect };
                         }
-                        return { roomId: result.room.id, playerId: result.player.id };
+                        return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
                     }
 
                     // 单机模式
@@ -295,7 +307,7 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                     if (!result) {
                         throw new Error('Failed to join or create room');
                     }
-                    return { roomId: result.room.id, playerId: result.player.id };
+                    return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
                 }
 
                 throw new Error('roomType or roomId required');
@@ -305,6 +317,21 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
             apiHandlersObj['LeaveRoom'] = async (_input, conn) => {
                 await roomManager.leave(conn.id);
                 return { success: true };
+            };
+
+            // 内置 ReconnectRoom API
+            apiHandlersObj['ReconnectRoom'] = async (input: any, conn) => {
+                const { sessionToken } = input as { sessionToken: string };
+                if (!sessionToken) {
+                    throw new Error('sessionToken is required');
+                }
+
+                const result = await roomManager.reconnect(sessionToken, conn.id, conn);
+                if (!result) {
+                    throw new Error('Reconnection failed: invalid session or room no longer exists');
+                }
+
+                return { roomId: result.room.id, playerId: result.player.id, sessionToken: result.player.sessionToken };
             };
 
             // 内置 ListRooms API

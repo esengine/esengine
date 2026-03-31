@@ -117,6 +117,21 @@ export interface ServerConfig {
      * ```
      */
     distributed?: DistributedConfig;
+
+    /**
+     * @zh 重复加入房间策略
+     * @en Duplicate join policy
+     *
+     * @zh 当玩家已在房间中时再次调用 JoinRoom 的行为：
+     * - `'auto-leave'`: 自动离开当前房间再加入新房间（默认）
+     * - `'reject'`: 拒绝加入，抛出错误
+     * @en Behavior when a player calls JoinRoom while already in a room:
+     * - `'auto-leave'`: Auto-leave current room before joining new one (default)
+     * - `'reject'`: Reject the join with an error
+     *
+     * @default 'auto-leave'
+     */
+    duplicateJoinPolicy?: 'auto-leave' | 'reject';
 }
 
 // ============================================================================
