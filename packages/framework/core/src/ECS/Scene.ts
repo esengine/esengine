@@ -1326,6 +1326,14 @@ export class Scene implements IScene {
     /**
      * 获取场景的调试信息
      */
+    /**
+     * @zh 获取场景的字符串表示
+     * @en Get string representation of the scene
+     */
+    public toString(): string {
+        return `Scene[${this.name}, entities: ${this.entities.count}, systems: ${this.systems.length}]`;
+    }
+
     public getDebugInfo(): {
         name: string;
         entityCount: number;
@@ -1469,7 +1477,7 @@ export class Scene implements IScene {
      */
     public serializeIncremental(options?: IncrementalSerializationOptions): IncrementalSnapshot {
         if (!this._incrementalBaseSnapshot) {
-            throw new Error('必须先调用 createIncrementalSnapshot() 创建基础快照');
+            throw new Error('Must call createIncrementalSnapshot() first | 必须先调用 createIncrementalSnapshot() 创建基础快照');
         }
 
         return IncrementalSerializer.computeIncremental(this, this._incrementalBaseSnapshot as Parameters<typeof IncrementalSerializer.computeIncremental>[1], options);

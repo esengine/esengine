@@ -1,5 +1,6 @@
 import type { IComponent } from '../Types';
 import { Int32 } from './Core/SoAStorage';
+import { getComponentInstanceTypeName } from './Decorators';
 
 /**
  * @zh 游戏组件基类
@@ -167,4 +168,13 @@ export abstract class Component implements IComponent {
      * ```
      */
     public onDeserialized(): void | Promise<void> {}
+
+    /**
+     * @zh 获取组件的字符串表示
+     * @en Get string representation of the component
+     */
+    public toString(): string {
+        const typeName = getComponentInstanceTypeName(this);
+        return `${typeName}[id=${this.id}, entityId=${this.entityId}]`;
+    }
 }
