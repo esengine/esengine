@@ -75,8 +75,9 @@ await server.start()
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `port` | `number` | `3000` | WebSocket port |
+| `port` | `number` | `3000` | WebSocket port. Set to `0` to auto-assign a random available port |
 | `tickRate` | `number` | `20` | Global tick rate (Hz) |
+| `duplicateJoinPolicy` | `'auto-leave' \| 'reject'` | `'auto-leave'` | Behavior when a player calls JoinRoom while already in a room. `'auto-leave'` automatically leaves the current room first; `'reject'` throws an error |
 | `apiDir` | `string` | `'src/api'` | API handlers directory |
 | `msgDir` | `string` | `'src/msg'` | Message handlers directory |
 | `httpDir` | `string` | `'src/http'` | HTTP routes directory |
@@ -85,6 +86,21 @@ await server.start()
 | `onStart` | `(port) => void` | - | Start callback |
 | `onConnect` | `(conn) => void` | - | Connection callback |
 | `onDisconnect` | `(conn) => void` | - | Disconnect callback |
+
+### GameServer
+
+The object returned by `createServer()`:
+
+| Property / Method | Type | Description |
+|-------------------|------|-------------|
+| `server.port` | `number` (readonly) | Actual listening port. Useful when `port: 0` is used for auto-assignment |
+| `server.tick` | `number` (readonly) | Current tick count |
+| `server.connections` | `ReadonlyArray<ServerConnection>` | All active connections |
+| `server.define(name, RoomClass)` | `void` | Register a room type |
+| `server.start()` | `Promise<void>` | Start the server |
+| `server.stop()` | `Promise<void>` | Stop the server |
+| `server.broadcast(name, data)` | `void` | Broadcast to all connections |
+| `server.send(conn, name, data)` | `void` | Send to a specific connection |
 
 ## HTTP Routing
 
@@ -127,6 +143,8 @@ export class GameRoom extends Room<{ players: any[] }, PlayerData> {
     maxPlayers = 8
     tickRate = 20
     autoDispose = true
+    reconnectGracePeriod = 10000  // 10s reconnect window
+    metadata = { gameMode: 'deathmatch' }
 
     // Room state
     state = {
@@ -153,6 +171,14 @@ export class GameRoom extends Room<{ players: any[] }, PlayerData> {
         this.broadcast('Left', { playerId: player.id })
     }
 
+    onPlayerDisconnected(player: Player<PlayerData>) {
+        this.broadcast('PlayerOffline', { playerId: player.id })
+    }
+
+    onPlayerReconnected(player: Player<PlayerData>) {
+        this.broadcast('PlayerOnline', { playerId: player.id })
+    }
+
     onTick(dt: number) {
         // State synchronization
         this.broadcast('Sync', { players: this.state.players })
@@ -167,6 +193,13 @@ export class GameRoom extends Room<{ players: any[] }, PlayerData> {
     handleMove(data: MsgMove, player: Player<PlayerData>) {
         player.data.x = data.x
         player.data.y = data.y
+
+        // Broadcast to everyone except the sender
+        this.broadcast('Move', {
+            playerId: player.id,
+            x: data.x,
+            y: data.y,
+        }, { exclude: player })
     }
 
     @onMessage('Chat')
@@ -183,9 +216,11 @@ export class GameRoom extends Room<{ players: any[] }, PlayerData> {
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `maxPlayers` | `number` | `10` | Maximum players |
-| `tickRate` | `number` | `20` | Tick rate (Hz) |
-| `autoDispose` | `boolean` | `true` | Auto-dispose empty rooms |
+| `maxPlayers` | `number` | `16` | Maximum players |
+| `tickRate` | `number` | `0` | Tick rate (Hz), 0 = no auto tick |
+| `autoDispose` | `boolean` | `true` | Auto-dispose when empty |
+| `reconnectGracePeriod` | `number` | `0` | Reconnection grace period in milliseconds. Disconnected players can reconnect within this window. 0 = reconnection disabled |
+| `metadata` | `Record<string, unknown>` | `{}` | Room metadata, visible to clients via ListRooms and GetRoomInfo |
 
 ### Room API
 
@@ -196,12 +231,15 @@ class Room<TState, TPlayerData> {
     readonly playerCount: number  // Player count
     readonly isLocked: boolean    // Lock status
     state: TState                 // Room state
+    metadata: Record<string, unknown>  // Room metadata
 
     // Broadcast to all players
-    broadcast<T>(type: string, data: T): void
+    broadcast<T>(type: string, data: T, options?: {
+        exclude?: Player | Player[]
+    }): void
 
-    // Broadcast to all except one
-    broadcastExcept<T>(type: string, data: T, except: Player): void
+    // Broadcast to all except one (deprecated, use broadcast with exclude option)
+    broadcastExcept<T>(except: Player, type: string, data: T): void
 
     // Get player by ID
     getPlayer(id: string): Player | undefined
@@ -218,15 +256,34 @@ class Room<TState, TPlayerData> {
 }
 ```
 
+The `broadcast` method now supports an `exclude` option to skip specific players:
+
+```typescript
+// Broadcast to all
+this.broadcast('Chat', { text: 'hello' })
+
+// Exclude one player (e.g. the sender)
+this.broadcast('Move', data, { exclude: player })
+
+// Exclude multiple players
+this.broadcast('Event', data, { exclude: [player1, player2] })
+```
+
+> `broadcastExcept` is deprecated. Use `broadcast(type, data, { exclude: player })` instead.
+
 ### Lifecycle Methods
 
 | Method | Trigger | Purpose |
 |--------|---------|---------|
-| `onCreate()` | Room created | Initialize game state |
+| `onCreate(options?)` | Room created | Initialize game state |
 | `onJoin(player)` | Player joins | Welcome message, assign position |
-| `onLeave(player)` | Player leaves | Cleanup player data |
+| `onLeave(player, reason?)` | Player truly leaves (not just disconnected) | Cleanup player data |
+| `onPlayerDisconnected(player)` | Player disconnects (reconnect grace period active) | Notify others the player went offline |
+| `onPlayerReconnected(player)` | Player reconnects within grace period | Restore state, notify others |
 | `onTick(dt)` | Every frame | Game logic, state sync |
 | `onDispose()` | Before disposal | Save data, cleanup resources |
+
+`onPlayerDisconnected` only fires when `reconnectGracePeriod > 0`. The player is not yet removed from the room and can reconnect within the grace period. If the player does not reconnect in time, `onLeave` is called with the reason `'reconnect_timeout'`.
 
 ## Player Class
 
@@ -234,17 +291,26 @@ Player represents a connected player in a room.
 
 ```typescript
 class Player<TData = Record<string, unknown>> {
-    readonly id: string          // Player ID
-    readonly roomId: string      // Room ID
-    data: TData                  // Custom data
+    readonly id: string              // Player ID
+    readonly roomId: string          // Room ID
+    readonly sessionToken: string    // Session token (used for reconnection)
+    readonly connected: boolean      // Whether the player is currently online
+    data: TData                      // Custom data
 
     // Send message to this player
     send<T>(type: string, data: T): void
 
+    // Send binary data to this player
+    sendBinary(data: Uint8Array): void
+
     // Leave room
-    leave(): void
+    leave(reason?: string): void
 }
 ```
+
+- `sessionToken` is a unique token generated when the player joins. The client should store it and pass it to `ReconnectRoom` if the connection is lost.
+- `connected` is `true` when the player is online and `false` during the reconnection grace period after a disconnect.
+- `sendBinary` sends raw binary data over a native WebSocket binary frame. If the underlying transport does not support binary frames, it falls back to base64-encoded JSON.
 
 ## @onMessage Decorator
 
@@ -262,6 +328,146 @@ class GameRoom extends Room {
     @onMessage('Attack')
     handleAttack(data: { targetId: string }, player: Player) {
         // Handle attack
+    }
+}
+```
+
+## Built-in APIs
+
+The server automatically registers several built-in APIs. Clients call them via `client.call(name, data)`.
+
+### JoinRoom
+
+Join or create a room. Returns `roomId`, `playerId`, and `sessionToken`.
+
+```typescript
+// Join by room type (joins an available room or creates a new one)
+const result = await client.call('JoinRoom', {
+    roomType: 'game',
+    playerData: { name: 'Alice' },   // optional, passed to player.data
+    options: { mapName: 'desert' },  // optional, passed to onCreate
+})
+// result: { roomId, playerId, sessionToken }
+
+// Join by specific room ID
+const result = await client.call('JoinRoom', {
+    roomId: 'room_1',
+    playerData: { name: 'Bob' },
+})
+```
+
+The client should store `sessionToken` for reconnection.
+
+### LeaveRoom
+
+Leave the current room.
+
+```typescript
+await client.call('LeaveRoom', {})
+// result: { success: true }
+```
+
+### ReconnectRoom
+
+Reconnect to a room using a previously obtained session token.
+
+```typescript
+const result = await client.call('ReconnectRoom', {
+    sessionToken: savedSessionToken,
+})
+// result: { roomId, playerId, sessionToken }
+```
+
+Only succeeds if the room still exists and the player is within the reconnection grace period.
+
+### ListRooms
+
+List available rooms, optionally filtered by type. Returns room metadata.
+
+```typescript
+// List all rooms
+const { rooms } = await client.call('ListRooms', {})
+
+// Filter by type
+const { rooms } = await client.call('ListRooms', { type: 'game' })
+
+// Each room entry:
+// { roomId, playerCount, maxPlayers, locked, metadata }
+```
+
+### GetRoomInfo
+
+Get detailed information about a specific room.
+
+```typescript
+const info = await client.call('GetRoomInfo', { roomId: 'room_1' })
+// info: { roomId, playerCount, maxPlayers, locked, metadata, players: [{ id }] }
+```
+
+### Authenticate
+
+Authenticate a connection (requires the `withAuth` mixin to be configured on the server).
+
+```typescript
+const result = await client.call('Authenticate', { token: 'my-jwt-token' })
+// result: { success: true, user: { ... } }
+```
+
+## Reconnection
+
+To support reconnection, set `reconnectGracePeriod` on the room and store the `sessionToken` on the client.
+
+### Server Setup
+
+```typescript
+class GameRoom extends Room {
+    reconnectGracePeriod = 15000  // 15 seconds
+
+    onPlayerDisconnected(player: Player) {
+        // Player went offline but is not removed yet
+        console.log(`${player.id} disconnected, waiting for reconnect...`)
+        this.broadcast('PlayerOffline', { playerId: player.id })
+    }
+
+    onPlayerReconnected(player: Player) {
+        // Player came back
+        console.log(`${player.id} reconnected!`)
+        this.broadcast('PlayerOnline', { playerId: player.id })
+    }
+
+    onLeave(player: Player, reason?: string) {
+        // Truly gone (voluntary leave, kicked, or grace period expired)
+        console.log(`${player.id} left: ${reason}`)
+    }
+}
+```
+
+### Client Usage
+
+```typescript
+const client = await connect('ws://localhost:3000')
+
+// Join room and save session token
+const { roomId, sessionToken } = await client.call('JoinRoom', {
+    roomType: 'game',
+})
+localStorage.setItem('sessionToken', sessionToken)
+
+// ... connection lost, client reconnects ...
+
+const newClient = await connect('ws://localhost:3000')
+const saved = localStorage.getItem('sessionToken')
+if (saved) {
+    try {
+        const result = await newClient.call('ReconnectRoom', {
+            sessionToken: saved,
+        })
+        console.log('Reconnected to room:', result.roomId)
+    } catch (e) {
+        // Grace period expired or room no longer exists
+        console.log('Reconnection failed, joining new room')
+        const result = await newClient.call('JoinRoom', { roomType: 'game' })
+        localStorage.setItem('sessionToken', result.sessionToken)
     }
 }
 ```
@@ -396,6 +602,7 @@ export interface JoinRoomReq {
 export interface JoinRoomRes {
     roomId: string
     playerId: string
+    sessionToken: string
 }
 
 // Game messages
@@ -428,11 +635,18 @@ import { connect } from '@esengine/rpc/client'
 
 const client = await connect('ws://localhost:3000')
 
-// Join room
-const { roomId, playerId } = await client.call('JoinRoom', {
+// Join room (now returns sessionToken)
+const { roomId, playerId, sessionToken } = await client.call('JoinRoom', {
     roomType: 'game',
-    playerName: 'Alice',
+    playerData: { name: 'Alice' },
 })
+
+// Store sessionToken for reconnection
+localStorage.setItem('sessionToken', sessionToken)
+
+// List available rooms
+const { rooms } = await client.call('ListRooms', { type: 'game' })
+console.log('Available rooms:', rooms)
 
 // Listen for broadcasts
 client.onMessage('Sync', (data) => {
@@ -454,15 +668,15 @@ client.send('RoomMessage', {
 
 `ECSRoom` is a room base class with ECS World support, suitable for games that need ECS architecture.
 
+ECSRoom automatically initializes `Core` if it has not been created yet, so you do not need to call `Core.create()` manually.
+
 ### Server Startup
 
 ```typescript
-import { Core } from '@esengine/ecs-framework';
 import { createServer } from '@esengine/server';
 import { GameRoom } from './rooms/GameRoom.js';
 
-// Initialize Core
-Core.create();
+// No need to call Core.create() -- ECSRoom handles it automatically
 
 // Global game loop
 setInterval(() => Core.update(1/60), 16);
@@ -552,10 +766,12 @@ Mark component fields that need network synchronization:
    - Server should validate all client inputs
    - Never trust client-sent data
 
-4. **Disconnect Handling**
-   - Implement reconnection logic
-   - Use `onLeave` to save player state
+4. **Reconnection Handling**
+   - Set `reconnectGracePeriod` to enable reconnection
+   - Use `onPlayerDisconnected` / `onPlayerReconnected` to manage player state during disconnects
+   - Store `sessionToken` on the client for `ReconnectRoom`
 
 5. **Room Lifecycle**
    - Use `autoDispose` to clean up empty rooms
    - Save important data in `onDispose`
+   - Use `metadata` to expose room info to the lobby (ListRooms)
