@@ -264,7 +264,7 @@ export interface IStateMachine<TState extends string = string, TContext = unknow
      *
      * @param from - @zh 源状态 @en Source state
      */
-    getTransitionsFrom(from: TState): TransitionConfig<TState, TContext>[];
+    getTransitionsFrom(from: TState): ReadonlyArray<TransitionConfig<TState, TContext>>;
 
     // =========================================================================
     // 转换操作 | Transition Operations
@@ -354,11 +354,17 @@ export interface IStateMachine<TState extends string = string, TContext = unknow
      * @zh 获取状态历史
      * @en Get state history
      */
-    getHistory(): StateChangeEvent<TState>[];
+    getHistory(): ReadonlyArray<StateChangeEvent<TState>>;
 
     /**
      * @zh 清除历史
      * @en Clear history
      */
     clearHistory(): void;
+
+    /**
+     * @zh 销毁状态机，释放所有监听器引用
+     * @en Dispose state machine, release all listener references
+     */
+    dispose(): void;
 }
