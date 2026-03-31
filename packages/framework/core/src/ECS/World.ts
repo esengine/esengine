@@ -479,13 +479,13 @@ export class World {
      */
     private validateSceneName(sceneName: string): void {
         if (!sceneName?.trim()) {
-            throw new Error('Scene name不能为空');
+            throw new Error('Scene name cannot be empty | Scene name不能为空');
         }
         if (this._scenes.has(sceneName)) {
-            throw new Error(`Scene name '${sceneName}' 已存在于World '${this.name}' 中`);
+            throw new Error(`Scene '${sceneName}' already exists in World '${this.name}' | Scene '${sceneName}' 已存在于World '${this.name}' 中`);
         }
         if (this._scenes.size >= this._config.maxScenes) {
-            throw new Error(`World '${this.name}' 已达到最大Scene数量限制: ${this._config.maxScenes}`);
+            throw new Error(`World '${this.name}' maximum Scene limit reached: ${this._config.maxScenes} | 已达到最大Scene数量限制`);
         }
     }
 

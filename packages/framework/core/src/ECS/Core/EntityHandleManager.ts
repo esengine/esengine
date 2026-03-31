@@ -270,7 +270,7 @@ export class EntityHandleManager {
         if (newSize > MAX_ENTITIES) {
             newSize = MAX_ENTITIES;
             if (minIndex >= newSize) {
-                throw new Error(`EntityHandleManager: 超过最大实体数量 ${MAX_ENTITIES}`);
+                throw new Error(`EntityHandleManager: max entity limit reached ${MAX_ENTITIES} | 超过最大实体数量 ${MAX_ENTITIES}`);
             }
         }
 

@@ -77,7 +77,7 @@ export type SerializationMetadata = {
 export function Serializable(options: SerializableOptions) {
     return function <T extends new (...args: any[]) => Component>(target: T): T {
         if (!options || typeof options.version !== 'number') {
-            throw new Error('Serializable装饰器必须提供有效的版本号');
+            throw new Error('Serializable decorator requires a valid version number | Serializable装饰器必须提供有效的版本号');
         }
 
         // 检查是否有自己的元数据（不是从父类继承的）

@@ -840,7 +840,7 @@ export class QuerySystem {
      */
     public createReactiveQuery(componentTypes: ComponentType[], config?: ReactiveQueryConfig): ReactiveQuery {
         if (!componentTypes || componentTypes.length === 0) {
-            throw new Error('组件类型列表不能为空');
+            throw new Error('Component type list cannot be empty | 组件类型列表不能为空');
         }
 
         const mask = this.createComponentMask(componentTypes);

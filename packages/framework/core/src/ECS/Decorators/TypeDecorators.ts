@@ -116,7 +116,7 @@ export type ComponentOptions = {
 export function ECSComponent(typeName: string, options?: ComponentOptions) {
     return function <T extends ComponentType<Component>>(target: T): T {
         if (!typeName || typeof typeName !== 'string') {
-            throw new Error('ECSComponent装饰器必须提供有效的类型名称');
+            throw new Error('ECSComponent decorator requires a valid type name | ECSComponent装饰器必须提供有效的类型名称');
         }
 
         // 获取可写的元数据对象
@@ -215,7 +215,7 @@ export type SystemMetadata = {
 export function ECSSystem(typeName: string, metadata?: SystemMetadata) {
     return function <T extends SystemConstructor>(target: T): T {
         if (!typeName || typeof typeName !== 'string') {
-            throw new Error('ECSSystem装饰器必须提供有效的类型名称');
+            throw new Error('ECSSystem decorator requires a valid type name | ECSSystem装饰器必须提供有效的类型名称');
         }
 
         // 获取可写的元数据对象

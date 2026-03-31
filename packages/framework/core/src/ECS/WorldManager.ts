@@ -429,13 +429,13 @@ export class WorldManager implements IService {
      */
     private validateWorldName(worldName: string): void {
         if (!worldName?.trim()) {
-            throw new Error('World name不能为空');
+            throw new Error('World name cannot be empty | World name不能为空');
         }
         if (this._worlds.has(worldName)) {
-            throw new Error(`World name '${worldName}' 已存在`);
+            throw new Error(`World '${worldName}' already exists | World '${worldName}' 已存在`);
         }
         if (this._worlds.size >= this._config.maxWorlds) {
-            throw new Error(`已达到最大World数量限制: ${this._config.maxWorlds}`);
+            throw new Error(`Maximum World limit reached: ${this._config.maxWorlds} | 已达到最大World数量限制: ${this._config.maxWorlds}`);
         }
     }
 

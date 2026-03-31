@@ -437,7 +437,7 @@ export abstract class WorkerEntitySystem<TEntityData = unknown> extends EntitySy
     private extractFunctionBody(methodStr: string): string {
         const match = methodStr.match(/\{([\s\S]*)\}/);
         if (!match || match[1] === undefined) {
-            throw new Error('无法解析 workerProcess 方法');
+            throw new Error('Cannot resolve workerProcess method | 无法解析 workerProcess 方法');
         }
         return match[1];
     }
