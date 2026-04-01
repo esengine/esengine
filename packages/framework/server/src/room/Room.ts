@@ -49,7 +49,7 @@ const MESSAGE_HANDLERS = Symbol('messageHandlers');
  * }
  * ```
  */
-export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> {
+export abstract class Room<TState = unknown, TPlayerData = Record<string, unknown>> {
     // ========================================================================
     // 配置 | Configuration
     // ========================================================================
@@ -322,7 +322,6 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
 
         this._stopTick();
 
-        // 清理断线等待
         for (const { timer } of this._disconnectedPlayers.values()) {
             clearTimeout(timer);
         }
@@ -405,7 +404,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
             }, this.reconnectGracePeriod);
 
             this._disconnectedPlayers.set(player.sessionToken, { player, timer });
-            this.onPlayerDisconnected(player);
+            await this.onPlayerDisconnected(player);
             return;
         }
 
@@ -423,7 +422,6 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
 
         this._players.delete(id);
 
-        // 清理断线映射
         this._disconnectedPlayers.delete(player.sessionToken);
 
         await this.onLeave(player, reason);
@@ -438,7 +436,7 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
      * @en Reconnect a player
      * @internal
      */
-    _reconnectPlayer(sessionToken: string, newConnId: string, conn: any): Player<TPlayerData> | null {
+    async _reconnectPlayer(sessionToken: string, newConnId: string, conn: any): Promise<Player<TPlayerData> | null> {
         const entry = this._disconnectedPlayers.get(sessionToken);
         if (!entry) return null;
 
@@ -450,14 +448,13 @@ export abstract class Room<TState = any, TPlayerData = Record<string, unknown>> 
 
         player._setConnection(conn, this._sendFn!, this._sendBinaryFn ?? undefined);
 
-        // 更新 _players 映射到新的 connId
         if (oldId !== newConnId) {
             this._players.delete(oldId);
             (player as { id: string }).id = newConnId;
             this._players.set(newConnId, player);
         }
 
-        this.onPlayerReconnected(player);
+        await this.onPlayerReconnected(player);
         return player;
     }
 

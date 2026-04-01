@@ -134,16 +134,13 @@ export class RoomManager {
         options?: RoomOptions,
         playerData?: Record<string, unknown>
     ): Promise<{ room: Room; player: Player } | null> {
-        // 查找可加入的房间 | Find available room
         let room = this._findAvailableRoom(name);
 
-        // 没有则创建 | Create if none exists
         if (!room) {
             room = await this.create(name, options);
             if (!room) return null;
         }
 
-        // 加入房间 | Join room
         const player = await room._addPlayer(playerId, conn, playerData);
         if (!player) return null;
 
@@ -231,10 +228,9 @@ export class RoomManager {
             return null;
         }
 
-        const player = room._reconnectPlayer(sessionToken, newConnId, conn);
+        const player = await room._reconnectPlayer(sessionToken, newConnId, conn);
         if (!player) return null;
 
-        // 更新连接 ID 映射
         this._playerToRoom.delete(info.playerId);
         this._playerToRoom.set(newConnId, info.roomId);
         this._sessionToPlayer.set(sessionToken, { playerId: newConnId, roomId: info.roomId });
@@ -416,5 +412,13 @@ export class RoomManager {
      */
     protected _onPlayerLeft(playerId: string, _roomId: string): void {
         this._playerToRoom.delete(playerId);
+
+        // 清理 session 映射，防止内存泄漏
+        for (const [token, info] of this._sessionToPlayer) {
+            if (info.playerId === playerId) {
+                this._sessionToPlayer.delete(token);
+                break;
+            }
+        }
     }
 }
