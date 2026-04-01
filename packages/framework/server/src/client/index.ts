@@ -26,11 +26,9 @@
  * await client.joinRoom('game');
  *
  * // 消息名有自动补全，data 有类型推断
- * client.sendToRoom('Chat', { text: 'Hello!' });   // ✓ 类型安全
- * client.sendToRoom('Chatt', { text: 'Hello!' });   // ✗ 编译报错
- *
+ * client.sendToRoom('Chat', { text: 'Hello!' });
  * client.onRoomMessage('Sync', (data) => {
- *     data.players.forEach(p => move(p.id, p.x, p.y));  // ✓ 自动推断
+ *     data.players.forEach(p => move(p.id, p.x, p.y));
  * });
  *
  * // 3. 服务端使用同一协议
@@ -120,10 +118,7 @@ export interface GameClientOptions {
 /** @zh 取消订阅函数 @en Unsubscribe function */
 export type Unsubscribe = () => void;
 
-/**
- * @zh 默认消息映射（无类型约束）
- * @en Default message map (no type constraints)
- */
+/** @zh 默认消息映射 @en Default message map */
 export type DefaultMessages = Record<string, unknown>;
 
 // =============================================================================
@@ -138,8 +133,11 @@ export type DefaultMessages = Record<string, unknown>;
  * sessionToken 管理和断线重连。
  * @en High-level client for game developers, auto-handles RoomMessage protocol
  * wrapping, sessionToken management and reconnection.
+ *
+ * @typeParam TMessages - @zh 房间消息类型映射 @en Room message type map
  */
 export class GameClient<TMessages extends Record<string, unknown> = DefaultMessages> {
+    // _rpc 在构造函数中通过 _buildRpc() 赋值，TypeScript 无法跟踪间接赋值
     private _rpc!: RpcClient<ServerProtocol>;
     private _state: GameClientState = 'disconnected';
     private _roomId: string | null = null;
@@ -148,14 +146,15 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     private _reconnectAttempts = 0;
     private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private _intentionalDisconnect = false;
+    private _reconnecting = false;
 
     private readonly _url: string;
+    private readonly _connectUrl: string;
     private readonly _timeout: number;
     private readonly _autoReconnect: boolean;
     private readonly _reconnectInterval: number;
     private readonly _maxReconnectAttempts: number;
     private readonly _webSocketFactory?: WebSocketFactory;
-    private readonly _query?: Record<string, string>;
 
     private readonly _connectedHandlers = new Set<() => void>();
     private readonly _disconnectedHandlers = new Set<(reason?: string) => void>();
@@ -170,7 +169,14 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
         this._reconnectInterval = options.reconnectInterval ?? 3000;
         this._maxReconnectAttempts = options.maxReconnectAttempts ?? 5;
         this._webSocketFactory = options.webSocketFactory;
-        this._query = options.query;
+
+        // 预计算 URL + query
+        let connectUrl = url;
+        if (options.query) {
+            const qs = new URLSearchParams(options.query).toString();
+            connectUrl += (url.includes('?') ? '&' : '?') + qs;
+        }
+        this._connectUrl = connectUrl;
         this._rpc = this._buildRpc();
     }
 
@@ -178,12 +184,16 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     // 属性 | Properties
     // ========================================================================
 
+    /** @zh 连接状态 @en Connection state */
     get state(): GameClientState { return this._state; }
+    /** @zh 是否已连接 @en Whether connected */
     get isConnected(): boolean { return this._state === 'connected'; }
+    /** @zh 当前房间 ID @en Current room ID */
     get roomId(): string | null { return this._roomId; }
+    /** @zh 当前玩家 ID @en Current player ID */
     get playerId(): string | null { return this._playerId; }
+    /** @zh 会话令牌 @en Session token */
     get sessionToken(): string | null { return this._sessionToken; }
-
     /** @zh 底层 RPC 客户端（用于自定义 API 调用） @en Underlying RPC client (for custom API calls) */
     get rpc(): RpcClient<ServerProtocol> { return this._rpc; }
 
@@ -191,6 +201,7 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     // 连接 | Connection
     // ========================================================================
 
+    /** @zh 连接到服务器 @en Connect to server */
     async connect(): Promise<this> {
         this._state = 'connecting';
         this._intentionalDisconnect = false;
@@ -198,17 +209,36 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
         return this;
     }
 
+    /** @zh 断开连接 @en Disconnect */
     disconnect(): void {
         this._intentionalDisconnect = true;
+        this._reconnecting = false;
         this._clearReconnectTimer();
         this._rpc.disconnect();
         this._state = 'disconnected';
+    }
+
+    /**
+     * @zh 销毁客户端，释放所有资源和监听器
+     * @en Destroy client, release all resources and listeners
+     */
+    dispose(): void {
+        this.disconnect();
+        this._connectedHandlers.clear();
+        this._disconnectedHandlers.clear();
+        this._reconnectingHandlers.clear();
+        this._reconnectedHandlers.clear();
+        this._roomMsgHandlers.clear();
+        this._roomId = null;
+        this._playerId = null;
+        this._sessionToken = null;
     }
 
     // ========================================================================
     // 认证 | Authentication
     // ========================================================================
 
+    /** @zh 认证 @en Authenticate */
     async authenticate(token: string): Promise<AuthResult> {
         return this._rpc.call('Authenticate', { token }) as Promise<AuthResult>;
     }
@@ -217,24 +247,29 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     // 房间操作 | Room Operations
     // ========================================================================
 
+    /** @zh 加入房间 @en Join room */
     async joinRoom(type: string, options?: Record<string, unknown>, playerData?: Record<string, unknown>): Promise<JoinRoomResult> {
         const result = await this._rpc.call('JoinRoom', { roomType: type, options, playerData }) as JoinRoomResult;
         this._applyJoinResult(result);
         return result;
     }
 
+    /** @zh 按 ID 加入房间 @en Join room by ID */
     async joinRoomById(roomId: string, playerData?: Record<string, unknown>): Promise<JoinRoomResult> {
         const result = await this._rpc.call('JoinRoom', { roomId, playerData }) as JoinRoomResult;
         this._applyJoinResult(result);
         return result;
     }
 
+    /** @zh 离开房间 @en Leave room */
     async leaveRoom(): Promise<void> {
         await this._rpc.call('LeaveRoom', {});
         this._roomId = null;
         this._playerId = null;
+        this._sessionToken = null;
     }
 
+    /** @zh 重连房间 @en Reconnect to room */
     async reconnectRoom(sessionToken?: string): Promise<JoinRoomResult> {
         const token = sessionToken ?? this._sessionToken;
         if (!token) {
@@ -245,11 +280,13 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
         return result;
     }
 
+    /** @zh 房间列表 @en List rooms */
     async listRooms(type?: string): Promise<RoomInfo[]> {
         const result = await this._rpc.call('ListRooms', { type }) as { rooms: RoomInfo[] };
         return result.rooms;
     }
 
+    /** @zh 房间详情 @en Room details */
     async getRoomInfo(roomId: string): Promise<RoomInfoDetail> {
         return this._rpc.call('GetRoomInfo', { roomId }) as Promise<RoomInfoDetail>;
     }
@@ -258,20 +295,14 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     // 消息 | Messaging
     // ========================================================================
 
-    /**
-     * @zh 发送房间消息
-     * @en Send room message
-     */
+    /** @zh 发送房间消息 @en Send room message */
     sendToRoom<K extends string & keyof TMessages>(type: K, data: TMessages[K]): void;
     sendToRoom(type: string, data: unknown): void;
     sendToRoom(type: string, data: unknown): void {
         this._rpc.send('RoomMessage', { type, data });
     }
 
-    /**
-     * @zh 监听房间消息
-     * @en Listen for room message
-     */
+    /** @zh 监听房间消息 @en Listen for room message */
     onRoomMessage<K extends string & keyof TMessages>(type: K, handler: (data: TMessages[K]) => void): Unsubscribe;
     onRoomMessage<T = unknown>(type: string, handler: (data: T) => void): Unsubscribe;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -281,15 +312,11 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
             handlers = new Set();
             this._roomMsgHandlers.set(type, handlers);
         }
-        const wrapped = handler as (data: unknown) => void;
-        handlers.add(wrapped);
-        return () => { handlers!.delete(wrapped); };
+        handlers.add(handler);
+        return () => { handlers!.delete(handler); };
     }
 
-    /**
-     * @zh 等待房间消息（类型安全）
-     * @en Wait for room message (type-safe)
-     */
+    /** @zh 等待房间消息 @en Wait for room message */
     waitForRoomMessage<K extends string & keyof TMessages>(type: K, timeout?: number): Promise<TMessages[K]>;
     waitForRoomMessage<T = unknown>(type: string, timeout?: number): Promise<T>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,21 +339,25 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     // 连接事件 | Connection Events
     // ========================================================================
 
+    /** @zh 连接成功 @en Connected */
     onConnected(handler: () => void): Unsubscribe {
         this._connectedHandlers.add(handler);
         return () => { this._connectedHandlers.delete(handler); };
     }
 
+    /** @zh 断线 @en Disconnected */
     onDisconnected(handler: (reason?: string) => void): Unsubscribe {
         this._disconnectedHandlers.add(handler);
         return () => { this._disconnectedHandlers.delete(handler); };
     }
 
+    /** @zh 正在重连 @en Reconnecting */
     onReconnecting(handler: (attempt: number) => void): Unsubscribe {
         this._reconnectingHandlers.add(handler);
         return () => { this._reconnectingHandlers.delete(handler); };
     }
 
+    /** @zh 重连成功 @en Reconnected */
     onReconnected(handler: () => void): Unsubscribe {
         this._reconnectedHandlers.add(handler);
         return () => { this._reconnectedHandlers.delete(handler); };
@@ -337,18 +368,20 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     // ========================================================================
 
     private _buildRpc(): RpcClient<ServerProtocol> {
-        let url = this._url;
-        if (this._query) {
-            const qs = new URLSearchParams(this._query).toString();
-            url += (url.includes('?') ? '&' : '?') + qs;
-        }
-
-        const client = new RpcClient(serverProtocol, url, {
+        const client = new RpcClient(serverProtocol, this._connectUrl, {
             timeout: this._timeout,
             autoReconnect: false,
             webSocketFactory: this._webSocketFactory,
-            onConnect: () => this._onRpcConnect(),
-            onDisconnect: (reason) => this._onRpcDisconnect(reason),
+            onConnect: () => {
+                if (!this._reconnecting) {
+                    this._onRpcConnect();
+                }
+            },
+            onDisconnect: (reason) => {
+                if (!this._reconnecting) {
+                    this._onRpcDisconnect(reason);
+                }
+            },
         });
 
         client.on('RoomMessage', (raw: unknown) => {
@@ -357,7 +390,9 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
                 const handlers = this._roomMsgHandlers.get(msg.type);
                 if (handlers) {
                     for (const h of handlers) {
-                        try { h(msg.data); } catch { /* handler error */ }
+                        try { h(msg.data); } catch (e) {
+                            console.warn('GameClient: room message handler error:', e);
+                        }
                     }
                 }
             }
@@ -377,7 +412,9 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     private _onRpcConnect(): void {
         this._state = 'connected';
         this._reconnectAttempts = 0;
-        for (const h of this._connectedHandlers) { try { h(); } catch { /* */ } }
+        for (const h of this._connectedHandlers) {
+            try { h(); } catch (e) { console.warn('GameClient: onConnected handler error:', e); }
+        }
     }
 
     private _onRpcDisconnect(reason?: string): void {
@@ -386,37 +423,67 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
             return;
         }
         this._state = 'disconnected';
-        for (const h of this._disconnectedHandlers) { try { h(reason); } catch { /* */ } }
+        for (const h of this._disconnectedHandlers) {
+            try { h(reason); } catch (e) { console.warn('GameClient: onDisconnected handler error:', e); }
+        }
         if (this._autoReconnect) {
             this._scheduleReconnect();
         }
     }
 
     private _scheduleReconnect(): void {
+        // 防止并发重连
+        if (this._intentionalDisconnect) return;
+        if (this._reconnectTimer) return;
         if (this._maxReconnectAttempts > 0 && this._reconnectAttempts >= this._maxReconnectAttempts) {
             return;
         }
+
         this._reconnectAttempts++;
         this._state = 'reconnecting';
-        for (const h of this._reconnectingHandlers) { try { h(this._reconnectAttempts); } catch { /* */ } }
+        for (const h of this._reconnectingHandlers) {
+            try { h(this._reconnectAttempts); } catch (e) { console.warn('GameClient: onReconnecting handler error:', e); }
+        }
 
         this._reconnectTimer = setTimeout(async () => {
+            this._reconnectTimer = null;
+
+            // 每个 await 后检查是否被取消
+            if (this._intentionalDisconnect) return;
+
             try {
+                this._reconnecting = true;
                 this._rpc = this._buildRpc();
                 await this._rpc.connect();
+
+                if (this._intentionalDisconnect) return;
+
+                // WebSocket 重连成功，尝试恢复房间
                 if (this._sessionToken) {
                     try {
                         const result = await this._rpc.call('ReconnectRoom', { sessionToken: this._sessionToken }) as JoinRoomResult;
+                        if (this._intentionalDisconnect) return;
                         this._applyJoinResult(result);
                     } catch {
+                        // 房间恢复失败（宽限期过期等），清除状态
                         this._roomId = null;
                         this._playerId = null;
                         this._sessionToken = null;
                     }
                 }
-                for (const h of this._reconnectedHandlers) { try { h(); } catch { /* */ } }
+
+                this._reconnecting = false;
+                this._state = 'connected';
+                this._reconnectAttempts = 0;
+
+                for (const h of this._reconnectedHandlers) {
+                    try { h(); } catch (e) { console.warn('GameClient: onReconnected handler error:', e); }
+                }
             } catch {
-                this._scheduleReconnect();
+                this._reconnecting = false;
+                if (!this._intentionalDisconnect) {
+                    this._scheduleReconnect();
+                }
             }
         }, this._reconnectInterval);
     }
