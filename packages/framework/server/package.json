@@ -30,6 +30,10 @@
     "./ecs": {
       "import": "./dist/ecs/index.js",
       "types": "./dist/ecs/index.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client/index.js",
+      "types": "./dist/client/index.d.ts"
     }
   },
   "files": [

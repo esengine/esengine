@@ -8,11 +8,12 @@ export default defineConfig({
         'src/ratelimit/index.ts',
         'src/testing/index.ts',
         'src/ecs/index.ts',
+        'src/client/index.ts',
     ],
     format: ['esm'],
     dts: true,
     clean: true,
     sourcemap: true,
-    external: ['ws', 'jsonwebtoken', '@esengine/rpc', '@esengine/rpc/codec', '@esengine/ecs-framework'],
+    external: ['ws', 'jsonwebtoken', '@esengine/rpc', '@esengine/rpc/client', '@esengine/rpc/codec', '@esengine/ecs-framework'],
     treeshake: true,
 });
