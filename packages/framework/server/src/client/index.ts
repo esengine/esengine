@@ -10,16 +10,35 @@
  *
  * @example
  * ```typescript
+ * // 1. 定义房间消息协议（客户端和服务端共享）
+ * // shared/messages.ts
+ * export interface GameMessages {
+ *     Chat: { from: string; text: string };
+ *     Move: { x: number; y: number };
+ *     Sync: { players: Array<{ id: string; x: number; y: number }> };
+ * }
+ *
+ * // 2. 客户端使用（类型安全）
  * import { createGameClient } from '@esengine/server/client';
+ * import type { GameMessages } from '../shared/messages';
  *
- * const client = await createGameClient('ws://localhost:3000');
- * await client.joinRoom('game', { map: 'desert' });
+ * const client = await createGameClient<GameMessages>('ws://localhost:3000');
+ * await client.joinRoom('game');
  *
- * client.onRoomMessage<{ text: string }>('Chat', (data) => {
- *     console.log(data.text);
+ * // 消息名有自动补全，data 有类型推断
+ * client.sendToRoom('Chat', { text: 'Hello!' });   // ✓ 类型安全
+ * client.sendToRoom('Chatt', { text: 'Hello!' });   // ✗ 编译报错
+ *
+ * client.onRoomMessage('Sync', (data) => {
+ *     data.players.forEach(p => move(p.id, p.x, p.y));  // ✓ 自动推断
  * });
  *
- * client.sendToRoom('Chat', { text: 'Hello!' });
+ * // 3. 服务端使用同一协议
+ * import type { GameMessages } from '../shared/messages';
+ * class GameRoom extends Room {
+ *     @onMessage('Chat')
+ *     handleChat(data: GameMessages['Chat'], player: Player) { ... }
+ * }
  * ```
  */
 
@@ -101,6 +120,12 @@ export interface GameClientOptions {
 /** @zh 取消订阅函数 @en Unsubscribe function */
 export type Unsubscribe = () => void;
 
+/**
+ * @zh 默认消息映射（无类型约束）
+ * @en Default message map (no type constraints)
+ */
+export type DefaultMessages = Record<string, unknown>;
+
 // =============================================================================
 // GameClient
 // =============================================================================
@@ -114,7 +139,7 @@ export type Unsubscribe = () => void;
  * @en High-level client for game developers, auto-handles RoomMessage protocol
  * wrapping, sessionToken management and reconnection.
  */
-export class GameClient {
+export class GameClient<TMessages extends Record<string, unknown> = DefaultMessages> {
     private _rpc!: RpcClient<ServerProtocol>;
     private _state: GameClientState = 'disconnected';
     private _roomId: string | null = null;
@@ -233,11 +258,24 @@ export class GameClient {
     // 消息 | Messaging
     // ========================================================================
 
+    /**
+     * @zh 发送房间消息
+     * @en Send room message
+     */
+    sendToRoom<K extends string & keyof TMessages>(type: K, data: TMessages[K]): void;
+    sendToRoom(type: string, data: unknown): void;
     sendToRoom(type: string, data: unknown): void {
         this._rpc.send('RoomMessage', { type, data });
     }
 
-    onRoomMessage<T = unknown>(type: string, handler: (data: T) => void): Unsubscribe {
+    /**
+     * @zh 监听房间消息
+     * @en Listen for room message
+     */
+    onRoomMessage<K extends string & keyof TMessages>(type: K, handler: (data: TMessages[K]) => void): Unsubscribe;
+    onRoomMessage<T = unknown>(type: string, handler: (data: T) => void): Unsubscribe;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onRoomMessage(type: string, handler: (data: any) => void): Unsubscribe {
         let handlers = this._roomMsgHandlers.get(type);
         if (!handlers) {
             handlers = new Set();
@@ -248,14 +286,21 @@ export class GameClient {
         return () => { handlers!.delete(wrapped); };
     }
 
-    waitForRoomMessage<T = unknown>(type: string, timeout?: number): Promise<T> {
+    /**
+     * @zh 等待房间消息（类型安全）
+     * @en Wait for room message (type-safe)
+     */
+    waitForRoomMessage<K extends string & keyof TMessages>(type: K, timeout?: number): Promise<TMessages[K]>;
+    waitForRoomMessage<T = unknown>(type: string, timeout?: number): Promise<T>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    waitForRoomMessage(type: string, timeout?: number): Promise<any> {
         const ms = timeout ?? this._timeout;
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
                 unsub();
                 reject(new Error(`Timeout waiting for '${type}' | 等待 '${type}' 超时`));
             }, ms);
-            const unsub = this.onRoomMessage<T>(type, (data) => {
+            const unsub = this.onRoomMessage(type, (data: unknown) => {
                 clearTimeout(timer);
                 unsub();
                 resolve(data);
@@ -392,8 +437,11 @@ export class GameClient {
  * @zh 创建并连接 GameClient
  * @en Create and connect GameClient
  */
-export async function createGameClient(url: string, options?: GameClientOptions): Promise<GameClient> {
-    const client = new GameClient(url, options);
+export async function createGameClient<TMessages extends Record<string, unknown> = DefaultMessages>(
+    url: string,
+    options?: GameClientOptions
+): Promise<GameClient<TMessages>> {
+    const client = new GameClient<TMessages>(url, options);
     await client.connect();
     return client;
 }
