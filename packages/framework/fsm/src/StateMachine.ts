@@ -361,15 +361,13 @@ export class StateMachine<TState extends string = string, TContext = unknown>
 
         const from = this._current;
 
-        // 退出当前状态
         this._fireExitCallbacks(from, to);
 
-        // 更新状态
         this._previous = from;
         this._current = to;
         this._stateElapsed = 0;
 
-        // 记录历史 + 通知变更监听器（独立于历史开关）
+        // 变更监听器独立于历史开关触发
         const event: StateChangeEvent<TState> = {
             from,
             to,
@@ -391,7 +389,6 @@ export class StateMachine<TState extends string = string, TContext = unknown>
             }
         }
 
-        // 进入新状态
         this._fireEnterCallbacks(to, from);
 
         this._isTransitioning = false;
