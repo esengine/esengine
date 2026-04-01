@@ -170,7 +170,6 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
         this._maxReconnectAttempts = options.maxReconnectAttempts ?? 5;
         this._webSocketFactory = options.webSocketFactory;
 
-        // 预计算 URL + query
         let connectUrl = url;
         if (options.query) {
             const qs = new URLSearchParams(options.query).toString();
@@ -432,7 +431,6 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
     }
 
     private _scheduleReconnect(): void {
-        // 防止并发重连
         if (this._intentionalDisconnect) return;
         if (this._reconnectTimer) return;
         if (this._maxReconnectAttempts > 0 && this._reconnectAttempts >= this._maxReconnectAttempts) {
@@ -453,12 +451,13 @@ export class GameClient<TMessages extends Record<string, unknown> = DefaultMessa
 
             try {
                 this._reconnecting = true;
+                // 清理旧连接，防止资源泄漏
+                try { this._rpc.disconnect(); } catch { /* already closed */ }
                 this._rpc = this._buildRpc();
                 await this._rpc.connect();
 
                 if (this._intentionalDisconnect) return;
 
-                // WebSocket 重连成功，尝试恢复房间
                 if (this._sessionToken) {
                     try {
                         const result = await this._rpc.call('ReconnectRoom', { sessionToken: this._sessionToken }) as JoinRoomResult;
