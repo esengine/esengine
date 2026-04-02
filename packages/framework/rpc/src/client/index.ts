@@ -179,6 +179,7 @@ export class RpcClient<P extends ProtocolDef> {
 
     private readonly _pendingCalls = new Map<number, PendingCall>();
     private readonly _msgHandlers = new Map<string, Set<(data: unknown) => void>>();
+    private _connectPromise: Promise<this> | null = null;
 
     constructor(
         _protocol: P,
@@ -215,40 +216,43 @@ export class RpcClient<P extends ProtocolDef> {
      * @en Connect to server
      */
     connect(): Promise<this> {
-        return new Promise((resolve, reject) => {
-            if (this._status === 'open' || this._status === 'connecting') {
-                resolve(this);
-                return;
-            }
+        if (this._status === 'open') return Promise.resolve(this);
+        if (this._status === 'connecting' && this._connectPromise) return this._connectPromise;
 
-            this._status = 'connecting';
-            this._ws = this._wsFactory(this._url);
+        this._status = 'connecting';
+        this._ws = this._wsFactory(this._url);
 
-            this._ws.onopen = () => {
+        this._connectPromise = new Promise<this>((resolve, reject) => {
+            this._ws!.onopen = () => {
                 this._status = 'open';
+                this._connectPromise = null;
                 this._options.onConnect?.();
                 resolve(this);
             };
 
-            this._ws.onclose = (e) => {
+            this._ws!.onclose = (e) => {
                 this._status = 'closed';
+                this._connectPromise = null;
                 this._rejectAllPending();
                 this._options.onDisconnect?.(e.reason);
                 this._scheduleReconnect();
             };
 
-            this._ws.onerror = () => {
+            this._ws!.onerror = () => {
                 const err = new Error('WebSocket error');
                 this._options.onError?.(err);
                 if (this._status === 'connecting') {
+                    this._connectPromise = null;
                     reject(err);
                 }
             };
 
-            this._ws.onmessage = (e) => {
+            this._ws!.onmessage = (e) => {
                 this._handleMessage(e.data as string | ArrayBuffer);
             };
         });
+
+        return this._connectPromise;
     }
 
     /**
