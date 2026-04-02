@@ -56,6 +56,15 @@ export class TransformInterpolator implements IInterpolator<ITransformState>, IE
  * @en Hermite transform interpolator (smoother curves)
  */
 export class HermiteTransformInterpolator implements IInterpolator<ITransformStateWithVelocity> {
+    private readonly _snapshotInterval: number;
+
+    /**
+     * @param snapshotInterval - @zh 快照间隔（秒） @en Snapshot interval in seconds
+     */
+    constructor(snapshotInterval = 0.1) {
+        this._snapshotInterval = snapshotInterval;
+    }
+
     /**
      * @zh 使用赫尔米特插值
      * @en Use Hermite interpolation
@@ -74,8 +83,7 @@ export class HermiteTransformInterpolator implements IInterpolator<ITransformSta
         const h01 = -2 * t3 + 3 * t2;
         const h11 = t3 - t2;
 
-        // Estimate time interval (assume 100ms between snapshots)
-        const dt = 0.1;
+        const dt = this._snapshotInterval;
 
         const x = h00 * from.x + h10 * from.velocityX * dt + h01 * to.x + h11 * to.velocityX * dt;
         const y = h00 * from.y + h10 * from.velocityY * dt + h01 * to.y + h11 * to.velocityY * dt;

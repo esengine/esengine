@@ -348,21 +348,23 @@ export class NetworkPlugin implements IPlugin {
      * @en Connect to server
      */
     public async connect(options: ConnectOptions): Promise<boolean> {
-        this._lastConnectOptions = options
+        this._lastConnectOptions = { ...options }
 
         try {
-            // Setup disconnect handler for auto-reconnect
             const originalOnDisconnect = options.onDisconnect
-            options.onDisconnect = (reason) => {
-                originalOnDisconnect?.(reason)
-                this._handleDisconnect(reason)
+            const connectOptions = {
+                ...options,
+                onDisconnect: (reason?: string) => {
+                    originalOnDisconnect?.(reason)
+                    this._handleDisconnect(reason)
+                }
             }
 
-            await this._networkService.connect(options)
+            await this._networkService.connect(connectOptions)
 
             const result = await this._networkService.call('join', {
-                playerName: options.playerName,
-                roomId: options.roomId,
+                playerName: connectOptions.playerName,
+                roomId: connectOptions.roomId,
             })
 
             this._localPlayerId = result.playerId

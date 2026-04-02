@@ -199,7 +199,12 @@ export class StateDeltaCompressor {
             }
 
             // Update last state
-            this._lastStates.set(entity.netId, { ...entity })
+            this._lastStates.set(entity.netId, {
+                ...entity,
+                pos: entity.pos ? { ...entity.pos } : undefined,
+                vel: entity.vel ? { ...entity.vel } : undefined,
+                custom: entity.custom ? { ...entity.custom } : undefined,
+            } as EntitySyncState)
         }
 
         return {

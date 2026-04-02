@@ -7,6 +7,7 @@
  */
 
 import type { BlueprintNodeTemplate, BlueprintNode, INodeExecutor, ExecutionResult } from '@esengine/blueprint';
+import { NetworkIdentity } from '../components/NetworkIdentity';
 
 // =============================================================================
 // 执行上下文接口 | Execution Context Interface
@@ -64,9 +65,7 @@ export class IsLocalPlayerExecutor implements INodeExecutor {
         // Try to get NetworkIdentity component
         let isLocal = false;
         if (ctx.entity) {
-            const identity = ctx.entity.getComponent(class NetworkIdentity {
-                bIsLocalPlayer: boolean = false;
-            });
+            const identity = ctx.entity.getComponent(NetworkIdentity);
             if (identity) {
                 isLocal = identity.bIsLocalPlayer;
             }
@@ -160,9 +159,7 @@ export class HasAuthorityExecutor implements INodeExecutor {
 
         let hasAuthority = false;
         if (ctx.entity) {
-            const identity = ctx.entity.getComponent(class NetworkIdentity {
-                bHasAuthority: boolean = false;
-            });
+            const identity = ctx.entity.getComponent(NetworkIdentity);
             if (identity) {
                 hasAuthority = identity.bHasAuthority;
             }
@@ -220,10 +217,7 @@ export class GetNetworkIdExecutor implements INodeExecutor {
         let ownerId = 0;
 
         if (ctx.entity) {
-            const identity = ctx.entity.getComponent(class NetworkIdentity {
-                netId: number = 0;
-                ownerId: number = 0;
-            });
+            const identity = ctx.entity.getComponent(NetworkIdentity);
             if (identity) {
                 netId = identity.netId;
                 ownerId = identity.ownerId;

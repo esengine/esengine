@@ -57,6 +57,7 @@ export interface NetworkServiceOptions extends RpcClientOptions {
 export class RpcService<P extends ProtocolDef> {
     protected _client: RpcClient<P> | null = null
     protected _state: NetworkState = NetworkState.Disconnected
+    private _pendingHandlers: Array<{ name: string; handler: (data: unknown) => void }> = []
 
     constructor(protected readonly _protocol: P) {}
 
@@ -108,6 +109,11 @@ export class RpcService<P extends ProtocolDef> {
                 },
                 onError: options.onError,
             })
+            for (const { name, handler } of this._pendingHandlers) {
+                this._client.on(name as MsgNames<P>, handler as (data: MsgData<P['msg'][MsgNames<P>]>) => void)
+            }
+            this._pendingHandlers = []
+
             await this._client.connect()
             this._state = NetworkState.Connected
         } catch (err) {
@@ -157,7 +163,11 @@ export class RpcService<P extends ProtocolDef> {
         name: K,
         handler: (data: MsgData<P['msg'][K]>) => void
     ): this {
-        this._client?.on(name, handler)
+        if (this._client) {
+            this._client.on(name, handler)
+        } else {
+            this._pendingHandlers.push({ name: name as string, handler: handler as (data: unknown) => void })
+        }
         return this
     }
 

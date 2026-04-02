@@ -32,6 +32,12 @@ export interface IInputSnapshot<TInput> {
      * @en Input timestamp
      */
     readonly timestamp: number;
+
+    /**
+     * @zh 该帧的 deltaTime
+     * @en DeltaTime for this frame
+     */
+    readonly deltaTime: number;
 }
 
 /**
@@ -164,7 +170,8 @@ export class ClientPrediction<TState, TInput> {
         const inputSnapshot: IInputSnapshot<TInput> = {
             sequence: this._currentSequence,
             input,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            deltaTime
         };
 
         this._pendingInputs.push(inputSnapshot);
@@ -219,10 +226,9 @@ export class ClientPrediction<TState, TInput> {
             this._pendingInputs.shift();
         }
 
-        // Re-predict from server state using unacknowledged inputs
         let state = serverState;
         for (const inputSnapshot of this._pendingInputs) {
-            state = this._predictor.predict(state, inputSnapshot.input, deltaTime);
+            state = this._predictor.predict(state, inputSnapshot.input, inputSnapshot.deltaTime);
         }
 
         // Calculate error
