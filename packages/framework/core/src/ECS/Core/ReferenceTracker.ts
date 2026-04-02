@@ -172,7 +172,7 @@ export class ReferenceTracker {
         for (const record of validRecords) {
             const component = record.component.deref();
             if (component) {
-                (component as any)[record.propertyKey] = null;
+                Reflect.set(component, record.propertyKey, null);
             }
         }
 

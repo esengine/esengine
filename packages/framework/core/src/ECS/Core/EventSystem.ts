@@ -189,7 +189,7 @@ export class TypeSafeEventSystem {
         const toRemove: string[] = [];
 
         // 按优先级排序
-        const sortedListeners = this.sortListenersByPriority(listeners);
+        const sortedListeners = listeners;
 
         for (const listener of sortedListeners) {
             if (listener.config.async) continue; // 跳过异步监听器
@@ -352,6 +352,7 @@ export class TypeSafeEventSystem {
         };
 
         listeners.push(listener);
+        listeners.sort((a, b) => (b.config.priority || 0) - (a.config.priority || 0));
 
         // 初始化统计信息
         if (!this.stats.has(eventType)) {
@@ -374,7 +375,7 @@ export class TypeSafeEventSystem {
         const toRemove: string[] = [];
 
         // 按优先级排序
-        const sortedListeners = this.sortListenersByPriority(listeners);
+        const sortedListeners = listeners;
 
         // 分离同步和异步监听器
         const syncListeners = sortedListeners.filter((l) => !l.config.async);
@@ -422,15 +423,6 @@ export class TypeSafeEventSystem {
 
         // 更新统计信息
         this.updateStats(eventType, performance.now() - startTime);
-    }
-
-    /**
-     * 按优先级排序监听器
-     * @param listeners 监听器数组
-     * @returns 排序后的监听器数组
-     */
-    private sortListenersByPriority(listeners: InternalEventListener[]): InternalEventListener[] {
-        return listeners.slice().sort((a, b) => (b.config.priority || 0) - (a.config.priority || 0));
     }
 
     /**

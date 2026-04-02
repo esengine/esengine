@@ -48,6 +48,8 @@ export class IdentifierPool {
         timestamp: number;
     }> = [];
 
+    private _pendingRecycleSet: Set<number> = new Set();
+
     /**
      * 延迟回收时间（毫秒）
      */
@@ -153,16 +155,12 @@ export class IdentifierPool {
             return false;
         }
 
-        // 检查是否已经在待回收队列中
-        const alreadyPending = this._pendingRecycle.some(
-            (item) => item.index === index && item.generation === generation
-        );
-
-        if (alreadyPending) {
-            return false; // 已经在回收队列中，拒绝重复回收
+        const packedId = (index << 16) | generation;
+        if (this._pendingRecycleSet.has(packedId)) {
+            return false;
         }
 
-        // 加入延迟回收队列
+        this._pendingRecycleSet.add(packedId);
         this._pendingRecycle.push({
             index,
             generation,
@@ -282,7 +280,10 @@ export class IdentifierPool {
             }
         }
 
-        // 处理到期的回收项
+        for (const item of readyToRecycle) {
+            this._pendingRecycleSet.delete((item.index << 16) | item.generation);
+        }
+
         for (const item of readyToRecycle) {
             // 再次验证ID有效性（防止重复回收）
             if (this._isValidId(item.index, item.generation)) {

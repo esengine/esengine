@@ -198,6 +198,7 @@ export class SoAStorage<T extends Component> {
     private indexToEntity: number[] = [];
     private freeIndices: number[] = [];
     private _size = 0;
+    private _proxyCache = new Map<number, T>();
     private _capacity = 1000;
     public readonly type: ComponentType<T>;
 
@@ -385,8 +386,12 @@ export class SoAStorage<T extends Component> {
             return null;
         }
 
-        // 返回 Proxy，直接操作底层 TypedArray
-        return this.createProxyView(entityId, index);
+        const cached = this._proxyCache.get(entityId);
+        if (cached) return cached;
+
+        const proxy = this.createProxyView(entityId, index);
+        this._proxyCache.set(entityId, proxy);
+        return proxy;
     }
 
     /**
@@ -592,10 +597,9 @@ export class SoAStorage<T extends Component> {
             return null;
         }
 
-        // 获取组件副本以便返回
-        const component = this.getComponent(entityId);
+        const component = this.getComponentSnapshot(entityId);
 
-        // 清理复杂字段
+        this._proxyCache.delete(entityId);
         this.complexFields.delete(entityId);
 
         this.entityToIndex.delete(entityId);

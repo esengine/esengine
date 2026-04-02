@@ -406,9 +406,8 @@ export class EventBus implements IEventBus {
             } as T & IEventData;
         }
 
-        const enhanced = data as T & IEventData;
+        const enhanced = { ...data } as T & IEventData;
 
-        // 如果数据还没有基础事件属性，添加它们
         if (!enhanced.timestamp) {
             enhanced.timestamp = Date.now();
         }
