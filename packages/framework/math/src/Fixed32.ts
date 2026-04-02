@@ -203,9 +203,8 @@ export class Fixed32 {
      */
     div(other: Fixed32): Fixed32 {
         if (other.raw === 0) {
-            throw new Error('Fixed32: Division by zero');
+            throw new Error('Fixed32: Division by zero | 除数为零');
         }
-        // 先左移再除，保持精度
         const result = ((this.raw * Fixed32.SCALE) / other.raw) | 0;
         return new Fixed32(result);
     }

@@ -57,8 +57,9 @@ export class MathUtils {
    * @returns 规范化后的角度
    */
     static normalizeAngle(radians: number): number {
-        while (radians < 0) radians += MathUtils.TWO_PI;
-        while (radians >= MathUtils.TWO_PI) radians -= MathUtils.TWO_PI;
+        if (!isFinite(radians)) return 0;
+        radians = radians % MathUtils.TWO_PI;
+        if (radians < 0) radians += MathUtils.TWO_PI;
         return radians;
     }
 
@@ -68,8 +69,10 @@ export class MathUtils {
    * @returns 规范化后的角度
    */
     static normalizeAngleSigned(radians: number): number {
-        while (radians <= -Math.PI) radians += MathUtils.TWO_PI;
-        while (radians > Math.PI) radians -= MathUtils.TWO_PI;
+        if (!isFinite(radians)) return 0;
+        radians = radians % MathUtils.TWO_PI;
+        if (radians <= -Math.PI) radians += MathUtils.TWO_PI;
+        if (radians > Math.PI) radians -= MathUtils.TWO_PI;
         return radians;
     }
 

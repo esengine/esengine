@@ -37,22 +37,22 @@ export class Vector2 implements IVector2 {
 
     // 静态常量
     /** 零向量 (0, 0) */
-    static readonly ZERO = new Vector2(0, 0);
+    static readonly ZERO = Object.freeze(new Vector2(0, 0));
 
     /** 单位向量 (1, 1) */
-    static readonly ONE = new Vector2(1, 1);
+    static readonly ONE = Object.freeze(new Vector2(1, 1));
 
     /** 右方向向量 (1, 0) */
-    static readonly RIGHT = new Vector2(1, 0);
+    static readonly RIGHT = Object.freeze(new Vector2(1, 0));
 
     /** 左方向向量 (-1, 0) */
-    static readonly LEFT = new Vector2(-1, 0);
+    static readonly LEFT = Object.freeze(new Vector2(-1, 0));
 
     /** 上方向向量 (0, 1) */
-    static readonly UP = new Vector2(0, 1);
+    static readonly UP = Object.freeze(new Vector2(0, 1));
 
     /** 下方向向量 (0, -1) */
-    static readonly DOWN = new Vector2(0, -1);
+    static readonly DOWN = Object.freeze(new Vector2(0, -1));
 
     // 基础属性
 
