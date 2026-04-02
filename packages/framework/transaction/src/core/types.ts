@@ -344,6 +344,12 @@ export interface ITransactionStorage {
     getPendingTransactions(serverId?: string): Promise<TransactionLog[]>
 
     /**
+     * @zh 获取已完成的事务列表（committed/rolledback）
+     * @en Get completed transactions (committed/rolledback)
+     */
+    getCompletedTransactions?(): Promise<TransactionLog[]>
+
+    /**
      * @zh 删除事务日志
      * @en Delete transaction log
      */

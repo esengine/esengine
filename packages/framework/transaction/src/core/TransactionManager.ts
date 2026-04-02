@@ -202,12 +202,14 @@ export class TransactionManager {
     async cleanup(beforeTimestamp?: number): Promise<number> {
         if (!this._storage) return 0;
 
-        const timestamp = beforeTimestamp ?? Date.now() - 24 * 60 * 60 * 1000; // 默认清理24小时前
+        const timestamp = beforeTimestamp ?? Date.now() - 24 * 60 * 60 * 1000;
 
-        const pendingTransactions = await this._storage.getPendingTransactions();
+        const completedTransactions = this._storage.getCompletedTransactions
+            ? await this._storage.getCompletedTransactions()
+            : await this._storage.getPendingTransactions();
         let cleanedCount = 0;
 
-        for (const log of pendingTransactions) {
+        for (const log of completedTransactions) {
             if (
                 log.createdAt < timestamp &&
                 (log.state === 'committed' || log.state === 'rolledback')

@@ -133,6 +133,18 @@ export class MemoryStorage implements ITransactionStorage {
         return result;
     }
 
+    async getCompletedTransactions(): Promise<TransactionLog[]> {
+        const result: TransactionLog[] = [];
+
+        for (const tx of this._transactions.values()) {
+            if (tx.state === 'committed' || tx.state === 'rolledback') {
+                result.push({ ...tx });
+            }
+        }
+
+        return result;
+    }
+
     async deleteTransaction(id: string): Promise<void> {
         this._transactions.delete(id);
     }
