@@ -134,26 +134,28 @@ export class UserRepository extends Repository<UserEntity> {
     async register(params: CreateUserParams): Promise<SafeUser> {
         const { username, password, email, roles, metadata } = params
 
-        if (await this.usernameExists(username)) {
-            throw new Error('Username already exists')
-        }
-
-        if (email && (await this.emailExists(email))) {
-            throw new Error('Email already exists')
-        }
-
         const passwordHash = await hashPassword(password)
 
-        const user = await this.create({
-            username,
-            passwordHash,
-            email,
-            roles: roles ?? ['user'],
-            isActive: true,
-            metadata
-        })
+        try {
+            const user = await this.create({
+                username,
+                passwordHash,
+                email,
+                roles: roles ?? ['user'],
+                isActive: true,
+                metadata
+            })
 
-        return this.toSafeUser(user)
+            return this.toSafeUser(user)
+        } catch (err) {
+            if (await this.usernameExists(username)) {
+                throw new Error('Username already exists | 用户名已存在')
+            }
+            if (email && (await this.emailExists(email))) {
+                throw new Error('Email already exists | 邮箱已存在')
+            }
+            throw err
+        }
     }
 
     /**

@@ -269,7 +269,8 @@ export class Repository<T extends BaseEntity> implements IRepository<T> {
                 if ('$in' in ops) mongoOps['$in'] = ops.$in
                 if ('$nin' in ops) mongoOps['$nin'] = ops.$nin
                 if ('$like' in ops) {
-                    const pattern = (ops.$like as string).replace(/%/g, '.*').replace(/_/g, '.')
+                    const escaped = (ops.$like as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                    const pattern = escaped.replace(/%/g, '.*').replace(/_/g, '.')
                     mongoOps['$regex'] = new RegExp(`^${pattern}$`, 'i')
                 }
                 if ('$regex' in ops) {
