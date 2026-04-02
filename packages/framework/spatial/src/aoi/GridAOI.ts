@@ -68,6 +68,7 @@ export class GridAOI<T> implements IAOIManager<T> {
     private readonly _cells: Map<string, Set<AOIObserverData<T>>> = new Map();
     private readonly _observers: Map<T, AOIObserverData<T>> = new Map();
     private readonly _globalListeners: Set<AOIEventListener<T>> = new Set();
+    private _maxViewRange = 0;
 
     constructor(config: GridAOIConfig) {
         this._cellSize = config.cellSize;
@@ -105,6 +106,9 @@ export class GridAOI<T> implements IAOIManager<T> {
         };
 
         this._observers.set(entity, data);
+        if (config.viewRange > this._maxViewRange) {
+            this._maxViewRange = config.viewRange;
+        }
         this._addToCell(cellKey, data);
 
         // Initial visibility check for this observer
@@ -403,25 +407,49 @@ export class GridAOI<T> implements IAOIManager<T> {
      * @en Update other observers' visibility of an entity
      */
     private _updateObserversOfEntity(movedData: AOIObserverData<T>): void {
-        // Check all observers for visibility changes
-        // This handles both: observers who can now see the entity (enter)
-        // and observers who could see it before but can't anymore (exit)
+        const cellRadius = Math.ceil(this._maxViewRange / this._cellSize);
+        const centerCell = this._getCellCoords(movedData.position);
+        const checked = new Set<T>();
+
+        for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+            for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                const cellKey = `${centerCell.x + dx},${centerCell.y + dy}`;
+                const cell = this._cells.get(cellKey);
+                if (!cell) continue;
+
+                for (const otherData of cell) {
+                    if (otherData === movedData || checked.has(otherData.entity)) continue;
+                    checked.add(otherData.entity);
+
+                    const distSq = distanceSquared(otherData.position, movedData.position);
+                    const wasVisible = otherData.visibleEntities.has(movedData.entity);
+                    const isVisible = distSq <= otherData.viewRangeSq;
+
+                    if (isVisible && !wasVisible) {
+                        otherData.visibleEntities.add(movedData.entity);
+                        this._emitEvent({
+                            type: 'enter',
+                            observer: otherData.entity,
+                            target: movedData.entity,
+                            position: movedData.position
+                        }, otherData);
+                    } else if (!isVisible && wasVisible) {
+                        otherData.visibleEntities.delete(movedData.entity);
+                        this._emitEvent({
+                            type: 'exit',
+                            observer: otherData.entity,
+                            target: movedData.entity,
+                            position: movedData.position
+                        }, otherData);
+                    }
+                }
+            }
+        }
+
+        // Handle exit events for observers outside search range that had this entity visible
         for (const [, otherData] of this._observers) {
-            if (otherData === movedData) continue;
-
-            const distSq = distanceSquared(otherData.position, movedData.position);
-            const wasVisible = otherData.visibleEntities.has(movedData.entity);
-            const isVisible = distSq <= otherData.viewRangeSq;
-
-            if (isVisible && !wasVisible) {
-                otherData.visibleEntities.add(movedData.entity);
-                this._emitEvent({
-                    type: 'enter',
-                    observer: otherData.entity,
-                    target: movedData.entity,
-                    position: movedData.position
-                }, otherData);
-            } else if (!isVisible && wasVisible) {
+            if (otherData === movedData || checked.has(otherData.entity)) continue;
+            if (otherData.visibleEntities.has(movedData.entity)) {
                 otherData.visibleEntities.delete(movedData.entity);
                 this._emitEvent({
                     type: 'exit',

@@ -107,12 +107,20 @@ export class BlueprintVM {
      * 停止 VM
      */
     stop(): void {
-        // Trigger EndPlay event
-        // 触发 EndPlay 事件
         this.triggerEvent('EventEndPlay');
 
         this._isRunning = false;
         this._pendingExecutions = [];
+    }
+
+    /**
+     * @zh 释放资源
+     * @en Dispose resources
+     */
+    dispose(): void {
+        this.stop();
+        this._eventNodes.clear();
+        this._context = null!;
     }
 
     /**

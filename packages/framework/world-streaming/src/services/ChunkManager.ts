@@ -403,9 +403,10 @@ export class ChunkManager implements IService {
      * Unload all chunks.
      */
     clear(): void {
-        this._chunkGrid.forEach((_info, coord) => {
+        const coords = Array.from(this._chunkGrid.keys());
+        for (const coord of coords) {
             this.unloadChunk(coord);
-        });
+        }
 
         this._loadQueue = [];
         this._unloadQueue = [];
