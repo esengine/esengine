@@ -555,7 +555,10 @@ export async function createServer(config: ServerConfig = {}): Promise<GameServe
                 tickInterval = null;
             }
 
-            // 停止分布式管理器（优雅关闭）
+            for (const room of roomManager.getRooms()) {
+                await room.dispose();
+            }
+
             if (distributedManager) {
                 await distributedManager.stop(true);
             }

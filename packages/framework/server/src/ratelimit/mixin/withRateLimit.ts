@@ -329,9 +329,9 @@ export function withRateLimit<TBase extends RoomConstructor>(
          * @zh 重写 dispose 以清理定时器
          * @en Override dispose to cleanup timer
          */
-        dispose(): void {
+        async dispose(): Promise<void> {
             this._stopCleanup();
-            super.dispose();
+            await super.dispose();
         }
 
         /**

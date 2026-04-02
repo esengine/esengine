@@ -316,27 +316,38 @@ export class DistributedRoomManager extends RoomManager {
         const locked = await this._adapter.acquireLock(lockKey, 5000);
 
         if (!locked) {
-            // 等待一小段时间后重试 | Wait and retry
-            await this._sleep(100);
-            return this.joinOrCreateDistributed(name, playerId, conn, options);
+            const maxRetries = 10;
+            for (let i = 0; i < maxRetries; i++) {
+                await this._sleep(100 * (i + 1));
+                const retryLocked = await this._adapter.acquireLock(lockKey, 5000);
+                if (retryLocked) {
+                    return this._doJoinOrCreateDistributed(name, playerId, conn, options, lockKey);
+                }
+            }
+            return null;
         }
 
+        return this._doJoinOrCreateDistributed(name, playerId, conn, options, lockKey);
+    }
+
+    private async _doJoinOrCreateDistributed(
+        name: string,
+        playerId: string,
+        conn: any,
+        options: RoomOptions | undefined,
+        lockKey: string
+    ): Promise<{ room: Room; player: Player } | { redirect: string } | null> {
         try {
-            // 先在分布式注册表中查找 | First search in distributed registry
             const availableRoom = await this._adapter.findAvailableRoom(name);
 
             if (availableRoom) {
-                // 检查是否在本地服务器 | Check if on local server
                 if (availableRoom.serverId === this._serverId) {
-                    // 本地房间 | Local room
                     return super.joinOrCreate(name, playerId, conn, options);
                 } else {
-                    // 其他服务器，返回重定向 | Other server, return redirect
                     return { redirect: availableRoom.serverAddress };
                 }
             }
 
-            // 没有可用房间，在本地创建 | No available room, create locally
             return super.joinOrCreate(name, playerId, conn, options);
         } finally {
             await this._adapter.releaseLock(lockKey);

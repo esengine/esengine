@@ -579,11 +579,8 @@ export class RedisAdapter implements IDistributedAdapter {
 
         let results: RoomRegistration[] = [];
 
-        // 获取所有房间
-        for (const roomId of roomIds) {
-            const room = await this.getRoom(roomId);
-            if (room) results.push(room);
-        }
+        const rooms = await Promise.all(roomIds.map(id => this.getRoom(id)));
+        results = rooms.filter((r): r is RoomRegistration => r !== null);
 
         // 过滤
         if (query.roomType) {

@@ -3,6 +3,7 @@
  * @en Player class
  */
 
+import { randomBytes } from 'crypto';
 import type { Connection } from '@esengine/rpc';
 
 /**
@@ -138,6 +139,6 @@ export class Player<TData = Record<string, unknown>> implements IPlayer<TData> {
     }
 
     private _generateToken(): string {
-        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        return randomBytes(24).toString('base64url');
     }
 }

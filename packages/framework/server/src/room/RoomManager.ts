@@ -388,6 +388,17 @@ export class RoomManager {
      */
     protected _onRoomDisposed(roomId: string): void {
         this._rooms.delete(roomId);
+
+        for (const [playerId, rid] of this._playerToRoom) {
+            if (rid === roomId) {
+                this._playerToRoom.delete(playerId);
+            }
+        }
+        for (const [token, info] of this._sessionToPlayer) {
+            if (info.roomId === roomId) {
+                this._sessionToPlayer.delete(token);
+            }
+        }
     }
 
     /**

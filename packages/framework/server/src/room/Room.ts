@@ -116,6 +116,8 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
     private _disconnectedPlayers: Map<string, { player: Player<TPlayerData>; timer: ReturnType<typeof setTimeout> }> = new Map();
     private _locked = false;
     private _disposed = false;
+    private _playerOps: Map<string, Promise<unknown>> = new Map();
+    private _playersCache: ReadonlyArray<Player<TPlayerData>> | null = null;
     private _tickInterval: ReturnType<typeof setInterval> | null = null;
     private _lastTickTime = 0;
     private _broadcastFn: ((type: string, data: unknown) => void) | null = null;
@@ -140,7 +142,10 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
      * @en All players
      */
     get players(): ReadonlyArray<Player<TPlayerData>> {
-        return Array.from(this._players.values());
+        if (!this._playersCache) {
+            this._playersCache = Array.from(this._players.values());
+        }
+        return this._playersCache;
     }
 
     /**
@@ -316,7 +321,7 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
      * @zh 手动销毁房间
      * @en Manually dispose room
      */
-    dispose(): void {
+    async dispose(): Promise<void> {
         if (this._disposed) return;
         this._disposed = true;
 
@@ -332,7 +337,7 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
         }
         this._players.clear();
 
-        this.onDispose();
+        await this.onDispose();
         this._disposeFn?.();
     }
 
@@ -369,6 +374,19 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
      * @internal
      */
     async _addPlayer(id: string, conn: any, playerData?: Record<string, unknown>): Promise<Player<TPlayerData> | null> {
+        const prev = this._playerOps.get(id);
+        if (prev) await prev.catch(() => {});
+
+        const op = this._doAddPlayer(id, conn, playerData);
+        this._playerOps.set(id, op);
+        try {
+            return await op;
+        } finally {
+            if (this._playerOps.get(id) === op) this._playerOps.delete(id);
+        }
+    }
+
+    private async _doAddPlayer(id: string, conn: any, playerData?: Record<string, unknown>): Promise<Player<TPlayerData> | null> {
         if (this._locked || this.isFull || this._disposed) {
             return null;
         }
@@ -384,6 +402,7 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
         });
 
         this._players.set(id, player);
+        this._playersCache = null;
         await this.onJoin(player);
 
         return player;
@@ -393,10 +412,22 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
      * @internal
      */
     async _removePlayer(id: string, reason?: string): Promise<void> {
+        const prev = this._playerOps.get(id);
+        if (prev) await prev.catch(() => {});
+
+        const op = this._doRemovePlayer(id, reason);
+        this._playerOps.set(id, op);
+        try {
+            await op;
+        } finally {
+            if (this._playerOps.get(id) === op) this._playerOps.delete(id);
+        }
+    }
+
+    private async _doRemovePlayer(id: string, reason?: string): Promise<void> {
         const player = this._players.get(id);
         if (!player) return;
 
-        // 断线 + 有宽限期 → 进入断线等待，不立即移除
         if (reason === 'disconnected' && this.reconnectGracePeriod > 0) {
             player._setDisconnected();
             const timer = setTimeout(() => {
@@ -408,7 +439,7 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
             return;
         }
 
-        this._finalRemovePlayer(id, reason);
+        await this._finalRemovePlayer(id, reason);
     }
 
     /**
@@ -421,13 +452,14 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
         if (!player) return;
 
         this._players.delete(id);
+        this._playersCache = null;
 
         this._disconnectedPlayers.delete(player.sessionToken);
 
         await this.onLeave(player, reason);
 
         if (this.autoDispose && this._players.size === 0 && this._disconnectedPlayers.size === 0) {
-            this.dispose();
+            await this.dispose();
         }
     }
 

@@ -163,11 +163,18 @@ async function createRequest(
  * @zh 解析请求体
  * @en Parse request body
  */
-function parseBody(req: IncomingMessage): Promise<unknown> {
-    return new Promise((resolve) => {
+function parseBody(req: IncomingMessage, maxBodySize = 1024 * 1024): Promise<unknown> {
+    return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
+        let totalSize = 0;
 
         req.on('data', (chunk: Buffer) => {
+            totalSize += chunk.length;
+            if (totalSize > maxBodySize) {
+                req.destroy();
+                reject(new Error('Payload Too Large | 请求体过大'));
+                return;
+            }
             chunks.push(chunk);
         });
 
@@ -374,19 +381,17 @@ async function executeWithTimeout(
     timeoutMs: number,
     res: ServerResponse
 ): Promise<void> {
-    let resolved = false;
+    let timer: ReturnType<typeof setTimeout>;
 
     const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-            if (!resolved) {
-                reject(new Error('Request timeout'));
-            }
+        timer = setTimeout(() => {
+            reject(new Error('Request timeout'));
         }, timeoutMs);
     });
 
     try {
         await Promise.race([
-            handler().then(() => { resolved = true; }),
+            handler().then(() => { clearTimeout(timer); }),
             timeoutPromise
         ]);
     } catch (error) {
