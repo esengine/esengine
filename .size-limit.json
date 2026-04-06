@@ -1,7 +1,7 @@
 [
   {
     "name": "@esengine/ecs-framework (ESM)",
-    "path": "packages/core/dist/esm/index.js",
+    "path": "packages/framework/core/dist/index.mjs",
     "import": "*",
     "limit": "50 KB",
     "webpack": false,
@@ -9,17 +9,18 @@
   },
   {
     "name": "@esengine/ecs-framework (UMD)",
-    "path": "packages/core/dist/umd/ecs-framework.js",
+    "path": "packages/framework/core/dist/index.umd.js",
     "limit": "60 KB",
     "webpack": false,
     "gzip": true
   },
   {
     "name": "Core Runtime (Tree-shaking)",
-    "path": "packages/core/dist/esm/index.js",
+    "path": "packages/framework/core/dist/index.mjs",
     "import": "{ Core, Scene, Entity, Component }",
     "limit": "30 KB",
     "webpack": false,
     "gzip": true
   }
 ]
+

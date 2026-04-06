@@ -1,6 +1,6 @@
 {
   "version": "independent",
-  "npmClient": "npm",
+  "npmClient": "pnpm",
   "command": {
     "publish": {
       "registry": "https://registry.npmjs.org/",
@@ -19,8 +19,7 @@
     }
   },
   "packages": [
-    "packages/*",
-    "!extensions/cocos/*/settings/**",
-    "!examples/*/settings/**"
+    "packages/framework/*",
+    "packages/tools/*"
   ]
 }
