@@ -3,8 +3,10 @@
  * @en Color Blueprint Nodes
  */
 
-import type { BlueprintNodeTemplate, BlueprintNode, INodeExecutor, ExecutionResult } from '@esengine/blueprint';
-import { Color } from '../Color';
+import type { BlueprintNodeTemplate, BlueprintNode } from '../../types/nodes';
+import type { ExecutionResult } from '../../runtime/ExecutionContext';
+import type { INodeExecutor } from '../../runtime/NodeRegistry';
+import { Color } from '@esengine/ecs-framework-math';
 
 interface ColorContext {
     evaluateInput(nodeId: string, pinName: string, defaultValue?: unknown): unknown;

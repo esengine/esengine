@@ -3,9 +3,10 @@
  * @en FixedVector2 Blueprint Nodes
  */
 
-import type { BlueprintNodeTemplate, BlueprintNode, INodeExecutor, ExecutionResult } from '@esengine/blueprint';
-import { FixedVector2 } from '../FixedVector2';
-import { Fixed32 } from '../Fixed32';
+import type { BlueprintNodeTemplate, BlueprintNode } from '../../types/nodes';
+import type { ExecutionResult } from '../../runtime/ExecutionContext';
+import type { INodeExecutor } from '../../runtime/NodeRegistry';
+import { FixedVector2, Fixed32 } from '@esengine/ecs-framework-math';
 
 interface FixedVectorContext {
     evaluateInput(nodeId: string, pinName: string, defaultValue?: unknown): unknown;

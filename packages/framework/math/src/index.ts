@@ -34,6 +34,3 @@ export * from './Collision';
 
 // 动画和插值
 export * from './Animation';
-
-// 蓝图节点
-export * from './nodes';

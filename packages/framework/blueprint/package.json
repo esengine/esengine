@@ -34,6 +34,7 @@
     "license": "MIT",
     "devDependencies": {
         "@esengine/ecs-framework": "workspace:*",
+        "@esengine/ecs-framework-math": "workspace:*",
         "@esengine/build-config": "workspace:*",
         "@types/node": "^20.19.17",
         "rimraf": "^5.0.0",
@@ -41,7 +42,8 @@
         "typescript": "^5.8.3"
     },
     "peerDependencies": {
-        "@esengine/ecs-framework": "workspace:*"
+        "@esengine/ecs-framework": "workspace:*",
+        "@esengine/ecs-framework-math": "workspace:*"
     },
     "dependencies": {
         "tslib": "^2.8.1"

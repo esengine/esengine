@@ -3,8 +3,10 @@
  * @en Vector2 Blueprint Nodes
  */
 
-import type { BlueprintNodeTemplate, BlueprintNode, INodeExecutor, ExecutionResult } from '@esengine/blueprint';
-import { Vector2 } from '../Vector2';
+import type { BlueprintNodeTemplate, BlueprintNode } from '../../types/nodes';
+import type { ExecutionResult } from '../../runtime/ExecutionContext';
+import type { INodeExecutor } from '../../runtime/NodeRegistry';
+import { Vector2 } from '@esengine/ecs-framework-math';
 
 interface VectorContext {
     evaluateInput(nodeId: string, pinName: string, defaultValue?: unknown): unknown;
