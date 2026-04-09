@@ -6,7 +6,8 @@
   "packageManager": "pnpm@10.22.0",
   "workspaces": [
     "packages/framework/*",
-    "packages/tools/*"
+    "packages/tools/*",
+    "docs"
   ],
   "keywords": [
     "ecs",
