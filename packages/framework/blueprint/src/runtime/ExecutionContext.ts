@@ -84,6 +84,8 @@ export class ExecutionContext {
 
     /** Connection lookup by source (按源的连接查找) */
     private _connectionsBySource: Map<string, BlueprintConnection[]> = new Map();
+    /** Node lookup by ID (按ID的节点查找) */
+    private _nodesById: Map<string, BlueprintNode> = new Map();
 
     constructor(blueprint: BlueprintAsset, entity: Entity, scene: IScene) {
         this.blueprint = blueprint;
@@ -98,8 +100,11 @@ export class ExecutionContext {
             }
         }
 
-        // Build connection lookup maps
-        // 构建连接查找映射
+        // Build lookup maps
+        // 构建查找映射
+        for (const node of blueprint.nodes) {
+            this._nodesById.set(node.id, node);
+        }
         this._buildConnectionMaps();
     }
 
@@ -126,7 +131,7 @@ export class ExecutionContext {
      * 通过ID获取节点
      */
     getNode(nodeId: string): BlueprintNode | undefined {
-        return this.blueprint.nodes.find(n => n.id === nodeId);
+        return this._nodesById.get(nodeId);
     }
 
     /**

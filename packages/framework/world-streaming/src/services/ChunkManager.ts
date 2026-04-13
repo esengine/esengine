@@ -1,10 +1,12 @@
-import type { Entity, IScene, IService } from '@esengine/ecs-framework';
+import { type Entity, type IScene, type IService, createLogger } from '@esengine/ecs-framework';
 import type { IChunkCoord, IChunkData, IChunkInfo, IChunkLoadRequest, IChunkBounds } from '../types';
 import { EChunkState, EChunkPriority } from '../types';
 import { SpatialHashGrid } from './SpatialHashGrid';
 import type { IChunkSerializer } from './ChunkSerializer';
 import { ChunkSerializer } from './ChunkSerializer';
 import { ChunkComponent } from '../components/ChunkComponent';
+
+const chunkLogger = createLogger('ChunkManager');
 
 /**
  * 区块数据提供者接口
@@ -188,20 +190,18 @@ export class ChunkManager implements IService {
     processUnloads(maxCount: number): void {
         const now = Date.now();
         let processed = 0;
+        const remaining: typeof this._unloadQueue = [];
 
-        const readyToUnload = this._unloadQueue.filter((r) => r.scheduledTime <= now);
-
-        for (const request of readyToUnload) {
-            if (processed >= maxCount) break;
-
-            this.unloadChunk(request.coord);
-            processed++;
-
-            const index = this._unloadQueue.indexOf(request);
-            if (index >= 0) {
-                this._unloadQueue.splice(index, 1);
+        for (const request of this._unloadQueue) {
+            if (request.scheduledTime <= now && processed < maxCount) {
+                this.unloadChunk(request.coord);
+                processed++;
+            } else {
+                remaining.push(request);
             }
         }
+
+        this._unloadQueue = remaining;
     }
 
     /**
@@ -211,7 +211,7 @@ export class ChunkManager implements IService {
      */
     private async loadChunk(coord: IChunkCoord): Promise<void> {
         if (!this._scene) {
-            console.warn('[ChunkManager] No scene set');
+            chunkLogger.warn('No scene set');
             return;
         }
 

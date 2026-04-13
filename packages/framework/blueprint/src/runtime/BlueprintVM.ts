@@ -3,11 +3,13 @@
  * 蓝图虚拟机 - 执行蓝图图
  */
 
-import type { Entity, IScene } from '@esengine/ecs-framework';
+import { type Entity, type IScene, createLogger } from '@esengine/ecs-framework';
 import { BlueprintNode } from '../types/nodes';
 import { BlueprintAsset } from '../types/blueprint';
 import { ExecutionContext, ExecutionResult } from './ExecutionContext';
 import { NodeRegistry } from './NodeRegistry';
+
+const vmLogger = createLogger('BlueprintVM');
 
 /**
  * Pending execution frame (for delayed/async execution)
@@ -54,6 +56,9 @@ export class BlueprintVM {
 
     /** Maximum execution steps per frame (每帧最大执行步骤) */
     private _maxStepsPerFrame: number = 1000;
+
+    /** Maximum pending executions (最大待处理执行数) */
+    private _maxPendingExecutions: number = 10000;
 
     /** Debug mode (调试模式) */
     debug: boolean = false;
@@ -119,6 +124,7 @@ export class BlueprintVM {
      */
     dispose(): void {
         this.stop();
+        this._pendingExecutions.length = 0;
         this._eventNodes.clear();
         this._context = null!;
     }
@@ -231,18 +237,20 @@ export class BlueprintVM {
             const result = this._executeNode(nextConn.toNodeId);
 
             if (result.error) {
-                console.error(`Blueprint error in node ${nextConn.toNodeId}: ${result.error}`);
+                vmLogger.error(`Error in node ${nextConn.toNodeId}: ${result.error}`);
                 break;
             }
 
             if (result.delay && result.delay > 0) {
                 // Schedule delayed execution
                 // 安排延迟执行
-                this._pendingExecutions.push({
-                    nodeId: nextConn.toNodeId,
-                    execPin: result.nextExec ?? 'exec',
-                    resumeTime: this._currentTime + result.delay
-                });
+                if (this._pendingExecutions.length < this._maxPendingExecutions) {
+                    this._pendingExecutions.push({
+                        nodeId: nextConn.toNodeId,
+                        execPin: result.nextExec ?? 'exec',
+                        resumeTime: this._currentTime + result.delay
+                    });
+                }
                 break;
             }
 
@@ -265,7 +273,7 @@ export class BlueprintVM {
         }
 
         if (steps >= this._maxStepsPerFrame) {
-            console.warn('Blueprint execution exceeded maximum steps, possible infinite loop');
+            vmLogger.warn('Execution exceeded maximum steps, possible infinite loop');
         }
     }
 
@@ -286,7 +294,7 @@ export class BlueprintVM {
 
         try {
             if (this.debug) {
-                console.log(`[Blueprint] Executing: ${node.type} (${nodeId})`);
+                vmLogger.debug(`Executing: ${node.type} (${nodeId})`);
             }
 
             const result = executor.execute(node, this._context);

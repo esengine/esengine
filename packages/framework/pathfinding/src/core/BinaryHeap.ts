@@ -8,6 +8,7 @@
 export class BinaryHeap<T> {
     private heap: T[] = [];
     private readonly compare: (a: T, b: T) => number;
+    private _items = new Set<T>();
 
     /**
      * @zh 创建二叉堆
@@ -41,6 +42,7 @@ export class BinaryHeap<T> {
      */
     push(item: T): void {
         this.heap.push(item);
+        this._items.add(item);
         this.bubbleUp(this.heap.length - 1);
     }
 
@@ -61,6 +63,7 @@ export class BinaryHeap<T> {
             this.sinkDown(0);
         }
 
+        this._items.delete(result);
         return result;
     }
 
@@ -89,7 +92,7 @@ export class BinaryHeap<T> {
      * @en Check if contains element
      */
     contains(item: T): boolean {
-        return this.heap.indexOf(item) !== -1;
+        return this._items.has(item);
     }
 
     /**
@@ -98,6 +101,7 @@ export class BinaryHeap<T> {
      */
     clear(): void {
         this.heap.length = 0;
+        this._items.clear();
     }
 
     /**

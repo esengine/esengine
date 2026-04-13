@@ -87,12 +87,12 @@ export const DEFAULT_PATH_CACHE_CONFIG: IPathCacheConfig = {
 export class PathCache {
     private readonly config: IPathCacheConfig;
     private readonly cache: Map<string, ICacheEntry>;
-    private readonly accessOrder: string[];
+    private readonly accessOrder: Map<string, true>;
 
     constructor(config: Partial<IPathCacheConfig> = {}) {
         this.config = { ...DEFAULT_PATH_CACHE_CONFIG, ...config };
         this.cache = new Map();
-        this.accessOrder = [];
+        this.accessOrder = new Map();
     }
 
     /**
@@ -173,7 +173,7 @@ export class PathCache {
      */
     invalidateAll(): void {
         this.cache.clear();
-        this.accessOrder.length = 0;
+        this.accessOrder.clear();
     }
 
     /**
@@ -325,21 +325,19 @@ export class PathCache {
     }
 
     private updateAccessOrder(key: string): void {
-        this.removeFromAccessOrder(key);
-        this.accessOrder.push(key);
+        this.accessOrder.delete(key);
+        this.accessOrder.set(key, true);
     }
 
     private removeFromAccessOrder(key: string): void {
-        const index = this.accessOrder.indexOf(key);
-        if (index !== -1) {
-            this.accessOrder.splice(index, 1);
-        }
+        this.accessOrder.delete(key);
     }
 
     private evictLRU(): void {
-        const lruKey = this.accessOrder.shift();
-        if (lruKey) {
-            this.cache.delete(lruKey);
+        const first = this.accessOrder.keys().next();
+        if (!first.done) {
+            this.accessOrder.delete(first.value);
+            this.cache.delete(first.value);
         }
     }
 }
