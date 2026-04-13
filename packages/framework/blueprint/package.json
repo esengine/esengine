@@ -1,6 +1,6 @@
 {
     "name": "@esengine/blueprint",
-    "version": "4.5.2",
+    "version": "5.0.0",
     "description": "Visual scripting system - works with any ECS framework (ESEngine, Cocos, Laya, etc.)",
     "main": "dist/index.js",
     "module": "dist/index.js",
