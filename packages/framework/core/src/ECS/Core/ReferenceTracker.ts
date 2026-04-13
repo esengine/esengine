@@ -282,6 +282,18 @@ export class ReferenceTracker {
     }
 
     /**
+     * @zh 批量注销场景关联的所有实体映射
+     * @en Bulk unregister all entity mappings for a scene
+     */
+    public unregisterAllEntitiesForScene(scene: IScene): void {
+        for (const [entityId, sceneRef] of globalEntitySceneMap) {
+            if (sceneRef.deref() === scene) {
+                globalEntitySceneMap.delete(entityId);
+            }
+        }
+    }
+
+    /**
      * 获取调试信息
      */
     public getDebugInfo(): object {

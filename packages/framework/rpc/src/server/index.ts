@@ -101,6 +101,13 @@ export interface ServeOptions<P extends ProtocolDef, TConnData = unknown> {
     codec?: Codec;
 
     /**
+     * @zh 最大消息大小（字节），超过则丢弃
+     * @en Maximum message size in bytes, messages exceeding this are dropped
+     * @defaultValue 1048576 (1MB)
+     */
+    maxMessageSize?: number;
+
+    /**
      * @zh 连接初始数据工厂
      * @en Connection initial data factory
      */
@@ -223,11 +230,19 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
             || 'unknown';
     };
 
+    const maxMessageSize = options.maxMessageSize ?? 1_048_576; // 1MB
+
     const handleMessage = async (
         conn: ServerConnection<TConnData>,
         data: string | Buffer
     ): Promise<void> => {
         try {
+            const size = typeof data === 'string' ? data.length : data.byteLength;
+            if (size > maxMessageSize) {
+                options.onError?.(new Error(`Message too large: ${size} bytes (max: ${maxMessageSize})`), conn);
+                return;
+            }
+
             const packet = codec.decode(
                 typeof data === 'string' ? data : new Uint8Array(data)
             );
@@ -327,10 +342,6 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
 
                     connections.push(conn);
 
-                    ws.on('message', (data) => {
-                        handleMessage(conn, data as string | Buffer);
-                    });
-
                     ws.on('close', async (code, reason) => {
                         conn._markClosed();
                         const idx = connections.indexOf(conn);
@@ -343,6 +354,10 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
                     });
 
                     await options.onConnect?.(conn);
+
+                    ws.on('message', (data) => {
+                        handleMessage(conn, data as string | Buffer);
+                    });
                 });
 
                 // 如果使用已有的 HTTP 服务器，WebSocketServer 不会触发 listening 事件
@@ -359,7 +374,7 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
         },
 
         async stop() {
-            return new Promise((resolve, reject) => {
+            return new Promise<void>((resolve, reject) => {
                 if (!wss) {
                     resolve();
                     return;
@@ -369,7 +384,12 @@ export function serve<P extends ProtocolDef, TConnData = unknown>(
                     conn.close('Server shutting down');
                 }
 
+                const timeout = setTimeout(() => {
+                    resolve();
+                }, 5000);
+
                 wss.close((err) => {
+                    clearTimeout(timeout);
                     if (err) reject(err);
                     else resolve();
                 });

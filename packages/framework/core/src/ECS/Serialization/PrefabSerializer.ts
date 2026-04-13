@@ -215,10 +215,18 @@ export class PrefabSerializer {
         const hierarchySystem = scene.getSystem(HierarchySystem) ?? null;
 
         // ID 生成器 | ID generator
+        const MAX_ENTITY_ID = 0x7FFFFFFF;
         let nextId = 1;
         const idGenerator = (): number => {
+            const startId = nextId;
             while (scene.findEntityById(nextId)) {
                 nextId++;
+                if (nextId > MAX_ENTITY_ID) {
+                    nextId = 1;
+                }
+                if (nextId === startId) {
+                    throw new Error('Entity ID space exhausted: no available IDs');
+                }
             }
             return nextId++;
         };

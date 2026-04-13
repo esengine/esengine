@@ -242,6 +242,7 @@ export class RpcClient<P extends ProtocolDef> {
                 const err = new Error('WebSocket error');
                 this._options.onError?.(err);
                 if (this._status === 'connecting') {
+                    this._status = 'closed';
                     this._connectPromise = null;
                     reject(err);
                 }
@@ -262,6 +263,7 @@ export class RpcClient<P extends ProtocolDef> {
     disconnect(): void {
         this._shouldReconnect = false;
         this._clearReconnectTimer();
+        this._rejectAllPending();
         if (this._ws) {
             this._status = 'closing';
             this._ws.close();
@@ -296,7 +298,13 @@ export class RpcClient<P extends ProtocolDef> {
             });
 
             const packet: Packet = [PacketType.ApiRequest, id, name as string, input];
-            this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
+            try {
+                this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
+            } catch (err) {
+                this._pendingCalls.delete(id);
+                clearTimeout(timer);
+                reject(new RpcError(ErrorCode.CONNECTION_CLOSED, 'Send failed'));
+            }
         });
     }
 
@@ -307,7 +315,12 @@ export class RpcClient<P extends ProtocolDef> {
     send<K extends MsgNames<P>>(name: K, data: MsgData<P['msg'][K]>): void {
         if (this._status !== 'open') return;
         const packet: Packet = [PacketType.Message, name as string, data];
-        this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
+        try {
+            this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
+        } catch {
+            // Socket closed at transport level
+            this._status = 'closed';
+        }
     }
 
     /**

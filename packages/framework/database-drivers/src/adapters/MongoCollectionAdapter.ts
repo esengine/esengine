@@ -6,7 +6,7 @@
  * @en Adapts native MongoDB Collection to simplified interface
  */
 
-import type { Collection, Db } from 'mongodb'
+import type { Collection, Db, OptionalUnlessRequiredId, WithId } from 'mongodb'
 import type {
     DeleteResult,
     FindOneAndUpdateOptions,
@@ -92,7 +92,7 @@ export class MongoCollectionAdapter<T extends object> implements IMongoCollectio
 
     async insertMany(docs: T[]): Promise<InsertManyResult> {
         const result = await this._collection.insertMany(
-            docs as Parameters<typeof this._collection.insertMany>[0]
+            docs as OptionalUnlessRequiredId<T>[]
         )
         return {
             insertedCount: result.insertedCount,
@@ -192,9 +192,9 @@ export class MongoCollectionAdapter<T extends object> implements IMongoCollectio
      * @zh 移除 MongoDB 的 _id 字段
      * @en Remove MongoDB's _id field
      */
-    private _stripId<D extends object>(doc: D): D {
+    private _stripId(doc: WithId<T>): T {
         const { _id, ...rest } = doc as { _id?: unknown } & Record<string, unknown>
-        return rest as D
+        return rest as T
     }
 }
 
@@ -204,7 +204,7 @@ export class MongoCollectionAdapter<T extends object> implements IMongoCollectio
  */
 export class MongoDatabaseAdapter implements IMongoDatabase {
     readonly name: string
-    private _collections = new Map<string, MongoCollectionAdapter<object>>()
+    private _collections = new Map<string, unknown>()
 
     constructor(private readonly _db: Db) {
         this.name = _db.databaseName
@@ -213,10 +213,7 @@ export class MongoDatabaseAdapter implements IMongoDatabase {
     collection<T extends object = object>(name: string): IMongoCollection<T> {
         if (!this._collections.has(name)) {
             const nativeCollection = this._db.collection<T>(name)
-            this._collections.set(
-                name,
-                new MongoCollectionAdapter(nativeCollection) as MongoCollectionAdapter<object>
-            )
+            this._collections.set(name, new MongoCollectionAdapter(nativeCollection))
         }
         return this._collections.get(name) as IMongoCollection<T>
     }

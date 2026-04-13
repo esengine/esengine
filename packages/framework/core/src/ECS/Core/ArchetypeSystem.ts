@@ -79,6 +79,10 @@ export class ArchetypeSystem {
         // 清理实体相关缓存
         this._entityComponentTypesCache.delete(entity);
         this._entityToArchetype.delete(entity);
+
+        if (archetype.entities.size === 0) {
+            this._removeArchetype(archetype);
+        }
     }
 
     /**
@@ -105,6 +109,9 @@ export class ArchetypeSystem {
         // 从旧原型中移除实体
         if (currentArchetype) {
             currentArchetype.entities.delete(entity);
+            if (currentArchetype.entities.size === 0) {
+                this._removeArchetype(currentArchetype);
+            }
         }
 
         // 获取或创建新原型
@@ -275,6 +282,20 @@ export class ArchetypeSystem {
             BitMask64Utils.orInPlace(mask, bitMask);
         }
         return mask;
+    }
+
+    private _removeArchetype(archetype: Archetype): void {
+        this._archetypes.delete(archetype.id);
+        for (const componentType of archetype.componentTypes) {
+            const archetypes = this._componentToArchetypes.get(componentType);
+            if (archetypes) {
+                archetypes.delete(archetype);
+                if (archetypes.size === 0) {
+                    this._componentToArchetypes.delete(componentType);
+                }
+            }
+        }
+        this.updateAllArchetypeArrays();
     }
 
     /**

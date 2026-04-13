@@ -269,7 +269,8 @@ export class SagaOrchestrator {
                 await this._saveSagaLog(sagaLog);
             }
 
-            sagaLog.state = 'compensated';
+            const hasCompensationFailure = sagaLog.steps.some(s => s.state === 'failed');
+            sagaLog.state = hasCompensationFailure ? 'failed' : 'compensated';
             sagaLog.updatedAt = Date.now();
             await this._saveSagaLog(sagaLog);
 

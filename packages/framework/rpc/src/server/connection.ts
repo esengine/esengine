@@ -43,7 +43,12 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
      */
     send(data: string | Uint8Array): void {
         if (this._status !== 'open') return;
-        this._socket.send(data);
+        try {
+            this._socket.send(data);
+        } catch {
+            // Socket already closed at transport level
+            this._status = 'closed';
+        }
     }
 
     /**
@@ -55,7 +60,11 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
      */
     sendBinary(data: Uint8Array): void {
         if (this._status !== 'open') return;
-        this._socket.send(data, { binary: true });
+        try {
+            this._socket.send(data, { binary: true });
+        } catch {
+            this._status = 'closed';
+        }
     }
 
     /**
@@ -65,9 +74,12 @@ export class ServerConnection<TData = unknown> implements Connection<TData> {
     close(reason?: string): void {
         if (this._status !== 'open') return;
 
-        this._status = 'closing';
-        this._socket.close(1000, reason);
         this._status = 'closed';
+        try {
+            this._socket.close(1000, reason);
+        } catch {
+            // Socket may already be closed
+        }
         this._onClose?.();
     }
 

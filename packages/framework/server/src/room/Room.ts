@@ -218,6 +218,12 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
     onPlayerReconnected(player: Player<TPlayerData>): void | Promise<void> {}
 
     /**
+     * @zh 发生错误时调用
+     * @en Called when an error occurs
+     */
+    onError(error: Error): void {}
+
+    /**
      * @zh 游戏循环
      * @en Game tick
      */
@@ -375,7 +381,12 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
      */
     async _addPlayer(id: string, conn: any, playerData?: Record<string, unknown>): Promise<Player<TPlayerData> | null> {
         const prev = this._playerOps.get(id);
-        if (prev) await prev.catch(() => {});
+        if (prev) {
+            await Promise.race([
+                prev.catch(() => {}),
+                new Promise<void>(r => setTimeout(r, 5000))
+            ]);
+        }
 
         const op = this._doAddPlayer(id, conn, playerData);
         this._playerOps.set(id, op);
@@ -484,6 +495,7 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
             this._players.delete(oldId);
             (player as { id: string }).id = newConnId;
             this._players.set(newConnId, player);
+            this._playersCache = null;
         }
 
         await this.onPlayerReconnected(player);
@@ -502,7 +514,11 @@ export abstract class Room<TState = unknown, TPlayerData = Record<string, unknow
             if (handler.type === type) {
                 const method = this[handler.method as keyof this];
                 if (typeof method === 'function') {
-                    (method as (data: unknown, player: Player<TPlayerData>) => void).call(this, data, player);
+                    try {
+                        (method as (data: unknown, player: Player<TPlayerData>) => void).call(this, data, player);
+                    } catch (err) {
+                        this.onError(err instanceof Error ? err : new Error(String(err)));
+                    }
                 }
             }
         }

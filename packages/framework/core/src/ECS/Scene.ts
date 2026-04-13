@@ -889,6 +889,7 @@ export class Scene implements IScene {
      * 从场景中删除所有实体
      */
     public destroyAllEntities() {
+        this.referenceTracker.unregisterAllEntitiesForScene(this);
         this.entities.removeAllEntities();
 
         this.querySystem.setEntities([]);

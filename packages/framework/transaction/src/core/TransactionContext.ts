@@ -211,6 +211,7 @@ export class TransactionContext implements ITransactionContext {
 
     private async _compensate(fromIndex: number): Promise<void> {
         this._state = 'rolledback';
+        let hasCompensationFailure = false;
 
         for (let i = fromIndex; i >= 0; i--) {
             const op = this._operations[i];
@@ -218,12 +219,15 @@ export class TransactionContext implements ITransactionContext {
                 await op.compensate(this);
                 await this._updateOperationLog(i, 'compensated');
             } catch (error) {
+                hasCompensationFailure = true;
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 await this._updateOperationLog(i, 'failed', errorMessage);
             }
         }
 
-        await this._updateTransactionState('rolledback');
+        const finalState = hasCompensationFailure ? 'failed' : 'rolledback';
+        this._state = finalState;
+        await this._updateTransactionState(finalState);
     }
 
     private async _saveLog(): Promise<void> {

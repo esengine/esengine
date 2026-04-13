@@ -274,7 +274,15 @@ export class Repository<T extends BaseEntity> implements IRepository<T> {
                     mongoOps['$regex'] = new RegExp(`^${pattern}$`, 'i')
                 }
                 if ('$regex' in ops) {
-                    mongoOps['$regex'] = new RegExp(ops.$regex as string, 'i')
+                    const pattern = ops.$regex as string
+                    if (pattern.length > 256) {
+                        throw new Error('Regex pattern too long (max 256 characters)')
+                    }
+                    try {
+                        mongoOps['$regex'] = new RegExp(pattern, 'i')
+                    } catch {
+                        throw new Error(`Invalid regex pattern: ${pattern}`)
+                    }
                 }
 
                 result[key] = Object.keys(mongoOps).length > 0 ? mongoOps : value
