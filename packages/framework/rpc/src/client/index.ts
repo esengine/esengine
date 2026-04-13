@@ -300,7 +300,7 @@ export class RpcClient<P extends ProtocolDef> {
             const packet: Packet = [PacketType.ApiRequest, id, name as string, input];
             try {
                 this._ws!.send(this._codec.encode(packet) as string | ArrayBuffer);
-            } catch (err) {
+            } catch {
                 this._pendingCalls.delete(id);
                 clearTimeout(timer);
                 reject(new RpcError(ErrorCode.CONNECTION_CLOSED, 'Send failed'));
