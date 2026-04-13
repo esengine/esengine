@@ -1,10 +1,12 @@
-import { EntitySystem, Matcher, Time, ECSSystem } from '@esengine/ecs-framework';
+import { EntitySystem, Matcher, Time, ECSSystem, createLogger } from '@esengine/ecs-framework';
 import type { Entity, Scene } from '@esengine/ecs-framework';
 import { StreamingAnchorComponent } from '../components/StreamingAnchorComponent';
 import { ChunkLoaderComponent } from '../components/ChunkLoaderComponent';
 import { ChunkManager } from '../services/ChunkManager';
 import { EChunkPriority } from '../types';
 import type { IChunkCoord } from '../types';
+
+const streamLogger = createLogger('ChunkStreamingSystem');
 
 /**
  * 区块流式加载系统
@@ -75,7 +77,7 @@ export class ChunkStreamingSystem extends EntitySystem {
             this._loadingInProgress = true;
             this._chunkManager.processLoads(loader.maxLoadsPerFrame)
                 .catch((error) => {
-                    console.error('ChunkStreamingSystem: processLoads failed:', error);
+                    streamLogger.error('processLoads failed:', error);
                 })
                 .finally(() => {
                     this._loadingInProgress = false;

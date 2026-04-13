@@ -1,5 +1,5 @@
 import { TaskStatus, NodeType } from '../../Types/TaskStatus';
-import { INodeExecutor, NodeExecutionContext, BindingHelper } from '../NodeExecutor';
+import { INodeExecutor, NodeExecutionContext, BindingHelper, btLogger } from '../NodeExecutor';
 import { NodeExecutorMetadata } from '../NodeMetadata';
 
 /**
@@ -39,7 +39,7 @@ export class ExecuteAction implements INodeExecutor {
         try {
             return actionFunction(entity);
         } catch (error) {
-            console.error(`ExecuteAction failed: ${error}`);
+            btLogger.error(`ExecuteAction failed: ${error}`);
             return TaskStatus.Failure;
         }
     }

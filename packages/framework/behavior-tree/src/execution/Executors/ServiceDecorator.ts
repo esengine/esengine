@@ -1,5 +1,5 @@
 import { TaskStatus, NodeType } from '../../Types/TaskStatus';
-import { INodeExecutor, NodeExecutionContext, BindingHelper } from '../NodeExecutor';
+import { INodeExecutor, NodeExecutionContext, BindingHelper, btLogger } from '../NodeExecutor';
 import { NodeExecutorMetadata } from '../NodeMetadata';
 
 /**
@@ -87,7 +87,7 @@ export class ServiceDecorator implements INodeExecutor {
 
         const service = ServiceRegistry.get(serviceName);
         if (!service) {
-            console.warn(`未找到Service: ${serviceName}`);
+            btLogger.warn(`Service not found: ${serviceName}`);
             return TaskStatus.Failure;
         }
 

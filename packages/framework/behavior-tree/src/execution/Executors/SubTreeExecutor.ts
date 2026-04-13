@@ -1,5 +1,5 @@
 import { TaskStatus, NodeType } from '../../Types/TaskStatus';
-import { INodeExecutor, NodeExecutionContext, BindingHelper } from '../NodeExecutor';
+import { INodeExecutor, NodeExecutionContext, BindingHelper, btLogger } from '../NodeExecutor';
 import { NodeExecutorMetadata } from '../NodeMetadata';
 import { BehaviorTreeAssetManager } from '../BehaviorTreeAssetManager';
 import { Core } from '@esengine/ecs-framework';
@@ -53,13 +53,13 @@ export class SubTreeExecutor implements INodeExecutor {
         const subTreeData = assetManager.getAsset(treeAssetId);
 
         if (!subTreeData) {
-            console.warn(`未找到子树资产: ${treeAssetId}`);
+            btLogger.warn(`SubTree asset not found: ${treeAssetId}`);
             return TaskStatus.Failure;
         }
 
         const rootNode = subTreeData.nodes.get(subTreeData.rootNodeId);
         if (!rootNode) {
-            console.warn(`子树根节点未找到: ${subTreeData.rootNodeId}`);
+            btLogger.warn(`SubTree root node not found: ${subTreeData.rootNodeId}`);
             return TaskStatus.Failure;
         }
 
@@ -84,7 +84,7 @@ export class SubTreeExecutor implements INodeExecutor {
             executeChild: (childId: string) => {
                 const childData = subTreeData.nodes.get(childId);
                 if (!childData) {
-                    console.warn(`子树节点未找到: ${childId}`);
+                    btLogger.warn(`SubTree node not found: ${childId}`);
                     return TaskStatus.Failure;
                 }
 

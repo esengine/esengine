@@ -6,7 +6,7 @@
  * @en Provides @esengine/rpc based network synchronization with client prediction and reconnection
  */
 
-import { type IPlugin, Core, type ServiceContainer, type Scene } from '@esengine/ecs-framework'
+import { type IPlugin, Core, type ServiceContainer, type Scene, createLogger } from '@esengine/ecs-framework'
 import {
     GameNetworkService,
     type NetworkServiceOptions,
@@ -150,6 +150,8 @@ interface ReconnectState {
  * })
  * ```
  */
+const logger = createLogger('NetworkPlugin')
+
 export class NetworkPlugin implements IPlugin {
     public readonly name = '@esengine/network'
     public readonly version = '2.1.0'
@@ -388,7 +390,7 @@ export class NetworkPlugin implements IPlugin {
 
             return true
         } catch (err) {
-            console.error('[NetworkPlugin] Connection failed:', err)
+            logger.error('Connection failed:', err)
             return false
         }
     }
@@ -411,7 +413,7 @@ export class NetworkPlugin implements IPlugin {
     }
 
     private _handleDisconnect(reason?: string): void {
-        console.log('[NetworkPlugin] Disconnected:', reason)
+        logger.info('Disconnected:', reason)
 
         if (this._config.enableAutoReconnect && this._reconnectState && !this._reconnectState.isReconnecting) {
             this._attemptReconnect()
@@ -422,7 +424,7 @@ export class NetworkPlugin implements IPlugin {
         if (!this._reconnectState || !this._lastConnectOptions) return
 
         if (this._reconnectState.attempts >= this._config.maxReconnectAttempts) {
-            console.error('[NetworkPlugin] Max reconnection attempts reached')
+            logger.error('Max reconnection attempts reached')
             this._reconnectState = null
             return
         }
@@ -430,7 +432,7 @@ export class NetworkPlugin implements IPlugin {
         this._reconnectState.isReconnecting = true
         this._reconnectState.attempts++
 
-        console.log(`[NetworkPlugin] Attempting reconnection (${this._reconnectState.attempts}/${this._config.maxReconnectAttempts})`)
+        logger.info(`Attempting reconnection (${this._reconnectState.attempts}/${this._config.maxReconnectAttempts})`)
 
         this._reconnectTimer = setTimeout(async () => {
             try {
@@ -443,7 +445,7 @@ export class NetworkPlugin implements IPlugin {
                 })
 
                 if (result.success) {
-                    console.log('[NetworkPlugin] Reconnection successful')
+                    logger.info('Reconnection successful')
                     this._reconnectState!.isReconnecting = false
                     this._reconnectState!.attempts = 0
 
@@ -452,11 +454,11 @@ export class NetworkPlugin implements IPlugin {
                         this._handleFullState(result.state)
                     }
                 } else {
-                    console.error('[NetworkPlugin] Reconnection rejected:', result.error)
+                    logger.error('Reconnection rejected:', result.error)
                     this._attemptReconnect()
                 }
             } catch (err) {
-                console.error('[NetworkPlugin] Reconnection failed:', err)
+                logger.error('Reconnection failed:', err)
                 if (this._reconnectState) {
                     this._reconnectState.isReconnecting = false
                 }

@@ -115,7 +115,9 @@ export class ObjectValidator<T extends ObjectShape> extends BaseValidator<InferS
         for (const [key, validator] of Object.entries(this._shape)) {
             partialShape[key] = validator.optional();
         }
-        return new ObjectValidator(partialShape) as any;
+        return new ObjectValidator(partialShape) as ObjectValidator<{
+            [K in keyof T]: ReturnType<T[K]['optional']>;
+        }>;
     }
 
     /**
@@ -127,7 +129,7 @@ export class ObjectValidator<T extends ObjectShape> extends BaseValidator<InferS
         for (const key of keys) {
             pickedShape[key as string] = this._shape[key];
         }
-        return new ObjectValidator(pickedShape) as any;
+        return new ObjectValidator(pickedShape) as ObjectValidator<Pick<T, K>>;
     }
 
     /**
@@ -142,7 +144,7 @@ export class ObjectValidator<T extends ObjectShape> extends BaseValidator<InferS
                 omittedShape[key] = validator;
             }
         }
-        return new ObjectValidator(omittedShape) as any;
+        return new ObjectValidator(omittedShape) as ObjectValidator<Omit<T, K>>;
     }
 
     /**
@@ -151,7 +153,7 @@ export class ObjectValidator<T extends ObjectShape> extends BaseValidator<InferS
      */
     extend<U extends ObjectShape>(shape: U): ObjectValidator<T & U> {
         const extendedShape = { ...this._shape, ...shape };
-        return new ObjectValidator(extendedShape) as any;
+        return new ObjectValidator(extendedShape) as ObjectValidator<T & U>;
     }
 }
 
@@ -335,13 +337,17 @@ export class TupleValidator<T extends readonly Validator<unknown>[]> extends Bas
             const itemResult = this._elements[i].validate(value[i], itemPath);
 
             if (!itemResult.success) {
-                return itemResult as any;
+                return itemResult as ValidationResult<{
+                    [K in keyof T]: T[K] extends Validator<infer U> ? U : never;
+                }>;
             }
 
             result.push(itemResult.data);
         }
 
-        return { success: true, data: result as any };
+        return { success: true, data: result as {
+            [K in keyof T]: T[K] extends Validator<infer U> ? U : never;
+        } };
     }
 
     protected _clone(): TupleValidator<T> {
@@ -379,7 +385,9 @@ export class UnionValidator<T extends readonly Validator<unknown>[]> extends Bas
         for (const variant of this._variants) {
             const result = variant.validate(value, path);
             if (result.success) {
-                return result as any;
+                return result as ValidationResult<
+                    T[number] extends Validator<infer U> ? U : never
+                >;
             }
             errors.push(variant.typeName);
         }

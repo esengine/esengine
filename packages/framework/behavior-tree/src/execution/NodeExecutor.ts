@@ -1,4 +1,6 @@
-import { Entity } from '@esengine/ecs-framework';
+import { Entity, createLogger } from '@esengine/ecs-framework';
+
+export const btLogger = createLogger('BehaviorTree');
 import { TaskStatus } from '../Types/TaskStatus';
 import { BehaviorNodeData, BehaviorTreeData, NodeRuntimeState } from './BehaviorTreeData';
 import { BehaviorTreeRuntimeComponent } from './BehaviorTreeRuntimeComponent';
@@ -146,7 +148,7 @@ export class NodeExecutorRegistry {
      */
     register(implementationType: string, executor: INodeExecutor): void {
         if (this.executors.has(implementationType)) {
-            console.warn(`执行器已存在，将被覆盖: ${implementationType}`);
+            btLogger.warn(`Executor already exists, will be overridden: ${implementationType}`);
         }
         this.executors.set(implementationType, executor);
     }

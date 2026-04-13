@@ -9,8 +9,8 @@
  * auto-generate corresponding Get/Set/Call nodes and register to NodeRegistry
  */
 
-import { type Component, type Entity, getComponentInstanceTypeName } from '@esengine/ecs-framework';
-import type { BlueprintNodeTemplate, BlueprintNode } from '../types/nodes';
+import { type Component, type Entity, getComponentInstanceTypeName, createLogger } from '@esengine/ecs-framework';
+import type { BlueprintNodeTemplate, BlueprintNode, BlueprintNodeCategory } from '../types/nodes';
 import type { BlueprintPinType } from '../types/pins';
 import type { ExecutionContext, ExecutionResult } from '../runtime/ExecutionContext';
 import type { INodeExecutor } from '../runtime/NodeRegistry';
@@ -21,6 +21,8 @@ import {
     type PropertyMetadata,
     type MethodMetadata
 } from './BlueprintDecorators';
+
+const logger = createLogger('Blueprint');
 
 // ============================================================================
 // Node Generator | 节点生成器
@@ -144,7 +146,7 @@ function generateAddComponentNode(
 
                 return { outputs: { component, success: true }, nextExec: 'exec' };
             } catch (error) {
-                console.error(`[Blueprint] Failed to add ${componentName}:`, error);
+                logger.error(`Failed to add ${componentName}:`, error);
                 return { outputs: { component: null, success: false }, nextExec: 'exec' };
             }
         }
@@ -217,7 +219,7 @@ function generateGetComponentNode(
 function generatePropertyGetNode(
     componentName: string,
     prop: PropertyMetadata,
-    category: string,
+    category: BlueprintNodeCategory,
     color: string
 ): void {
     const nodeType = `Get_${componentName}_${prop.propertyKey}`;
@@ -227,7 +229,7 @@ function generatePropertyGetNode(
         type: nodeType,
         title: `Get ${displayName}`,
         subtitle: componentName,
-        category: category as any,
+        category,
         color,
         isPure: true,
         description: prop.description ?? `Gets ${displayName} from ${componentName} (从 ${componentName} 获取 ${displayName})`,
@@ -267,7 +269,7 @@ function generatePropertyGetNode(
 function generatePropertySetNode(
     componentName: string,
     prop: PropertyMetadata,
-    category: string,
+    category: BlueprintNodeCategory,
     color: string
 ): void {
     const nodeType = `Set_${componentName}_${prop.propertyKey}`;
@@ -277,7 +279,7 @@ function generatePropertySetNode(
         type: nodeType,
         title: `Set ${displayName}`,
         subtitle: componentName,
-        category: category as any,
+        category,
         color,
         description: prop.description ?? `Sets ${displayName} on ${componentName} (设置 ${componentName} 的 ${displayName})`,
         keywords: ['set', 'property', componentName.toLowerCase(), prop.propertyKey.toLowerCase()],
@@ -317,7 +319,7 @@ function generatePropertySetNode(
 function generateMethodCallNode(
     componentName: string,
     method: MethodMetadata,
-    category: string,
+    category: BlueprintNodeCategory,
     color: string
 ): void {
     const nodeType = `Call_${componentName}_${method.methodKey}`;
@@ -360,7 +362,7 @@ function generateMethodCallNode(
         type: nodeType,
         title: displayName,
         subtitle: componentName,
-        category: category as any,
+        category,
         color,
         isPure,
         description: method.description ?? `Calls ${displayName} on ${componentName} (调用 ${componentName} 的 ${displayName})`,
@@ -386,7 +388,7 @@ function generateMethodCallNode(
 
             const fn = (component as unknown as Record<string, Function>)[methodKey];
             if (typeof fn !== 'function') {
-                console.warn(`Method ${methodKey} not found on component ${componentName}`);
+                logger.warn(`Method ${methodKey} not found on component ${componentName}`);
                 return isPure ? { outputs: { result: null } } : { nextExec: 'exec' };
             }
 
@@ -421,13 +423,13 @@ export function registerAllComponentNodes(): void {
     for (const [componentClass, metadata] of components) {
         try {
             generateComponentNodes(componentClass, metadata);
-            console.log(`[Blueprint] Registered component: ${metadata.componentName} (${metadata.properties.length} properties, ${metadata.methods.length} methods)`);
+            logger.debug(`Registered component: ${metadata.componentName} (${metadata.properties.length} properties, ${metadata.methods.length} methods)`);
         } catch (error) {
-            console.error(`[Blueprint] Failed to register component ${metadata.componentName}:`, error);
+            logger.error(`Failed to register component ${metadata.componentName}:`, error);
         }
     }
 
-    console.log(`[Blueprint] Registered ${components.size} component(s)`);
+    logger.debug(`Registered ${components.size} component(s)`);
 }
 
 /**
@@ -439,7 +441,7 @@ export function registerComponentNodes(componentClass: Function): void {
     const metadata = components.get(componentClass);
 
     if (!metadata) {
-        console.warn(`[Blueprint] Component ${componentClass.name} is not marked with @BlueprintExpose`);
+        logger.warn(`Component ${componentClass.name} is not marked with @BlueprintExpose`);
         return;
     }
 

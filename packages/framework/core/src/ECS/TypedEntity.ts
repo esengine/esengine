@@ -7,7 +7,6 @@
 import { Entity } from './Entity';
 import type { Component } from './Component';
 import type { ComponentType } from './Core/ComponentStorage';
-import type { ComponentConstructor, ComponentInstance } from '../Types/TypeHelpers';
 import { HierarchySystem } from './Systems/HierarchySystem';
 
 /**
@@ -24,11 +23,11 @@ import { HierarchySystem } from './Systems/HierarchySystem';
  * position.x += 10;
  * ```
  */
-export function requireComponent<T extends ComponentConstructor>(
+export function requireComponent<T extends Component>(
     entity: Entity,
-    componentType: T
-): ComponentInstance<T> {
-    const component = entity.getComponent(componentType as unknown as ComponentType<ComponentInstance<T>>);
+    componentType: ComponentType<T>
+): T {
+    const component = entity.getComponent(componentType);
     if (!component) {
         throw new Error(
             `Component ${componentType.name} not found on entity ${entity.name} (id: ${entity.id})`
@@ -52,11 +51,11 @@ export function requireComponent<T extends ComponentConstructor>(
  * }
  * ```
  */
-export function tryGetComponent<T extends ComponentConstructor>(
+export function tryGetComponent<T extends Component>(
     entity: Entity,
-    componentType: T
-): ComponentInstance<T> | undefined {
-    const component = entity.getComponent(componentType as unknown as ComponentType<ComponentInstance<T>>);
+    componentType: ComponentType<T>
+): T | undefined {
+    const component = entity.getComponent(componentType);
     return component !== null ? component : undefined;
 }
 
@@ -75,13 +74,13 @@ export function tryGetComponent<T extends ComponentConstructor>(
  * }
  * ```
  */
-export function getComponents<T extends readonly ComponentConstructor[]>(
+export function getComponents<T extends readonly ComponentType[]>(
     entity: Entity,
     ...types: T
-): { [K in keyof T]: ComponentInstance<T[K]> | null } {
+): { [K in keyof T]: T[K] extends ComponentType<infer C> ? C | null : never } {
     return types.map((type) =>
-        entity.getComponent(type as ComponentType<ComponentInstance<typeof type>>)
-    ) as { [K in keyof T]: ComponentInstance<T[K]> | null };
+        entity.getComponent(type)
+    ) as { [K in keyof T]: T[K] extends ComponentType<infer C> ? C | null : never };
 }
 
 /**
@@ -99,8 +98,8 @@ export function getComponents<T extends readonly ComponentConstructor[]>(
  * }
  * ```
  */
-export function hasComponents(entity: Entity, ...types: ComponentConstructor[]): boolean {
-    return types.every((type) => entity.hasComponent(type as ComponentType));
+export function hasComponents(entity: Entity, ...types: ComponentType[]): boolean {
+    return types.every((type) => entity.hasComponent(type));
 }
 
 /**
@@ -110,8 +109,8 @@ export function hasComponents(entity: Entity, ...types: ComponentConstructor[]):
  * @param types - 组件类型构造函数数组
  * @returns 如果拥有任意一个组件返回true，否则返回false
  */
-export function hasAnyComponent(entity: Entity, ...types: ComponentConstructor[]): boolean {
-    return types.some((type) => entity.hasComponent(type as ComponentType));
+export function hasAnyComponent(entity: Entity, ...types: ComponentType[]): boolean {
+    return types.some((type) => entity.hasComponent(type));
 }
 
 /**
@@ -155,12 +154,12 @@ export function addAndConfigure<T extends Component>(
  * const health = getOrAddComponent(entity, Health, () => new Health(100));
  * ```
  */
-export function getOrAddComponent<T extends ComponentConstructor>(
+export function getOrAddComponent<T extends Component>(
     entity: Entity,
-    componentType: T,
-    factory: () => ComponentInstance<T>
-): ComponentInstance<T> {
-    let component = entity.getComponent(componentType as unknown as ComponentType<ComponentInstance<T>>);
+    componentType: ComponentType<T>,
+    factory: () => T
+): T {
+    let component = entity.getComponent(componentType);
     if (!component) {
         component = factory();
         entity.addComponent(component);
@@ -181,12 +180,12 @@ export function getOrAddComponent<T extends ComponentConstructor>(
  * updateComponent(entity, Position, { x: 100 });
  * ```
  */
-export function updateComponent<T extends ComponentConstructor>(
+export function updateComponent<T extends Component>(
     entity: Entity,
-    componentType: T,
-    data: Partial<ComponentInstance<T>>
+    componentType: ComponentType<T>,
+    data: Partial<T>
 ): boolean {
-    const component = entity.getComponent(componentType as unknown as ComponentType<ComponentInstance<T>>);
+    const component = entity.getComponent(componentType);
     if (!component) {
         return false;
     }

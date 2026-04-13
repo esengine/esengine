@@ -6,6 +6,7 @@
  * @en Uniform grid based area of interest management implementation
  */
 
+import { createLogger } from '@esengine/ecs-framework';
 import type { IVector2 } from '@esengine/ecs-framework-math';
 import type {
     IAOIManager,
@@ -14,6 +15,8 @@ import type {
     AOIEventListener
 } from './IAOI';
 import { distanceSquared } from '../ISpatialQuery';
+
+const aoiLogger = createLogger('GridAOI');
 
 // =============================================================================
 // 内部类型 | Internal Types
@@ -485,7 +488,7 @@ export class GridAOI<T> implements IAOIManager<T> {
             try {
                 listener(event);
             } catch (e) {
-                console.error('AOI entity listener error:', e);
+                aoiLogger.error('AOI entity listener error:', e);
             }
         }
 
@@ -494,7 +497,7 @@ export class GridAOI<T> implements IAOIManager<T> {
             try {
                 listener(event);
             } catch (e) {
-                console.error('AOI global listener error:', e);
+                aoiLogger.error('AOI global listener error:', e);
             }
         }
     }

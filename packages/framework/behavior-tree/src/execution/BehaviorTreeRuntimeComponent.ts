@@ -1,4 +1,4 @@
-import { Component, ECSComponent, Property } from '@esengine/ecs-framework';
+import { Component, ECSComponent, Property, createLogger } from '@esengine/ecs-framework';
 import { Serializable, Serialize, IgnoreSerialization } from '@esengine/ecs-framework';
 import { NodeRuntimeState, createDefaultRuntimeState } from './BehaviorTreeData';
 import { TaskStatus } from '../Types/TaskStatus';
@@ -6,6 +6,8 @@ import { TaskStatus } from '../Types/TaskStatus';
 /**
  * 黑板变化监听器
  */
+const btLogger = createLogger('BehaviorTree');
+
 export type BlackboardChangeListener = (key: string, newValue: any, oldValue: any) => void;
 
 /**
@@ -243,7 +245,7 @@ export class BehaviorTreeRuntimeComponent extends Component {
             try {
                 observer.callback(key, newValue, oldValue);
             } catch (error) {
-                console.error(`黑板观察者回调错误 (节点: ${observer.nodeId}):`, error);
+                btLogger.error(`Blackboard observer callback error (node: ${observer.nodeId}):`, error);
             }
         }
     }

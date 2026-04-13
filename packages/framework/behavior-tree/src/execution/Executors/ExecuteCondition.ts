@@ -1,5 +1,5 @@
 import { TaskStatus, NodeType } from '../../Types/TaskStatus';
-import { INodeExecutor, NodeExecutionContext, BindingHelper } from '../NodeExecutor';
+import { INodeExecutor, NodeExecutionContext, BindingHelper, btLogger } from '../NodeExecutor';
 import { NodeExecutorMetadata } from '../NodeMetadata';
 
 /**
@@ -39,7 +39,7 @@ export class ExecuteCondition implements INodeExecutor {
         try {
             return conditionFunction(entity) ? TaskStatus.Success : TaskStatus.Failure;
         } catch (error) {
-            console.error(`ExecuteCondition failed: ${error}`);
+            btLogger.error(`ExecuteCondition failed: ${error}`);
             return TaskStatus.Failure;
         }
     }

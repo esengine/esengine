@@ -1,4 +1,5 @@
 import { BehaviorTreeData, BehaviorNodeData } from '../execution/BehaviorTreeData';
+import { btLogger } from '../execution/NodeExecutor';
 import { NodeType, AbortType } from '../Types/TaskStatus';
 
 /**
@@ -164,7 +165,7 @@ export class EditorToBehaviorTreeDataConverter {
         }
 
         if (!implementationType) {
-            console.warn(`[EditorToBehaviorTreeDataConverter] Node ${editorNode.id} has no implementationType, using fallback`);
+            btLogger.warn(`Node ${editorNode.id} has no implementationType, using fallback`);
             // 根据节点类型使用默认实现
             implementationType = this.getDefaultImplementationType(nodeType);
         }

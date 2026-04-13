@@ -6,9 +6,12 @@
  * @en Responsible for dispatching trigger events to subscribers
  */
 
+import { createLogger } from '@esengine/ecs-framework';
 import type { TriggerType, ITriggerContext } from './TriggerTypes';
 import type { IBlueprintTrigger, ITriggerRegistry, TriggerCallback } from './BlueprintTrigger';
 import { TriggerRegistry } from './BlueprintTrigger';
+
+const triggerLogger = createLogger('TriggerDispatcher');
 
 // =============================================================================
 // 调度器接口 | Dispatcher Interface
@@ -200,7 +203,7 @@ export class TriggerDispatcher implements ITriggerDispatcher {
                 try {
                     callback(context);
                 } catch (error) {
-                    console.error(`Trigger subscriber error: ${error}`);
+                    triggerLogger.error(`Trigger subscriber error: ${error}`);
                 }
             }
         }
@@ -209,7 +212,7 @@ export class TriggerDispatcher implements ITriggerDispatcher {
             try {
                 callback(context);
             } catch (error) {
-                console.error(`Global trigger subscriber error: ${error}`);
+                triggerLogger.error(`Global trigger subscriber error: ${error}`);
             }
         }
     }

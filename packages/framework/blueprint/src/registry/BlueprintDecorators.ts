@@ -4,6 +4,7 @@
  */
 
 import type { BlueprintPinType } from '../types/pins';
+import type { BlueprintNodeCategory } from '../types/nodes';
 import type { PropertySchema, ArraySchema, ObjectSchema } from '../types/schema';
 
 // ============================================================================
@@ -20,7 +21,7 @@ export interface BlueprintParamDef {
 export interface BlueprintExposeOptions {
     displayName?: string;
     description?: string;
-    category?: string;
+    category?: BlueprintNodeCategory;
     color?: string;
     icon?: string;
 }
@@ -124,7 +125,7 @@ function getOrCreateMetadata(constructor: Function): ComponentBlueprintMetadata 
     let metadata = registeredComponents.get(constructor);
     if (!metadata) {
         metadata = {
-            componentName: (constructor as any).__componentName__ ?? constructor.name,
+            componentName: (constructor as unknown as { __componentName__?: string }).__componentName__ ?? constructor.name,
             properties: [],
             methods: []
         };
@@ -137,12 +138,12 @@ function getOrCreateMetadata(constructor: Function): ComponentBlueprintMetadata 
 // Decorators
 // ============================================================================
 
-export function BlueprintExpose(options: BlueprintExposeOptions = {}): ClassDecorator {
-    return function (target: Function) {
+export function BlueprintExpose(options: BlueprintExposeOptions = {}) {
+    return function <T extends Function>(target: T): T {
         const metadata = getOrCreateMetadata(target);
         Object.assign(metadata, options);
-        metadata.componentName = (target as any).__componentName__ ?? target.name;
-        return target as any;
+        metadata.componentName = (target as unknown as { __componentName__?: string }).__componentName__ ?? target.name;
+        return target;
     };
 }
 
