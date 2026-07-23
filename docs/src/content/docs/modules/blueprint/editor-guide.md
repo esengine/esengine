@@ -13,7 +13,11 @@ description: "Cocos Creator 蓝图可视化脚本编辑器完整使用教程"
 
 从 GitHub Release 下载最新版本（免费）：
 
-**[下载 Cocos Node Editor v1.2.0](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.0)**
+**[下载 Cocos Node Editor v1.2.1](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.1)**
+
+:::caution[从 v1.2.0 升级]
+v1.2.1 修复了一个严重问题：导出的蓝图在运行时完全不执行（连线按引脚 id 而非引脚名序列化），以及复制粘贴产生失效连线、节点检查器编辑不保存。**如果你在用 v1.2.0，请升级后把蓝图重新打开并保存一次**，让连线以正确格式重写。
+:::
 
 > 技术交流 QQ 群：**481923584** | 官网：[esengine.cn](https://esengine.cn/)
 
