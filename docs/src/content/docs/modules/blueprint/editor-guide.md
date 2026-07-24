@@ -13,10 +13,12 @@ description: "Cocos Creator 蓝图可视化脚本编辑器完整使用教程"
 
 从 GitHub Release 下载最新版本（免费）：
 
-**[下载 Cocos Node Editor v1.2.2](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.2)**
+**[下载 Cocos Node Editor v1.2.3](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.3)**
 
-:::tip[v1.2.2 更新]
+:::tip[v1.2.3 更新]
 用 Cocos 的 `@ccclass` + `@BlueprintExpose` 标记的组件，现在会正确生成方法/属性节点：`@BlueprintMethod` 生成带执行引脚的调用节点，`@BlueprintProperty` 生成 Get/Set 节点，节点标题使用装饰器里的 `displayName`。此前只有带 esengine ECS `@ECSComponent` 的组件才会生成这些节点。
+
+**v1.2.3**：`@BlueprintMethod` 的 `params` 现在会在方法节点上生成对应的**参数输入引脚**（如 `heal(amount)` 的 `amount`），未填时按类型取默认值（`float` → 0），不再出现运行时参数为 `undefined`。
 :::
 
 :::caution[从 v1.2.0 升级]
