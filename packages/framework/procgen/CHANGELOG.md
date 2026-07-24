@@ -1,5 +1,12 @@
 # @esengine/procgen
 
+## 11.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`9010378`](https://github.com/esengine/esengine/commit/9010378f888269090d8fe51102fdde492e9ab460)]:
+    - @esengine/blueprint@5.1.0
+
 ## 10.0.0
 
 ### Patch Changes
