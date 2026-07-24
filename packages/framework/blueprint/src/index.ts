@@ -73,6 +73,7 @@ import './nodes';
 // Re-export commonly used items
 export { NodeRegistry, RegisterNode } from './runtime/NodeRegistry';
 export { BlueprintVM } from './runtime/BlueprintVM';
+export { BlueprintRunner, type BlueprintRunnerOptions } from './runtime/BlueprintRunner';
 export { BlueprintComponent } from './runtime/BlueprintComponent';
 export { BlueprintSystem } from './runtime/BlueprintSystem';
 export { ExecutionContext } from './runtime/ExecutionContext';

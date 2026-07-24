@@ -52,11 +52,18 @@ export class ExecutionContext {
     /** Current blueprint asset (当前蓝图资产) */
     readonly blueprint: BlueprintAsset;
 
-    /** Owner entity (所有者实体) */
-    readonly entity: Entity;
+    /** Owner entity (所有者实体) — null for non-ECS hosts */
+    readonly entity: Entity | null;
 
-    /** Current scene (当前场景) */
-    readonly scene: IScene;
+    /** Current scene (当前场景) — null for non-ECS hosts */
+    readonly scene: IScene | null;
+
+    /**
+     * @zh 蓝图所绑定的宿主实例；组件方法/属性节点在未显式连线时默认作用于它
+     * @en Host/owner instance the blueprint is bound to; component method/property
+     *     nodes target this by default when their `component` input is unconnected
+     */
+    self: object | null = null;
 
     /** Frame delta time (帧增量时间) */
     deltaTime: number = 0;
@@ -87,10 +94,19 @@ export class ExecutionContext {
     /** Node lookup by ID (按ID的节点查找) */
     private _nodesById: Map<string, BlueprintNode> = new Map();
 
-    constructor(blueprint: BlueprintAsset, entity: Entity, scene: IScene) {
+    /** Lazy evaluator for pure source nodes, injected by the VM (由 VM 注入的纯节点按需求值器) */
+    private _nodeEvaluator: ((nodeId: string) => void) | null = null;
+
+    constructor(
+        blueprint: BlueprintAsset,
+        entity: Entity | null = null,
+        scene: IScene | null = null,
+        self: object | null = null
+    ) {
         this.blueprint = blueprint;
         this.entity = entity;
         this.scene = scene;
+        this.self = self;
 
         // Initialize instance variables with defaults
         // 使用默认值初始化实例变量
@@ -154,6 +170,14 @@ export class ExecutionContext {
      * Evaluate an input pin value (follows connections or uses default)
      * 计算输入引脚值（跟随连接或使用默认值）
      */
+    /**
+     * @zh 注入用于按需求值(纯)源节点的回调，由 BlueprintVM 设置
+     * @en Set the callback used to lazily evaluate (pure) source nodes on demand (injected by BlueprintVM)
+     */
+    setNodeEvaluator(evaluator: (nodeId: string) => void): void {
+        this._nodeEvaluator = evaluator;
+    }
+
     evaluateInput(nodeId: string, pinName: string, defaultValue?: unknown): unknown {
         const connections = this.getConnectionsToPin(nodeId, pinName);
 
@@ -167,14 +191,22 @@ export class ExecutionContext {
         // Get value from connected output
         // 从连接的输出获取值
         const conn = connections[0];
-        const cachedOutputs = this._outputCache.get(conn.fromNodeId);
+        let cachedOutputs = this._outputCache.get(conn.fromNodeId);
+
+        // Lazy (pull) evaluation: if the source node hasn't produced this output yet,
+        // ask the VM to evaluate it on demand. Only pure (side-effect-free) nodes are
+        // pull-evaluated, so data-flow through Get/property/math nodes works correctly.
+        // 惰性(拉取)求值：源节点尚未产出该输出时，按需让 VM 求值(仅对纯节点生效)，
+        // 使 Get/属性/数学 等数据节点的连线能真正把值传下去。
+        if ((!cachedOutputs || !(conn.fromPin in cachedOutputs)) && this._nodeEvaluator) {
+            this._nodeEvaluator(conn.fromNodeId);
+            cachedOutputs = this._outputCache.get(conn.fromNodeId);
+        }
 
         if (cachedOutputs && conn.fromPin in cachedOutputs) {
             return cachedOutputs[conn.fromPin];
         }
 
-        // Need to execute the source node first (lazy evaluation)
-        // 需要先执行源节点（延迟求值）
         return defaultValue;
     }
 

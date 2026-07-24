@@ -34,13 +34,48 @@ vm.triggerCustomEvent('OnDamage', { amount: 50 });
 vm.debug = true;
 ```
 
+## 在普通组件上运行（无需 ECS）
+
+如果承载蓝图的类不是 ECS 组件（例如 Cocos 的 `cc.Component`），用 `BlueprintRunner` 把蓝图直接跑在该实例上，无需 Scene / 实体 / `BlueprintSystem`：
+
+```typescript
+import { BlueprintRunner, registerAllComponentNodes } from '@esengine/blueprint';
+
+@ccclass('Playground')
+@BlueprintExpose({ displayName: 'Playground' })
+export class Playground extends Component {
+    @property(JsonAsset) bluePrintJson: JsonAsset = null!;
+
+    @BlueprintProperty({ displayName: '当前生命值', type: 'float' })
+    current = 100;
+
+    @BlueprintMethod({ displayName: '治疗', params: [{ name: 'amount', type: 'float' }] })
+    heal(amount: number) { this.current += amount; }
+
+    private runner: BlueprintRunner | null = null;
+
+    onLoad() {
+        registerAllComponentNodes();                 // 生成组件节点（进程内一次即可）
+        this.runner = new BlueprintRunner(this.bluePrintJson!.json as any, { self: this });
+        this.runner.start();
+    }
+    update(dt: number) { this.runner?.tick(dt); }
+    onDestroy() { this.runner?.stop(); }
+}
+```
+
+- **Target 默认 = Self**：组件方法/属性节点的 `component` 引脚未连线时，默认作用于 `self`（这里就是这个 `Playground` 实例），所以 `Heal` 节点什么都不用连就会调用 `this.heal(amount)`，参数走 `amount` 引脚传入。
+- `entity` / `scene` 在 `BlueprintRunner` 下为 `null`，纯 ECS 节点（Create Entity、Add Component 等）不可用；方法调用、属性读写、事件、流程、数学节点均正常工作。
+- 需要 ECS 集成时仍用 `BlueprintComponent` + `BlueprintSystem`。
+
 ## 执行上下文
 
 ```typescript
 interface ExecutionContext {
     blueprint: BlueprintAsset;  // 蓝图资产
-    entity: Entity;             // 当前实体
-    scene: IScene;              // 当前场景
+    entity: Entity | null;      // 当前实体（BlueprintRunner 下为 null）
+    scene: IScene | null;       // 当前场景（BlueprintRunner 下为 null）
+    self: object | null;        // 蓝图所绑定的宿主实例（方法/属性节点未连线时默认作用于它）
     deltaTime: number;          // 帧间隔时间
     time: number;               // 总运行时间
 

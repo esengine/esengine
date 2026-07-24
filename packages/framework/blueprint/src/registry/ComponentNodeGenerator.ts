@@ -188,24 +188,29 @@ function generateGetComponentNode(
 
     const executor: INodeExecutor = {
         execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-            const entity = context.evaluateInput(node.id, 'entity', context.entity) as Entity;
+            const entity = context.evaluateInput(node.id, 'entity', context.entity) as Entity | null;
 
-            if (!entity || entity.isDestroyed) {
-                return { outputs: { component: null, found: false } };
+            // ECS path: resolve the component from the entity
+            // ECS 路径：从实体查找组件
+            if (entity && !entity.isDestroyed) {
+                const component = entity.components.find(c =>
+                    c.constructor === componentClass ||
+                    c.constructor.name === componentName ||
+                    getComponentInstanceTypeName(c) === componentName
+                );
+                if (component) {
+                    return { outputs: { component, found: true } };
+                }
             }
 
-            const component = entity.components.find(c =>
-                c.constructor === componentClass ||
-                c.constructor.name === componentName ||
-                getComponentInstanceTypeName(c) === componentName
-            );
+            // Non-ECS path: fall back to the bound host if it matches this component type
+            // 非 ECS 路径：回退到所绑定的宿主(若类型匹配)
+            const self = context.self;
+            if (self && (self.constructor === componentClass || self.constructor?.name === componentName)) {
+                return { outputs: { component: self, found: true } };
+            }
 
-            return {
-                outputs: {
-                    component: component ?? null,
-                    found: component != null
-                }
-            };
+            return { outputs: { component: null, found: false } };
         }
     };
 
@@ -248,7 +253,7 @@ function generatePropertyGetNode(
 
     const executor: INodeExecutor = {
         execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-            const component = context.evaluateInput(node.id, 'component', null) as Component | null;
+            const component = (context.evaluateInput(node.id, 'component', null) ?? context.self) as Component | null;
 
             if (!component) {
                 return { outputs: { value: defaultValue ?? null } };
@@ -298,7 +303,7 @@ function generatePropertySetNode(
 
     const executor: INodeExecutor = {
         execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-            const component = context.evaluateInput(node.id, 'component', null) as Component | null;
+            const component = (context.evaluateInput(node.id, 'component', null) ?? context.self) as Component | null;
             const value = context.evaluateInput(node.id, 'value', defaultValue);
 
             if (component) {
@@ -376,7 +381,7 @@ function generateMethodCallNode(
 
     const executor: INodeExecutor = {
         execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-            const component = context.evaluateInput(node.id, 'component', null) as Component | null;
+            const component = (context.evaluateInput(node.id, 'component', null) ?? context.self) as Component | null;
 
             if (!component) {
                 return isPure ? { outputs: { result: null } } : { nextExec: 'exec' };

@@ -6,5 +6,6 @@
 export * from './ExecutionContext';
 export * from './NodeRegistry';
 export * from './BlueprintVM';
+export * from './BlueprintRunner';
 export * from './BlueprintComponent';
 export * from './BlueprintSystem';

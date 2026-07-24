@@ -63,8 +63,17 @@ export class BlueprintVM {
     /** Debug mode (调试模式) */
     debug: boolean = false;
 
-    constructor(blueprint: BlueprintAsset, entity: Entity, scene: IScene) {
-        this._context = new ExecutionContext(blueprint, entity, scene);
+    /** Nodes currently being pull-evaluated (cycle guard) (正在按需求值的节点，用于防环) */
+    private _pullEvaluating: Set<string> = new Set();
+
+    constructor(
+        blueprint: BlueprintAsset,
+        entity: Entity | null = null,
+        scene: IScene | null = null,
+        self: object | null = null
+    ) {
+        this._context = new ExecutionContext(blueprint, entity, scene, self);
+        this._context.setNodeEvaluator((nodeId) => this._pullEvaluateNode(nodeId));
         this._cacheEventNodes();
     }
 
@@ -308,6 +317,42 @@ export class BlueprintVM {
             return result;
         } catch (error) {
             return { error: `Execution error: ${error}` };
+        }
+    }
+
+    /**
+     * @zh 按需求值一个纯数据节点，使其输出可供下游读取(拉取式数据流)
+     * @en Lazily evaluate a pure data node so its outputs are available to consumers (pull-based data flow)
+     */
+    private _pullEvaluateNode(nodeId: string): void {
+        // Already produced outputs this execution — nothing to do
+        // 本次执行已产出输出 — 无需处理
+        if (this._context.getOutputs(nodeId)) return;
+
+        // Cycle guard (环检测)
+        if (this._pullEvaluating.has(nodeId)) return;
+
+        const node = this._context.getNode(nodeId);
+        if (!node) return;
+
+        // Only pure (side-effect-free) nodes may be evaluated out of exec order.
+        // 仅对纯节点(无副作用)做乱序求值，避免误触发带执行流的节点。
+        const template = NodeRegistry.instance.getTemplate(node.type);
+        if (!template?.isPure) return;
+
+        const executor = NodeRegistry.instance.getExecutor(node.type);
+        if (!executor) return;
+
+        this._pullEvaluating.add(nodeId);
+        try {
+            const result = executor.execute(node, this._context);
+            if (result.outputs) {
+                this._context.setOutputs(nodeId, result.outputs);
+            }
+        } catch (error) {
+            vmLogger.error(`Error pull-evaluating node ${nodeId}: ${error}`);
+        } finally {
+            this._pullEvaluating.delete(nodeId);
         }
     }
 

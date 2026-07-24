@@ -605,6 +605,7 @@ Check if pin types are compatible. Execution pins (white) can only connect to ex
 1. Ensure entity has `BlueprintComponent` attached
 2. Ensure scene has `BlueprintSystem` added
 3. Check if `autoStart` is `true`
+4. If the script is a plain Cocos component (`cc.Component`, not an ECS component), use `BlueprintRunner` instead — see [Runtime Integration](/en/modules/blueprint/vm)
 
 ### Q: How to debug?
 
