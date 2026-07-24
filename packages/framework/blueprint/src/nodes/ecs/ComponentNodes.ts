@@ -401,7 +401,7 @@ export class GetEntityFromComponentExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         const component = context.evaluateInput(node.id, 'component', null) as Component | null;
 
-        if (!component || component.entityId == null) {
+        if (!component || component.entityId == null || !context.scene) {
             return { outputs: { entity: null, found: false } };
         }
 

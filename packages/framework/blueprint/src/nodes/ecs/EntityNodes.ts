@@ -63,6 +63,9 @@ export const CreateEntityTemplate: BlueprintNodeTemplate = {
 export class CreateEntityExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         const name = context.evaluateInput(node.id, 'name', 'NewEntity') as string;
+        if (!context.scene) {
+            return { outputs: { entity: null }, nextExec: 'exec' };
+        }
         const entity = context.scene.createEntity(name);
         return { outputs: { entity }, nextExec: 'exec' };
     }
@@ -121,7 +124,7 @@ export const DestroySelfTemplate: BlueprintNodeTemplate = {
 @RegisterNode(DestroySelfTemplate)
 export class DestroySelfExecutor implements INodeExecutor {
     execute(_node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        if (!context.entity.isDestroyed) {
+        if (context.entity && !context.entity.isDestroyed) {
             context.entity.destroy();
         }
         return { nextExec: null };
@@ -373,7 +376,7 @@ export const FindEntityByNameTemplate: BlueprintNodeTemplate = {
 export class FindEntityByNameExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         const name = context.evaluateInput(node.id, 'name', '') as string;
-        const entity = context.scene.findEntity(name);
+        const entity = context.scene?.findEntity(name);
         return {
             outputs: {
                 entity: entity ?? null,
@@ -409,7 +412,7 @@ export const FindEntitiesByTagTemplate: BlueprintNodeTemplate = {
 export class FindEntitiesByTagExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         const tag = context.evaluateInput(node.id, 'tag', 0) as number;
-        const entities = context.scene.findEntitiesByTag(tag);
+        const entities = context.scene?.findEntitiesByTag(tag) ?? [];
         return {
             outputs: {
                 entities,
@@ -474,7 +477,7 @@ export const FindEntityByIdTemplate: BlueprintNodeTemplate = {
 export class FindEntityByIdExecutor implements INodeExecutor {
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
         const id = context.evaluateInput(node.id, 'id', 0) as number;
-        const entity = context.scene.findEntityById(id);
+        const entity = context.scene?.findEntityById(id);
         return {
             outputs: {
                 entity: entity ?? null,

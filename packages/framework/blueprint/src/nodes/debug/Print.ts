@@ -74,8 +74,8 @@ export class PrintExecutor implements INodeExecutor {
                 detail: {
                     message: String(message),
                     duration: Number(duration),
-                    entityId: context.entity.id,
-                    entityName: context.entity.name
+                    entityId: context.entity?.id ?? null,
+                    entityName: context.entity?.name ?? null
                 }
             });
 

@@ -871,6 +871,7 @@ your-project/
 1. 确保实体添加了 `BlueprintComponent`
 2. 确保场景添加了 `BlueprintSystem`
 3. 检查 `autoStart` 是否为 `true`
+4. 若脚本是普通 Cocos 组件（`cc.Component`，非 ECS 组件），改用 `BlueprintRunner`，见[运行时集成](/modules/blueprint/vm)
 
 ### Q: 如何调试？
 

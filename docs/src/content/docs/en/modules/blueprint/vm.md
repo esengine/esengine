@@ -34,13 +34,48 @@ vm.triggerCustomEvent('OnDamage', { amount: 50 });
 vm.debug = true;
 ```
 
+## Running on a plain component (no ECS)
+
+If the class hosting the blueprint is not an ECS component (e.g. a Cocos `cc.Component`), use `BlueprintRunner` to run the blueprint directly against that instance — no Scene, entity, or `BlueprintSystem` required:
+
+```typescript
+import { BlueprintRunner, registerAllComponentNodes } from '@esengine/blueprint';
+
+@ccclass('Playground')
+@BlueprintExpose({ displayName: 'Playground' })
+export class Playground extends Component {
+    @property(JsonAsset) bluePrintJson: JsonAsset = null!;
+
+    @BlueprintProperty({ displayName: 'Current Health', type: 'float' })
+    current = 100;
+
+    @BlueprintMethod({ displayName: 'Heal', params: [{ name: 'amount', type: 'float' }] })
+    heal(amount: number) { this.current += amount; }
+
+    private runner: BlueprintRunner | null = null;
+
+    onLoad() {
+        registerAllComponentNodes();                 // generate component nodes (once per process)
+        this.runner = new BlueprintRunner(this.bluePrintJson!.json as any, { self: this });
+        this.runner.start();
+    }
+    update(dt: number) { this.runner?.tick(dt); }
+    onDestroy() { this.runner?.stop(); }
+}
+```
+
+- **Target defaults to Self**: when a component method/property node's `component` pin is unconnected, it targets `self` (here, this `Playground` instance) — so the `Heal` node calls `this.heal(amount)` with nothing wired, the argument flowing through the `amount` pin.
+- `entity` / `scene` are `null` under `BlueprintRunner`, so pure-ECS nodes (Create Entity, Add Component, …) are unavailable; method calls, property get/set, events, flow and math nodes all work.
+- For ECS integration, keep using `BlueprintComponent` + `BlueprintSystem`.
+
 ## Execution Context
 
 ```typescript
 interface ExecutionContext {
     blueprint: BlueprintAsset;  // Blueprint asset
-    entity: Entity;             // Current entity
-    scene: IScene;              // Current scene
+    entity: Entity | null;      // Current entity (null under BlueprintRunner)
+    scene: IScene | null;       // Current scene (null under BlueprintRunner)
+    self: object | null;        // Host instance the blueprint is bound to (method/property nodes target it by default)
     deltaTime: number;          // Frame delta time
     time: number;               // Total runtime
 
