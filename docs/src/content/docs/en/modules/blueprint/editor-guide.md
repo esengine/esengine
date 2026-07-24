@@ -13,7 +13,11 @@ This guide covers how to use the Blueprint Visual Scripting Editor in Cocos Crea
 
 Download the latest version from GitHub Release (Free):
 
-**[Download Cocos Node Editor v1.2.1](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.1)**
+**[Download Cocos Node Editor v1.2.2](https://github.com/esengine/esengine/releases/tag/cocos-node-editor-v1.2.2)**
+
+:::tip[What's new in v1.2.2]
+Components marked with Cocos's `@ccclass` + `@BlueprintExpose` now correctly generate method/property nodes: `@BlueprintMethod` becomes a callable node with exec pins, `@BlueprintProperty` generates Get/Set nodes, and node titles use the decorator `displayName`. Previously only esengine ECS `@ECSComponent` components generated these nodes.
+:::
 
 :::caution[Upgrade from v1.2.0]
 v1.2.1 fixes a critical bug where exported blueprints did not execute at runtime (connections were serialized by pin id instead of pin name), plus copy/paste producing broken links and node inspector edits not being saved. **If you are on v1.2.0, upgrade and re-open + re-save your blueprints once** so connections are rewritten in the correct format.
