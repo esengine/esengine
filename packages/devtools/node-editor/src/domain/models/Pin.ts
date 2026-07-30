@@ -26,7 +26,17 @@ export interface PinDefinition {
     /** Default value when not connected (未连接时的默认值) */
     defaultValue?: unknown;
 
-    /** Whether multiple connections are allowed (是否允许多个连接) */
+    /**
+     * Whether multiple connections are allowed (是否允许多个连接)
+     *
+     * @zh 默认值只把数据输入限制为单连接（一个引脚只能有一个数据来源）；
+     *     exec 输入允许多条执行流汇聚，所有输出都允许扇出。显式指定可覆盖，
+     *     例如把某个 exec 输出声明为单连接（Unreal 风格，强制用 Sequence 扇出）。
+     * @en Defaults to single-connection for data inputs only (a pin can have one
+     *     value source); exec inputs accept converging flows and every output fans
+     *     out. Set explicitly to override — e.g. to make an exec output
+     *     single-connection (Unreal-style, forcing a Sequence node to fan out).
+     */
     allowMultiple?: boolean;
 
     /** Whether this pin is hidden by default (是否默认隐藏) */
@@ -68,7 +78,12 @@ export class Pin {
             definition.isArray ?? false
         );
         this._defaultValue = definition.defaultValue;
-        this._allowMultiple = definition.allowMultiple ?? (definition.category === 'exec' && definition.direction === 'output');
+        // Only data inputs are single-connection — a pin can have exactly one value
+        // source. Exec inputs let flows converge, and every output fans out.
+        // 只有数据输入是单连接 —— 一个引脚只能有一个数据来源。
+        // exec 输入允许执行流汇聚，所有输出都允许扇出。
+        const isDataInput = definition.category !== 'exec' && definition.direction === 'input';
+        this._allowMultiple = definition.allowMultiple ?? !isDataInput;
         this._hidden = definition.hidden ?? false;
         this._color = definition.color;
     }

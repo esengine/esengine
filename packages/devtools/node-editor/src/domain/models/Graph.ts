@@ -210,11 +210,19 @@ export class Graph {
             return this;
         }
 
-        // Remove existing connection to input pin if it doesn't allow multiple
-        // 如果输入引脚不允许多连接，移除现有连接
+        // A single-connection pin drops its existing wire when a new one lands on it.
+        // Enforced on both ends so `allowMultiple` means the same thing whichever side
+        // declares it — by default that is data inputs only, but a template can also
+        // declare an output single-connection (see PinDefinition.allowMultiple).
+        // 单连接引脚在接入新线时丢掉原有的线。两端都做检查，使 `allowMultiple`
+        // 无论声明在哪一侧含义一致 —— 默认只有数据输入是单连接，但模板也可以把
+        // 某个输出声明为单连接（见 PinDefinition.allowMultiple）。
         let newConnections = [...this._connections];
         if (!toPin.allowMultiple) {
             newConnections = newConnections.filter(c => c.toPinId !== connection.toPinId);
+        }
+        if (!fromPin.allowMultiple) {
+            newConnections = newConnections.filter(c => c.fromPinId !== connection.fromPinId);
         }
 
         newConnections.push(connection);

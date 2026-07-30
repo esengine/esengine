@@ -177,3 +177,28 @@
     stroke: var(--ne-connection-selected);
     filter: drop-shadow(0 0 4px var(--ne-connection-selected));
 }
+
+/* ==================== Exec Order Badge 执行顺序徽标 ==================== */
+/*
+ * An exec output pin may fan out to several nodes; the runtime executes them in
+ * connection order. Identical-looking wires give no hint of that order, so each
+ * wire of a fanned-out pin carries its 1-based position.
+ * 一个 exec 输出引脚可以扇出到多个节点，运行时按连线顺序执行。几条一模一样的线
+ * 看不出顺序，所以扇出引脚的每条线都标出自己的序号。
+ */
+.ne-connection-order {
+    pointer-events: none;
+}
+
+.ne-connection-order-bg {
+    fill: var(--ne-canvas-bg);
+    stroke: var(--ne-pin-exec);
+    stroke-width: 1.5px;
+}
+
+.ne-connection-order-text {
+    fill: var(--ne-pin-exec);
+    font-size: var(--ne-font-size-small);
+    font-weight: 600;
+    user-select: none;
+}
