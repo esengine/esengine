@@ -57,6 +57,12 @@ export class BlueprintVM {
     /** Maximum execution steps per frame (每帧最大执行步骤) */
     private _maxStepsPerFrame: number = 1000;
 
+    /** Steps used by the flow currently running (当前执行流已消耗的步数) */
+    private _steps: number = 0;
+
+    /** Maximum exec fan-out nesting depth (exec 扇出的最大嵌套深度) */
+    private _maxExecDepth: number = 200;
+
     /** Maximum pending executions (最大待处理执行数) */
     private _maxPendingExecutions: number = 10000;
 
@@ -110,6 +116,10 @@ export class BlueprintVM {
     start(): void {
         this._isRunning = true;
         this._currentTime = 0;
+
+        // Stateful nodes (Do Once, Gate, ...) start fresh on every run
+        // 有状态节点（Do Once、Gate 等）每次运行都从初始状态开始
+        this._context.clearNodeStates();
 
         // Trigger BeginPlay event
         // 触发 BeginPlay 事件
@@ -221,33 +231,71 @@ export class BlueprintVM {
             this._context.setOutputs(startNode.id, eventData);
         }
 
-        // Follow execution chain
-        // 跟随执行链
-        let currentNodeId: string | null = startNode.id;
-        let currentPin: string = startPin;
-        let steps = 0;
+        // Follow execution chain. The step budget is scoped to this flow, so a node
+        // that synchronously triggers another event doesn't eat this flow's budget.
+        // 跟随执行链。步数预算属于本次执行流，节点内同步触发其它事件不会占用本流预算。
+        const outerSteps = this._steps;
+        this._steps = 0;
 
-        while (currentNodeId && steps < this._maxStepsPerFrame) {
-            steps++;
+        try {
+            this._followExecPin(startNode.id, startPin, 0);
 
-            // Get connected nodes from current exec pin
-            // 从当前执行引脚获取连接的节点
-            const connections = this._context.getConnectionsFromPin(currentNodeId, currentPin);
-
-            if (connections.length === 0) {
-                // No more connections, end execution
-                // 没有更多连接，结束执行
-                break;
+            if (this._steps >= this._maxStepsPerFrame) {
+                vmLogger.warn('Execution exceeded maximum steps, possible infinite loop');
             }
+        } finally {
+            this._steps = outerSteps;
+        }
+    }
 
-            // Execute connected node
-            // 执行连接的节点
-            const nextConn = connections[0];
-            const result = this._executeNode(nextConn.toNodeId);
+    /**
+     * Follow every connection on an exec output pin, in connection order
+     * 按连线顺序跟随 exec 输出引脚上的所有连线
+     *
+     * @zh 每个分支跑完整条下游链后才进入下一个分支，所以把一个 exec 输出引脚扇出到
+     *     N 个节点等价于 Sequence —— 编辑器允许这么连，运行时就必须全部执行。
+     * @en Each branch runs its whole downstream chain before the next branch starts,
+     *     so fanning one exec output pin out to N nodes behaves like a Sequence — the
+     *     editor lets you wire it that way, so the runtime must execute all of them.
+     */
+    private _followExecPin(nodeId: string, pin: string, depth: number): void {
+        const connections = this._context.getConnectionsFromPin(nodeId, pin);
+        if (connections.length === 0) return;
+
+        if (depth >= this._maxExecDepth) {
+            vmLogger.warn(`Exec nesting exceeded ${this._maxExecDepth} at ${nodeId}.${pin}, stopping branch`);
+            return;
+        }
+
+        for (const conn of connections) {
+            this._runExecBranch(conn.toNodeId, conn.toPin, depth);
+        }
+    }
+
+    /**
+     * Run one exec branch: execute the node, then follow its next pin
+     * 执行一个分支：执行节点后跟随它的下一个引脚
+     *
+     * @zh 线性链（每个引脚只有一条连线）用循环走，长链只占一层调用栈；
+     *     只在遇到扇出时才递归。
+     * @en Linear chains (one connection per pin) are walked iteratively so a long chain
+     *     costs a single stack frame; recursion only happens at fan-out points.
+     */
+    private _runExecBranch(nodeId: string, entryPin: string, depth: number): void {
+        let currentNodeId = nodeId;
+        let currentEntryPin = entryPin;
+
+        for (;;) {
+            if (this._steps >= this._maxStepsPerFrame) return;
+            this._steps++;
+
+            const result = this._executeNode(currentNodeId, currentEntryPin);
 
             if (result.error) {
-                vmLogger.error(`Error in node ${nextConn.toNodeId}: ${result.error}`);
-                break;
+                // Stop this branch only — sibling branches are independent
+                // 只中断当前分支 —— 兄弟分支相互独立
+                vmLogger.error(`Error in node ${currentNodeId}: ${result.error}`);
+                return;
             }
 
             if (result.delay && result.delay > 0) {
@@ -255,42 +303,60 @@ export class BlueprintVM {
                 // 安排延迟执行
                 if (this._pendingExecutions.length < this._maxPendingExecutions) {
                     this._pendingExecutions.push({
-                        nodeId: nextConn.toNodeId,
+                        nodeId: currentNodeId,
                         execPin: result.nextExec ?? 'exec',
                         resumeTime: this._currentTime + result.delay
                     });
                 }
-                break;
+                return;
             }
 
             if (result.yield) {
                 // Yield execution until next frame
                 // 暂停执行直到下一帧
-                break;
+                return;
+            }
+
+            // Multiple output pins (Sequence): run each in order
+            // 多个输出引脚（Sequence）：按顺序各跑一遍
+            if (result.nextExecs) {
+                for (const nextPin of result.nextExecs) {
+                    this._followExecPin(currentNodeId, nextPin, depth + 1);
+                }
+                return;
             }
 
             if (result.nextExec === null) {
                 // Explicitly stop execution
                 // 显式停止执行
-                break;
+                return;
+            }
+
+            const nextPin = result.nextExec ?? 'exec';
+            const nextConns = this._context.getConnectionsFromPin(currentNodeId, nextPin);
+            if (nextConns.length === 0) return;
+
+            if (nextConns.length > 1) {
+                // Fan-out: recurse so each branch completes before the next starts
+                // 扇出：递归，保证每个分支跑完再进入下一个
+                this._followExecPin(currentNodeId, nextPin, depth + 1);
+                return;
             }
 
             // Continue to next node
             // 继续到下一个节点
-            currentNodeId = nextConn.toNodeId;
-            currentPin = result.nextExec ?? 'exec';
-        }
-
-        if (steps >= this._maxStepsPerFrame) {
-            vmLogger.warn('Execution exceeded maximum steps, possible infinite loop');
+            currentNodeId = nextConns[0].toNodeId;
+            currentEntryPin = nextConns[0].toPin;
         }
     }
 
     /**
      * Execute a single node
      * 执行单个节点
+     *
+     * @param entryPin - Exec input pin the node was entered through (节点被进入的 exec 输入引脚)
      */
-    private _executeNode(nodeId: string): ExecutionResult {
+    private _executeNode(nodeId: string, entryPin?: string): ExecutionResult {
         const node = this._context.getNode(nodeId);
         if (!node) {
             return { error: `Node not found: ${nodeId}` };
@@ -304,6 +370,13 @@ export class BlueprintVM {
         try {
             if (this.debug) {
                 vmLogger.debug(`Executing: ${node.type} (${nodeId})`);
+            }
+
+            // Record which exec input the node was entered through, so nodes with
+            // several exec inputs (Gate, Do Once) can tell their pins apart
+            // 记录节点从哪个 exec 输入引脚进入，供有多个 exec 输入的节点（Gate、Do Once）区分
+            if (entryPin !== undefined) {
+                node.data._lastInputPin = entryPin;
             }
 
             const result = executor.execute(node, this._context);

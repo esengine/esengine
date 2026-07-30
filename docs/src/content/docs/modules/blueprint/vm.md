@@ -96,12 +96,54 @@ interface ExecutionContext {
 ```typescript
 interface ExecutionResult {
     outputs?: Record<string, unknown>; // 输出值
-    nextExec?: string | null;          // 下一个执行引脚
-    delay?: number;                    // 延迟执行（毫秒）
+    nextExec?: string | null;          // 下一个执行引脚（null 表示停止）
+    nextExecs?: string[];              // 按顺序执行多个引脚（优先于 nextExec）
+    delay?: number;                    // 延迟执行（秒）
     yield?: boolean;                   // 暂停到下一帧
     error?: string;                    // 错误信息
 }
 ```
+
+## 执行流分支
+
+一个 exec 输出引脚可以连到多个节点。VM 会**按连线顺序**执行全部连线，且每个分支跑完整条下游链后才进入下一个分支 —— 效果等同于 `Sequence`：
+
+```
+Event Begin Play ──┬──> Play Sound ──> Print "done"    ← 分支 1 整条链先跑完
+                   ├──> Log Data                        ← 再跑分支 2
+                   └──> Print "ready"                   ← 最后分支 3
+```
+
+分支之间相互独立：其中一个分支遇到 `Delay` 或报错，不会阻止其它分支执行。
+
+需要在一个节点里触发多个自己的输出引脚时（如 `Sequence`），返回 `nextExecs`：
+
+```typescript
+execute(): ExecutionResult {
+    return { nextExecs: ['then0', 'then1', 'then2', 'then3'] };
+}
+```
+
+未连线的引脚会被自动跳过。
+
+## 有状态节点
+
+执行器按节点类型注册为**一个共享实例**，所以需要跨执行保留的状态不能放在执行器字段上 —— 那样同类型的所有节点、所有蓝图实例都会共用同一份状态。用 `context.getNodeState()` 按节点存放：
+
+```typescript
+@RegisterNode(MyCounterTemplate)
+export class MyCounterExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        // ✅ 每个节点一份，蓝图重新 start() 时重置
+        const state = context.getNodeState(node.id, () => ({ count: 0 }));
+        state.count++;
+
+        return { outputs: { count: state.count }, nextExec: 'exec' };
+    }
+}
+```
+
+有多个 exec 输入引脚的节点（如 `Gate` 的 `Open` / `Close`）可以通过 `node.data._lastInputPin` 判断本次是从哪个引脚进入的。
 
 ## 与 ECS 集成
 
