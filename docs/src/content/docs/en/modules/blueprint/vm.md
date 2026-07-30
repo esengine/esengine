@@ -96,12 +96,54 @@ interface ExecutionContext {
 ```typescript
 interface ExecutionResult {
     outputs?: Record<string, unknown>; // Output values
-    nextExec?: string | null;          // Next execution pin
-    delay?: number;                    // Delay execution (ms)
+    nextExec?: string | null;          // Next execution pin (null stops the branch)
+    nextExecs?: string[];              // Several pins, run in order (wins over nextExec)
+    delay?: number;                    // Delay execution (seconds)
     yield?: boolean;                   // Pause until next frame
     error?: string;                    // Error message
 }
 ```
+
+## Branching Execution Flow
+
+One exec output pin may connect to several nodes. The VM follows **all** of them in connection order, and each branch runs its whole downstream chain before the next branch starts — equivalent to a `Sequence`:
+
+```
+Event Begin Play ──┬──> Play Sound ──> Print "done"    ← branch 1 runs to completion first
+                   ├──> Log Data                        ← then branch 2
+                   └──> Print "ready"                   ← then branch 3
+```
+
+Branches are independent: a `Delay` or an error in one branch does not stop the others.
+
+To fire several of a node's *own* output pins (as `Sequence` does), return `nextExecs`:
+
+```typescript
+execute(): ExecutionResult {
+    return { nextExecs: ['then0', 'then1', 'then2', 'then3'] };
+}
+```
+
+Pins with nothing connected are skipped.
+
+## Stateful Nodes
+
+Executors are registered as **one shared instance per node type**, so state that must survive across executions cannot live in executor fields — every node of that type, in every blueprint instance, would share it. Keep it per node with `context.getNodeState()`:
+
+```typescript
+@RegisterNode(MyCounterTemplate)
+export class MyCounterExecutor implements INodeExecutor {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        // ✅ One per node, reset when the blueprint is start()ed again
+        const state = context.getNodeState(node.id, () => ({ count: 0 }));
+        state.count++;
+
+        return { outputs: { count: state.count }, nextExec: 'exec' };
+    }
+}
+```
+
+Nodes with several exec input pins (such as `Gate`'s `Open` / `Close`) can read `node.data._lastInputPin` to tell which pin the current execution came in through.
 
 ## ECS Integration
 

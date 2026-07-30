@@ -20,6 +20,14 @@ export interface ExecutionResult {
     nextExec?: string | null;
 
     /**
+     * Exec pins to follow in order, each running its whole chain before the next
+     * (takes precedence over `nextExec`; used by Sequence)
+     * 按顺序执行的多个引脚，每个引脚的整条链跑完再进入下一个
+     * （优先于 `nextExec`；Sequence 使用）
+     */
+    nextExecs?: string[];
+
+    /**
      * Output values by pin name
      * 按引脚名称的输出值
      */
@@ -85,6 +93,9 @@ export class ExecutionContext {
 
     /** Node output cache for current execution (当前执行的节点输出缓存) */
     private _outputCache: Map<string, Record<string, unknown>> = new Map();
+
+    /** Persistent per-node executor state (每个节点的持久化执行器状态) */
+    private _nodeStates: Map<string, unknown> = new Map();
 
     /** Connection lookup by target (按目标的连接查找) */
     private _connectionsByTarget: Map<string, BlueprintConnection[]> = new Map();
@@ -233,6 +244,35 @@ export class ExecutionContext {
     clearOutputCache(): void {
         this._outputCache.clear();
         this._localVariables.clear();
+    }
+
+    /**
+     * Get (or lazily create) persistent state for a stateful node
+     * 获取（或惰性创建）有状态节点的持久化状态
+     *
+     * @zh 执行器按类型注册为一个共享实例（见 `RegisterNode`），所以需要跨执行保留的
+     *     状态必须按节点 id 存在上下文里；放在执行器字段上会被同类型的所有节点、
+     *     所有蓝图实例共用。状态不随 `clearOutputCache` 清除。
+     * @en Executors are registered as one shared instance per type (see `RegisterNode`),
+     *     so state that must survive across executions belongs here, keyed by node id —
+     *     an executor field would be shared by every node of that type in every
+     *     blueprint instance. Not cleared by `clearOutputCache`.
+     */
+    getNodeState<T>(nodeId: string, create: () => T): T {
+        let state = this._nodeStates.get(nodeId) as T | undefined;
+        if (state === undefined) {
+            state = create();
+            this._nodeStates.set(nodeId, state);
+        }
+        return state;
+    }
+
+    /**
+     * Clear all per-node state (call when the blueprint restarts)
+     * 清除所有节点状态（蓝图重新启动时调用）
+     */
+    clearNodeStates(): void {
+        this._nodeStates.clear();
     }
 
     /**

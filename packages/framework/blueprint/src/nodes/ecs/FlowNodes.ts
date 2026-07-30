@@ -65,18 +65,11 @@ export const SequenceTemplate: BlueprintNodeTemplate = {
 
 @RegisterNode(SequenceTemplate)
 export class SequenceExecutor implements INodeExecutor {
-    private currentIndex = 0;
-
     execute(_node: BlueprintNode, _context: ExecutionContext): ExecutionResult {
-        const outputs = ['then0', 'then1', 'then2', 'then3'];
-        const nextPin = outputs[this.currentIndex];
-        this.currentIndex = (this.currentIndex + 1) % outputs.length;
-
-        if (this.currentIndex === 0) {
-            return { nextExec: null };
-        }
-
-        return { nextExec: nextPin };
+        // Every Then pin fires on a single trigger, in order; the VM skips the
+        // ones with nothing connected
+        // 单次触发按顺序触发所有 Then 引脚；未连线的引脚由 VM 跳过
+        return { nextExecs: ['then0', 'then1', 'then2', 'then3'] };
     }
 }
 
@@ -103,21 +96,23 @@ export const DoOnceTemplate: BlueprintNodeTemplate = {
 
 @RegisterNode(DoOnceTemplate)
 export class DoOnceExecutor implements INodeExecutor {
-    private executed = false;
-
-    execute(node: BlueprintNode, _context: ExecutionContext): ExecutionResult {
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        // State lives on the context, keyed by node — this executor instance is
+        // shared by every Do Once node in every blueprint
+        // 状态按节点存在上下文里 —— 这个执行器实例被所有蓝图的所有 Do Once 节点共用
+        const state = context.getNodeState(node.id, () => ({ executed: false }));
         const inputPin = node.data._lastInputPin as string | undefined;
 
         if (inputPin === 'reset') {
-            this.executed = false;
+            state.executed = false;
             return { nextExec: null };
         }
 
-        if (this.executed) {
+        if (state.executed) {
             return { nextExec: null };
         }
 
-        this.executed = true;
+        state.executed = true;
         return { nextExec: 'exec' };
     }
 }
@@ -146,11 +141,10 @@ export const FlipFlopTemplate: BlueprintNodeTemplate = {
 
 @RegisterNode(FlipFlopTemplate)
 export class FlipFlopExecutor implements INodeExecutor {
-    private isA = true;
-
-    execute(_node: BlueprintNode, _context: ExecutionContext): ExecutionResult {
-        const currentIsA = this.isA;
-        this.isA = !this.isA;
+    execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
+        const state = context.getNodeState(node.id, () => ({ isA: true }));
+        const currentIsA = state.isA;
+        state.isA = !state.isA;
 
         return {
             outputs: { isA: currentIsA },
@@ -185,27 +179,27 @@ export const GateTemplate: BlueprintNodeTemplate = {
 
 @RegisterNode(GateTemplate)
 export class GateExecutor implements INodeExecutor {
-    private isOpen: boolean | null = null;
-
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        if (this.isOpen === null) {
-            this.isOpen = context.evaluateInput(node.id, 'startOpen', true) as boolean;
+        const state = context.getNodeState<{ isOpen: boolean | null }>(node.id, () => ({ isOpen: null }));
+
+        if (state.isOpen === null) {
+            state.isOpen = context.evaluateInput(node.id, 'startOpen', true) as boolean;
         }
 
         const inputPin = node.data._lastInputPin as string | undefined;
 
         switch (inputPin) {
             case 'open':
-                this.isOpen = true;
+                state.isOpen = true;
                 return { nextExec: null };
             case 'close':
-                this.isOpen = false;
+                state.isOpen = false;
                 return { nextExec: null };
             case 'toggle':
-                this.isOpen = !this.isOpen;
+                state.isOpen = !state.isOpen;
                 return { nextExec: null };
             default:
-                return { nextExec: this.isOpen ? 'exec' : null };
+                return { nextExec: state.isOpen ? 'exec' : null };
         }
     }
 }
@@ -236,20 +230,22 @@ export const ForLoopTemplate: BlueprintNodeTemplate = {
 
 @RegisterNode(ForLoopTemplate)
 export class ForLoopExecutor implements INodeExecutor {
-    private currentIndex = 0;
-    private endIndex = 0;
-    private isRunning = false;
-
     execute(node: BlueprintNode, context: ExecutionContext): ExecutionResult {
-        if (!this.isRunning) {
-            this.currentIndex = context.evaluateInput(node.id, 'start', 0) as number;
-            this.endIndex = context.evaluateInput(node.id, 'end', 10) as number;
-            this.isRunning = true;
+        const state = context.getNodeState(node.id, () => ({
+            currentIndex: 0,
+            endIndex: 0,
+            isRunning: false
+        }));
+
+        if (!state.isRunning) {
+            state.currentIndex = context.evaluateInput(node.id, 'start', 0) as number;
+            state.endIndex = context.evaluateInput(node.id, 'end', 10) as number;
+            state.isRunning = true;
         }
 
-        if (this.currentIndex < this.endIndex) {
-            const index = this.currentIndex;
-            this.currentIndex++;
+        if (state.currentIndex < state.endIndex) {
+            const index = state.currentIndex;
+            state.currentIndex++;
 
             return {
                 outputs: { index },
@@ -257,9 +253,9 @@ export class ForLoopExecutor implements INodeExecutor {
             };
         }
 
-        this.isRunning = false;
+        state.isRunning = false;
         return {
-            outputs: { index: this.endIndex },
+            outputs: { index: state.endIndex },
             nextExec: 'completed'
         };
     }
