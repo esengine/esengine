@@ -9,6 +9,10 @@ on:
       - 'packages/*/package.json'
       - 'packages/*/*/package.json'
       - 'packages/*/*/*/package.json'
+      # 这两处决定 changesets 能看到哪些包 —— 漏了它们的话，新增/移除工作区目录
+      # 不会触发发布，changeset version 会在下一次无关的 push 上才失败
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
