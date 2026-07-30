@@ -20,6 +20,7 @@
   },
   "packages": [
     "packages/framework/*",
+    "packages/devtools/*",
     "packages/tools/*"
   ]
 }

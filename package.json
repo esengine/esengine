@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.22.0",
   "workspaces": [
     "packages/framework/*",
+    "packages/devtools/*",
     "packages/tools/*",
     "docs"
   ],
