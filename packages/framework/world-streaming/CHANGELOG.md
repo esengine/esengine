@@ -1,5 +1,12 @@
 # @esengine/world-streaming
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies []:
+    - @esengine/spatial@15.0.1
+
 ## 3.0.0
 
 ### Patch Changes
