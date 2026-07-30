@@ -44,6 +44,7 @@ jobs:
       - name: Build framework packages
         run: |
           # Only build packages managed by Changesets (not in ignore list)
+          pnpm --filter "@esengine/node-editor" build
           pnpm --filter "@esengine/ecs-framework" build
           pnpm --filter "@esengine/ecs-framework-math" build
           pnpm --filter "@esengine/blueprint" build

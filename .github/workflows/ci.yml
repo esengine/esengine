@@ -75,9 +75,17 @@ jobs:
         pnpm --filter @esengine/rpc build
         pnpm --filter @esengine/network build
 
+    # 构建 devtools 包 (编辑器侧通用库)
+    - name: Build devtools packages
+      run: pnpm --filter @esengine/node-editor build
+
     # 类型检查 (仅 framework 包)
     - name: Type check (framework packages)
       run: pnpm run type-check:framework
+
+    # 类型检查 (devtools 包)
+    - name: Type check (devtools packages)
+      run: pnpm --filter @esengine/node-editor type-check
 
     # Lint 检查 (仅 framework 包)
     - name: Lint check (framework packages)
